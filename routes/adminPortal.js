@@ -772,9 +772,15 @@ function getGitDefaultBranch(repoRoot) {
   return 'main';
 }
 
+function getGitOriginUrl(repoRoot) {
+  const r = runCmd('git', ['remote', 'get-url', 'origin'], repoRoot);
+  if (!r.ok) return '';
+  return String(r.stdout || '').trim();
+}
+
 function getUpdateInfo(repoRoot) {
   const localVersion = readTextFileSafe(path.join(repoRoot, 'version.txt')) || '-';
-  const info = { localVersion, remoteVersion: '-', branch: '-', needsUpdate: false, error: '' };
+  const info = { localVersion, remoteVersion: '-', branch: '-', needsUpdate: false, error: '', originUrl: '' };
 
   const inside = runCmd('git', ['rev-parse', '--is-inside-work-tree'], repoRoot);
   if (!inside.ok) {
@@ -784,6 +790,7 @@ function getUpdateInfo(repoRoot) {
 
   const branch = getGitDefaultBranch(repoRoot);
   info.branch = branch;
+  info.originUrl = getGitOriginUrl(repoRoot);
 
   const fetch = runCmd('git', ['fetch', '--prune'], repoRoot);
   if (!fetch.ok) {
@@ -3492,13 +3499,19 @@ router.post('/digiflazz/products/update-price', requireAdminSession, restrictToA
 });
 
 router.get('/update', requireAdminSession, restrictToAdmin, (req, res) => {
-  req.session._msg = { type: 'error', text: 'Fitur update otomatis dinonaktifkan demi menjaga source code tetap aman.' };
-  return res.redirect('/admin/settings');
+  const repoRoot = path.resolve(__dirname, '..');
+  const info = getUpdateInfo(repoRoot);
+  res.render('admin/update', {
+    title: 'Update Aplikasi',
+    company: company(),
+    activePage: 'update',
+    msg: flashMsg(req),
+    log: popUpdateLog(req),
+    info
+  });
 });
 
 router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
-  req.session._msg = { type: 'error', text: 'Fitur update otomatis dinonaktifkan dan tidak lagi menjalankan reset source code.' };
-  return res.redirect('/admin/settings');
   const repoRoot = path.resolve(__dirname, '..');
   const log = [];
   const pushCmd = (label, r) => {
@@ -3513,8 +3526,15 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   const backupRoot = path.join(os.tmpdir(), `billing-update-backup-${Date.now()}`);
   const backupSettings = path.join(backupRoot, 'settings.json');
   const backupDb = path.join(backupRoot, 'database');
+  const backupAuth = path.join(backupRoot, 'auth_info_baileys');
+  const backupLogs = path.join(backupRoot, 'logs');
+  const backupUploads = path.join(backupRoot, 'uploads');
   const settingsPath = path.join(repoRoot, 'settings.json');
   const dbDir = path.join(repoRoot, 'database');
+  const authFolder = String(getSetting('whatsapp_auth_folder', 'auth_info_baileys') || 'auth_info_baileys');
+  const authPath = path.join(repoRoot, authFolder);
+  const logsPath = path.join(repoRoot, 'logs');
+  const uploadsPath = path.join(repoRoot, 'public', 'uploads');
 
   try {
     const inside = runCmd('git', ['rev-parse', '--is-inside-work-tree'], repoRoot);
@@ -3539,11 +3559,9 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     fs.mkdirSync(backupRoot, { recursive: true });
     if (fs.existsSync(settingsPath)) fs.copyFileSync(settingsPath, backupSettings);
     if (fs.existsSync(dbDir)) copyDirSync(dbDir, backupDb);
-
-    const resetSettings = runCmd('git', ['checkout', '--', 'settings.json'], repoRoot);
-    pushCmd('git checkout -- settings.json', resetSettings);
-    const resetDb = runCmd('git', ['checkout', '--', 'database'], repoRoot);
-    pushCmd('git checkout -- database', resetDb);
+    if (fs.existsSync(authPath)) copyDirSync(authPath, backupAuth);
+    if (fs.existsSync(logsPath)) copyDirSync(logsPath, backupLogs);
+    if (fs.existsSync(uploadsPath)) copyDirSync(uploadsPath, backupUploads);
 
     const resetHard = runCmd('git', ['reset', '--hard', `origin/${branch}`], repoRoot);
     pushCmd(`git reset --hard origin/${branch}`, resetHard);
@@ -3558,7 +3576,6 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
       }
     }
 
-    const authFolder = String(getSetting('whatsapp_auth_folder', 'auth_info_baileys') || 'auth_info_baileys');
     const clean = runCmd(
       'git',
       [
@@ -3567,18 +3584,32 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
         '-e', 'settings.json',
         '-e', 'database',
         '-e', 'node_modules',
-        '-e', 'package-lock.json',
         '-e', authFolder,
-        '-e', 'data'
+        '-e', 'data',
+        '-e', 'logs',
+        '-e', 'public/uploads',
+        '-e', 'backups'
       ],
       repoRoot
     );
-    pushCmd(`git clean -fd -e settings.json -e database -e node_modules -e package-lock.json -e ${authFolder} -e data`, clean);
+    pushCmd(`git clean -fd -e settings.json -e database -e node_modules -e ${authFolder} -e data -e logs -e public/uploads -e backups`, clean);
 
     if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, settingsPath);
     if (fs.existsSync(backupDb)) {
       fs.mkdirSync(dbDir, { recursive: true });
       copyDirSync(backupDb, dbDir);
+    }
+    if (fs.existsSync(backupAuth)) {
+      fs.mkdirSync(authPath, { recursive: true });
+      copyDirSync(backupAuth, authPath);
+    }
+    if (fs.existsSync(backupLogs)) {
+      fs.mkdirSync(logsPath, { recursive: true });
+      copyDirSync(backupLogs, logsPath);
+    }
+    if (fs.existsSync(backupUploads)) {
+      fs.mkdirSync(uploadsPath, { recursive: true });
+      copyDirSync(backupUploads, uploadsPath);
     }
 
     const npm = runCmd('npm', ['install'], repoRoot);
@@ -3586,7 +3617,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     if (!npm.ok) throw new Error('Update berhasil, tetapi npm install gagal.');
 
     const localAfter = readTextFileSafe(versionPath) || '-';
-    req.session._msg = { type: 'success', text: `Update selesai. Versi: ${localBefore} → ${localAfter}. Silakan restart aplikasi.` };
+    req.session._msg = { type: 'success', text: `Update selesai. Versi: ${localBefore} → ${localAfter}. Database, settings, auth WhatsApp, log, dan upload tetap aman.` };
     req.session._updateLog = log.join('\n');
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal update: ' + (e?.message || e) };
@@ -3597,7 +3628,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     } catch (e) {}
   }
 
-  return res.redirect('/admin/settings');
+  return res.redirect('/admin/update');
 });
 
 router.post('/api/telegram/sync', requireAdminSession, async (req, res) => {

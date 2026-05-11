@@ -203,10 +203,3 @@ Fork, buat branch fitur, lalu kirim Pull Request.
 ## Lisensi
 
 **ISC** — lihat berkas `LICENSE`.
-
-Dibuat untuk operasional ISP lokal & RTRW-Net.  
-Managed by [Ali Jaya Net](https://github.com/alijayanet)
-
-## Info & donasi
-
-081947215703 — https://wa.me/6281947215703

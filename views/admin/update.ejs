@@ -52,6 +52,20 @@
           </div>
         </div>
 
+        <div class="form-row" style="margin-top:12px">
+          <div class="fg">
+            <label class="fl">Repo Update Default</label>
+            <div class="fc" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <i class="bi bi-github"></i>
+              <% if (info?.originUrl) { %>
+                <a href="<%= info.originUrl %>" target="_blank" rel="noopener" style="font-weight:700"><%= info.originUrl %></a>
+              <% } else { %>
+                <span style="font-weight:700">Origin belum diatur</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
           <form method="GET" action="/admin/update">
             <button type="submit" class="btn btn-g"><i class="bi bi-arrow-repeat"></i> <%= t('admin.update.check', 'Cek Versi') %></button>
@@ -62,7 +76,7 @@
         </div>
 
         <div style="margin-top:12px;color:var(--muted);font-size:12px;line-height:1.5">
-          <%= t('admin.update.keep_files', 'File yang tidak ditimpa saat update: settings.json dan folder database. Setelah update selesai, restart aplikasi agar versi baru aktif.') %>
+          File yang tetap aman saat update: <strong>settings.json</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, <strong>uploads</strong>, dan <strong>backups</strong>.
         </div>
       </div>
     </div>
