@@ -1,9 +1,16 @@
+<%
+  const safeUnpaidInvoices = Array.isArray(unpaidInvoices) ? unpaidInvoices : [];
+  const safePaidInvoices = Array.isArray(paidInvoices) ? paidInvoices : [];
+  const safeMonthNames = Array.isArray(monthNames)
+    ? monthNames
+    : [null, 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+%>
 <section class="app-screen" data-tab="billing">
   <div class="billing-card">
     <div class="billing-card-head">
       <div>
         <h4>Tagihan Aktif</h4>
-        <div class="soft-muted"><%= unpaidInvoices.length %> tagihan belum dibayar</div>
+        <div class="soft-muted"><%= safeUnpaidInvoices.length %> tagihan belum dibayar</div>
       </div>
       <button class="mini-button" type="button" onclick="openPaymentModal()">
         <i class="bi bi-plus-circle"></i> Bayar
