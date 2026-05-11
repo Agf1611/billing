@@ -1,0 +1,112 @@
+<header class="app-topbar">
+  <div class="topbar-row">
+    <div class="topbar-left">
+      <button type="button" class="header-menu" aria-label="Menu cepat" onclick="toggleAppMenu()">
+        <i class="bi bi-list"></i>
+      </button>
+      <div class="brand-chip">
+        <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <div class="brand-meta">
+          <strong><%= companyName %></strong>
+          <span>Customer App</span>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="header-icon-wrap">
+        <button type="button" class="header-action" aria-label="Refresh halaman" title="Refresh halaman" onclick="window.location.reload()">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="header-icon-wrap">
+        <button type="button" class="header-action" aria-label="Notifikasi" onclick="openNotificationsPanel()">
+          <i class="bi bi-bell"></i>
+        </button>
+        <% if (notificationUnread > 0) { %>
+          <span class="notif-badge" id="notificationBadge"><%= notificationUnread > 99 ? '99+' : notificationUnread %></span>
+        <% } %>
+      </div>
+      <div class="header-icon-wrap">
+        <button type="button" class="header-action" aria-label="Akun" onclick="toggleAccountMenu()">
+          <i class="bi bi-person-circle"></i>
+        </button>
+        <div class="account-menu" id="accountMenu">
+          <div class="account-menu-head">
+            <strong><%= customerName %></strong>
+            <span><%= customerCode %></span>
+          </div>
+          <button type="button" onclick="openAppTab('profile'); closeAccountMenu();">
+            <i class="bi bi-person-badge"></i> Profil pelanggan
+          </button>
+          <% if (hasRouterPortalAccess) { %>
+            <button type="button" onclick="openAppTab('settings'); closeAccountMenu();">
+              <i class="bi bi-router"></i> Router & WiFi
+            </button>
+          <% } %>
+          <form method="POST" action="/customer/logout">
+            <button type="submit" class="danger-action">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-title">
+    <small id="appHeaderEyebrow">Halaman Utama</small>
+    <h2 id="appHeaderTitle">Dashboard Pelanggan</h2>
+  </div>
+</header>
+
+<div class="app-menu-backdrop" id="appMenuBackdrop" onclick="closeAppMenu()"></div>
+<aside class="app-menu-sheet" id="appMenuSheet" aria-hidden="true">
+  <div class="app-menu-head">
+    <div>
+      <strong>Menu Cepat</strong>
+      <span>Pindah antar halaman pelanggan tanpa perlu scroll panjang.</span>
+    </div>
+    <button type="button" class="app-menu-close" aria-label="Tutup menu" onclick="closeAppMenu()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="app-menu-grid">
+    <button type="button" class="app-menu-tile" onclick="openAppTab('home'); closeAppMenu();">
+      <i class="bi bi-house-door"></i>
+      <div><strong>Home</strong><span>Ringkasan, kuota, dan aksi cepat</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('billing'); closeAppMenu();">
+      <i class="bi bi-wallet2"></i>
+      <div><strong>Tagihan</strong><span>Bayar dan lihat riwayat pembayaran</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('traffic'); closeAppMenu();">
+      <i class="bi bi-activity"></i>
+      <div><strong>Traffic</strong><span>Live speed dan statistik bandwidth</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('packages'); closeAppMenu();">
+      <i class="bi bi-box-seam"></i>
+      <div><strong>Paket WiFi</strong><span>Pilih paket lain yang tersedia untuk pelanggan</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('speedtest'); closeAppMenu();">
+      <i class="bi bi-speedometer2"></i>
+      <div><strong>Tes Speed</strong><span>Uji kecepatan langsung tanpa keluar portal</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('ticketing'); closeAppMenu();">
+      <i class="bi bi-headset"></i>
+      <div><strong>Bantuan</strong><span>Buat tiket dan cek progres gangguan</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openAppTab('profile'); closeAppMenu();">
+      <i class="bi bi-person-badge"></i>
+      <div><strong>Profil</strong><span>Nama, alamat, paket, dan identitas pelanggan</span></div>
+    </button>
+    <button type="button" class="app-menu-tile" onclick="openNotificationsPanel(); closeAppMenu();">
+      <i class="bi bi-bell"></i>
+      <div><strong>Notifikasi</strong><span>Tagihan dan update tiket terbaru</span></div>
+    </button>
+    <% if (hasRouterPortalAccess) { %>
+      <button type="button" class="app-menu-tile" onclick="openAppTab('settings'); closeAppMenu();">
+        <i class="bi bi-router"></i>
+        <div><strong>Router</strong><span>WiFi, password, status internet, dan perangkat</span></div>
+      </button>
+    <% } %>
+  </div>
+</aside>

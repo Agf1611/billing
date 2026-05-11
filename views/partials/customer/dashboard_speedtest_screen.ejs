@@ -1,0 +1,45 @@
+<section class="app-screen" data-tab="speedtest">
+  <div class="speedtest-stack">
+    <div class="speedtest-panel">
+      <div class="speedtest-head">
+        <div>
+          <h4>Tes Speed Internet</h4>
+          <p>Jalankan speedtest langsung di dalam portal pelanggan. Pelanggan tetap berada di web app tanpa pindah ke layanan lain.</p>
+        </div>
+        <span class="speedtest-badge"><i class="bi bi-wifi"></i> Di Dalam Portal</span>
+      </div>
+
+      <div class="speedtest-frame-wrap">
+        <iframe
+          id="portalSpeedtestFrame"
+          class="speedtest-frame light-embed"
+          src="https://openspeedtest.com/speedtest?Run=3"
+          title="Tes Speed Pelanggan"
+          loading="lazy"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="fullscreen">
+        </iframe>
+      </div>
+
+      <div class="speedtest-action-row">
+        <button type="button" class="speedtest-inline-btn primary" onclick="reloadPortalSpeedtest()">
+          <i class="bi bi-arrow-repeat"></i> Muat Ulang Speedtest
+        </button>
+        <a class="speedtest-inline-btn" href="https://openspeedtest.com/speedtest?Run=3" target="_blank" rel="noopener">
+          <i class="bi bi-box-arrow-up-right"></i> Buka Cadangan
+        </a>
+      </div>
+
+      <div class="speedtest-notes">
+        <div class="speedtest-note">
+          <small>Tips</small>
+          <p>Tutup aplikasi lain yang sedang download atau upload agar hasil tes lebih stabil dan mendekati kondisi asli koneksi pelanggan.</p>
+        </div>
+        <div class="speedtest-note">
+          <small>Catatan</small>
+          <p>Jika widget tertahan browser atau webview, tombol cadangan tetap bisa dipakai tanpa perlu logout dari portal pelanggan.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

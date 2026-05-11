@@ -1363,10 +1363,12 @@ document.getElementById('payInvoiceModal')?.addEventListener('change', (e) => {
 
 function buildPppoeList(datalistEl, users) {
   if (!datalistEl) return;
-  datalistEl.innerHTML = '';
+  datalistEl.replaceChildren();
   for (const u of users) {
     if (!u || !u.name) continue;
-    datalistEl.insertAdjacentHTML('beforeend', `<option value="${String(u.name).replace(/"/g, '&quot;')}"></option>`);
+    const option = document.createElement('option');
+    option.value = String(u.name);
+    datalistEl.appendChild(option);
   }
 }
 
@@ -1413,15 +1415,24 @@ async function loadMikrotikProfiles(routerId = '') {
     const selAdd = document.getElementById('add_isolir_select');
     const selEdit = document.getElementById('e_isolir_profile');
     
-const defaultOpt = '<option value="BEATISOLIR">BEATISOLIR</option>';
-    selAdd.innerHTML = defaultOpt;
-    selEdit.innerHTML = defaultOpt;
+    if (selAdd) selAdd.replaceChildren();
+    if (selEdit) selEdit.replaceChildren();
+
+    const appendOption = (selectEl, value, label) => {
+      if (!selectEl) return;
+      const option = document.createElement('option');
+      option.value = String(value);
+      option.textContent = String(label);
+      selectEl.appendChild(option);
+    };
+
+    appendOption(selAdd, 'BEATISOLIR', 'BEATISOLIR');
+    appendOption(selEdit, 'BEATISOLIR', 'BEATISOLIR');
 
     profiles.forEach(p => {
-    if(p.name === 'BEATISOLIR') return;
-      const opt = `<option value="${p.name}">${p.name}</option>`;
-      selAdd.innerHTML += opt;
-      selEdit.innerHTML += opt;
+      if (!p || p.name === 'BEATISOLIR') return;
+      appendOption(selAdd, p.name, p.name);
+      appendOption(selEdit, p.name, p.name);
     });
   } catch (e) {
     console.error('Failed to load MikroTik profiles', e);
@@ -1439,7 +1450,7 @@ async function syncCustomerSearchSuggestions(query) {
   if (!input || !list) return;
   const keyword = String(query || '').trim();
   if (keyword.length < 2) {
-    list.innerHTML = '';
+    list.replaceChildren();
     return;
   }
   try {
@@ -1450,7 +1461,7 @@ async function syncCustomerSearchSuggestions(query) {
     });
     if (!res.ok) return;
     const rows = await res.json();
-    list.innerHTML = '';
+    list.replaceChildren();
     (Array.isArray(rows) ? rows : []).forEach((row) => {
       const option = document.createElement('option');
       const name = String(row.name || '').trim();

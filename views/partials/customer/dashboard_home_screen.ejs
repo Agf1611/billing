@@ -1,0 +1,109 @@
+<section class="app-screen is-active" data-tab="home">
+  <div class="home-compact">
+    <div class="home-intro">
+      <h1>Selamat datang kembali,</h1>
+      <div class="home-intro-line">
+        <strong><%= customerName %></strong>
+        <span class="mini-status"><i class="bi bi-check-circle-fill"></i> <%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
+      </div>
+      <div class="home-code-row">
+        <span class="home-code"><%= customerCode %></span>
+        <button class="home-code-copy" type="button" aria-label="Salin kode pelanggan" onclick="copyCustomerCode()">
+          <i class="bi bi-copy"></i>
+        </button>
+      </div>
+    </div>
+
+    <% if (appNotif && appNotif.text) { %>
+      <div class="status-banner banner-<%= appNotif.type === 'danger' ? 'danger' : appNotif.type === 'warning' ? 'warning' : appNotif.type === 'success' ? 'success' : 'info' %>">
+        <div class="status-banner-main">
+          <i class="bi <%= appNotif.type === 'danger' ? 'bi-x-octagon-fill' : appNotif.type === 'warning' ? 'bi-exclamation-triangle-fill' : appNotif.type === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill' %>"></i>
+          <div>
+            <strong><%= appNotif.type === 'danger' ? 'Perlu perhatian' : appNotif.type === 'warning' ? 'Informasi penting' : appNotif.type === 'success' ? 'Berhasil' : 'Info' %></strong>
+            <p><%= appNotif.text %></p>
+          </div>
+        </div>
+        <button class="status-detail" type="button" onclick="openAppTab('profile')">Detail</button>
+      </div>
+    <% } %>
+
+    <div class="hero-card home-hero-card">
+      <div class="home-hero-grid">
+        <div class="home-hero-main">
+          <div class="hero-eyebrow">Paket Anda</div>
+          <div class="hero-package"><%= packageName %></div>
+          <div class="hero-sub home-hero-meta">
+            <span><i class="bi bi-speedometer2"></i> <%= liveDownloadCap %> Mbps / <%= liveUploadCap %> Mbps</span>
+            <span><i class="bi bi-wifi"></i> <%= isPppoeOnline ? 'Internet normal' : (pppoeStatusText || 'Status belum terbaca') %></span>
+          </div>
+          <div class="home-status-line">
+            <span class="home-bill-state <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'warn' : 'okay' %>">
+              <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'Belum Bayar' : 'Aman' %>
+            </span>
+            <span class="home-due-inline">
+              <small><%= latestInvoice ? 'Jatuh Tempo' : 'Status' %></small>
+              <strong><%= latestInvoice ? formatDate(new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month) - 1, Math.min(Number(latestInvoice.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month), 0).getDate()))) : 'Tidak ada tagihan' %></strong>
+            </span>
+          </div>
+        </div>
+        <div class="home-hero-side">
+          <span class="home-plan-state"><%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
+          <div class="home-amount-row">
+            <div class="home-amount-wrap">
+              <span>Nominal</span>
+              <strong><%= latestInvoice ? formatCurrency(latestInvoice.amount) : formatCurrency(monthlyPrice) %></strong>
+            </div>
+            <button class="primary-button home-pay-button" type="button" onclick="openAppTab('billing')">
+              <i class="bi bi-wallet2"></i> <%= latestInvoice ? 'Bayar' : 'Tagihan' %>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-hero-divider"></div>
+
+      <div class="home-usage-grid">
+        <div class="home-usage-card upload">
+          <small>Download</small>
+          <strong><%= formatBytes(uploadBytes) %></strong>
+        </div>
+        <div class="home-usage-card download">
+          <small>Upload</small>
+          <strong><%= formatBytes(downloadBytes) %></strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="home-quick-section">
+      <h3 class="home-quick-title">Aksi Cepat</h3>
+      <div class="quick-grid home-quick-grid">
+        <button class="quick-card home-quick-card" type="button" onclick="openAppTab('billing')">
+          <div class="quick-icon quick-green"><i class="bi bi-wallet2"></i></div>
+          <h4>Tagihan</h4>
+        </button>
+        <% if (hasRouterPortalAccess) { %>
+          <button class="quick-card home-quick-card" type="button" onclick="openAppTab('settings')">
+            <div class="quick-icon quick-cyan"><i class="bi bi-router"></i></div>
+            <h4>Router</h4>
+          </button>
+        <% } %>
+        <button class="quick-card home-quick-card" type="button" onclick="openAppTab('traffic')">
+          <div class="quick-icon quick-lilac"><i class="bi bi-graph-up-arrow"></i></div>
+          <h4>Traffic</h4>
+        </button>
+        <button class="quick-card home-quick-card" type="button" onclick="openAppTab('packages')">
+          <div class="quick-icon quick-sky"><i class="bi bi-box-seam"></i></div>
+          <h4>Paket WiFi</h4>
+        </button>
+        <button class="quick-card home-quick-card" type="button" onclick="openAppTab('speedtest')">
+          <div class="quick-icon quick-rose"><i class="bi bi-speedometer2"></i></div>
+          <h4>Tes Speed</h4>
+        </button>
+        <button class="quick-card home-quick-card" type="button" onclick="openTicketModal()">
+          <div class="quick-icon quick-gold"><i class="bi bi-chat-dots"></i></div>
+          <h4>Bantuan</h4>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

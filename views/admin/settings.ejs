@@ -119,6 +119,18 @@
     </div>
     <% } %>
 
+    <% if (runtimeWarnings && runtimeWarnings.length) { %>
+    <div class="alert alert-d" style="margin-bottom:16px">
+      <i class="bi bi-shield-exclamation"></i>
+      <div style="display:grid;gap:6px">
+        <strong>Perhatian konfigurasi runtime</strong>
+        <% runtimeWarnings.forEach((warning) => { %>
+          <div><%= warning.text %></div>
+        <% }) %>
+      </div>
+    </div>
+    <% } %>
+
     <div class="settings-category-card">
       <div class="settings-category-head">
         <div>

@@ -9,6 +9,11 @@ const customerSvc = require('./services/customerService');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { scheduleAutoBackup } = require('./services/backupService');
 const { assertCriticalSecuritySettings } = require('./config/security');
+const {
+  installSafeRedirectMiddleware,
+  getRuntimeConfigurationWarnings,
+  isSelfUpdateEnabled
+} = require('./config/runtimeSafety');
 
 // Prefer IPv4 to avoid AggregateError (IPv6 timeouts) on some servers
 if (dns.setDefaultResultOrder) {
@@ -30,7 +35,8 @@ const { createSqliteSessionStore } = require('./config/sqliteSessionStore');
 // Inisialisasi aplikasi Express
 const app = express();
 
-assertCriticalSecuritySettings(getSettingsWithCache());
+const bootSettings = getSettingsWithCache();
+assertCriticalSecuritySettings(bootSettings);
 
 const isProduction = process.env.NODE_ENV === 'production';
 const cookieSecure = getSetting('cookie_secure', isProduction);
@@ -57,6 +63,8 @@ function applySessionLifetime(sessionState) {
 if (trustProxy) {
   app.set('trust proxy', 1);
 }
+
+installSafeRedirectMiddleware(app);
 
 // Middleware dasar
 app.use(express.json({
@@ -87,6 +95,13 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  const settings = getSettingsWithCache();
+  res.locals.runtimeWarnings = getRuntimeConfigurationWarnings(settings, process.env);
+  res.locals.selfUpdateEnabled = isSelfUpdateEnabled(settings, process.env);
+  next();
+});
+
 // i18n middleware (aman: hanya teks UI, tidak mengubah logic fitur)
 app.use((req, res, next) => {
   if (req.query && typeof req.query.lang === 'string') {
@@ -107,6 +122,11 @@ app.get('/lang/:lang', (req, res) => {
   const referer = req.get('referer');
   if (referer) return res.redirect(referer);
   return res.redirect('/');
+});
+
+const runtimeWarnings = getRuntimeConfigurationWarnings(bootSettings, process.env);
+runtimeWarnings.forEach((item) => {
+  logger.warn(`[Runtime] ${item.text}`);
 });
 
 // Konstanta

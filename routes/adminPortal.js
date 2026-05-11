@@ -51,6 +51,10 @@ const {
   isStrongSessionSecret,
   isStrongXenditCallbackToken
 } = require('../config/security');
+const {
+  getRuntimeConfigurationWarnings,
+  isSelfUpdateEnabled
+} = require('../config/runtimeSafety');
 
 const DIGIFLAZZ_URL = 'https://api.digiflazz.com/v1';
 const digiflazzApi = axios.create({
@@ -405,6 +409,14 @@ function flashMsg(req) {
   const m = req.session._msg;
   delete req.session._msg;
   return m || null;
+}
+
+function redirectBack(res, fallback = '/admin') {
+  return res.safeRedirect(null, fallback);
+}
+
+function redirectBack(res, fallback = '/admin') {
+  return res.safeRedirect(null, fallback);
 }
 
 function popSettingsFormData(req) {
@@ -1429,7 +1441,7 @@ router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdm
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal approve: ' + (e.message || String(e)) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customer-requests');
 });
 
 router.post('/customer-requests/:id/reject', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
@@ -1452,7 +1464,7 @@ router.post('/customer-requests/:id/reject', requireAdminSession, restrictToAdmi
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal reject: ' + (e.message || String(e)) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customer-requests');
 });
 
 // --- CASHIER MANAGEMENT ---
@@ -1569,7 +1581,7 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
         WHERE id=?
       `).run(req.session.isCashier ? 'cashier' : 'admin', resolvePaidByName(req, 'Admin'), 'Invoice sudah lunas', id);
       req.session._msg = { type: 'error', text: 'Invoice sudah lunas, request ditolak.' };
-      return res.redirect('back');
+      return redirectBack(res, '/admin/collector-payments');
     }
 
     const collectorLabel =
@@ -1620,7 +1632,7 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + (e.message || String(e)) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/collector-payments');
 });
 
 router.post('/collector-payments/:id/reject', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
@@ -1641,7 +1653,7 @@ router.post('/collector-payments/:id/reject', requireAdminSession, express.urlen
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + (e.message || String(e)) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/collector-payments');
 });
 
 router.get('/cashiers/reports', requireAdminSession, (req, res) => {
@@ -2352,7 +2364,7 @@ router.post('/customers/:id/isolate', requireAdminSession, async (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal isolir: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 router.post('/customers/:id/unisolate', requireAdminSession, async (req, res) => {
@@ -2363,7 +2375,7 @@ router.post('/customers/:id/unisolate', requireAdminSession, async (req, res) =>
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal aktivasi: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 router.post('/customers/:id/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
@@ -2378,7 +2390,7 @@ router.post('/customers/:id/billing/generate', requireAdminSession, express.urle
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal generate tagihan: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 router.post('/customers/:id/billing/reset-promo-cycles', requireAdminSession, restrictToAdmin, (req, res) => {
@@ -2393,7 +2405,7 @@ router.post('/customers/:id/billing/reset-promo-cycles', requireAdminSession, re
   } catch (e) {
     req.session._msg = { type: 'error', text: e.message || String(e) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 router.post('/customers/:id/billing/install-prorata', requireAdminSession, restrictToAdmin, (req, res) => {
@@ -2406,7 +2418,7 @@ router.post('/customers/:id/billing/install-prorata', requireAdminSession, restr
   } catch (e) {
     req.session._msg = { type: 'error', text: e.message || String(e) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
@@ -2485,7 +2497,7 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal bayar: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/customers');
 });
 
 // ─── PACKAGES ──────────────────────────────────────────────────────────────
@@ -2711,7 +2723,7 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal bayar massal: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
@@ -2751,7 +2763,7 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/unpay', requireAdminSession, (req, res) => {
@@ -2761,7 +2773,7 @@ router.post('/billing/:id/unpay', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/qris-assign', requireAdminSession, (req, res) => {
@@ -2776,7 +2788,7 @@ router.post('/billing/:id/qris-assign', requireAdminSession, (req, res) => {
 
     if (!force && inv.qris_amount_unique) {
       req.session._msg = { type: 'success', text: 'Kode QRIS sudah ada untuk tagihan ini.' };
-      return res.redirect('back');
+      return redirectBack(res, '/admin/billing');
     }
 
     const baseAmount = Number(inv.amount || 0);
@@ -2820,7 +2832,7 @@ router.post('/billing/:id/qris-assign', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal membuat kode QRIS: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/qris-clear', requireAdminSession, (req, res) => {
@@ -2836,7 +2848,7 @@ router.post('/billing/:id/qris-clear', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal menghapus kode QRIS: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
@@ -2907,7 +2919,7 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/tickets');
 });
 
 router.post('/billing/:id/delete', requireAdminSession, (req, res) => {
@@ -2917,7 +2929,7 @@ router.post('/billing/:id/delete', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/tickets');
 });
 
 // ─── TICKETS ───────────────────────────────────────────────────────────────
@@ -2990,7 +3002,7 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal update keluhan: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/bookkeeping');
 });
 
 router.post('/tickets/:id/delete', requireAdminSession, (req, res) => {
@@ -3000,7 +3012,7 @@ router.post('/tickets/:id/delete', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal hapus keluhan: ' + e.message };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/tickets');
 });
 
 // ─── REPORTS ───────────────────────────────────────────────────────────────
@@ -3279,7 +3291,7 @@ router.post('/bookkeeping/:id/delete', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal menghapus pembukuan: ' + (e.message || String(e)) };
   }
-  res.redirect('back');
+  return redirectBack(res, '/admin/bookkeeping');
 });
 
 router.get('/settings', requireAdminSession, (req, res) => {
@@ -3306,8 +3318,6 @@ router.get('/settings', requireAdminSession, (req, res) => {
     }
   });
   mergedSettings.admin_username = String(mergedSettings.admin_username || settings.admin_username || req.session.adminUser || 'admin').trim();
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
   const baseUrl = resolveRequestBaseUrl(req, resolveAppBaseUrl());
   const digiflazzWebhookUrl = `${baseUrl}/webhook/digiflazz`;
   const paymentWebhookUrl = `${baseUrl}/customer/payment/callback`;
@@ -3315,6 +3325,8 @@ router.get('/settings', requireAdminSession, (req, res) => {
     title: 'Pengaturan Sistem', company: company(), activePage: 'settings',
     settings: mergedSettings, msg: flashMsg(req),
     activeSettingsPane,
+    runtimeWarnings: getRuntimeConfigurationWarnings(mergedSettings, process.env),
+    selfUpdateEnabled: isSelfUpdateEnabled(mergedSettings, process.env),
     digiflazzWebhookUrl,
     paymentWebhookUrl
   });
@@ -3322,8 +3334,6 @@ router.get('/settings', requireAdminSession, (req, res) => {
 
 router.get('/digiflazz', requireAdminSession, restrictToAdmin, async (req, res) => {
   const settings = getSettings();
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.get('host');
   const baseUrl = resolveRequestBaseUrl(req, resolveAppBaseUrl());
   const digiflazzWebhookUrl = `${baseUrl}/webhook/digiflazz`;
   let digi = { configured: digiflazzConfigured(), deposit: null, error: null };
@@ -3499,6 +3509,11 @@ router.post('/digiflazz/products/update-price', requireAdminSession, restrictToA
 });
 
 router.get('/update', requireAdminSession, restrictToAdmin, (req, res) => {
+  const settings = getSettings();
+  if (!isSelfUpdateEnabled(settings, process.env)) {
+    req.session._msg = { type: 'error', text: 'Fitur update internal dinonaktifkan pada mode produksi demi keamanan.' };
+    return res.redirect('/admin/settings');
+  }
   const repoRoot = path.resolve(__dirname, '..');
   const info = getUpdateInfo(repoRoot);
   res.render('admin/update', {
@@ -3512,6 +3527,11 @@ router.get('/update', requireAdminSession, restrictToAdmin, (req, res) => {
 });
 
 router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
+  const settings = getSettings();
+  if (!isSelfUpdateEnabled(settings, process.env)) {
+    req.session._msg = { type: 'error', text: 'Fitur update internal dinonaktifkan pada mode produksi demi keamanan.' };
+    return res.redirect('/admin/settings');
+  }
   const repoRoot = path.resolve(__dirname, '..');
   const log = [];
   const pushCmd = (label, r) => {
@@ -3563,9 +3583,17 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     if (fs.existsSync(logsPath)) copyDirSync(logsPath, backupLogs);
     if (fs.existsSync(uploadsPath)) copyDirSync(uploadsPath, backupUploads);
 
-    const resetHard = runCmd('git', ['reset', '--hard', `origin/${branch}`], repoRoot);
-    pushCmd(`git reset --hard origin/${branch}`, resetHard);
-    if (!resetHard.ok) throw new Error('Gagal reset ke origin/' + branch);
+    const switchLocal = runCmd('git', ['switch', branch], repoRoot);
+    pushCmd(`git switch ${branch}`, switchLocal);
+    if (!switchLocal.ok) {
+      const switchTrack = runCmd('git', ['switch', '--track', `origin/${branch}`], repoRoot);
+      pushCmd(`git switch --track origin/${branch}`, switchTrack);
+      if (!switchTrack.ok) throw new Error(`Gagal pindah ke branch ${branch}. Pastikan worktree bersih sebelum update.`);
+    }
+
+    const pull = runCmd('git', ['pull', '--ff-only', 'origin', branch], repoRoot);
+    pushCmd(`git pull --ff-only origin ${branch}`, pull);
+    if (!pull.ok) throw new Error('Gagal mengambil update terbaru secara fast-forward.');
 
     if (remoteVersion && remoteVersion !== '-') {
       try {

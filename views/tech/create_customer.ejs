@@ -258,7 +258,7 @@
     const hint = document.getElementById('pppoeHint');
     const list = document.getElementById('pppoeList');
     if (hint) hint.innerText = 'Memuat user PPPoE dari MikroTik...';
-    if (list) list.innerHTML = '';
+    if (list) list.replaceChildren();
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-users?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-users`;
       const res = await fetch(url);
@@ -266,10 +266,14 @@
       if (!res.ok) throw new Error(data.error || 'Gagal memuat user PPPoE');
       const users = Array.isArray(data) ? data : [];
       if (list) {
-        list.innerHTML = users
+        list.replaceChildren();
+        users
           .filter(u => u && u.name)
-          .map(u => `<option value="${String(u.name).replace(/"/g, '&quot;')}"></option>`)
-          .join('');
+          .forEach((u) => {
+            const option = document.createElement('option');
+            option.value = String(u.name);
+            list.appendChild(option);
+          });
       }
       if (hint) hint.innerText = users.length ? `Tersedia ${users.length} user PPPoE.` : 'Tidak ada user PPPoE.';
     } catch (e) {
@@ -280,22 +284,35 @@
   async function loadPppoeProfiles() {
     const routerId = document.getElementById('router_id')?.value || '';
     const sel = document.getElementById('isolir_profile');
-    if (sel) sel.innerHTML = '';
+    if (sel) sel.replaceChildren();
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-profiles?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-profiles`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memuat profile PPPoE');
       const profiles = Array.isArray(data) ? data : [];
-      const opts = [];
-      opts.push('<option value="isolir">isolir</option>');
-      for (const p of profiles) {
-        if (!p || !p.name || p.name === 'isolir') continue;
-        opts.push(`<option value="${String(p.name).replace(/"/g, '&quot;')}">${p.name}</option>`);
+      if (sel) {
+        sel.replaceChildren();
+        const defaultOption = document.createElement('option');
+        defaultOption.value = 'isolir';
+        defaultOption.textContent = 'isolir';
+        sel.appendChild(defaultOption);
+        for (const p of profiles) {
+          if (!p || !p.name || p.name === 'isolir') continue;
+          const option = document.createElement('option');
+          option.value = String(p.name);
+          option.textContent = String(p.name);
+          sel.appendChild(option);
+        }
       }
-      if (sel) sel.innerHTML = opts.join('');
     } catch (e) {
-      if (sel) sel.innerHTML = '<option value="isolir">isolir</option>';
+      if (sel) {
+        sel.replaceChildren();
+        const defaultOption = document.createElement('option');
+        defaultOption.value = 'isolir';
+        defaultOption.textContent = 'isolir';
+        sel.appendChild(defaultOption);
+      }
     }
   }
 
