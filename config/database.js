@@ -590,7 +590,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_tech ON technician_tasks(technician_id);
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_due ON technician_tasks(due_date);
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_created ON technician_tasks(created_at);
-);
+`);
 
 try {
   db.exec('ALTER TABLE technician_tasks ADD COLUMN create_pppoe_secret INTEGER NOT NULL DEFAULT 0');
