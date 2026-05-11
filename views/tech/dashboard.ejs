@@ -6,6 +6,10 @@
 </div>
 
 <div class="stat-grid">
+  <div class="stat-box" style="border-left: 3px solid #3b82f6;">
+    <div class="lbl">Job Ditugaskan</div>
+    <div class="val text-primary"><%= stats.taskAssigned || 0 %></div>
+  </div>
   <div class="stat-box" style="border-left: 3px solid #f59e0b;">
     <div class="lbl"><%= t('tech.dashboard.in_progress', 'Sedang Dikerjakan') %></div>
     <div class="val text-warning"><%= stats.inProgress %></div>
@@ -14,16 +18,62 @@
     <div class="lbl"><%= t('tech.dashboard.resolved_today', 'Selesai Hari Ini') %></div>
     <div class="val text-success"><%= stats.resolved %></div>
   </div>
+  <div class="stat-box" style="border-left: 3px solid #ef4444;">
+    <div class="lbl">Deadline Hari Ini</div>
+    <div class="val text-danger"><%= stats.taskDueToday || 0 %></div>
+  </div>
 </div>
 
 <h6 class="mb-3 text-secondary fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 1px;">
-  <i class="bi bi-list-task me-1"></i> <%= t('tech.dashboard.active_tasks', 'Tugas Aktif Anda') %> (<%= tickets.length %>)
+  <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= (operationalTasks || []).length %>)
+</h6>
+
+<% if (!operationalTasks || operationalTasks.length === 0) { %>
+  <div class="text-center py-4">
+    <i class="bi bi-clipboard-check text-primary" style="font-size: 34px;"></i>
+    <p class="text-secondary mt-2 small">Belum ada job operasional yang ditugaskan. Jika admin membuat pemasangan baru, survey, atau perbaikan lapangan, job-nya akan muncul di sini.</p>
+  </div>
+<% } else { %>
+  <% operationalTasks.forEach((task) => { %>
+    <div class="t-card">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="badge-status badge-<%= task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open' %>">
+          <%= task.status === 'in_progress' ? 'Dikerjakan' : task.status === 'done' ? 'Selesai' : 'Ditugaskan' %>
+        </span>
+        <span class="text-secondary" style="font-size:11px;"><%= task.due_date || task.scheduled_date || '-' %></span>
+      </div>
+      <div class="fw-bold mb-1" style="font-size:15px;"><%= task.title %></div>
+      <div class="text-secondary mb-2" style="font-size:12px;">
+        <i class="bi bi-person me-1"></i><%= task.customer_name || task.linked_customer_name || 'Pelanggan umum' %><br>
+        <i class="bi bi-geo-alt-fill me-1"></i><%= task.customer_address || task.location_note || 'Lokasi menyusul' %>
+      </div>
+      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size: 13px;">
+        <div class="fw-semibold text-primary"><%= task.task_type === 'install' ? 'Pemasangan Baru' : task.task_type === 'repair' ? 'Perbaikan' : task.task_type === 'survey' ? 'Survey' : task.task_type === 'maintenance' ? 'Maintenance' : task.task_type === 'collection' ? 'Penagihan Lapangan' : task.task_type === 'relocation' ? 'Relokasi' : 'Lainnya' %></div>
+        <div><%= task.description || 'Tidak ada detail tambahan.' %></div>
+      </div>
+      <div class="d-flex gap-2">
+        <% if (task.status === 'assigned') { %>
+          <form method="POST" action="/tech/tasks/<%= task.id %>/start" class="flex-fill">
+            <button type="submit" class="btn btn-primary btn-action" style="margin-top:0"><i class="bi bi-play-circle me-2"></i>Mulai Kerjakan</button>
+          </form>
+        <% } else if (task.status === 'in_progress') { %>
+          <a href="/tech/tasks" class="btn btn-warning btn-action flex-fill" style="margin-top:0"><i class="bi bi-card-checklist me-2"></i>Buka Detail Job</a>
+        <% } else { %>
+          <a href="/tech/tasks" class="btn btn-outline-success btn-action flex-fill" style="margin-top:0"><i class="bi bi-journal-check me-2"></i>Lihat Riwayat Job</a>
+        <% } %>
+      </div>
+    </div>
+  <% }) %>
+<% } %>
+
+<h6 class="mb-3 text-secondary fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 1px;">
+  <i class="bi bi-headset me-1"></i> Tiket Keluhan Aktif (<%= tickets.length %>)
 </h6>
 
 <% if (tickets.length === 0) { %>
   <div class="text-center py-5">
     <i class="bi bi-check2-circle text-success" style="font-size: 40px;"></i>
-    <p class="text-secondary mt-2 small"><%= t('tech.dashboard.empty_active', 'Bagus! Tidak ada tugas aktif saat ini.') %><br><%= t('tech.dashboard.empty_active_hint', 'Silakan cek tab "Tiket Baru" untuk mengambil tugas.') %></p>
+    <p class="text-secondary mt-2 small">Tidak ada tiket keluhan aktif saat ini.<br>Silakan cek tab "Tiket Baru" jika ada gangguan pelanggan yang belum ditangani.</p>
   </div>
 <% } else { %>
   <% tickets.forEach(ticket => { %>

@@ -1,13 +1,20 @@
   </div> <!-- End container -->
 
+  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 }; %>
+
   <nav class="bottom-nav">
     <a href="/tech" class="nav-item <%= activePage === 'dashboard' ? 'active' : '' %>">
       <i class="bi bi-briefcase-fill"></i>
-      <span><%= t('tech.nav.my_tasks', 'Tugas Saya') %></span>
+      <span>Beranda</span>
+    </a>
+    <a href="/tech/tasks" class="nav-item <%= activePage === 'tasks' ? 'active' : '' %>">
+      <i class="bi bi-clipboard-check-fill"></i>
+      <% if (safeTechNav.assignedTasks > 0) { %><span class="nav-count"><%= safeTechNav.assignedTasks > 99 ? '99+' : safeTechNav.assignedTasks %></span><% } %>
+      <span>Job</span>
     </a>
     <a href="/tech/pool" class="nav-item <%= activePage === 'pool' ? 'active' : '' %>">
       <i class="bi bi-inbox-fill"></i>
-      <% if (techNav && techNav.openTickets > 0) { %><span class="nav-count"><%= techNav.openTickets > 99 ? '99+' : techNav.openTickets %></span><% } %>
+      <% if (safeTechNav.openTickets > 0) { %><span class="nav-count"><%= safeTechNav.openTickets > 99 ? '99+' : safeTechNav.openTickets %></span><% } %>
       <span><%= t('tech.nav.new_tickets', 'Tiket Baru') %></span>
     </a>
     <a href="/tech/map" class="nav-item <%= activePage === 'map' ? 'active' : '' %>">

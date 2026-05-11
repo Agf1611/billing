@@ -1,0 +1,129 @@
+<%- include('partials/header') %>
+
+<%
+  const taskTypeMap = {
+    install: 'Pemasangan Baru',
+    repair: 'Perbaikan',
+    survey: 'Survey',
+    maintenance: 'Maintenance',
+    collection: 'Penagihan Lapangan',
+    relocation: 'Relokasi',
+    other: 'Lainnya'
+  };
+  const taskPriorityMap = {
+    low: 'Rendah',
+    medium: 'Sedang',
+    high: 'Tinggi',
+    urgent: 'Urgent'
+  };
+%>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0 fw-bold">Job Lapangan</h5>
+    <div class="text-secondary" style="font-size:12px;">Daftar pekerjaan teknisi yang dibuat admin untuk operasional harian.</div>
+  </div>
+  <span class="badge-status badge-open"><%= (tasks || []).length %> job</span>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-box" style="border-left:3px solid #3b82f6;">
+    <div class="lbl">Ditugaskan</div>
+    <div class="val text-primary"><%= stats.taskAssigned || 0 %></div>
+  </div>
+  <div class="stat-box" style="border-left:3px solid #f59e0b;">
+    <div class="lbl">Dikerjakan</div>
+    <div class="val text-warning"><%= stats.taskInProgress || 0 %></div>
+  </div>
+  <div class="stat-box" style="border-left:3px solid #ef4444;">
+    <div class="lbl">Deadline Hari Ini</div>
+    <div class="val text-danger"><%= stats.taskDueToday || 0 %></div>
+  </div>
+  <div class="stat-box" style="border-left:3px solid #10b981;">
+    <div class="lbl">Selesai</div>
+    <div class="val text-success"><%= stats.taskDone || 0 %></div>
+  </div>
+</div>
+
+<div class="t-card">
+  <form method="GET" action="/tech/tasks" class="d-grid gap-2">
+    <label class="text-secondary small">Filter Status</label>
+    <select class="form-select rounded-4 tech-select" name="status" onchange="this.form.submit()">
+      <option value="all" <%= filterStatus === 'all' ? 'selected' : '' %>>Semua Job</option>
+      <option value="assigned" <%= filterStatus === 'assigned' ? 'selected' : '' %>>Ditugaskan</option>
+      <option value="in_progress" <%= filterStatus === 'in_progress' ? 'selected' : '' %>>Dikerjakan</option>
+      <option value="done" <%= filterStatus === 'done' ? 'selected' : '' %>>Selesai</option>
+      <option value="cancelled" <%= filterStatus === 'cancelled' ? 'selected' : '' %>>Dibatalkan</option>
+    </select>
+  </form>
+</div>
+
+<% if (!tasks || tasks.length === 0) { %>
+  <div class="text-center py-5">
+    <i class="bi bi-clipboard-check text-primary" style="font-size:40px;"></i>
+    <p class="text-secondary mt-2 small">Belum ada job untuk filter ini.</p>
+  </div>
+<% } else { %>
+  <% tasks.forEach((task) => { %>
+    <div class="t-card">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="badge-status badge-<%= task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open' %>">
+          <%= task.status === 'in_progress' ? 'Dikerjakan' : task.status === 'done' ? 'Selesai' : task.status === 'cancelled' ? 'Dibatalkan' : 'Ditugaskan' %>
+        </span>
+        <span class="text-secondary" style="font-size:11px;">Deadline: <%= task.due_date || '-' %></span>
+      </div>
+      <div class="fw-bold mb-1" style="font-size:15px;"><%= task.title %></div>
+      <div class="text-secondary mb-2" style="font-size:12px;">
+        <i class="bi bi-tags me-1"></i><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskPriorityMap[task.priority] || task.priority %><br>
+        <i class="bi bi-person me-1"></i><%= task.customer_name || task.linked_customer_name || 'Pelanggan umum' %><br>
+        <% if (task.customer_phone || task.linked_customer_phone) { %><i class="bi bi-telephone-fill me-1"></i><%= task.customer_phone || task.linked_customer_phone %><br><% } %>
+        <i class="bi bi-geo-alt-fill me-1"></i><%= task.customer_address || task.location_note || 'Lokasi menyusul' %>
+      </div>
+
+      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size:13px;">
+        <div class="fw-semibold text-primary">Detail Pekerjaan</div>
+        <div><%= task.description || 'Tidak ada catatan tambahan.' %></div>
+      </div>
+
+      <% if (task.completion_note) { %>
+        <div class="surface-soft p-2 rounded-3 mb-3" style="font-size:13px;">
+          <div class="fw-semibold text-success">Catatan Selesai</div>
+          <div><%= task.completion_note %></div>
+        </div>
+      <% } %>
+
+      <% if (task.status === 'assigned') { %>
+        <form method="POST" action="/tech/tasks/<%= task.id %>/start">
+          <button type="submit" class="btn btn-primary btn-action" style="margin-top:0"><i class="bi bi-play-circle me-2"></i>Mulai Kerjakan</button>
+        </form>
+      <% } else if (task.status === 'in_progress') { %>
+        <button type="button" class="btn btn-success btn-action" style="margin-top:0" data-bs-toggle="modal" data-bs-target="#completeTaskModal<%= task.id %>">
+          <i class="bi bi-check-circle me-2"></i>Tandai Selesai
+        </button>
+
+        <div class="modal fade" id="completeTaskModal<%= task.id %>" tabindex="-1">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content surface-soft">
+              <div class="modal-header" style="border-color:var(--tech-border)">
+                <h6 class="modal-title">Selesaikan Job</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <form method="POST" action="/tech/tasks/<%= task.id %>/complete">
+                <div class="modal-body">
+                  <label class="form-label text-secondary small">Catatan Penyelesaian</label>
+                  <textarea class="form-control tech-textarea" name="completion_note" rows="3" placeholder="Contoh: pemasangan selesai, ONU normal, pelanggan sudah online"></textarea>
+                </div>
+                <div class="modal-footer" style="border-color:var(--tech-border)">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                  <button type="submit" class="btn btn-success btn-sm">Simpan Selesai</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  <% }) %>
+<% } %>
+
+<%- include('partials/bottom_nav') %>

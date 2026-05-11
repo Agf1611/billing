@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title>Tugas Teknisi | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .task-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+    .task-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:14px;display:grid;gap:10px;box-shadow:var(--shadow-card)}
+    .task-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .task-title{display:grid;gap:4px}
+    .task-title strong{font-size:15px;line-height:1.3}
+    .task-sub{font-size:11px;color:var(--muted);line-height:1.4}
+    .task-pills{display:flex;gap:6px;flex-wrap:wrap}
+    .task-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .task-box{padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+    .task-box small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+    .task-box span,.task-box strong{display:block;font-size:11.5px;line-height:1.45}
+    .task-box.full{grid-column:1 / -1}
+    .task-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .task-toolbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}
+    .task-filters{display:flex;gap:8px;flex-wrap:wrap}
+    .task-lookup{position:relative}
+    .task-suggest{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--bg2);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-card);margin-top:6px;max-height:220px;overflow:auto;display:none}
+    .task-suggest button{width:100%;text-align:left;border:0;background:transparent;color:var(--text);padding:10px 12px;display:grid;gap:3px}
+    .task-suggest button:hover{background:rgba(255,255,255,.05)}
+    .task-suggest small{color:var(--muted)}
+    body[data-theme="light"] .task-card{background:rgba(255,255,255,.92)}
+    body[data-theme="light"] .task-box{background:rgba(105,88,255,.04);border-color:rgba(148,163,184,.18)}
+    @media(max-width:768px){
+      .task-toolbar,.task-filters{flex-direction:column;align-items:stretch}
+      .task-filters .fs,.task-filters .btn{width:100% !important}
+      .task-meta{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<%
+  const taskTypeMap = {
+    install: 'Pemasangan Baru',
+    repair: 'Perbaikan',
+    survey: 'Survey',
+    maintenance: 'Maintenance',
+    collection: 'Penagihan Lapangan',
+    relocation: 'Relokasi',
+    other: 'Lainnya'
+  };
+  const taskPriorityMap = {
+    low: 'Rendah',
+    medium: 'Sedang',
+    high: 'Tinggi',
+    urgent: 'Urgent'
+  };
+  const taskStatusMap = {
+    assigned: 'Ditugaskan',
+    in_progress: 'Dikerjakan',
+    done: 'Selesai',
+    cancelled: 'Dibatalkan'
+  };
+%>
+<%- include('partials/sidebar', { activePage: 'technician_tasks', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-clipboard-check"></i> Tugas Teknisi</div>
+    <div class="tb-right">
+      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+        <i class="bi bi-sun"></i><span>Terang</span>
+      </button>
+      <button class="btn btn-p btn-sm" type="button" onclick="openModal('addTaskModal')"><i class="bi bi-plus-lg"></i> Buat Tugas</button>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+  <div class="page">
+    <% if (msg) { %>
+      <div class="alert alert-<%= msg.type === 'error' ? 'd' : 's' %>"><i class="bi bi-<%= msg.type === 'error' ? 'exclamation-circle' : 'check-circle' %>"></i> <%= msg.text %></div>
+    <% } %>
+
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="sc p"><i class="bi bi-clipboard-data sc-icon"></i><div class="sc-label">Total Job</div><div class="sc-val"><%= stats.total %></div></div>
+      <div class="sc d"><i class="bi bi-hourglass-split sc-icon"></i><div class="sc-label">Ditugaskan</div><div class="sc-val"><%= stats.assigned %></div></div>
+      <div class="sc w"><i class="bi bi-tools sc-icon"></i><div class="sc-label">Dikerjakan</div><div class="sc-val"><%= stats.inProgress %></div></div>
+      <div class="sc s"><i class="bi bi-check-circle sc-icon"></i><div class="sc-label">Selesai</div><div class="sc-val"><%= stats.done %></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd task-toolbar">
+        <h6><i class="bi bi-list-ul"></i> Operasional Lapangan (<%= tasks.length %>)</h6>
+        <button class="btn btn-p btn-sm" type="button" onclick="openModal('addTaskModal')"><i class="bi bi-plus-lg"></i> Tugas Baru</button>
+      </div>
+      <div class="card-bd">
+        <form method="GET" action="/admin/technician-tasks" class="task-filters" style="margin-bottom:16px">
+          <select class="fs" name="status" style="width:160px" onchange="this.form.submit()">
+            <option value="all" <%= filterStatus === 'all' ? 'selected' : '' %>>Semua Status</option>
+            <option value="assigned" <%= filterStatus === 'assigned' ? 'selected' : '' %>>Ditugaskan</option>
+            <option value="in_progress" <%= filterStatus === 'in_progress' ? 'selected' : '' %>>Dikerjakan</option>
+            <option value="done" <%= filterStatus === 'done' ? 'selected' : '' %>>Selesai</option>
+            <option value="cancelled" <%= filterStatus === 'cancelled' ? 'selected' : '' %>>Dibatalkan</option>
+          </select>
+          <select class="fs" name="task_type" style="width:180px" onchange="this.form.submit()">
+            <option value="all" <%= filterTaskType === 'all' ? 'selected' : '' %>>Semua Jenis</option>
+            <% Object.entries(taskTypeMap).forEach(([key, label]) => { %>
+              <option value="<%= key %>" <%= filterTaskType === key ? 'selected' : '' %>><%= label %></option>
+            <% }) %>
+          </select>
+          <select class="fs" name="technician_id" style="width:190px" onchange="this.form.submit()">
+            <option value="0">Semua Teknisi</option>
+            <% technicians.forEach((tech) => { %>
+              <option value="<%= tech.id %>" <%= Number(filterTechnicianId || 0) === Number(tech.id) ? 'selected' : '' %>><%= tech.name %></option>
+            <% }) %>
+          </select>
+        </form>
+
+        <% if (!tasks.length) { %>
+          <div class="text-center text-muted" style="padding:32px 12px">Belum ada tugas teknisi. Buat tugas baru untuk pemasangan, perbaikan, survey, atau pekerjaan lapangan lainnya.</div>
+        <% } %>
+
+        <div class="task-grid">
+          <% tasks.forEach((task) => { %>
+            <div class="task-card">
+              <div class="task-head">
+                <div class="task-title">
+                  <strong><%= task.title %></strong>
+                  <div class="task-sub"><%= task.technician_name || 'Belum ditugaskan' %> • Dibuat <%= new Date(task.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) %></div>
+                </div>
+                <span class="badge <%= task.status === 'done' ? 'bs' : task.status === 'in_progress' ? 'bw' : task.status === 'cancelled' ? 'bd' : 'bp' %>"><%= taskStatusMap[task.status] || String(task.status || '').toUpperCase() %></span>
+              </div>
+
+              <div class="task-pills">
+                <span class="badge bp"><%= taskTypeMap[task.task_type] || task.task_type %></span>
+                <span class="badge <%= task.priority === 'urgent' ? 'bd' : task.priority === 'high' ? 'bw' : task.priority === 'low' ? 'bs' : 'bp' %>"><%= taskPriorityMap[task.priority] || task.priority %></span>
+              </div>
+
+              <div class="task-meta">
+                <div class="task-box">
+                  <small>Pelanggan</small>
+                  <strong><%= task.linked_customer_name || task.customer_name || '-' %></strong>
+                  <span><%= task.linked_customer_phone || task.customer_phone || '-' %></span>
+                </div>
+                <div class="task-box">
+                  <small>Jadwal</small>
+                  <strong><%= task.scheduled_date || '-' %></strong>
+                  <span>Deadline: <%= task.due_date || '-' %></span>
+                </div>
+                <div class="task-box full">
+                  <small>Alamat / Lokasi</small>
+                  <span><%= task.customer_address || task.location_note || '-' %></span>
+                </div>
+                <div class="task-box full">
+                  <small>Detail Pekerjaan</small>
+                  <span><%= task.description || '-' %></span>
+                </div>
+                <% if (task.completion_note) { %>
+                  <div class="task-box full">
+                    <small>Catatan Selesai</small>
+                    <span><%= task.completion_note %></span>
+                  </div>
+                <% } %>
+              </div>
+
+              <div class="task-actions">
+                <button type="button" class="btn btn-g btn-sm edit-task-btn"
+                  data-task='<%- JSON.stringify(task) %>'>
+                  <i class="bi bi-pencil"></i> Kelola
+                </button>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="addTaskModal">
+  <div class="mb">
+    <form method="POST" action="/admin/technician-tasks">
+      <div class="mh"><span class="mt"><i class="bi bi-plus-circle"></i> Buat Tugas Teknisi</span><button type="button" class="mc" onclick="closeModal('addTaskModal')">&times;</button></div>
+      <div class="mbody">
+        <div class="fg"><label class="fl">Judul Tugas</label><input class="fc" name="title" placeholder="Contoh: Pemasangan baru rumah Pak Budi" required></div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Jenis Tugas</label><select class="fs" name="task_type"><option value="install">Pemasangan Baru</option><option value="repair">Perbaikan</option><option value="survey">Survey</option><option value="maintenance">Maintenance</option><option value="collection">Penagihan Lapangan</option><option value="relocation">Relokasi</option><option value="other">Lainnya</option></select></div>
+          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" required><option value="">Pilih teknisi</option><% technicians.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
+        </div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Prioritas</label><select class="fs" name="priority"><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="urgent">Urgent</option><option value="low">Rendah</option></select></div>
+          <div class="fg"><label class="fl">Jadwal Kunjungan</label><input class="fc" type="date" name="scheduled_date"></div>
+        </div>
+        <div class="fg"><label class="fl">Deadline</label><input class="fc" type="date" name="due_date"></div>
+        <div class="fg task-lookup">
+          <label class="fl">Cari Pelanggan Existing</label>
+          <input class="fc customer-lookup-input" placeholder="Ketik nama, nomor, PPPoE, atau alamat pelanggan">
+          <input type="hidden" name="customer_id" class="customer-lookup-id">
+          <div class="task-suggest"></div>
+        </div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Nama Pelanggan</label><input class="fc customer-name-field" name="customer_name" placeholder="Bisa diisi manual jika belum ada di database"></div>
+          <div class="fg"><label class="fl">No. HP</label><input class="fc customer-phone-field" name="customer_phone" placeholder="08xxxxxxxxxx"></div>
+        </div>
+        <div class="fg"><label class="fl">Alamat Pelanggan</label><textarea class="fc customer-address-field" name="customer_address" rows="2" placeholder="Alamat lengkap atau titik temu"></textarea></div>
+        <div class="fg"><label class="fl">Catatan Lokasi / Patokan</label><textarea class="fc" name="location_note" rows="2" placeholder="Contoh: rumah pojok dekat musholla, kabel lewat gang kiri"></textarea></div>
+        <div class="fg"><label class="fl">Detail Pekerjaan</label><textarea class="fc" name="description" rows="3" placeholder="Jelaskan pekerjaan yang harus dikerjakan teknisi" required></textarea></div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn btn-g" onclick="closeModal('addTaskModal')">Batal</button>
+        <button type="submit" class="btn btn-p">Simpan Tugas</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="mo" id="editTaskModal">
+  <div class="mb">
+    <form method="POST" id="editTaskForm">
+      <div class="mh"><span class="mt"><i class="bi bi-pencil"></i> Kelola Tugas Teknisi</span><button type="button" class="mc" onclick="closeModal('editTaskModal')">&times;</button></div>
+      <div class="mbody">
+        <div class="fg"><label class="fl">Judul Tugas</label><input class="fc" name="title" id="edit-title" required></div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Jenis Tugas</label><select class="fs" name="task_type" id="edit-task-type"><option value="install">Pemasangan Baru</option><option value="repair">Perbaikan</option><option value="survey">Survey</option><option value="maintenance">Maintenance</option><option value="collection">Penagihan Lapangan</option><option value="relocation">Relokasi</option><option value="other">Lainnya</option></select></div>
+          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" id="edit-technician-id" required><option value="">Pilih teknisi</option><% technicians.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
+        </div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Prioritas</label><select class="fs" name="priority" id="edit-priority"><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="urgent">Urgent</option><option value="low">Rendah</option></select></div>
+          <div class="fg"><label class="fl">Status</label><select class="fs" name="status" id="edit-status"><option value="assigned">Ditugaskan</option><option value="in_progress">Dikerjakan</option><option value="done">Selesai</option><option value="cancelled">Dibatalkan</option></select></div>
+        </div>
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Jadwal Kunjungan</label><input class="fc" type="date" name="scheduled_date" id="edit-scheduled-date"></div>
+          <div class="fg"><label class="fl">Deadline</label><input class="fc" type="date" name="due_date" id="edit-due-date"></div>
+        </div>
+        <input type="hidden" name="customer_id" id="edit-customer-id">
+        <div class="grid-2">
+          <div class="fg"><label class="fl">Nama Pelanggan</label><input class="fc" name="customer_name" id="edit-customer-name"></div>
+          <div class="fg"><label class="fl">No. HP</label><input class="fc" name="customer_phone" id="edit-customer-phone"></div>
+        </div>
+        <div class="fg"><label class="fl">Alamat Pelanggan</label><textarea class="fc" name="customer_address" rows="2" id="edit-customer-address"></textarea></div>
+        <div class="fg"><label class="fl">Catatan Lokasi / Patokan</label><textarea class="fc" name="location_note" rows="2" id="edit-location-note"></textarea></div>
+        <div class="fg"><label class="fl">Detail Pekerjaan</label><textarea class="fc" name="description" rows="3" id="edit-description" required></textarea></div>
+        <div class="fg"><label class="fl">Catatan Penyelesaian</label><textarea class="fc" name="completion_note" rows="2" id="edit-completion-note" placeholder="Isi jika pekerjaan sudah selesai atau ada hasil penting di lapangan"></textarea></div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn btn-g" onclick="closeModal('editTaskModal')">Batal</button>
+        <button type="submit" class="btn btn-p">Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id){document.getElementById(id).classList.add('show')}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.mo').forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) modal.classList.remove('show'); }));
+
+let lookupTimer = null;
+
+function bindCustomerLookup(scope) {
+  const input = scope.querySelector('.customer-lookup-input');
+  const hiddenId = scope.querySelector('.customer-lookup-id');
+  const suggestBox = scope.querySelector('.task-suggest');
+  const nameField = scope.querySelector('.customer-name-field');
+  const phoneField = scope.querySelector('.customer-phone-field');
+  const addressField = scope.querySelector('.customer-address-field');
+  if (!input || !hiddenId || !suggestBox) return;
+
+  const clearSuggestions = () => {
+    suggestBox.replaceChildren();
+    suggestBox.style.display = 'none';
+  };
+
+  input.addEventListener('input', () => {
+    const keyword = String(input.value || '').trim();
+    hiddenId.value = '';
+    if (lookupTimer) clearTimeout(lookupTimer);
+    if (keyword.length < 2) {
+      clearSuggestions();
+      return;
+    }
+    lookupTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/admin/api/customers/suggest?q=${encodeURIComponent(keyword)}`);
+        const rows = await res.json();
+        suggestBox.replaceChildren();
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          const name = document.createElement('strong');
+          name.textContent = row.name || '-';
+          const meta = document.createElement('small');
+          meta.textContent = `${row.phone || '-'} • ${row.pppoe_username || row.genieacs_tag || '-'} • ${row.address || '-'}`;
+          button.appendChild(name);
+          button.appendChild(meta);
+          button.addEventListener('click', () => {
+            hiddenId.value = row.id || '';
+            input.value = row.name || '';
+            if (nameField) nameField.value = row.name || '';
+            if (phoneField) phoneField.value = row.phone || '';
+            if (addressField) addressField.value = row.address || '';
+            clearSuggestions();
+          });
+          suggestBox.appendChild(button);
+        });
+        suggestBox.style.display = suggestBox.children.length ? 'block' : 'none';
+      } catch (_error) {
+        clearSuggestions();
+      }
+    }, 240);
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(clearSuggestions, 160);
+  });
+}
+
+bindCustomerLookup(document.getElementById('addTaskModal'));
+
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('.edit-task-btn');
+  if (!button) return;
+  const task = JSON.parse(button.dataset.task || '{}');
+  document.getElementById('editTaskForm').action = '/admin/technician-tasks/' + task.id + '/update';
+  document.getElementById('edit-title').value = task.title || '';
+  document.getElementById('edit-task-type').value = task.task_type || 'repair';
+  document.getElementById('edit-technician-id').value = task.technician_id || '';
+  document.getElementById('edit-priority').value = task.priority || 'medium';
+  document.getElementById('edit-status').value = task.status || 'assigned';
+  document.getElementById('edit-scheduled-date').value = task.scheduled_date || '';
+  document.getElementById('edit-due-date').value = task.due_date || '';
+  document.getElementById('edit-customer-id').value = task.customer_id || '';
+  document.getElementById('edit-customer-name').value = task.customer_name || task.linked_customer_name || '';
+  document.getElementById('edit-customer-phone').value = task.customer_phone || task.linked_customer_phone || '';
+  document.getElementById('edit-customer-address').value = task.customer_address || '';
+  document.getElementById('edit-location-note').value = task.location_note || '';
+  document.getElementById('edit-description').value = task.description || '';
+  document.getElementById('edit-completion-note').value = task.completion_note || '';
+  openModal('editTaskModal');
+});
+
+setTimeout(() => document.querySelectorAll('.alert').forEach((alert) => { alert.style.display = 'none'; }), 5000);
+</script>
+</body>
+</html>

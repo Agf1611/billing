@@ -310,6 +310,8 @@
 
 <body>
 
+  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 }; %>
+
   <div class="top-nav">
     <h1 class="top-nav-title">
       <%= title %>
@@ -324,7 +326,7 @@
       <a href="/tech/customers/new" class="top-nav-btn" title="<%= t('tech.new_customer', 'Tambah Pelanggan') %>"><i class="bi bi-person-plus-fill"></i></a>
       <a href="/tech/pool" class="top-nav-btn" title="Tiket gangguan baru">
         <i class="bi bi-bell-fill"></i>
-        <% if (techNav && techNav.openTickets > 0) { %><span class="nav-icon-badge"><%= techNav.openTickets > 99 ? '99+' : techNav.openTickets %></span><% } %>
+        <% if (safeTechNav.openTickets > 0) { %><span class="nav-icon-badge"><%= safeTechNav.openTickets > 99 ? '99+' : safeTechNav.openTickets %></span><% } %>
       </a>
       <a href="/tech/logout" class="top-nav-btn" onclick="return confirm('<%= t('tech.logout_confirm', 'Apakah Anda yakin ingin logout?') %>')"><i class="bi bi-box-arrow-right"></i></a>
     </div>

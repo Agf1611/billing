@@ -12,6 +12,7 @@ const billingSvc = require('../services/billingService');
 const mikrotikService = require('../services/mikrotikService');
 const adminSvc = require('../services/adminService');
 const agentSvc = require('../services/agentService');
+const techSvc = require('../services/techService');
 const oltSvc = require('../services/oltService');
 const odpSvc = require('../services/odpService');
 const fs = require('fs');
@@ -1422,6 +1423,82 @@ router.post('/technicians/:id/delete', requireAdminSession, restrictToAdmin, (re
   adminSvc.deleteTechnician(req.params.id);
   req.session._msg = { type: 'success', text: 'Teknisi berhasil dihapus.' };
   res.redirect('/admin/technicians');
+});
+
+router.get('/technician-tasks', requireAdminSession, restrictToAdmin, (req, res) => {
+  const status = String(req.query.status || 'all').trim() || 'all';
+  const taskType = String(req.query.task_type || 'all').trim() || 'all';
+  const technicianId = Number(req.query.technician_id || 0) || 0;
+  const tasks = techSvc.listAdminTechnicianTasks({ status, taskType, technicianId });
+  const stats = techSvc.getAdminTechnicianTaskStats();
+  const technicians = adminSvc.getAllTechnicians().filter((tech) => Number(tech.is_active || 0) === 1);
+  res.render('admin/technician_tasks', {
+    title: 'Tugas Teknisi',
+    company: company(),
+    activePage: 'technician_tasks',
+    tasks,
+    stats,
+    technicians,
+    filterStatus: status,
+    filterTaskType: taskType,
+    filterTechnicianId: technicianId,
+    msg: flashMsg(req)
+  });
+});
+
+router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const customerId = Number(req.body.customer_id || 0) || null;
+    const linkedCustomer = customerId ? customerSvc.getCustomerById(customerId) : null;
+    techSvc.createTechnicianTask({
+      title: String(req.body.title || '').trim(),
+      task_type: String(req.body.task_type || 'repair').trim(),
+      description: String(req.body.description || '').trim(),
+      customer_id: customerId,
+      customer_name: linkedCustomer?.name || String(req.body.customer_name || '').trim(),
+      customer_phone: linkedCustomer?.phone || String(req.body.customer_phone || '').trim(),
+      customer_address: linkedCustomer?.address || String(req.body.customer_address || '').trim(),
+      location_note: String(req.body.location_note || '').trim(),
+      technician_id: Number(req.body.technician_id || 0) || null,
+      priority: String(req.body.priority || 'medium').trim(),
+      status: 'assigned',
+      scheduled_date: String(req.body.scheduled_date || '').trim() || null,
+      due_date: String(req.body.due_date || '').trim() || null,
+      created_by_name: resolvePaidByName(req, 'Admin')
+    });
+    req.session._msg = { type: 'success', text: 'Tugas teknisi berhasil dibuat.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal membuat tugas teknisi: ' + (e.message || String(e)) };
+  }
+  res.redirect('/admin/technician-tasks');
+});
+
+router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const taskId = Number(req.params.id || 0);
+    const customerId = Number(req.body.customer_id || 0) || null;
+    const linkedCustomer = customerId ? customerSvc.getCustomerById(customerId) : null;
+    techSvc.updateTechnicianTask(taskId, {
+      title: String(req.body.title || '').trim(),
+      task_type: String(req.body.task_type || 'repair').trim(),
+      description: String(req.body.description || '').trim(),
+      customer_id: customerId,
+      customer_name: linkedCustomer?.name || String(req.body.customer_name || '').trim(),
+      customer_phone: linkedCustomer?.phone || String(req.body.customer_phone || '').trim(),
+      customer_address: linkedCustomer?.address || String(req.body.customer_address || '').trim(),
+      location_note: String(req.body.location_note || '').trim(),
+      technician_id: Number(req.body.technician_id || 0) || null,
+      priority: String(req.body.priority || 'medium').trim(),
+      status: String(req.body.status || 'assigned').trim() || 'assigned',
+      scheduled_date: String(req.body.scheduled_date || '').trim() || null,
+      due_date: String(req.body.due_date || '').trim() || null,
+      completion_note: String(req.body.completion_note || '').trim()
+    });
+    req.session._msg = { type: 'success', text: 'Tugas teknisi berhasil diperbarui.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal memperbarui tugas teknisi: ' + (e.message || String(e)) };
+  }
+  res.redirect('/admin/technician-tasks');
 });
 
 router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res) => {

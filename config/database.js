@@ -560,6 +560,35 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS technician_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    task_type TEXT NOT NULL DEFAULT 'repair',
+    description TEXT DEFAULT '',
+    customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+    customer_name TEXT DEFAULT '',
+    customer_phone TEXT DEFAULT '',
+    customer_address TEXT DEFAULT '',
+    location_note TEXT DEFAULT '',
+    technician_id INTEGER REFERENCES technicians(id) ON DELETE SET NULL,
+    priority TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'assigned', -- assigned, in_progress, done, cancelled
+    scheduled_date DATE,
+    due_date DATE,
+    created_by_name TEXT DEFAULT '',
+    completion_note TEXT DEFAULT '',
+    started_at DATETIME,
+    completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_technician_tasks_status ON technician_tasks(status);
+  CREATE INDEX IF NOT EXISTS idx_technician_tasks_tech ON technician_tasks(technician_id);
+  CREATE INDEX IF NOT EXISTS idx_technician_tasks_due ON technician_tasks(due_date);
+  CREATE INDEX IF NOT EXISTS idx_technician_tasks_created ON technician_tasks(created_at);
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS digiflazz_products (
     sku TEXT PRIMARY KEY,
     product_name TEXT NOT NULL,

@@ -32,6 +32,7 @@ function getTechNav(techId) {
   return {
     openTickets: Number(stats?.open || 0),
     myTickets: Number(stats?.total || 0),
+    assignedTasks: Number((stats?.taskAssigned || 0) + (stats?.taskInProgress || 0)),
     inProgress: Number(stats?.inProgress || 0),
     resolved: Number(stats?.resolved || 0)
   };
@@ -75,12 +76,29 @@ router.get('/', requireTechSession, (req, res) => {
   const techId = req.session.techId;
   const stats = techSvc.getTechStats(techId);
   const myTickets = techSvc.getAssignedTickets(techId);
+  const operationalTasks = techSvc.getTechnicianTasks(techId, { status: 'all' }).slice(0, 4);
 
   renderTechPage(req, res, 'tech/dashboard', {
     title: 'Dashboard Teknisi', 
     activePage: 'dashboard',
     stats,
+    operationalTasks,
     tickets: myTickets,
+    msg: flashMsg(req)
+  });
+});
+
+router.get('/tasks', requireTechSession, (req, res) => {
+  const techId = req.session.techId;
+  const status = String(req.query.status || 'all').trim() || 'all';
+  const stats = techSvc.getTechStats(techId);
+  const tasks = techSvc.getTechnicianTasks(techId, { status });
+  renderTechPage(req, res, 'tech/tasks', {
+    title: 'Job Lapangan',
+    activePage: 'tasks',
+    stats,
+    filterStatus: status,
+    tasks,
     msg: flashMsg(req)
   });
 });
@@ -197,6 +215,26 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
     req.session._msg = { type: 'error', text: 'Gagal update keluhan: ' + e.message };
   }
   res.redirect('/tech');
+});
+
+router.post('/tasks/:id/start', requireTechSession, (req, res) => {
+  try {
+    techSvc.startTechnicianTask(req.params.id, req.session.techId);
+    req.session._msg = { type: 'success', text: 'Job lapangan sudah dimulai.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal memulai job: ' + e.message };
+  }
+  res.redirect('/tech/tasks');
+});
+
+router.post('/tasks/:id/complete', requireTechSession, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    techSvc.completeTechnicianTask(req.params.id, req.session.techId, req.body.completion_note || '');
+    req.session._msg = { type: 'success', text: 'Job lapangan ditandai selesai.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal menyelesaikan job: ' + e.message };
+  }
+  res.redirect('/tech/tasks');
 });
 
 // --- MONITORING ONU ---
