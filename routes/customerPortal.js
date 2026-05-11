@@ -28,16 +28,23 @@ const { buildDynamicQrisPayload } = require('../services/qrisService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
 const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
-const LOGIN_GENIE_PREFETCH_MAX_WAIT_MS = 3500;
-const LOGIN_GENIE_PREFETCH_INTERVAL_MS = 1200;
-const LOGIN_GENIE_PREFETCH_REQUEST_TIMEOUT_MS = 2200;
+const LOGIN_GENIE_PREFETCH_MAX_WAIT_MS = 1200;
+const LOGIN_GENIE_PREFETCH_INTERVAL_MS = 500;
+const LOGIN_GENIE_PREFETCH_REQUEST_TIMEOUT_MS = 900;
 const INITIAL_GENIE_SYNC_MAX_WAIT_MS = 10000;
 const INITIAL_GENIE_SYNC_INTERVAL_MS = 2500;
 const INITIAL_GENIE_SYNC_REQUEST_TIMEOUT_MS = 5000;
 const DASHBOARD_GENIE_FOLLOWUP_MAX_WAIT_MS = 3000;
 const DASHBOARD_GENIE_FOLLOWUP_INTERVAL_MS = 1200;
 const DASHBOARD_GENIE_FOLLOWUP_REQUEST_TIMEOUT_MS = 3000;
-const DASHBOARD_PPPOE_SNAPSHOT_TIMEOUT_MS = 6000;
+const DASHBOARD_PPPOE_SNAPSHOT_CACHE_MAX_AGE_MS = 60 * 1000;
+const DASHBOARD_PAYMENT_CHANNELS_TIMEOUT_MS = 1800;
+const CUSTOMER_PAYMENT_CHANNELS_CACHE_TTL_MS = 5 * 60 * 1000;
+let customerPaymentChannelsCache = {
+  key: '',
+  expiresAt: 0,
+  value: []
+};
 
 router.use((req, res, next) => {
   res.set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
@@ -307,7 +314,34 @@ function normalizePaymentMethodLabel(channel = {}) {
   return map[code] || rawName || code;
 }
 
+function getCustomerPaymentChannelsCacheKey(settings = {}) {
+  return JSON.stringify({
+    staticQris: hasStaticQrisEnabled(settings),
+    tripayEnabled: Boolean(settings.tripay_enabled)
+  });
+}
+
+function getCachedCustomerPaymentChannels(settings = {}) {
+  const cacheKey = getCustomerPaymentChannelsCacheKey(settings);
+  if (customerPaymentChannelsCache.key !== cacheKey) return null;
+  if (Date.now() >= Number(customerPaymentChannelsCache.expiresAt || 0)) return null;
+  return Array.isArray(customerPaymentChannelsCache.value)
+    ? customerPaymentChannelsCache.value.map((channel) => ({ ...channel }))
+    : null;
+}
+
+function setCachedCustomerPaymentChannels(settings = {}, channels = []) {
+  customerPaymentChannelsCache = {
+    key: getCustomerPaymentChannelsCacheKey(settings),
+    expiresAt: Date.now() + CUSTOMER_PAYMENT_CHANNELS_CACHE_TTL_MS,
+    value: Array.isArray(channels) ? channels.map((channel) => ({ ...channel })) : []
+  };
+}
+
 async function getCustomerPaymentChannels(settings = {}) {
+  const cached = getCachedCustomerPaymentChannels(settings);
+  if (cached) return cached;
+
   const channels = [];
   if (hasStaticQrisEnabled(settings)) {
     channels.push({
@@ -348,7 +382,7 @@ async function getCustomerPaymentChannels(settings = {}) {
     LINKAJA: 7
   };
 
-  return channels
+  const normalizedChannels = channels
     .filter((channel) => {
       const key = String(channel.code || '').toUpperCase();
       if (!key || seen.has(key)) return false;
@@ -367,6 +401,8 @@ async function getCustomerPaymentChannels(settings = {}) {
       if (pa !== pb) return pa - pb;
       return normalizePaymentMethodLabel(a).localeCompare(normalizePaymentMethodLabel(b), 'id');
     });
+  setCachedCustomerPaymentChannels(settings, normalizedChannels);
+  return normalizedChannels;
 }
 
 async function resolveCustomerPaymentGateway(settings, method) {
@@ -592,10 +628,24 @@ function getPortalDeviceCache(req) {
   return cached && typeof cached === 'object' ? cached : null;
 }
 
+function getPortalPppoeSnapshotCache(req, maxAgeMs = DASHBOARD_PPPOE_SNAPSHOT_CACHE_MAX_AGE_MS) {
+  const cached = req?.session?.portalPppoeSnapshotCache;
+  const cachedAt = Number(req?.session?.portalPppoeSnapshotCachedAt || 0);
+  if (!cached || typeof cached !== 'object' || !cachedAt) return null;
+  if (Number.isFinite(maxAgeMs) && maxAgeMs > 0 && (Date.now() - cachedAt) > maxAgeMs) return null;
+  return cached;
+}
+
 function setPortalDeviceCache(req, deviceData) {
   if (!req?.session) return;
   req.session.portalDeviceCache = deviceData && typeof deviceData === 'object' ? deviceData : null;
   req.session.portalDeviceCachedAt = Date.now();
+}
+
+function setPortalPppoeSnapshotCache(req, snapshot) {
+  if (!req?.session) return;
+  req.session.portalPppoeSnapshotCache = snapshot && typeof snapshot === 'object' ? snapshot : null;
+  req.session.portalPppoeSnapshotCachedAt = Date.now();
 }
 
 function patchPortalDeviceCache(req, partialData = {}) {
@@ -1182,19 +1232,7 @@ router.get('/dashboard', async (req, res) => {
     }
   }
   const routerId = profile && profile.router_id ? Number(profile.router_id) : null;
-  const pppoeLookup = String(
-    profile?.pppoe_username ||
-    deviceData?.pppoeUsername ||
-    (/[a-zA-Z]/.test(String(loginId || '')) ? loginId : '')
-  ).trim();
-  const pppoeSnapshot = (routerId && pppoeLookup)
-    ? await guardExternalCall(
-        () => mikrotikService.getPppoeCustomerSnapshot(pppoeLookup, routerId),
-        DASHBOARD_PPPOE_SNAPSHOT_TIMEOUT_MS,
-        `snapshot PPPoE ${pppoeLookup}`,
-        null
-      )
-    : null;
+  const pppoeSnapshot = getPortalPppoeSnapshotCache(req);
   if (profile?.id && pppoeSnapshot && (pppoeSnapshot.bytesIn > 0 || pppoeSnapshot.bytesOut > 0)) {
     usageSvc.syncUsageTotals(profile.id, pppoeSnapshot.bytesIn, pppoeSnapshot.bytesOut);
   }
@@ -1224,7 +1262,12 @@ router.get('/dashboard', async (req, res) => {
   else if (pppoeFromDevice) req.session.pppoe_username = pppoeFromDevice;
 
   const settings = getSettingsWithCache();
-  let paymentChannels = await getCustomerPaymentChannels(settings);
+  let paymentChannels = await guardExternalCall(
+    () => getCustomerPaymentChannels(settings),
+    DASHBOARD_PAYMENT_CHANNELS_TIMEOUT_MS,
+    'payment channels customer dashboard',
+    getCachedCustomerPaymentChannels(settings) || []
+  );
 
   let trafficMaxDownMbps = 10;
   let trafficMaxUpMbps = 10;
@@ -1313,6 +1356,11 @@ router.get('/api/pppoe-traffic', async (req, res) => {
       sessions = await conn.client.menu('/ppp/active').where('name', username).get();
     }
     if (!sessions || sessions.length === 0) {
+      setPortalPppoeSnapshotCache(req, {
+        username,
+        online: false,
+        statusText: 'Offline'
+      });
       return res.json({ ok: true, online: false, username, rxMbps: 0, txMbps: 0, ...getUsagePayload() });
     }
 
@@ -1357,6 +1405,15 @@ router.get('/api/pppoe-traffic', async (req, res) => {
           if (rxBps || txBps) {
             const routerRxMbps = (Number(rxBps) || 0) / 1e6;
             const routerTxMbps = (Number(txBps) || 0) / 1e6;
+            setPortalPppoeSnapshotCache(req, {
+              username,
+              interface: iface,
+              uptime,
+              online: true,
+              statusText: 'Online',
+              bytesIn,
+              bytesOut
+            });
             return res.json({
               ok: true,
               online: true,
@@ -1396,6 +1453,15 @@ router.get('/api/pppoe-traffic', async (req, res) => {
     if (profile?.id && (rxBytes > 0 || txBytes > 0)) {
       usageSvc.syncUsageTotals(profile.id, rxBytes, txBytes);
     }
+    setPortalPppoeSnapshotCache(req, {
+      username,
+      interface: iface,
+      uptime,
+      online: true,
+      statusText: 'Online',
+      bytesIn: rxBytes,
+      bytesOut: txBytes
+    });
 
     if (!prev || prev.sessionId !== sessionId || !prev.t) {
       return res.json({
