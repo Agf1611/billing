@@ -854,7 +854,7 @@ async function loadDevices() {
   const tbody   = document.getElementById('devices-tbody');
   const loading = document.getElementById('loading-devices');
   loading.style.display = 'block';
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
 
   try {
     const search = document.getElementById('search-device')?.value || '';
@@ -870,9 +870,9 @@ async function loadDevices() {
     document.getElementById('device-count').textContent = devicesData.length + I18N.devicesSuffix;
 
     if (devicesData.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">' + I18N.noDevicesFound + '</td></tr>';
+      tbody.insertAdjacentHTML('beforeend', '<tr><td colspan="6" class="text-center text-muted" style="padding:32px">' + I18N.noDevicesFound + '</td></tr>');
     } else {
-      tbody.innerHTML = devicesData.map((d, i) => {
+      tbody.insertAdjacentHTML('beforeend', devicesData.map((d, i) => {
         const isOn = d.status === 'online';
         const tagStr = d.tags.join(', ') || '-';
         const lastInformStr = d.lastInform ? new Date(d.lastInform).toLocaleString('id-ID', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
@@ -905,14 +905,15 @@ async function loadDevices() {
             <button class="btn btn-d btn-icon btn-sm" title="${I18N.titleReboot}" onclick="rebootDevice('${d.tags[0] || d.id}')"><i class="bi bi-power"></i></button>
           </td>
         </tr>`;
-      }).join('');
+      }).join(''));
     }
 
     // Update offline list on dashboard
     renderOfflineList(devicesData.filter(d => d.status === 'offline').slice(0, 5));
 
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:32px;color:var(--danger)"><i class="bi bi-exclamation-circle"></i> ' + I18N.errorLoadData + '</td></tr>';
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', '<tr><td colspan="6" class="text-center" style="padding:32px;color:var(--danger)"><i class="bi bi-exclamation-circle"></i> ' + I18N.errorLoadData + '</td></tr>');
   } finally {
     loading.style.display = 'none';
   }
@@ -923,10 +924,12 @@ function renderOfflineList(offlineDevices) {
   const el = document.getElementById('offline-list');
   if (!el) return;
   if (offlineDevices.length === 0) {
-    el.innerHTML = '<div class="text-center" style="padding:24px;font-size:13px;color:var(--success)"><i class="bi bi-check-circle-fill"></i> ' + I18N.allOnuOnline + '</div>';
+    el.replaceChildren();
+    el.insertAdjacentHTML('beforeend', '<div class="text-center" style="padding:24px;font-size:13px;color:var(--success)"><i class="bi bi-check-circle-fill"></i> ' + I18N.allOnuOnline + '</div>');
     return;
   }
-  el.innerHTML = offlineDevices.map(d => {
+  el.replaceChildren();
+  el.insertAdjacentHTML('beforeend', offlineDevices.map(d => {
     const ago = d.lastInform ? timeSince(new Date(d.lastInform)) : I18N.never;
     return `<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div>
@@ -938,7 +941,7 @@ function renderOfflineList(offlineDevices) {
         <div style="font-size:11px;color:var(--muted);margin-top:3px">${ago}</div>
       </div>
     </div>`;
-  }).join('');
+  }).join(''));
 }
 
 function timeSince(date) {
@@ -952,12 +955,15 @@ function timeSince(date) {
 // â”€â”€ DEVICE ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function showDetail(tag) {
   openModal('deviceModal');
-  document.getElementById('device-detail').innerHTML = '<div class="text-muted text-center" style="padding:20px">' + I18N.loading + '</div>';
+  const detailEl = document.getElementById('device-detail');
+  detailEl.replaceChildren();
+  detailEl.insertAdjacentHTML('beforeend', '<div class="text-muted text-center" style="padding:20px">' + I18N.loading + '</div>');
   try {
     const res = await fetch('/admin/api/device/' + encodeURIComponent(tag));
     const d   = await res.json();
     const isOn = d.status === 'Online';
-    document.getElementById('device-detail').innerHTML = `
+    detailEl.replaceChildren();
+    detailEl.insertAdjacentHTML('beforeend', `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div>
           <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -982,8 +988,8 @@ async function showDetail(tag) {
           <tbody>${d.connectedUsers.map(u=>`<tr><td>${u.hostname}</td><td>${u.ip}</td><td style="font-size:11px">${u.mac}</td><td>${u.iface}</td><td><span class="badge ${u.status==='Online'?'bs':'bm'}">${u.status}</span></td></tr>`).join('')}</tbody>
         </table></div>
       </div>` : '<p class="text-muted" style="margin-top:12px;font-size:13px"><i class="bi bi-info-circle"></i> ' + I18N.noConnectedDevices + '</p>'}
-    `;
-  } catch(e) { document.getElementById('device-detail').innerHTML = '<p class="text-muted text-center" style="padding:20px">' + I18N.detailLoadFailed + '</p>'; }
+    `);
+  } catch(e) { detailEl.replaceChildren(); detailEl.insertAdjacentHTML('beforeend', '<p class="text-muted text-center" style="padding:20px">' + I18N.detailLoadFailed + '</p>'); }
 }
 function row(k,v){return `<tr><td style="padding:6px 0;color:var(--muted);font-size:12px">${k}</td><td style="padding:6px 0;font-weight:500">${v||'-'}</td></tr>`;}
 
@@ -1089,14 +1095,14 @@ function showToast(msg, type = 's') {
   const icon = type === 's' ? 'check-circle-fill' : 'exclamation-circle-fill';
   const color = type === 's' ? 'var(--success)' : 'var(--danger)';
   
-  t.innerHTML = `
+  t.insertAdjacentHTML('beforeend', `
     <i class="bi bi-${icon}" style="font-size:20px;color:${color}"></i>
     <div style="flex:1">
       <div style="font-weight:600;margin-bottom:2px">${type === 's' ? I18N.success : I18N.failed}</div>
       <div style="color:var(--muted);font-size:13px">${msg}</div>
     </div>
     <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:4px"><i class="bi bi-x-lg"></i></button>
-  `;
+  `);
   document.body.appendChild(t);
   setTimeout(() => { if(t.parentElement) t.style.animation = 'slideOutRight .3s ease forwards'; setTimeout(() => t.remove(), 300); }, 5000);
 }

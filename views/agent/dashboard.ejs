@@ -1096,7 +1096,11 @@
             emptyState.id = 'df_emptyState';
             emptyState.className = 'col-12 text-center';
             emptyState.style.padding = '24px 0';
-            emptyState.innerHTML = '<div style="color:var(--muted);font-size:12px">Produk atau brand tidak ditemukan.</div>';
+            const emptyText = document.createElement('div');
+            emptyText.style.color = 'var(--muted)';
+            emptyText.style.fontSize = '12px';
+            emptyText.textContent = 'Produk atau brand tidak ditemukan.';
+            emptyState.appendChild(emptyText);
             brandGrid.appendChild(emptyState);
           }
         } else if (emptyState) {
@@ -1239,13 +1243,17 @@
         if (selectedBrandName) selectedBrandName.textContent = String(brand.name || '');
 
         if (nominalGrid) {
-          nominalGrid.innerHTML = '';
+          nominalGrid.replaceChildren();
           const items = Array.isArray(brand.items) ? brand.items : [];
           if (items.length === 0) {
             const col = document.createElement('div');
             col.className = 'col-12 text-center';
             col.style.padding = '24px 0';
-            col.innerHTML = '<div style="color:var(--muted);font-size:12px">Produk belum tersedia untuk brand ini.</div>';
+            const info = document.createElement('div');
+            info.style.color = 'var(--muted)';
+            info.style.fontSize = '12px';
+            info.textContent = 'Produk belum tersedia untuk brand ini.';
+            col.appendChild(info);
             nominalGrid.appendChild(col);
             return;
           }
@@ -1260,7 +1268,7 @@
             const price = Number(item?.price_sell || 0);
             const sku = String(item?.sku || '');
             const name = String(item?.product_name || sku);
-            card.innerHTML = `
+            card.insertAdjacentHTML('beforeend', `
               <div class="top">
                 <div style="min-width:0">
                   <div class="t1">${name}</div>
@@ -1271,7 +1279,7 @@
                   <div class="t2"><i class="bi bi-chevron-right"></i></div>
                 </div>
               </div>
-            `;
+            `);
 
             card.addEventListener('click', () => df_openOrderModal(item));
             col.appendChild(card);

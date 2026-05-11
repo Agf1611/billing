@@ -376,11 +376,25 @@
       }, 250);
     }
 
-    function getLocation() {
+    async function getLocation() {
       if (!navigator.geolocation) return alert('GPS tidak didukung di perangkat ini.');
+      try {
+        if (window.median?.android?.geoLocation?.promptLocationServices) {
+          window.median.android.geoLocation.promptLocationServices();
+          await new Promise((resolve) => setTimeout(resolve, 700));
+        }
+      } catch (_) {}
       navigator.geolocation.getCurrentPosition((pos) => {
         setCoords(pos.coords.latitude, pos.coords.longitude);
       }, (err) => {
+        const inMedianApp = Boolean(window.median?.android?.geoLocation?.promptLocationServices);
+        if (inMedianApp && window.median?.open?.appSettings) {
+          const openSettings = confirm('Izin lokasi belum aktif. Buka pengaturan aplikasi untuk mengaktifkannya?');
+          if (openSettings) {
+            try { window.median.open.appSettings(); } catch (_) {}
+          }
+          return;
+        }
         alert('Gagal mengambil lokasi: ' + (err.message || err));
       }, { enableHighAccuracy: true, timeout: 8000 });
     }

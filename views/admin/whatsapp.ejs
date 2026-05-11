@@ -146,7 +146,7 @@
         desc.innerText = I18N.descQr;
         qrSection.style.display = 'block';
         
-        qrContainer.innerHTML = '';
+        qrContainer.replaceChildren();
         if (typeof QRCode === 'undefined') {
           console.error('QRCode library still not loaded!');
           qrContainer.innerText = I18N.waitQrLib;

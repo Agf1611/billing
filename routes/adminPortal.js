@@ -55,6 +55,8 @@ const {
   getRuntimeConfigurationWarnings,
   isSelfUpdateEnabled
 } = require('../config/runtimeSafety');
+const registerBillingRoutes = require('./admin/registerBillingRoutes');
+const registerWhatsappRoutes = require('./admin/registerWhatsappRoutes');
 
 const DIGIFLAZZ_URL = 'https://api.digiflazz.com/v1';
 const digiflazzApi = axios.create({
@@ -409,10 +411,6 @@ function flashMsg(req) {
   const m = req.session._msg;
   delete req.session._msg;
   return m || null;
-}
-
-function redirectBack(res, fallback = '/admin') {
-  return res.safeRedirect(null, fallback);
 }
 
 function redirectBack(res, fallback = '/admin') {
@@ -2539,6 +2537,7 @@ router.post('/packages/:id/delete', requireAdminSession, (req, res) => {
 });
 
 // ─── BILLING ───────────────────────────────────────────────────────────────
+/*
 router.get('/billing', requireAdminSession, (req, res) => {
   const {
     month: filterMonth,
@@ -2919,7 +2918,7 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
   }
-  return redirectBack(res, '/admin/tickets');
+  return redirectBack(res, '/admin/billing');
 });
 
 router.post('/billing/:id/delete', requireAdminSession, (req, res) => {
@@ -2929,10 +2928,30 @@ router.post('/billing/:id/delete', requireAdminSession, (req, res) => {
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  return redirectBack(res, '/admin/tickets');
+  return redirectBack(res, '/admin/billing');
 });
 
 // ─── TICKETS ───────────────────────────────────────────────────────────────
+*/
+registerBillingRoutes(router, {
+  express,
+  requireAdmin,
+  requireAdminSession,
+  billingSvc,
+  customerSvc,
+  db,
+  getSetting,
+  getSettings,
+  company,
+  flashMsg,
+  buildInvoiceSummaryFromList,
+  resolvePaidByName,
+  sendPaidWhatsappNotification,
+  buildBillingWhatsappMessage,
+  buildManualPaymentMessage,
+  resolveRequestBaseUrl,
+  redirectBack
+});
 const ticketSvc = require('../services/ticketService');
 
 router.get('/tickets', requireAdminSession, (req, res) => {
@@ -3002,7 +3021,7 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal update keluhan: ' + e.message };
   }
-  return redirectBack(res, '/admin/bookkeeping');
+  return redirectBack(res, '/admin/tickets');
 });
 
 router.post('/tickets/:id/delete', requireAdminSession, (req, res) => {
@@ -5384,6 +5403,7 @@ function isTemporaryError(errorMessage) {
 // Global message history untuk duplicate detection
 global.broadcastMessageHistory = new Map();
 
+/*
 router.get('/whatsapp', requireAdminSession, async (req, res) => {
   res.render('admin/whatsapp', {
     title: 'Status WhatsApp', company: company(), activePage: 'whatsapp', msg: flashMsg(req)
@@ -5747,6 +5767,37 @@ router.post('/whatsapp/reset', requireAdminSession, (req, res) => {
 });
 
 // ─── ROUTERS (MULTI-ROUTER) ──────────────────────────────────────────────────
+*/
+registerWhatsappRoutes(router, {
+  express,
+  requireAdmin,
+  requireAdminSession,
+  company,
+  flashMsg,
+  getSetting,
+  saveSettings,
+  logger,
+  customerSvc,
+  billingSvc,
+  resolveRequestBaseUrl,
+  fillWhatsappTemplate,
+  buildWhatsappCustomerPayload,
+  defaultBillingWhatsappTemplate,
+  defaultDueReminderWhatsappTemplate,
+  defaultIsolationWhatsappTemplate,
+  defaultWelcomeWhatsappTemplate,
+  defaultReactivationWhatsappTemplate,
+  defaultPaidWhatsappTemplate,
+  buildWhatsappTemplatePreview,
+  resolveWhatsappTestRecipient,
+  formatPhoneDisplay,
+  path,
+  fs,
+  getRandomDelay,
+  getBackoffDelay,
+  addMessageVariation,
+  isPermanentError
+});
 router.get('/routers', requireAdminSession, (req, res) => {
   res.render('admin/routers', {
     title: 'Manajemen Router', company: company(), activePage: 'mikrotik',

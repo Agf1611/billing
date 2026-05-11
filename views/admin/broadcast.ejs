@@ -327,19 +327,31 @@ async function checkBroadcastStatus() {
       totalCountEl.textContent = status.total;
       failedCountEl.textContent = status.failed;
       submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + I18N.sendingText;
+      submitBtn.replaceChildren();
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner-border spinner-border-sm me-2';
+      submitBtn.appendChild(spinner);
+      submitBtn.append(document.createTextNode(I18N.sendingText));
       return;
     }
 
     if (status.total > 0 && status.sent + status.failed === status.total) {
       broadcastCounter.style.display = 'inline-flex';
       broadcastCounter.className = 'badge bs';
-      broadcastCounter.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${I18N.donePrefix} ${status.sent}/${status.total} ${I18N.sentSuffix}`;
+      broadcastCounter.replaceChildren();
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-check-circle-fill me-1';
+      broadcastCounter.appendChild(icon);
+      broadcastCounter.append(document.createTextNode(` ${I18N.donePrefix} ${status.sent}/${status.total} ${I18N.sentSuffix}`));
     } else {
       broadcastCounter.style.display = 'none';
     }
     submitBtn.disabled = false;
-    submitBtn.innerHTML = '<i class="bi bi-send"></i> ' + I18N.startBtn;
+    submitBtn.replaceChildren();
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-send';
+    submitBtn.appendChild(icon);
+    submitBtn.append(document.createTextNode(` ${I18N.startBtn}`));
   } catch (e) {
     console.error('Status check failed', e);
   }

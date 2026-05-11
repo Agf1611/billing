@@ -10,7 +10,6 @@
   </button>
 </div>
 
-<!-- Search Bar -->
 <div class="mb-3">
   <div class="input-group">
     <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
@@ -25,7 +24,6 @@
   </div>
 </div>
 
-<!-- Modal Edit SSID/Password -->
 <div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered mx-3">
     <div class="modal-content bg-dark border-secondary text-white">
@@ -36,17 +34,17 @@
       <div class="modal-body">
         <input type="hidden" id="modal-device-tag">
         <input type="hidden" id="modal-action-type">
-        
+
         <div id="ssid-input-group" class="d-none">
           <label class="form-label small text-secondary">Nama WiFi (SSID) Baru</label>
           <input type="text" id="new-ssid" class="form-control bg-dark border-secondary text-white" placeholder="Masukkan SSID baru">
         </div>
-        
+
         <div id="pass-input-group" class="d-none">
           <label class="form-label small text-secondary">Password WiFi Baru</label>
           <input type="text" id="new-password" class="form-control bg-dark border-secondary text-white" placeholder="Minimal 8 karakter">
         </div>
-        
+
         <div id="reboot-confirm" class="d-none text-center py-2">
           <i class="bi bi-exclamation-triangle-fill text-warning fs-1"></i>
           <p class="mt-2 mb-0">Apakah Anda yakin ingin melakukan reboot pada perangkat ini?</p>
@@ -64,81 +62,107 @@
 let allDevices = [];
 const actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
 
-async function loadDevices() {
+function escHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function setDeviceListMessage(message, className = 'text-center py-5 text-secondary small') {
   const container = document.getElementById('device-list');
+  if (!container) return;
+  container.replaceChildren();
+  const box = document.createElement('div');
+  box.className = className;
+  box.textContent = String(message || '');
+  container.appendChild(box);
+}
+
+function renderDevices(devices) {
+  const container = document.getElementById('device-list');
+  if (!container) return;
+  if (!Array.isArray(devices) || devices.length === 0) {
+    setDeviceListMessage('Tidak ada perangkat ditemukan');
+    return;
+  }
+
+  container.replaceChildren();
+  devices.forEach((device) => {
+    const isOn = device.status === 'online';
+    const title = device.customerName ? device.customerName : (Array.isArray(device.tags) ? device.tags.join(', ') : '') || 'Tanpa Tag';
+    const sub = device.customerName
+      ? `${(Array.isArray(device.tags) ? device.tags.join(', ') : '') || 'Tanpa Tag'} | SN: ${device.serialNumber || '-'}`
+      : `${device.model || 'ONU'} | SN: ${device.serialNumber || '-'}`;
+    const actionTag = escHtml((device.tags || [])[0] || '');
+    const actionSsid = escHtml(device.ssid || '');
+    const rxClass = device.rxPower && String(device.rxPower).includes('-')
+      ? (parseFloat(device.rxPower) < -27 ? 'text-danger' : 'text-success')
+      : '';
+
+    container.insertAdjacentHTML('beforeend', `
+      <div class="t-card mb-3 p-3" style="border-left: 4px solid ${isOn ? '#10b981' : '#ef4444'}">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div class="fw-bold" style="font-size: 15px;">${escHtml(title)}</div>
+            <div class="text-secondary small">${escHtml(sub)}</div>
+            ${device.customerPhone ? `<div class="text-secondary small">📞 ${escHtml(device.customerPhone)}</div>` : ''}
+          </div>
+          <span class="badge-status badge-${isOn ? 'resolved' : 'open'}">${isOn ? 'Online' : 'Offline'}</span>
+        </div>
+
+        <div class="row g-2 mb-3 mt-1" style="font-size: 12px;">
+          <div class="col-6">
+            <div class="text-secondary"><i class="bi bi-person-badge me-1"></i> PPPoE User</div>
+            <div class="fw-semibold text-truncate">${escHtml(device.pppoeUsername && device.pppoeUsername !== 'N/A' ? device.pppoeUsername : '-')}</div>
+          </div>
+          <div class="col-6">
+            <div class="text-secondary"><i class="bi bi-activity me-1"></i> Redaman (RX)</div>
+            <div class="fw-semibold ${rxClass}">${escHtml(device.rxPower || '-')}</div>
+          </div>
+          <div class="col-6">
+            <div class="text-secondary"><i class="bi bi-wifi me-1"></i> SSID</div>
+            <div class="fw-semibold text-truncate">${escHtml(device.ssid || '-')}</div>
+          </div>
+          <div class="col-6">
+            <div class="text-secondary"><i class="bi bi-globe me-1"></i> IP Address</div>
+            <div class="fw-semibold small">${escHtml(device.pppoeIP || '-')}</div>
+          </div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${actionTag}', 'ssid', '${actionSsid}')">
+            <i class="bi bi-wifi"></i> SSID
+          </button>
+          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${actionTag}', 'pass')">
+            <i class="bi bi-key"></i> Pass
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="openActionModal('${actionTag}', 'reboot')">
+            <i class="bi bi-power"></i>
+          </button>
+        </div>
+      </div>
+    `);
+  });
+}
+
+async function loadDevices() {
   try {
     const res = await fetch('/tech/api/devices');
     const data = await res.json();
     allDevices = data.devices || [];
     renderDevices(allDevices);
   } catch (e) {
-    container.innerHTML = `<div class="alert alert-danger small">Gagal memuat data: ${e.message}</div>`;
+    setDeviceListMessage(`Gagal memuat data: ${e.message}`, 'alert alert-danger small');
   }
-}
-
-function renderDevices(devices) {
-  const container = document.getElementById('device-list');
-  if (devices.length === 0) {
-    container.innerHTML = `<div class="text-center py-5 text-secondary small">Tidak ada perangkat ditemukan</div>`;
-    return;
-  }
-
-  container.innerHTML = devices.map(d => {
-    const isOn = d.status === 'online';
-    const title = d.customerName ? d.customerName : (d.tags.join(', ') || 'Tanpa Tag');
-    const sub = d.customerName ? `${d.tags.join(', ') || 'Tanpa Tag'} | SN: ${d.serialNumber}` : `${d.model || 'ONU'} | SN: ${d.serialNumber}`;
-    return `
-      <div class="t-card mb-3 p-3" style="border-left: 4px solid ${isOn ? '#10b981' : '#ef4444'}">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <div class="fw-bold" style="font-size: 15px;">${title}</div>
-            <div class="text-secondary small">${sub}</div>
-            ${d.customerPhone ? `<div class="text-secondary small">📞 ${d.customerPhone}</div>` : ``}
-          </div>
-          <span class="badge-status badge-${isOn ? 'resolved' : 'open'}">
-            ${isOn ? 'Online' : 'Offline'}
-          </span>
-        </div>
-        
-        <div class="row g-2 mb-3 mt-1" style="font-size: 12px;">
-          <div class="col-6">
-            <div class="text-secondary"><i class="bi bi-person-badge me-1"></i> PPPoE User</div>
-            <div class="fw-semibold text-truncate">${d.pppoeUsername && d.pppoeUsername !== 'N/A' ? d.pppoeUsername : '-'}</div>
-          </div>
-          <div class="col-6">
-            <div class="text-secondary"><i class="bi bi-activity me-1"></i> Redaman (RX)</div>
-            <div class="fw-semibold ${d.rxPower && String(d.rxPower).includes('-') ? (parseFloat(d.rxPower) < -27 ? 'text-danger' : 'text-success') : ''}">${d.rxPower || '-'}</div>
-          </div>
-          <div class="col-6">
-            <div class="text-secondary"><i class="bi bi-wifi me-1"></i> SSID</div>
-            <div class="fw-semibold text-truncate">${d.ssid || '-'}</div>
-          </div>
-          <div class="col-6">
-            <div class="text-secondary"><i class="bi bi-globe me-1"></i> IP Address</div>
-            <div class="fw-semibold small">${d.pppoeIP || '-'}</div>
-          </div>
-        </div>
-
-        <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${d.tags[0]}', 'ssid', '${d.ssid}')">
-            <i class="bi bi-wifi"></i> SSID
-          </button>
-          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${d.tags[0]}', 'pass')">
-            <i class="bi bi-key"></i> Pass
-          </button>
-          <button class="btn btn-sm btn-outline-danger" onclick="openActionModal('${d.tags[0]}', 'reboot')">
-            <i class="bi bi-power"></i>
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
 }
 
 function filterDevices() {
   const q = document.getElementById('search-input').value.toLowerCase();
-  const filtered = allDevices.filter(d => 
-    d.tags.some(t => t.toLowerCase().includes(q)) || 
+  const filtered = allDevices.filter((d) =>
+    d.tags.some((t) => t.toLowerCase().includes(q)) ||
     d.serialNumber.toLowerCase().includes(q) ||
     (d.pppoeUsername && d.pppoeUsername !== 'N/A' && String(d.pppoeUsername).toLowerCase().includes(q)) ||
     (d.customerName && String(d.customerName).toLowerCase().includes(q)) ||
@@ -151,14 +175,14 @@ function filterDevices() {
 function openActionModal(tag, type, currentSsid = '') {
   document.getElementById('modal-device-tag').value = tag;
   document.getElementById('modal-action-type').value = type;
-  
+
   document.getElementById('ssid-input-group').classList.add('d-none');
   document.getElementById('pass-input-group').classList.add('d-none');
   document.getElementById('reboot-confirm').classList.add('d-none');
-  
+
   const submitBtn = document.getElementById('btn-submit-action');
   submitBtn.className = 'btn btn-primary btn-sm';
-  
+
   if (type === 'ssid') {
     document.getElementById('modalTitle').innerText = 'Ubah SSID';
     document.getElementById('ssid-input-group').classList.remove('d-none');
@@ -175,7 +199,7 @@ function openActionModal(tag, type, currentSsid = '') {
     submitBtn.innerText = 'Ya, Reboot Now';
     submitBtn.className = 'btn btn-danger btn-sm';
   }
-  
+
   actionModal.show();
 }
 
@@ -183,10 +207,10 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
   const tag = document.getElementById('modal-device-tag').value;
   const type = document.getElementById('modal-action-type').value;
   const btn = this;
-  
+
   let url = '';
   let body = {};
-  
+
   if (type === 'ssid') {
     const ssid = document.getElementById('new-ssid').value.trim();
     if (!ssid) return alert('SSID tidak boleh kosong');
@@ -201,10 +225,14 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
     url = `/tech/api/device/${tag}/reboot`;
     body = {};
   }
-  
+
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Proses...';
-  
+  btn.replaceChildren();
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner-border spinner-border-sm';
+  btn.appendChild(spinner);
+  btn.append(document.createTextNode(' Proses...'));
+
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -212,7 +240,7 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
       body: JSON.stringify(body)
     });
     const result = await res.json();
-    
+
     if (result.success || result.ok) {
       alert('Perintah berhasil dikirim!');
       actionModal.hide();
@@ -224,7 +252,7 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
     alert('Error: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.innerText = 'Simpan Perubahan';
+    btn.textContent = 'Simpan Perubahan';
   }
 });
 

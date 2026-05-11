@@ -692,7 +692,8 @@ async function loadOltDashboard(id) {
     const cardBody = document.getElementById('card-table-body');
     if (stats.cards && stats.cards.length > 0) {
       cardContainer.style.display = 'block';
-      cardBody.innerHTML = stats.cards.map(card => {
+      cardBody.replaceChildren();
+      cardBody.insertAdjacentHTML('beforeend', stats.cards.map(card => {
         const statusClass = card.status === 'INSERVICE' || card.status === 'ONLINE' ? 'pill-online' : 'pill-offline';
         return `<tr>
           <td><strong>${card.index}</strong></td>
@@ -703,7 +704,7 @@ async function loadOltDashboard(id) {
           <td>${card.cpu}</td>
           <td>${card.ram}</td>
         </tr>`;
-      }).join('');
+      }).join(''));
     } else {
       cardContainer.style.display = 'none';
     }
@@ -713,7 +714,8 @@ async function loadOltDashboard(id) {
     const unauthBody = document.getElementById('unauth-table-body');
     if (stats.unauth_onus && stats.unauth_onus.length > 0) {
       unauthContainer.style.display = 'block';
-      unauthBody.innerHTML = stats.unauth_onus.map(onu => {
+      unauthBody.replaceChildren();
+      unauthBody.insertAdjacentHTML('beforeend', stats.unauth_onus.map(onu => {
         return `<tr>
           <td><code class="sn-mac">${onu.id || onu.index}</code></td>
           <td><code class="sn-mac">${onu.sn}</code></td>
@@ -724,7 +726,7 @@ async function loadOltDashboard(id) {
             </button>
           </td>
         </tr>`;
-      }).join('');
+      }).join(''));
     } else {
       unauthContainer.style.display = 'none';
     }
@@ -733,7 +735,8 @@ async function loadOltDashboard(id) {
     const tbody = document.getElementById('onu-table-body');
     if (stats.onus && stats.onus.length > 0) {
       document.getElementById('search-container').style.display = 'block';
-      tbody.innerHTML = stats.onus.map((onu, index) => {
+      tbody.replaceChildren();
+      tbody.insertAdjacentHTML('beforeend', stats.onus.map((onu, index) => {
         const statusVal = String(onu.status || '');
         const isOnline = statusVal.toLowerCase() === 'online';
         const statusClass = isOnline ? 'pill-online' : 'pill-offline';
@@ -761,19 +764,22 @@ async function loadOltDashboard(id) {
             </div>
           </td>
         </tr>`;
-      }).join('');
+      }).join(''));
     } else {
       document.getElementById('search-container').style.display = 'none';
-      tbody.innerHTML = `<tr><td colspan="8">
+      tbody.replaceChildren();
+      tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="8">
         <div class="empty-state">
           <i class="bi bi-exclamation-triangle"></i>
           <p>${stats.error || I18N.noOnuData}</p>
           ${stats.error ? '<button class="btn btn-sm btn-p mt-2" onclick="refreshCurrentOlt()">' + I18N.tryAgain + '</button>' : ''}
         </div>
-      </td></tr>`;
+      </td></tr>`);
     }
   } catch (e) {
-    document.getElementById('onu-table-body').innerHTML = `<tr><td colspan="8" class="text-center p-5 text-danger">${I18N.errorPrefix}${e.message}</td></tr>`;
+    const tbody = document.getElementById('onu-table-body');
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="8" class="text-center p-5 text-danger">${I18N.errorPrefix}${e.message}</td></tr>`);
   } finally {
     overlay.style.display = 'none';
   }

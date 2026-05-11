@@ -573,14 +573,25 @@
     const tbody = document.getElementById(tbodyId);
     if (!tbody) return;
     const toneClass = tone === 'danger' ? 'text-danger' : 'text-muted';
-    tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center ${toneClass}">${message}</td></tr>`;
+    tbody.replaceChildren();
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = colspan;
+    td.className = `text-center ${toneClass}`;
+    td.textContent = String(message || '');
+    tr.appendChild(td);
+    tbody.appendChild(tr);
   }
 
   function setMobileListMessage(containerId, message, tone = 'muted') {
     const container = document.getElementById(containerId);
     if (!container) return;
     const extraClass = tone === 'danger' ? ' text-danger' : '';
-    container.innerHTML = `<div class="monitor-mobile-empty${extraClass}">${message}</div>`;
+    container.replaceChildren();
+    const div = document.createElement('div');
+    div.className = `monitor-mobile-empty${extraClass}`;
+    div.textContent = String(message || '');
+    container.appendChild(div);
   }
 
   function escapeHtml(value) {
@@ -600,7 +611,9 @@
   function renderMobileCards(containerId, cards) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    container.innerHTML = cards.join('');
+    container.replaceChildren();
+    const html = (Array.isArray(cards) ? cards : []).join('');
+    if (html) container.insertAdjacentHTML('beforeend', html);
   }
 
   function renderStatusBadge(status) {
@@ -646,13 +659,14 @@
 
     const tbody = document.getElementById('pppoe-list');
     if (!pppoeData.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center">' + I18N.emptySecrets + '</td></tr>';
+      setTableMessage('pppoe-list', 7, I18N.emptySecrets);
       setMobileListMessage('pppoe-mobile-list', I18N.emptySecrets);
       if (!options.skipPersist) persistMonitoringCache();
       return;
     }
 
-    tbody.innerHTML = pppoeData.map((s, i) => {
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', pppoeData.map((s, i) => {
       const active = s.session || null;
       const statusKey = active
         ? 'online'
@@ -672,7 +686,7 @@
           </td>
         </tr>
       `;
-    }).join('');
+    }).join(''));
 
     renderMobileCards('pppoe-mobile-list', pppoeData.map((s, i) => {
       const active = s.session || null;
@@ -727,13 +741,14 @@
 
     const tbody = document.getElementById('hotspot-list');
     if (!hotspotData.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center">' + I18N.emptyHotspotUsers + '</td></tr>';
+      setTableMessage('hotspot-list', 8, I18N.emptyHotspotUsers);
       setMobileListMessage('hotspot-mobile-list', I18N.emptyHotspotUsers);
       if (!options.skipPersist) persistMonitoringCache();
       return;
     }
 
-    tbody.innerHTML = hotspotData.map((h, i) => {
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', hotspotData.map((h, i) => {
       const active = h.session || null;
       const statusKey = active
         ? 'online'
@@ -754,7 +769,7 @@
           </td>
         </tr>
       `;
-    }).join('');
+    }).join(''));
 
     renderMobileCards('hotspot-mobile-list', hotspotData.map((h, i) => {
       const active = h.session || null;
@@ -809,13 +824,14 @@
 
     const tbody = document.getElementById('pppoe-profiles-list');
     if (!pppoeProfilesData.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="text-center">${I18N.emptyPppoeProfiles}</td></tr>`;
+      setTableMessage('pppoe-profiles-list', 5, I18N.emptyPppoeProfiles);
       setMobileListMessage('pppoe-profiles-mobile-list', I18N.emptyPppoeProfiles);
       if (!options.skipPersist) persistMonitoringCache();
       return;
     }
 
-    tbody.innerHTML = pppoeProfilesData.map((p, i) => `
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', pppoeProfilesData.map((p, i) => `
       <tr>
         <td class="fw6">${p.name}</td>
         <td>${p.localAddress || '-'}</td>
@@ -826,7 +842,7 @@
           <button class="btn btn-d btn-icon btn-sm" onclick="deletePppoeProfile('${p.id || p.name}')"><i class="bi bi-trash"></i></button>
         </td>
       </tr>
-    `).join('');
+    `).join(''));
 
     renderMobileCards('pppoe-profiles-mobile-list', pppoeProfilesData.map((p, i) => `
       <div class="monitor-mobile-card">
@@ -870,13 +886,14 @@
 
     const tbody = document.getElementById('hotspot-profiles-list');
     if (!hotspotProfilesData.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center">${I18N.emptyHotspotProfiles}</td></tr>`;
+      setTableMessage('hotspot-profiles-list', 7, I18N.emptyHotspotProfiles);
       setMobileListMessage('hotspot-profiles-mobile-list', I18N.emptyHotspotProfiles);
       if (!options.skipPersist) persistMonitoringCache();
       return;
     }
 
-    tbody.innerHTML = hotspotProfilesData.map((p, i) => {
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', hotspotProfilesData.map((p, i) => {
       const meta = parseMikhmonOnLogin(p.onLogin || p['on-login'] || '');
       const price = meta ? `Rp ${Number(meta.price || 0).toLocaleString('id-ID')}` : '-';
       const validity = meta ? (meta.validity || '-') : '-';
@@ -894,7 +911,7 @@
         </td>
       </tr>
     `;
-    }).join('');
+    }).join(''));
 
     renderMobileCards('hotspot-profiles-mobile-list', hotspotProfilesData.map((p, i) => {
       const meta = parseMikhmonOnLogin(p.onLogin || p['on-login'] || '');
@@ -1005,13 +1022,21 @@
       };
       const current = labelMap[monitoringSync.status] || labelMap.idle;
       statusEl.className = `monitor-sync-status ${monitoringSync.status}`;
-      statusEl.innerHTML = `<i class="bi bi-${current.icon}"></i><span>${current.text}</span>`;
+      statusEl.replaceChildren();
+      const icon = document.createElement('i');
+      icon.className = `bi bi-${current.icon}`;
+      const label = document.createElement('span');
+      label.textContent = String(current.text || '');
+      statusEl.appendChild(icon);
+      statusEl.appendChild(label);
     }
     if (refreshBtn) {
       refreshBtn.disabled = monitoringSync.status === 'syncing';
-      refreshBtn.innerHTML = monitoringSync.status === 'syncing'
-        ? '<i class="bi bi-arrow-repeat"></i> Memuat data...'
-        : '<i class="bi bi-arrow-clockwise"></i> Refresh Manual';
+      refreshBtn.replaceChildren();
+      const icon = document.createElement('i');
+      icon.className = monitoringSync.status === 'syncing' ? 'bi bi-arrow-repeat' : 'bi bi-arrow-clockwise';
+      refreshBtn.appendChild(icon);
+      refreshBtn.append(document.createTextNode(monitoringSync.status === 'syncing' ? ' Memuat data...' : ' Refresh Manual'));
     }
   }
 
@@ -1248,7 +1273,7 @@
       applyPppoeResponse(sRes);
     } catch (err) {
       console.error('Error loadSecrets:', err);
-      document.getElementById('pppoe-list').innerHTML = '<tr><td colspan="7" class="text-center text-danger">' + I18N.loadFailed + '</td></tr>';
+      setTableMessage('pppoe-list', 7, I18N.loadFailed, 'danger');
       setMobileListMessage('pppoe-mobile-list', I18N.loadFailed, 'danger');
     } finally {
       loadState.pppoe = false;
@@ -1272,7 +1297,7 @@
       applyHotspotResponse(uRes);
     } catch (err) {
       console.error('Error loadHotspotUsers:', err);
-      document.getElementById('hotspot-list').innerHTML = '<tr><td colspan="8" class="text-center text-danger">' + I18N.loadFailed + '</td></tr>';
+      setTableMessage('hotspot-list', 8, I18N.loadFailed, 'danger');
       setMobileListMessage('hotspot-mobile-list', I18N.loadFailed, 'danger');
     } finally {
       loadState.hotspot = false;
@@ -1353,10 +1378,22 @@
       const hProfiles = hResult.status === 'fulfilled' && Array.isArray(hResult.value) ? hResult.value : [];
 
       const pSel = document.getElementById('s_profile');
-      pSel.innerHTML = pProfiles.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+      pSel.replaceChildren();
+      pProfiles.forEach((p) => {
+        const option = document.createElement('option');
+        option.value = String(p.name || '');
+        option.textContent = String(p.name || '');
+        pSel.appendChild(option);
+      });
 
       const hSel = document.getElementById('h_profile');
-      hSel.innerHTML = hProfiles.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+      hSel.replaceChildren();
+      hProfiles.forEach((p) => {
+        const option = document.createElement('option');
+        option.value = String(p.name || '');
+        option.textContent = String(p.name || '');
+        hSel.appendChild(option);
+      });
     } catch (err) {
       console.error('Error loadProfiles:', err);
     }

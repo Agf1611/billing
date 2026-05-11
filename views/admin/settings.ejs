@@ -984,7 +984,11 @@ function toggleEwalletLive() {
   const btn = document.getElementById('ew_live_btn');
   if (btn) {
     btn.className = ewLiveActive ? 'btn btn-d btn-sm' : 'btn btn-p btn-sm';
-    btn.innerHTML = ewLiveActive ? '<i class="bi bi-stop-circle"></i> Stop' : '<i class="bi bi-broadcast"></i> Live';
+    btn.replaceChildren();
+    const icon = document.createElement('i');
+    icon.className = ewLiveActive ? 'bi bi-stop-circle' : 'bi bi-broadcast';
+    btn.appendChild(icon);
+    btn.append(document.createTextNode(ewLiveActive ? ' Stop' : ' Live'));
   }
   if (ewLiveTimer) {
     clearInterval(ewLiveTimer);
@@ -1002,7 +1006,8 @@ async function loadEwalletLogs() {
   const q = document.getElementById('ew_q')?.value || '';
   const limit = document.getElementById('ew_limit')?.value || '200';
   if (!body) return;
-  body.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Memuat...</td></tr>';
+  body.replaceChildren();
+  body.insertAdjacentHTML('beforeend', '<tr><td colspan="7" class="text-center text-muted">Memuat...</td></tr>');
   try {
     const url = `/admin/api/webhook/payment-notif/logs?limit=${encodeURIComponent(limit)}&service=${encodeURIComponent(service)}&q=${encodeURIComponent(q)}`;
     const res = await fetch(url);
@@ -1010,7 +1015,8 @@ async function loadEwalletLogs() {
     if (!res.ok || !data.ok) throw new Error(data.error || 'Gagal memuat log');
     const rows = Array.isArray(data.rows) ? data.rows : [];
     if (rows.length === 0) {
-      body.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada data.</td></tr>';
+      body.replaceChildren();
+      body.insertAdjacentHTML('beforeend', '<tr><td colspan="7" class="text-center text-muted">Belum ada data.</td></tr>');
       return;
     }
     const newest = rows[0];
@@ -1024,7 +1030,8 @@ async function loadEwalletLogs() {
       showEwalletNotification(newest);
     }
 
-    body.innerHTML = rows.map(r => {
+    body.replaceChildren();
+    body.insertAdjacentHTML('beforeend', rows.map(r => {
       const ok = Number(r.parsed_ok || 0) ? 'Y' : 'N';
       const amount = (r.parsed_amount != null && r.parsed_amount !== '') ? Number(r.parsed_amount).toLocaleString('id-ID') : '-';
       const created = r.created_at ? escHtml(r.created_at) : '-';
@@ -1053,7 +1060,7 @@ async function loadEwalletLogs() {
           </button>
         </td>
       </tr>`;
-    }).join('');
+    }).join(''));
 
     body.querySelectorAll('.btn-copy-ew').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1070,7 +1077,8 @@ async function loadEwalletLogs() {
       });
     });
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="7" class="text-center text-muted">${escHtml(e.message)}</td></tr>`;
+    body.replaceChildren();
+    body.insertAdjacentHTML('beforeend', `<tr><td colspan="7" class="text-center text-muted">${escHtml(e.message)}</td></tr>`);
   }
 }
 

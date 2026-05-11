@@ -191,10 +191,16 @@
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/admin/backup/restore';
-    form.innerHTML = `
-      <input type="hidden" name="fileName" value="${fileName}">
-      <input type="hidden" name="type" value="${type}">
-    `;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'hidden';
+    fileInput.name = 'fileName';
+    fileInput.value = fileName;
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'type';
+    typeInput.value = type;
+    form.appendChild(fileInput);
+    form.appendChild(typeInput);
     document.body.appendChild(form);
     form.submit();
   }
@@ -207,9 +213,11 @@
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/admin/backup/delete';
-    form.innerHTML = `
-      <input type="hidden" name="fileName" value="${fileName}">
-    `;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'hidden';
+    fileInput.name = 'fileName';
+    fileInput.value = fileName;
+    form.appendChild(fileInput);
     document.body.appendChild(form);
     form.submit();
   }

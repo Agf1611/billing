@@ -571,9 +571,18 @@ document.addEventListener('click', async function(e) {
   const multiSection = document.getElementById('multiPaySection');
   const unpaidList = document.getElementById('unpaidList');
   const payDesc = document.getElementById('payDesc');
+
+  const setUnpaidListMessage = (message) => {
+    if (!unpaidList) return;
+    unpaidList.replaceChildren();
+    const info = document.createElement('div');
+    info.className = 'text-muted small';
+    info.textContent = String(message || '');
+    unpaidList.appendChild(info);
+  };
   
   payDesc.textContent = I18N.customerPrefix + ' ' + name;
-  unpaidList.innerHTML = '<div class="text-muted small">' + I18N.loadingOther + '</div>';
+  setUnpaidListMessage(I18N.loadingOther);
   multiSection.style.display = 'block';
   
   openModal('payModal');
@@ -582,7 +591,7 @@ document.addEventListener('click', async function(e) {
     const res = await fetch('/admin/api/billing/unpaid/' + customerId);
     const invoices = await res.json();
     
-    unpaidList.innerHTML = '';
+    unpaidList.replaceChildren();
     if (invoices.length > 0) {
       invoices.forEach(inv => {
         const div = document.createElement('div');
@@ -590,14 +599,34 @@ document.addEventListener('click', async function(e) {
         div.style.alignItems = 'center';
         div.style.gap = '10px';
         const isCurrent = inv.id == id;
-        div.innerHTML = `
-          <input type="checkbox" name="invoice_ids" value="${inv.id}" id="inv_${inv.id}" ${isCurrent ? 'checked' : ''} style="width:16px; height:16px">
-          <label for="inv_${inv.id}" style="font-size:13px; cursor:pointer">
-            ${I18N.periodPrefix} ${(MONTHS[inv.period_month] || '')} ${inv.period_year} 
-            <span class="text-muted">(${inv.package_name || I18N.packageFallback})</span> - 
-            <strong style="color:var(--success)">Rp ${inv.amount.toLocaleString('id-ID')}</strong>
-          </label>
-        `;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'invoice_ids';
+        checkbox.value = String(inv.id);
+        checkbox.id = `inv_${inv.id}`;
+        checkbox.checked = Boolean(isCurrent);
+        checkbox.style.width = '16px';
+        checkbox.style.height = '16px';
+
+        const label = document.createElement('label');
+        label.htmlFor = checkbox.id;
+        label.style.fontSize = '13px';
+        label.style.cursor = 'pointer';
+        label.append(document.createTextNode(`${I18N.periodPrefix} ${(MONTHS[inv.period_month] || '')} ${inv.period_year} `));
+
+        const packageSpan = document.createElement('span');
+        packageSpan.className = 'text-muted';
+        packageSpan.textContent = `(${inv.package_name || I18N.packageFallback})`;
+        label.appendChild(packageSpan);
+        label.append(document.createTextNode(' - '));
+
+        const amountStrong = document.createElement('strong');
+        amountStrong.style.color = 'var(--success)';
+        amountStrong.textContent = `Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}`;
+        label.appendChild(amountStrong);
+
+        div.appendChild(checkbox);
+        div.appendChild(label);
         unpaidList.appendChild(div);
       });
       form.action = '/admin/billing/pay-bulk';
@@ -621,7 +650,7 @@ async function syncBillingSearchSuggestions(query) {
   if (!input || !list) return;
   const keyword = String(query || '').trim();
   if (keyword.length < 2) {
-    list.innerHTML = '';
+    list.replaceChildren();
     return;
   }
   try {
@@ -632,7 +661,7 @@ async function syncBillingSearchSuggestions(query) {
     });
     if (!res.ok) return;
     const rows = await res.json();
-    list.innerHTML = '';
+    list.replaceChildren();
     (Array.isArray(rows) ? rows : []).forEach((row) => {
       const option = document.createElement('option');
       const name = String(row.name || '').trim();

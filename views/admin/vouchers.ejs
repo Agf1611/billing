@@ -336,7 +336,12 @@
   }
   function setVoucherMobileMessage(id, message) {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = `<div class="voucher-empty">${message}</div>`;
+    if (!el) return;
+    el.replaceChildren();
+    const div = document.createElement('div');
+    div.className = 'voucher-empty';
+    div.textContent = String(message || '');
+    el.appendChild(div);
   }
 
   function applyTemplatePreset(preset) {
@@ -394,16 +399,25 @@
       .filter(x => x.meta && x.meta.validity);
 
     const sel = document.getElementById('profileName');
-    sel.innerHTML = '';
+    sel.replaceChildren();
     if (filtered.length === 0) {
-      sel.innerHTML = '<option value="">Tidak ada profile dengan harga/durasi (Mikhmon)</option>';
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Tidak ada profile dengan harga/durasi (Mikhmon)';
+      sel.appendChild(option);
       document.getElementById('profileHint').innerText = '';
       return;
     }
-    sel.insertAdjacentHTML('beforeend', '<option value="">-- Pilih Profile --</option>');
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '-- Pilih Profile --';
+    sel.appendChild(defaultOption);
     for (const x of filtered) {
       const label = `${x.raw.name} (Rp ${Number(x.meta.price || 0).toLocaleString('id-ID')} - ${x.meta.validity})`;
-      sel.insertAdjacentHTML('beforeend', `<option value="${x.raw.name}">${label}</option>`);
+      const option = document.createElement('option');
+      option.value = String(x.raw.name || '');
+      option.textContent = label;
+      sel.appendChild(option);
     }
     document.getElementById('profileHint').innerText = '';
   }
@@ -453,7 +467,11 @@
     const url = routerId ? `/admin/api/vouchers/batches?routerId=${routerId}` : `/admin/api/vouchers/batches`;
     const btn = document.getElementById('btnCreate');
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> ' + I18N.processing;
+    btn.replaceChildren();
+    const loadingIcon = document.createElement('i');
+    loadingIcon.className = 'bi bi-hourglass-split';
+    btn.appendChild(loadingIcon);
+    btn.append(document.createTextNode(` ${I18N.processing}`));
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -468,7 +486,11 @@
       alert(e.message);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-magic"></i> ' + I18N.createBtn;
+      btn.replaceChildren();
+      const createIcon = document.createElement('i');
+      createIcon.className = 'bi bi-magic';
+      btn.appendChild(createIcon);
+      btn.append(document.createTextNode(` ${I18N.createBtn}`));
     }
   }
 
@@ -479,12 +501,14 @@
     const batches = await res.json();
     const list = document.getElementById('batches-list');
     if (!Array.isArray(batches) || batches.length === 0) {
-      list.innerHTML = '<tr><td colspan="8" class="text-center text-muted">' + I18N.noBatches + '</td></tr>';
+      list.replaceChildren();
+      list.insertAdjacentHTML('beforeend', `<tr><td colspan="8" class="text-center text-muted">${escapeHtml(I18N.noBatches)}</td></tr>`);
       setVoucherMobileMessage('batches-mobile-list', I18N.noBatches);
       updateStats([]);
       return;
     }
-    list.innerHTML = batches.map(b => {
+    list.replaceChildren();
+    list.insertAdjacentHTML('beforeend', batches.map(b => {
       const status = String(b.status || '-');
       const stClass = status === 'ready' ? 's' : (status === 'failed' ? 'd' : (status === 'partial' ? 'w' : 'w'));
       const created = b.created_at ? new Date(b.created_at).toLocaleString('id-ID') : '-';
@@ -513,8 +537,10 @@
           </td>
         </tr>
       `;
-    }).join('');
-    document.getElementById('batches-mobile-list').innerHTML = batches.map(b => {
+    }).join(''));
+    const mobileList = document.getElementById('batches-mobile-list');
+    mobileList.replaceChildren();
+    mobileList.insertAdjacentHTML('beforeend', batches.map(b => {
       const status = String(b.status || '-');
       const stClass = status === 'ready' ? 's' : (status === 'failed' ? 'd' : 'w');
       const created = b.created_at ? new Date(b.created_at).toLocaleString('id-ID') : '-';
@@ -557,7 +583,7 @@
           </div>
         </div>
       `;
-    }).join('');
+    }).join(''));
     updateStats(batches);
   }
 
@@ -608,7 +634,7 @@
     if (!res.ok) return alert(data.error || I18N.detailLoadFailed);
     document.getElementById('batchDetailTitle').innerText = `${I18N.detailTitlePrefix} #${data.batch.id}`;
     const meta = document.getElementById('batchDetailMeta');
-    meta.innerHTML = '';
+    meta.replaceChildren();
     meta.insertAdjacentHTML('beforeend', `<span class="pill"><i class="bi bi-hdd-network"></i> <b>${data.batch.router_name || I18N.defaultRouterName}</b></span>`);
     meta.insertAdjacentHTML('beforeend', `<span class="pill"><i class="bi bi-ticket"></i> <b>${data.batch.profile_name}</b></span>`);
     meta.insertAdjacentHTML('beforeend', `<span class="pill"><i class="bi bi-clock"></i> <b>${data.batch.validity || '-'}</b></span>`);
@@ -618,12 +644,14 @@
     const list = document.getElementById('batchDetailList');
     const items = Array.isArray(data.vouchers) ? data.vouchers : [];
     if (items.length === 0) {
-      list.innerHTML = '<tr><td colspan="5" class="text-center text-muted">' + I18N.noVouchers + '</td></tr>';
+      list.replaceChildren();
+      list.insertAdjacentHTML('beforeend', `<tr><td colspan="5" class="text-center text-muted">${escapeHtml(I18N.noVouchers)}</td></tr>`);
       setVoucherMobileMessage('batchDetailMobileList', I18N.noVouchers);
       openModal('batchDetailModal');
       return;
     }
-    list.innerHTML = items.map(v => {
+    list.replaceChildren();
+    list.insertAdjacentHTML('beforeend', items.map(v => {
       const st = String(v.status || '-');
       const usedAt = v.used_at ? new Date(v.used_at).toLocaleString('id-ID') : '-';
       const seenAt = v.last_seen_at ? new Date(v.last_seen_at).toLocaleString('id-ID') : '-';
@@ -638,8 +666,10 @@
           <td><div class="hint">${seenAt}</div><div class="hint">${seen}</div></td>
         </tr>
       `;
-    }).join('');
-    document.getElementById('batchDetailMobileList').innerHTML = items.map(v => {
+    }).join(''));
+    const detailMobileList = document.getElementById('batchDetailMobileList');
+    detailMobileList.replaceChildren();
+    detailMobileList.insertAdjacentHTML('beforeend', items.map(v => {
       const st = String(v.status || '-');
       const usedAt = v.used_at ? new Date(v.used_at).toLocaleString('id-ID') : '-';
       const seenAt = v.last_seen_at ? new Date(v.last_seen_at).toLocaleString('id-ID') : '-';
@@ -670,7 +700,7 @@
           </div>
         </div>
       `;
-    }).join('');
+    }).join(''));
     openModal('batchDetailModal');
   }
 

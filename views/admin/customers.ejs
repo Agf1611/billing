@@ -1162,11 +1162,27 @@ function openPicker(type) {
 }
 
 function useCurrentLocation(type, keepModalOpen = false) {
+  const targetType = type || activePickerType || 'add';
+  requestDeviceLocation((lat, lng) => {
+    activePickerType = targetType;
+    applyLocationToInputs(targetType, lat, lng);
+    if (keepModalOpen) syncPickerMarker(lat, lng);
+  });
+}
+
+async function requestDeviceLocation(onSuccess) {
   if (!navigator.geolocation) {
     alert('Browser ini tidak mendukung GPS.');
     return;
   }
-  const targetType = type || activePickerType || 'add';
+
+  try {
+    if (window.median?.android?.geoLocation?.promptLocationServices) {
+      window.median.android.geoLocation.promptLocationServices();
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+  } catch (_) {}
+
   navigator.geolocation.getCurrentPosition((position) => {
     const lat = Number(position.coords.latitude || 0);
     const lng = Number(position.coords.longitude || 0);
@@ -1174,10 +1190,16 @@ function useCurrentLocation(type, keepModalOpen = false) {
       alert('Koordinat GPS tidak valid.');
       return;
     }
-    activePickerType = targetType;
-    applyLocationToInputs(targetType, lat, lng);
-    if (keepModalOpen) syncPickerMarker(lat, lng);
+    onSuccess(lat, lng);
   }, () => {
+    const inMedianApp = Boolean(window.median?.android?.geoLocation?.promptLocationServices);
+    if (inMedianApp && window.median?.open?.appSettings) {
+      const openSettings = confirm('Lokasi GPS belum diizinkan. Buka pengaturan aplikasi untuk mengaktifkan izin lokasi?');
+      if (openSettings) {
+        try { window.median.open.appSettings(); } catch (_) {}
+      }
+      return;
+    }
     alert('Lokasi GPS tidak berhasil diambil. Pastikan izin lokasi diaktifkan.');
   }, {
     enableHighAccuracy: true,

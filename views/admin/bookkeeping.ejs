@@ -728,7 +728,13 @@
     const type = document.getElementById('entryType').value === 'income' ? 'income' : 'expense';
     const select = document.getElementById('entryCategory');
     const options = Array.isArray(CATEGORY_OPTIONS[type]) ? CATEGORY_OPTIONS[type] : [];
-    select.innerHTML = options.map((item) => `<option value="${String(item).replace(/"/g, '&quot;')}">${item}</option>`).join('');
+    select.replaceChildren();
+    options.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item);
+      option.textContent = String(item);
+      select.appendChild(option);
+    });
   }
   syncCategoryOptions();
 </script>

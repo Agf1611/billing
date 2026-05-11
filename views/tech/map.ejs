@@ -222,19 +222,27 @@
 
   // Geolocation for Tech
   if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(position => {
-      const myLat = position.coords.latitude;
-      const myLng = position.coords.longitude;
-      
-      L.marker([myLat, myLng], {
-        icon: L.divIcon({
-          html: '<i class="bi bi-person-circle text-white" style="font-size:24px; text-shadow: 0 0 10px #3b82f6"></i>',
-          className: 'custom-div-icon',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        })
-      }).addTo(map).bindPopup("<div class='popup-dark text-center'><b>Posisi Anda</b></div>");
-    });
+    (async () => {
+      try {
+        if (window.median?.android?.geoLocation?.promptLocationServices) {
+          window.median.android.geoLocation.promptLocationServices();
+          await new Promise((resolve) => setTimeout(resolve, 700));
+        }
+      } catch (_) {}
+      navigator.geolocation.getCurrentPosition(position => {
+        const myLat = position.coords.latitude;
+        const myLng = position.coords.longitude;
+        
+        L.marker([myLat, myLng], {
+          icon: L.divIcon({
+            html: '<i class="bi bi-person-circle text-white" style="font-size:24px; text-shadow: 0 0 10px #3b82f6"></i>',
+            className: 'custom-div-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          })
+        }).addTo(map).bindPopup("<div class='popup-dark text-center'><b>Posisi Anda</b></div>");
+      });
+    })();
   }
 
   // Auto zoom

@@ -294,7 +294,11 @@ async function loadHotspotProfiles() {
   const data = await res.json();
   hotspotProfilesCache = Array.isArray(data) ? data : [];
   const sel = document.getElementById('pr-profile');
-  sel.innerHTML = '<option value=\"\">' + I18N.chooseProfile + '</option>';
+  sel.replaceChildren();
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = I18N.chooseProfile;
+  sel.appendChild(defaultOption);
   hotspotProfilesCache.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.name;
@@ -316,7 +320,12 @@ function openPrices(a) {
   document.getElementById('pr-agent').value = a.name + ' (@' + a.username + ')';
   document.getElementById('pr-agent-id').value = a.id;
   hotspotProfilesCache = [];
-  document.getElementById('pr-profile').innerHTML = '<option value=\"\">' + I18N.chooseProfile + '</option>';
+  const profileSelect = document.getElementById('pr-profile');
+  profileSelect.replaceChildren();
+  const option = document.createElement('option');
+  option.value = '';
+  option.textContent = I18N.chooseProfile;
+  profileSelect.appendChild(option);
   document.getElementById('pr-validity').value = '';
   document.getElementById('pr-buy').value = 0;
   document.getElementById('pr-sell').value = 0;
@@ -333,13 +342,14 @@ async function loadAgentPrices() {
   const tbody = document.getElementById('pricesTbody');
   const rows = Array.isArray(data) ? data : [];
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan=\"7\" class=\"text-center text-muted\" style=\"padding:18px\">' + I18N.emptyNoPrices + '</td></tr>';
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', '<tr><td colspan="7" class="text-center text-muted" style="padding:18px">' + I18N.emptyNoPrices + '</td></tr>');
     return;
   }
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
+    tr.insertAdjacentHTML('beforeend', `
       <td>${r.router_name || I18N.defaultRouter}</td>
       <td class="fw6">${r.profile_name || ''}</td>
       <td>${r.validity || '-'}</td>
@@ -352,7 +362,7 @@ async function loadAgentPrices() {
           <button class="btn btn-d btn-sm" type="button" onclick="deletePrice(${r.id})"><i class="bi bi-trash"></i></button>
         </div>
       </td>
-    `;
+    `);
     tbody.appendChild(tr);
   });
 }
