@@ -56,6 +56,8 @@
   const appNotif = (typeof notif !== 'undefined' ? notif : null) || null;
   const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
   const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
+  const pushFeatureEnabled = Boolean(settings?.onesignal_enabled && settings?.onesignal_app_id);
+  const customerPushExternalId = profileData.id || customerData.id ? `customer-${profileData.id || customerData.id}` : '';
   const recentActivities = [];
 
   function formatCurrency(value) {
@@ -3270,6 +3272,35 @@
             </div>
           </div>
 
+          <div class="settings-card" style="margin-top:16px;">
+            <div class="billing-card-head">
+              <div>
+                <h4>Notifikasi Aplikasi</h4>
+                <div class="soft-muted">Aktifkan agar pelanggan menerima push saat ada tagihan baru dan pengumuman.</div>
+              </div>
+            </div>
+            <% if (!pushFeatureEnabled) { %>
+              <div class="empty-card" style="margin:0;">
+                <i class="bi bi-bell-slash"></i>
+                <strong>Notifikasi belum diaktifkan admin</strong>
+                <div>Admin perlu mengisi App ID dan REST API Key OneSignal di pengaturan aplikasi.</div>
+              </div>
+            <% } else { %>
+              <div class="stack-actions">
+                <div class="detail-item" style="margin-bottom:0;">
+                  <i class="bi bi-app-indicator"></i>
+                  <div>
+                    <strong>Status Push</strong>
+                    <span id="pushStatusText">Belum dicek</span>
+                  </div>
+                </div>
+                <button class="settings-submit" type="button" onclick="enableCustomerPushNotifications()">
+                  <i class="bi bi-bell"></i> Aktifkan Notifikasi
+                </button>
+              </div>
+            <% } %>
+          </div>
+
         </div>
       </section>
 
@@ -3626,6 +3657,8 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const NOTIFICATION_UNREAD = <%- JSON.stringify(notificationUnread) %>;
+    const PUSH_FEATURE_ENABLED = <%- JSON.stringify(pushFeatureEnabled) %>;
+    const CUSTOMER_PUSH_EXTERNAL_ID = <%- JSON.stringify(customerPushExternalId) %>;
     const TAB_META = {
       home: { eyebrow: 'Halaman Utama', title: 'Dashboard Pelanggan' },
       billing: { eyebrow: 'Pembayaran', title: 'Tagihan & Riwayat' },
@@ -3662,6 +3695,71 @@
       rx: <%- JSON.stringify(liveDownloadCap) %>,
       tx: <%- JSON.stringify(liveUploadCap) %>
     };
+
+    function setPushStatus(message) {
+      const node = document.getElementById('pushStatusText');
+      if (node) node.textContent = message;
+    }
+
+    async function syncCustomerPushIdentity() {
+      if (!PUSH_FEATURE_ENABLED || !CUSTOMER_PUSH_EXTERNAL_ID || !window.median?.onesignal?.login) return null;
+      try {
+        await window.median.onesignal.login(CUSTOMER_PUSH_EXTERNAL_ID);
+        if (window.median.onesignal.info) {
+          return await window.median.onesignal.info();
+        }
+      } catch (error) {
+        console.warn('OneSignal sync gagal:', error);
+      }
+      return null;
+    }
+
+    async function refreshCustomerPushStatus() {
+      if (!PUSH_FEATURE_ENABLED) {
+        setPushStatus('Belum diaktifkan oleh admin');
+        return null;
+      }
+      if (!window.median?.onesignal) {
+        setPushStatus('Aktif jika dibuka lewat aplikasi');
+        return null;
+      }
+      const info = await syncCustomerPushIdentity();
+      const optedIn = Boolean(info?.subscription?.optedIn);
+      setPushStatus(optedIn ? 'Sudah aktif di aplikasi ini' : 'Belum diizinkan di aplikasi ini');
+      return info;
+    }
+
+    async function enableCustomerPushNotifications() {
+      if (!PUSH_FEATURE_ENABLED) {
+        alert('Notifikasi aplikasi belum diaktifkan oleh admin.');
+        return;
+      }
+      if (!window.median?.onesignal) {
+        alert('Aktifkan dari aplikasi Median yang sudah di-install di HP Anda.');
+        return;
+      }
+      setPushStatus('Meminta izin notifikasi...');
+      try {
+        if (window.median.onesignal.userPrivacyConsent?.grant) {
+          await window.median.onesignal.userPrivacyConsent.grant();
+        }
+      } catch (_) {}
+      try {
+        await syncCustomerPushIdentity();
+        if (window.median.onesignal.register) {
+          await window.median.onesignal.register();
+        }
+        const info = await refreshCustomerPushStatus();
+        if (info?.subscription?.optedIn) {
+          alert('Notifikasi aplikasi berhasil diaktifkan.');
+        } else {
+          alert('Izin notifikasi belum aktif. Silakan cek pengaturan aplikasi di HP.');
+        }
+      } catch (error) {
+        setPushStatus('Gagal mengaktifkan notifikasi');
+        alert('Gagal mengaktifkan notifikasi: ' + (error?.message || error));
+      }
+    }
 
     function getTabFromHash() {
       const rawHash = String(window.location.hash || '').trim().toLowerCase();
@@ -3969,12 +4067,22 @@
         });
       }
 
+      document.querySelectorAll('form[action="/customer/logout"]').forEach((form) => {
+        form.addEventListener('submit', () => {
+          try {
+            if (window.median?.onesignal?.logout) window.median.onesignal.logout();
+          } catch (_) {}
+        });
+      });
+
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
           const active = document.querySelector('.app-screen.is-active');
           if (active) scheduleTrafficRefresh(active.dataset.tab);
         }
       });
+
+      refreshCustomerPushStatus();
     });
   </script>
 </body>

@@ -56,7 +56,13 @@ const {
   isSelfUpdateEnabled
 } = require('../config/runtimeSafety');
 const registerBillingRoutes = require('./admin/registerBillingRoutes');
+const registerCustomerRoutes = require('./admin/registerCustomerRoutes');
 const registerWhatsappRoutes = require('./admin/registerWhatsappRoutes');
+const {
+  isPushConfigured,
+  sendPushToCustomer,
+  sendPushToCustomers
+} = require('../services/pushNotificationService');
 
 const DIGIFLAZZ_URL = 'https://api.digiflazz.com/v1';
 const digiflazzApi = axios.create({
@@ -67,6 +73,39 @@ const digiflazzApi = axios.create({
 const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const IMAGE_UPLOAD_FIELDS = ['company_logo_file', 'support_isp_logo_file', 'invoice_signature_file', 'invoice_stamp_file', 'qris_static_qr_file'];
+
+function isEnabledSwitch(value) {
+  return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+}
+
+function sanitizePushBody(text, fallback = '') {
+  const clean = String(text || '').replace(/\r/g, '').trim();
+  return clean || fallback;
+}
+
+async function trySendInvoiceCreatedPush(customer, invoice, req, options = {}) {
+  try {
+    if (!customer || !invoice) return;
+    const settings = getSettings();
+    if (!isPushConfigured(settings) || !isEnabledSwitch(settings.onesignal_push_invoice_enabled ?? true)) return;
+    const baseUrl = resolveRequestBaseUrl(req);
+    const title = options.title || 'Tagihan Baru';
+    const body = options.body || `Tagihan ${invoice.period_month}/${invoice.period_year} sudah tersedia. Buka aplikasi untuk cek detail pembayaran.`;
+    await sendPushToCustomer(customer, {
+      settings,
+      title,
+      message: body,
+      targetUrl: `${baseUrl}/customer/dashboard#billing`,
+      data: {
+        kind: 'invoice',
+        invoiceId: Number(invoice.id || 0) || null,
+        customerId: Number(customer.id || 0) || null
+      }
+    });
+  } catch (error) {
+    logger.warn(`[PushNotification] Gagal kirim push tagihan: ${error.message}`);
+  }
+}
 
 function getUploadedSingleFile(req, fieldName) {
   const files = req && req.files;
@@ -434,6 +473,11 @@ function popUpdateLog(req) {
   delete req.session._updateLog;
   return l || '';
 }
+
+router.use(/^\/digiflazz(?:\/.*)?$/, requireAdminSession, restrictToAdmin, (req, res) => {
+  req.session._msg = { type: 'warning', text: 'Menu Digiflazz sudah dinonaktifkan dari panel admin.' };
+  return res.redirect('/admin/settings');
+});
 
 const mikrotikMonitoringCache = new Map();
 
@@ -1951,6 +1995,7 @@ function buildInvoiceSummaryFromList(invoices = []) {
   return summary;
 }
 
+/*
 router.get('/customers', requireAdminSession, (req, res) => {
   const {
     search = '',
@@ -2376,10 +2421,17 @@ router.post('/customers/:id/unisolate', requireAdminSession, async (req, res) =>
   return redirectBack(res, '/admin/customers');
 });
 
-router.post('/customers/:id/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/customers/:id/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const { month, year } = req.body;
     const result = billingSvc.generateInvoiceForCustomer(req.params.id, parseInt(month), parseInt(year));
+    if (result.created) {
+      const customer = customerSvc.getCustomerById(req.params.id);
+      const invoice = billingSvc.getInvoiceById(result.invoiceId);
+      await trySendInvoiceCreatedPush(customer, invoice, req, {
+        body: `Tagihan periode ${month}/${year} sudah tersedia. Silakan buka aplikasi pelanggan untuk melihat nominal dan link pembayaran.`
+      });
+    }
     if (result.created) {
       req.session._msg = { type: 'success', text: `Tagihan berhasil dibuat untuk "${result.customerName}" periode ${month}/${year}.` };
     } else {
@@ -2406,9 +2458,15 @@ router.post('/customers/:id/billing/reset-promo-cycles', requireAdminSession, re
   return redirectBack(res, '/admin/customers');
 });
 
-router.post('/customers/:id/billing/install-prorata', requireAdminSession, restrictToAdmin, (req, res) => {
+router.post('/customers/:id/billing/install-prorata', requireAdminSession, restrictToAdmin, async (req, res) => {
   try {
     const out = billingSvc.createInstallProrataCatchUpInvoice(req.params.id);
+    const customer = customerSvc.getCustomerById(req.params.id);
+    const invoice = billingSvc.getInvoiceById(out.invoiceId);
+    await trySendInvoiceCreatedPush(customer, invoice, req, {
+      title: 'Tagihan Susulan',
+      body: `Tagihan susulan prorata ${String(out.periodMonth).padStart(2, '0')}/${out.periodYear} sudah tersedia di aplikasi pelanggan.`
+    });
     req.session._msg = {
       type: 'success',
       text: `Tagihan susulan prorata untuk "${out.customerName}" periode ${String(out.periodMonth).padStart(2, '0')}/${out.periodYear} sebesar Rp ${Number(out.amount).toLocaleString('id-ID')} (${out.billableDays}/${out.daysInMonth} hari).`
@@ -2537,6 +2595,35 @@ router.post('/packages/:id/delete', requireAdminSession, (req, res) => {
 });
 
 // ─── BILLING ───────────────────────────────────────────────────────────────
+*/
+registerCustomerRoutes(router, {
+  express,
+  upload,
+  requireAdminSession,
+  restrictToAdmin,
+  company,
+  flashMsg,
+  getSettings,
+  customerSvc,
+  mikrotikService,
+  oltSvc,
+  odpSvc,
+  billingSvc,
+  db,
+  logger,
+  XLSX,
+  isTruthyFormValue,
+  getExistingPppoeSecretByUsername,
+  resolveCustomerPppoeProfile,
+  resolveAvailablePppoeProfile,
+  buildWelcomeWhatsappMessage,
+  buildIsolationWhatsappMessage,
+  resolveRequestBaseUrl,
+  trySendWhatsappPayment,
+  redirectBack,
+  resolvePaidByName,
+  sendPaidWhatsappNotification
+});
 /*
 router.get('/billing', requireAdminSession, (req, res) => {
   const {
@@ -2601,10 +2688,20 @@ router.get('/billing/:id/print', requireAdminSession, (req, res) => {
   });
 });
 
-router.post('/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const { month, year } = req.body;
-    const count = billingSvc.generateMonthlyInvoices(parseInt(month), parseInt(year));
+    const generated = billingSvc.generateMonthlyInvoices(parseInt(month), parseInt(year));
+    const count = typeof generated === 'number' ? generated : Number(generated?.count || 0);
+    const createdInvoiceIds = Array.isArray(generated?.createdInvoiceIds) ? generated.createdInvoiceIds : [];
+    for (const invoiceId of createdInvoiceIds) {
+      const invoice = billingSvc.getInvoiceById(invoiceId);
+      if (!invoice) continue;
+      const customer = customerSvc.getCustomerById(invoice.customer_id);
+      await trySendInvoiceCreatedPush(customer, invoice, req, {
+        body: `Tagihan internet periode ${month}/${year} sudah tersedia. Silakan buka aplikasi pelanggan untuk melihat detail pembayaran.`
+      });
+    }
     req.session._msg = { type: 'success', text: `${count} tagihan baru berhasil digenerate untuk periode ${month}/${year}.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal generate: ' + e.message };
@@ -3759,6 +3856,11 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     whatsapp: [
       'whatsapp_enabled',
       'whatsapp_admin_numbers',
+      'onesignal_enabled',
+      'onesignal_app_id',
+      'onesignal_rest_api_key',
+      'onesignal_push_invoice_enabled',
+      'onesignal_push_announcement_enabled',
       'whatsapp_group_invite_link',
       'whatsapp_broadcast_delay',
       'whatsapp_welcome_message',
@@ -3789,6 +3891,12 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
   try {
     if (newSettings.whatsapp_enabled === 'true') newSettings.whatsapp_enabled = true;
     else if (newSettings.whatsapp_enabled === 'false') newSettings.whatsapp_enabled = false;
+    if (newSettings.onesignal_enabled === 'true') newSettings.onesignal_enabled = true;
+    else if (newSettings.onesignal_enabled === 'false') newSettings.onesignal_enabled = false;
+    if (newSettings.onesignal_push_invoice_enabled === 'true') newSettings.onesignal_push_invoice_enabled = true;
+    else if (newSettings.onesignal_push_invoice_enabled === 'false') newSettings.onesignal_push_invoice_enabled = false;
+    if (newSettings.onesignal_push_announcement_enabled === 'true') newSettings.onesignal_push_announcement_enabled = true;
+    else if (newSettings.onesignal_push_announcement_enabled === 'false') newSettings.onesignal_push_announcement_enabled = false;
     
     if (newSettings.tripay_enabled === 'true') newSettings.tripay_enabled = true;
     else if (newSettings.tripay_enabled === 'false') newSettings.tripay_enabled = false;
@@ -5462,7 +5570,15 @@ router.post('/api/whatsapp/broadcast-stop', requireAdminSession, (req, res) => {
 
 router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
-    const { target, message, delay: customDelay, batchSize: customBatchSize, hourlyLimit: customHourlyLimit } = req.body;
+    const {
+      target,
+      message,
+      delay: customDelay,
+      batchSize: customBatchSize,
+      hourlyLimit: customHourlyLimit,
+      send_push,
+      push_title
+    } = req.body;
     if (!message) throw new Error('Pesan tidak boleh kosong');
     const requestBaseUrl = resolveRequestBaseUrl(req);
     
@@ -5510,6 +5626,26 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
 
     if (uniqueCustomers.length === 0) {
       throw new Error('Tidak ada nomor pelanggan yang valid untuk target tersebut.');
+    }
+
+    if (isEnabledSwitch(send_push) && isPushConfigured(getSettings()) && isEnabledSwitch(getSetting('onesignal_push_announcement_enabled', true))) {
+      try {
+        const title = sanitizePushBody(push_title, 'Pengumuman Pelanggan');
+        const body = sanitizePushBody(message, 'Ada pengumuman baru untuk pelanggan.');
+        await sendPushToCustomers(uniqueCustomers, {
+          settings: getSettings(),
+          title,
+          message: body,
+          targetUrl: `${requestBaseUrl}/customer/dashboard#home`,
+          data: {
+            kind: 'announcement',
+            source: 'broadcast',
+            target
+          }
+        });
+      } catch (pushError) {
+        logger.warn(`[Broadcast] Push pengumuman gagal: ${pushError.message}`);
+      }
     }
 
     const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');

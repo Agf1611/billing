@@ -452,55 +452,6 @@
             </div>
           </div>
 
-          <div class="form-row" style="margin-top:20px">
-            <div class="fg">
-              <label class="fl">Digiflazz Username</label>
-              <input class="fc" name="digiflazz_username" value="<%= settings.digiflazz_username || '' %>" placeholder="username digiflazz">
-            </div>
-            <div class="fg">
-              <label class="fl">Digiflazz API Key</label>
-              <div class="secret-field">
-                <input class="fc" type="password" name="digiflazz_api_key" value="<%= settings.digiflazz_api_key || '' %>" placeholder="api key digiflazz">
-                <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat API key">
-                  <i class="bi bi-eye"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="fg">
-              <label class="fl">Digiflazz Webhook Secret</label>
-              <div class="secret-field">
-                <input class="fc" type="password" name="digiflazz_webhook_secret" value="<%= settings.digiflazz_webhook_secret || '' %>" placeholder="secret untuk verifikasi webhook">
-                <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat secret">
-                  <i class="bi bi-eye"></i>
-                </button>
-              </div>
-              <div style="font-size:10px; color:var(--muted); margin-top:4px">Header yang dicek: <span class="mono">X-Hub-Signature</span> (HMAC-SHA1) dan event di <span class="mono">X-Digiflazz-Event</span>.</div>
-            </div>
-            <div class="fg">
-              <label class="fl">Digiflazz Webhook ID (Opsional)</label>
-              <input class="fc" name="digiflazz_webhook_id" value="<%= settings.digiflazz_webhook_id || '' %>" placeholder="contoh: ABC123">
-              <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai untuk validasi ping event (hook_id). Tidak wajib untuk transaksi.</div>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="fg">
-              <label class="fl">Webhook URL</label>
-              <div class="hint"><span class="mono"><%= (typeof digiflazzWebhookUrl !== 'undefined' && digiflazzWebhookUrl) ? digiflazzWebhookUrl : ('http://' + (settings.server_host || 'localhost') + ':' + (settings.server_port || 3001) + '/webhook/digiflazz') %></span></div>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="fg">
-              <label class="fl">Digiflazz Markup (Rp)</label>
-              <input class="fc" type="number" name="digiflazz_markup" value="<%= settings.digiflazz_markup || 0 %>" min="0">
-              <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai saat Sync Produk: harga jual = modal + markup.</div>
-            </div>
-            <div class="fg">
-              <label class="fl">Halaman Admin Digiflazz</label>
-              <div class="hint"><a href="/admin/digiflazz" style="color:var(--brand);font-weight:700;text-decoration:none">Buka Dashboard Digiflazz</a></div>
-            </div>
-          </div>
         </div>
 
         <!-- Admin Auth -->
@@ -561,6 +512,47 @@
           <div class="fg">
             <label class="fl">Jeda Antar Pesan Broadcast (Detik)</label>
             <input class="fc" type="number" name="whatsapp_broadcast_delay" value="<%= settings.whatsapp_broadcast_delay || 2 %>" min="1" max="60">
+          </div>
+          <div class="fg">
+            <label class="fl">Push App Pelanggan</label>
+            <select class="fs" name="onesignal_enabled">
+              <option value="true" <%= settings.onesignal_enabled ? 'selected' : '' %>>Aktif</option>
+              <option value="false" <%= !settings.onesignal_enabled ? 'selected' : '' %>>Nonaktif</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="fl">OneSignal App ID</label>
+            <input class="fc" name="onesignal_app_id" value="<%= settings.onesignal_app_id || '' %>" placeholder="Tempel App ID dari OneSignal">
+          </div>
+          <div class="fg">
+            <label class="fl">OneSignal REST API Key</label>
+            <div class="secret-field">
+              <input class="fc" type="password" name="onesignal_rest_api_key" value="<%= settings.onesignal_rest_api_key || '' %>" placeholder="Tempel REST API Key">
+              <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat REST API key">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-row" style="grid-column: span 2;">
+            <div class="fg">
+              <label class="fl">Push Tagihan Baru</label>
+              <select class="fs" name="onesignal_push_invoice_enabled">
+                <option value="true" <%= settings.onesignal_push_invoice_enabled !== false ? 'selected' : '' %>>Aktif</option>
+                <option value="false" <%= settings.onesignal_push_invoice_enabled === false ? 'selected' : '' %>>Nonaktif</option>
+              </select>
+            </div>
+            <div class="fg">
+              <label class="fl">Push Pengumuman / Broadcast</label>
+              <select class="fs" name="onesignal_push_announcement_enabled">
+                <option value="true" <%= settings.onesignal_push_announcement_enabled !== false ? 'selected' : '' %>>Aktif</option>
+                <option value="false" <%= settings.onesignal_push_announcement_enabled === false ? 'selected' : '' %>>Nonaktif</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg" style="grid-column: span 2;">
+            <div style="font-size:10px; color:var(--muted); margin-top:4px">
+              Setelah diisi, pelanggan bisa menyalakan notif dari aplikasi Median. Push dipakai untuk tagihan baru dan pengumuman pelanggan.
+            </div>
           </div>
           <div class="fg" style="grid-column: span 2;">
             <label class="fl">Template Chat Tagihan</label>

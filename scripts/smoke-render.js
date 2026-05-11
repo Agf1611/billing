@@ -8,6 +8,7 @@ const views = [
   'views/dashboard.ejs',
   'views/static_qris_payment.ejs',
   'views/public_check_billing.ejs',
+  'views/admin/customer_requests.ejs',
   'views/admin/settings.ejs',
   'views/admin/update.ejs'
 ];

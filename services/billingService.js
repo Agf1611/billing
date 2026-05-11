@@ -140,19 +140,24 @@ function generateMonthlyInvoices(month, year) {
   const insert = db.prepare(`INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)`);
   const bumpPromo = db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?');
   let created = 0;
+  const createdInvoiceIds = [];
   const run = db.transaction(() => {
     for (const c of customers) {
       if (existingIds.has(c.id)) continue;
       const pkg = db.prepare('SELECT * FROM packages WHERE id=?').get(c.package_id);
       if (!pkg) continue;
       const { amount, bumpPromo: bump, notesAuto } = computeInvoiceAmountAndMeta(c, pkg, month, year);
-      insert.run(c.id, month, year, amount, notesAuto, resolveInvoiceDueDay(c, month, year));
+      const result = insert.run(c.id, month, year, amount, notesAuto, resolveInvoiceDueDay(c, month, year));
       if (bump) bumpPromo.run(c.id);
+      createdInvoiceIds.push(result.lastInsertRowid);
       created++;
     }
   });
   run();
-  return created;
+  return {
+    count: created,
+    createdInvoiceIds
+  };
 }
 
 function generateInvoiceForCustomer(customerId, month, year) {

@@ -130,6 +130,19 @@
                 <code>{{group_line}}</code>.
               </div>
             </div>
+            <div class="wa-inline-grid" style="margin-top:14px;">
+              <div class="fg">
+                <label class="fl">Kirim juga Push App</label>
+                <label style="display:flex; align-items:center; gap:10px; font-weight:800; color:var(--text);">
+                  <input type="checkbox" name="send_push" value="1" <%= (getSetting('onesignal_enabled', false) && getSetting('onesignal_push_announcement_enabled', true)) ? 'checked' : '' %>>
+                  Aktifkan push pengumuman ke aplikasi pelanggan
+                </label>
+              </div>
+              <div class="fg">
+                <label class="fl">Judul Push App</label>
+                <input class="fc" type="text" name="push_title" value="Pengumuman Pelanggan" placeholder="Judul notifikasi aplikasi">
+              </div>
+            </div>
           </div>
           <div class="card-bd wa-card-actions">
             <button type="submit" class="btn btn-p" id="broadcastSubmitBtn"><i class="bi bi-send"></i> Mulai Broadcast</button>
