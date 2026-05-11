@@ -38,6 +38,9 @@
 </head>
 <body>
 <%
+  const tasksList = Array.isArray(tasks) ? tasks : [];
+  const statsData = (stats && typeof stats === 'object') ? stats : { total: 0, assigned: 0, inProgress: 0, done: 0 };
+  const techniciansList = Array.isArray(technicians) ? technicians : [];
   const taskTypeMap = {
     install: 'Pemasangan Baru',
     repair: 'Perbaikan',
@@ -59,6 +62,7 @@
     done: 'Selesai',
     cancelled: 'Dibatalkan'
   };
+  const safeTaskData = (task) => JSON.stringify(task).replace(/</g, '\\u003c');
 %>
 <%- include('partials/sidebar', { activePage: 'technician_tasks', company }) %>
 <div class="mw">
@@ -78,15 +82,15 @@
     <% } %>
 
     <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="sc p"><i class="bi bi-clipboard-data sc-icon"></i><div class="sc-label">Total Job</div><div class="sc-val"><%= stats.total %></div></div>
-      <div class="sc d"><i class="bi bi-hourglass-split sc-icon"></i><div class="sc-label">Ditugaskan</div><div class="sc-val"><%= stats.assigned %></div></div>
-      <div class="sc w"><i class="bi bi-tools sc-icon"></i><div class="sc-label">Dikerjakan</div><div class="sc-val"><%= stats.inProgress %></div></div>
-      <div class="sc s"><i class="bi bi-check-circle sc-icon"></i><div class="sc-label">Selesai</div><div class="sc-val"><%= stats.done %></div></div>
+      <div class="sc p"><i class="bi bi-clipboard-data sc-icon"></i><div class="sc-label">Total Job</div><div class="sc-val"><%= statsData.total %></div></div>
+      <div class="sc d"><i class="bi bi-hourglass-split sc-icon"></i><div class="sc-label">Ditugaskan</div><div class="sc-val"><%= statsData.assigned %></div></div>
+      <div class="sc w"><i class="bi bi-tools sc-icon"></i><div class="sc-label">Dikerjakan</div><div class="sc-val"><%= statsData.inProgress %></div></div>
+      <div class="sc s"><i class="bi bi-check-circle sc-icon"></i><div class="sc-label">Selesai</div><div class="sc-val"><%= statsData.done %></div></div>
     </div>
 
     <div class="card">
       <div class="card-hd task-toolbar">
-        <h6><i class="bi bi-list-ul"></i> Operasional Lapangan (<%= tasks.length %>)</h6>
+        <h6><i class="bi bi-list-ul"></i> Operasional Lapangan (<%= tasksList.length %>)</h6>
         <button class="btn btn-p btn-sm" type="button" onclick="openModal('addTaskModal')"><i class="bi bi-plus-lg"></i> Tugas Baru</button>
       </div>
       <div class="card-bd">
@@ -109,18 +113,18 @@
           </select>
           <select class="fs" name="technician_id" style="width:190px" onchange="this.form.submit()">
             <option value="0">Semua Teknisi</option>
-            <% technicians.forEach((tech) => { %>
+            <% techniciansList.forEach((tech) => { %>
               <option value="<%= tech.id %>" <%= Number(filterTechnicianId || 0) === Number(tech.id) ? 'selected' : '' %>><%= tech.name %></option>
             <% }) %>
           </select>
         </form>
 
-        <% if (!tasks.length) { %>
+        <% if (!tasksList.length) { %>
           <div class="text-center text-muted" style="padding:32px 12px">Belum ada tugas teknisi. Buat tugas baru untuk pemasangan, perbaikan, survey, atau pekerjaan lapangan lainnya.</div>
         <% } %>
 
         <div class="task-grid">
-          <% tasks.forEach((task) => { %>
+          <% tasksList.forEach((task) => { %>
             <div class="task-card">
               <div class="task-head">
                 <div class="task-title">
@@ -154,6 +158,15 @@
                   <small>Detail Pekerjaan</small>
                   <span><%= task.description || '-' %></span>
                 </div>
+                <% if (task.task_type === 'install' && (Number(task.create_pppoe_secret || 0) || task.pppoe_username || task.normal_pppoe_profile)) { %>
+                  <div class="task-box full">
+                    <small>Detail Pemasangan Baru</small>
+                    <span>Mode secret baru: <%= Number(task.create_pppoe_secret || 0) ? 'Ya' : 'Tidak' %></span>
+                    <% if (task.pppoe_username) { %><span>Akun: <%= task.pppoe_username %></span><% } %>
+                    <% if (task.pppoe_username) { %><span>Password: <%= task.pppoe_password ? task.pppoe_password : '(sama dengan username)' %></span><% } %>
+                    <% if (task.normal_pppoe_profile) { %><span>Profile: <%= task.normal_pppoe_profile %></span><% } %>
+                  </div>
+                <% } %>
                 <% if (task.completion_note) { %>
                   <div class="task-box full">
                     <small>Catatan Selesai</small>
@@ -164,7 +177,7 @@
 
               <div class="task-actions">
                 <button type="button" class="btn btn-g btn-sm edit-task-btn"
-                  data-task='<%- JSON.stringify(task) %>'>
+                  data-task='<%- safeTaskData(task) %>'>
                   <i class="bi bi-pencil"></i> Kelola
                 </button>
               </div>
@@ -184,7 +197,7 @@
         <div class="fg"><label class="fl">Judul Tugas</label><input class="fc" name="title" placeholder="Contoh: Pemasangan baru rumah Pak Budi" required></div>
         <div class="grid-2">
           <div class="fg"><label class="fl">Jenis Tugas</label><select class="fs" name="task_type"><option value="install">Pemasangan Baru</option><option value="repair">Perbaikan</option><option value="survey">Survey</option><option value="maintenance">Maintenance</option><option value="collection">Penagihan Lapangan</option><option value="relocation">Relokasi</option><option value="other">Lainnya</option></select></div>
-          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" required><option value="">Pilih teknisi</option><% technicians.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
+          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" required><option value="">Pilih teknisi</option><% techniciansList.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
         </div>
         <div class="grid-2">
           <div class="fg"><label class="fl">Prioritas</label><select class="fs" name="priority"><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="urgent">Urgent</option><option value="low">Rendah</option></select></div>
@@ -204,6 +217,12 @@
         <div class="fg"><label class="fl">Alamat Pelanggan</label><textarea class="fc customer-address-field" name="customer_address" rows="2" placeholder="Alamat lengkap atau titik temu"></textarea></div>
         <div class="fg"><label class="fl">Catatan Lokasi / Patokan</label><textarea class="fc" name="location_note" rows="2" placeholder="Contoh: rumah pojok dekat musholla, kabel lewat gang kiri"></textarea></div>
         <div class="fg"><label class="fl">Detail Pekerjaan</label><textarea class="fc" name="description" rows="3" placeholder="Jelaskan pekerjaan yang harus dikerjakan teknisi" required></textarea></div>
+        <div class="install-block" id="add-install-block" style="display:none">
+          <div class="fg"><label class="fl">Buat secret PPPoE baru?</label><label class="fl"><input type="checkbox" name="create_pppoe_secret" value="1"> Ya, buat secret baru</label></div>
+          <div class="fg"><label class="fl">Akun PPPoE</label><input class="fc" name="pppoe_username" placeholder="Username PPPoE"></div>
+          <div class="fg"><label class="fl">Password PPPoE</label><input class="fc" name="pppoe_password" placeholder="Kosongkan bila sama dengan username"></div>
+          <div class="fg"><label class="fl">Profile Normal</label><input class="fc" name="normal_pppoe_profile" placeholder="Contoh: paket-5mb"></div>
+        </div>
       </div>
       <div class="mf">
         <button type="button" class="btn btn-g" onclick="closeModal('addTaskModal')">Batal</button>
@@ -221,7 +240,7 @@
         <div class="fg"><label class="fl">Judul Tugas</label><input class="fc" name="title" id="edit-title" required></div>
         <div class="grid-2">
           <div class="fg"><label class="fl">Jenis Tugas</label><select class="fs" name="task_type" id="edit-task-type"><option value="install">Pemasangan Baru</option><option value="repair">Perbaikan</option><option value="survey">Survey</option><option value="maintenance">Maintenance</option><option value="collection">Penagihan Lapangan</option><option value="relocation">Relokasi</option><option value="other">Lainnya</option></select></div>
-          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" id="edit-technician-id" required><option value="">Pilih teknisi</option><% technicians.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
+          <div class="fg"><label class="fl">Teknisi</label><select class="fs" name="technician_id" id="edit-technician-id" required><option value="">Pilih teknisi</option><% techniciansList.forEach((tech) => { %><option value="<%= tech.id %>"><%= tech.name %></option><% }) %></select></div>
         </div>
         <div class="grid-2">
           <div class="fg"><label class="fl">Prioritas</label><select class="fs" name="priority" id="edit-priority"><option value="medium">Sedang</option><option value="high">Tinggi</option><option value="urgent">Urgent</option><option value="low">Rendah</option></select></div>
@@ -238,6 +257,12 @@
         </div>
         <div class="fg"><label class="fl">Alamat Pelanggan</label><textarea class="fc" name="customer_address" rows="2" id="edit-customer-address"></textarea></div>
         <div class="fg"><label class="fl">Catatan Lokasi / Patokan</label><textarea class="fc" name="location_note" rows="2" id="edit-location-note"></textarea></div>
+        <div class="install-block" id="edit-install-block" style="display:none">
+          <div class="fg"><label class="fl">Buat secret PPPoE baru?</label><label class="fl"><input type="checkbox" name="create_pppoe_secret" id="edit-create_pppoe_secret" value="1"> Ya, buat secret baru</label></div>
+          <div class="fg"><label class="fl">Akun PPPoE</label><input class="fc" name="pppoe_username" id="edit-pppoe_username" placeholder="Username PPPoE"></div>
+          <div class="fg"><label class="fl">Password PPPoE</label><input class="fc" name="pppoe_password" id="edit-pppoe_password" placeholder="Kosongkan bila sama dengan username"></div>
+          <div class="fg"><label class="fl">Profile Normal</label><input class="fc" name="normal_pppoe_profile" id="edit-normal_pppoe_profile" placeholder="Contoh: paket-5mb"></div>
+        </div>
         <div class="fg"><label class="fl">Detail Pekerjaan</label><textarea class="fc" name="description" rows="3" id="edit-description" required></textarea></div>
         <div class="fg"><label class="fl">Catatan Penyelesaian</label><textarea class="fc" name="completion_note" rows="2" id="edit-completion-note" placeholder="Isi jika pekerjaan sudah selesai atau ada hasil penting di lapangan"></textarea></div>
       </div>
@@ -314,7 +339,19 @@ function bindCustomerLookup(scope) {
   });
 }
 
+function updateInstallBlock(scope) {
+  if (!scope) return;
+  const taskType = scope.querySelector('select[name="task_type"]')?.value;
+  const installBlock = scope.querySelector('.install-block');
+  if (!installBlock) return;
+  installBlock.style.display = taskType === 'install' ? 'block' : 'none';
+}
+
 bindCustomerLookup(document.getElementById('addTaskModal'));
+document.getElementById('addTaskModal')?.querySelector('select[name="task_type"]')?.addEventListener('change', () => updateInstallBlock(document.getElementById('addTaskModal')));
+updateInstallBlock(document.getElementById('addTaskModal'));
+
+document.getElementById('edit-task-type')?.addEventListener('change', () => updateInstallBlock(document.getElementById('editTaskModal')));
 
 document.addEventListener('click', (event) => {
   const button = event.target.closest('.edit-task-btn');
@@ -333,8 +370,13 @@ document.addEventListener('click', (event) => {
   document.getElementById('edit-customer-phone').value = task.customer_phone || task.linked_customer_phone || '';
   document.getElementById('edit-customer-address').value = task.customer_address || '';
   document.getElementById('edit-location-note').value = task.location_note || '';
+  document.getElementById('edit-pppoe_username').value = task.pppoe_username || '';
+  document.getElementById('edit-pppoe_password').value = task.pppoe_password || '';
+  document.getElementById('edit-normal_pppoe_profile').value = task.normal_pppoe_profile || '';
+  document.getElementById('edit-create_pppoe_secret').checked = Number(task.create_pppoe_secret || 0) === 1;
   document.getElementById('edit-description').value = task.description || '';
   document.getElementById('edit-completion-note').value = task.completion_note || '';
+  updateInstallBlock(document.getElementById('editTaskModal'));
   openModal('editTaskModal');
 });
 

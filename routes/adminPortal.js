@@ -337,6 +337,18 @@ function buildTechnicianTaskWhatsappMessage(task, technician, options = {}) {
   ];
 
   if (locationNote) lines.push(`Patokan: ${locationNote}`);
+  if (String(task?.task_type || '').trim() === 'install') {
+    const secretMode = Number(task?.create_pppoe_secret || 0) ? 'Ya' : 'Tidak';
+    const username = String(task?.pppoe_username || '').trim();
+    const password = String(task?.pppoe_password || '').trim();
+    const profile = String(task?.normal_pppoe_profile || '').trim();
+    lines.push(`Mode secret baru: ${secretMode}`);
+    if (username) {
+      lines.push(`Akun PPPoE: ${username}`);
+      lines.push(`Password: ${password || '(sama dengan username)'}`);
+    }
+    if (profile) lines.push(`Profile: ${profile}`);
+  }
   lines.push('', `Buka tugas: ${portalLink}`);
 
   return lines.join('\n');
@@ -357,7 +369,11 @@ function hasTechnicianTaskOperationalChange(previousTask, nextTask) {
     'priority',
     'status',
     'scheduled_date',
-    'due_date'
+    'due_date',
+    'create_pppoe_secret',
+    'pppoe_username',
+    'pppoe_password',
+    'normal_pppoe_profile'
   ];
   return watchedFields.some((field) => String(previousTask[field] ?? '') !== String(nextTask[field] ?? ''));
 }
@@ -1538,9 +1554,9 @@ router.get('/technician-tasks', requireAdminSession, restrictToAdmin, (req, res)
   const status = String(req.query.status || 'all').trim() || 'all';
   const taskType = String(req.query.task_type || 'all').trim() || 'all';
   const technicianId = Number(req.query.technician_id || 0) || 0;
-  const tasks = techSvc.listAdminTechnicianTasks({ status, taskType, technicianId });
-  const stats = techSvc.getAdminTechnicianTaskStats();
-  const technicians = adminSvc.getAllTechnicians().filter((tech) => Number(tech.is_active || 0) === 1);
+  const tasks = techSvc.listAdminTechnicianTasks({ status, taskType, technicianId }) || [];
+  const stats = techSvc.getAdminTechnicianTaskStats() || { total: 0, assigned: 0, inProgress: 0, done: 0 };
+  const technicians = (adminSvc.getAllTechnicians() || []).filter((tech) => Number(tech.is_active || 0) === 1);
   res.render('admin/technician_tasks', {
     title: 'Tugas Teknisi',
     company: company(),
@@ -1573,10 +1589,14 @@ router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.u
       status: 'assigned',
       scheduled_date: String(req.body.scheduled_date || '').trim() || null,
       due_date: String(req.body.due_date || '').trim() || null,
+      create_pppoe_secret: Number(req.body.create_pppoe_secret || 0) || 0,
+      pppoe_username: String(req.body.pppoe_username || '').trim(),
+      pppoe_password: String(req.body.pppoe_password || '').trim(),
+      normal_pppoe_profile: String(req.body.normal_pppoe_profile || '').trim(),
       created_by_name: resolvePaidByName(req, 'Admin')
     });
     const createdTask = createResult?.lastInsertRowid ? techSvc.getTechnicianTaskById(createResult.lastInsertRowid, null) : null;
-    const technicians = adminSvc.getAllTechnicians();
+    const technicians = adminSvc.getAllTechnicians() || [];
     const assignedTechnician = createdTask
       ? technicians.find((tech) => Number(tech.id || 0) === Number(createdTask.technician_id || 0))
       : null;
@@ -1616,10 +1636,14 @@ router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin
       status: String(req.body.status || 'assigned').trim() || 'assigned',
       scheduled_date: String(req.body.scheduled_date || '').trim() || null,
       due_date: String(req.body.due_date || '').trim() || null,
+      create_pppoe_secret: Number(req.body.create_pppoe_secret || 0) || 0,
+      pppoe_username: String(req.body.pppoe_username || '').trim(),
+      pppoe_password: String(req.body.pppoe_password || '').trim(),
+      normal_pppoe_profile: String(req.body.normal_pppoe_profile || '').trim(),
       completion_note: String(req.body.completion_note || '').trim()
     });
     const updatedTask = techSvc.getTechnicianTaskById(taskId, null);
-    const technicians = adminSvc.getAllTechnicians();
+    const technicians = adminSvc.getAllTechnicians() || [];
     const assignedTechnician = updatedTask
       ? technicians.find((tech) => Number(tech.id || 0) === Number(updatedTask.technician_id || 0))
       : null;

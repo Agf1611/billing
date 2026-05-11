@@ -155,8 +155,10 @@ function createTechnicianTask(data = {}) {
   return db.prepare(`
     INSERT INTO technician_tasks (
       title, task_type, description, customer_id, customer_name, customer_phone, customer_address,
-      location_note, technician_id, priority, status, scheduled_date, due_date, created_by_name
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      location_note, technician_id, priority, status, scheduled_date, due_date,
+      create_pppoe_secret, pppoe_username, pppoe_password, normal_pppoe_profile,
+      created_by_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     title,
     String(data.task_type || 'repair').trim() || 'repair',
@@ -171,6 +173,10 @@ function createTechnicianTask(data = {}) {
     String(data.status || 'assigned').trim() || 'assigned',
     data.scheduled_date || null,
     data.due_date || null,
+    Number(data.create_pppoe_secret || 0) || 0,
+    String(data.pppoe_username || '').trim(),
+    String(data.pppoe_password || '').trim(),
+    String(data.normal_pppoe_profile || '').trim(),
     String(data.created_by_name || '').trim()
   );
 }
@@ -204,6 +210,10 @@ function updateTechnicianTask(taskId, data = {}) {
         status = ?,
         scheduled_date = ?,
         due_date = ?,
+        create_pppoe_secret = ?,
+        pppoe_username = ?,
+        pppoe_password = ?,
+        normal_pppoe_profile = ?,
         completion_note = ?,
         started_at = ?,
         completed_at = ?,
@@ -223,6 +233,10 @@ function updateTechnicianTask(taskId, data = {}) {
     nextStatus,
     data.scheduled_date || prev.scheduled_date || null,
     data.due_date || prev.due_date || null,
+    Number(data.create_pppoe_secret || prev.create_pppoe_secret || 0) || 0,
+    String(data.pppoe_username != null ? data.pppoe_username : prev.pppoe_username || '').trim(),
+    String(data.pppoe_password != null ? data.pppoe_password : prev.pppoe_password || '').trim(),
+    String(data.normal_pppoe_profile != null ? data.normal_pppoe_profile : prev.normal_pppoe_profile || '').trim(),
     completionNote,
     startedAt,
     completedAt,

@@ -1,6 +1,6 @@
 <%- include('partials/header') %>
 
-<% const operationalTasksList = Array.isArray(operationalTasks) ? operationalTasks : []; %>
+<% const operationalTasksList = typeof operationalTasks !== 'undefined' && Array.isArray(operationalTasks) ? operationalTasks : []; %>
 
 <div class="mb-4">
   <div class="text-secondary small"><%= t('tech.dashboard.greeting', 'Halo, Selamat Bekerja!') %></div>

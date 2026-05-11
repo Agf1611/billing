@@ -575,6 +575,10 @@ db.exec(`
     status TEXT NOT NULL DEFAULT 'assigned', -- assigned, in_progress, done, cancelled
     scheduled_date DATE,
     due_date DATE,
+    create_pppoe_secret INTEGER NOT NULL DEFAULT 0,
+    pppoe_username TEXT DEFAULT '',
+    pppoe_password TEXT DEFAULT '',
+    normal_pppoe_profile TEXT DEFAULT '',
     created_by_name TEXT DEFAULT '',
     completion_note TEXT DEFAULT '',
     started_at DATETIME,
@@ -586,7 +590,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_tech ON technician_tasks(technician_id);
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_due ON technician_tasks(due_date);
   CREATE INDEX IF NOT EXISTS idx_technician_tasks_created ON technician_tasks(created_at);
-`);
+);
+
+try {
+  db.exec('ALTER TABLE technician_tasks ADD COLUMN create_pppoe_secret INTEGER NOT NULL DEFAULT 0');
+} catch (e) {}
+try {
+  db.exec('ALTER TABLE technician_tasks ADD COLUMN pppoe_username TEXT DEFAULT ""');
+} catch (e) {}
+try {
+  db.exec('ALTER TABLE technician_tasks ADD COLUMN pppoe_password TEXT DEFAULT ""');
+} catch (e) {}
+try {
+  db.exec('ALTER TABLE technician_tasks ADD COLUMN normal_pppoe_profile TEXT DEFAULT ""');
+} catch (e) {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS digiflazz_products (

@@ -44,6 +44,7 @@ function renderTechPage(req, res, view, payload = {}) {
     company: company(),
     techName: req.session?.techName || '',
     techNav: techId ? getTechNav(techId) : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 },
+    operationalTasks: [],
     ...payload
   });
 }
