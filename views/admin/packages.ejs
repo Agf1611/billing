@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title><%= t('admin.packages.title', 'Paket Internet') %> | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .tax-box{background:rgba(34,197,94,.06);padding:12px 14px;border-radius:10px;margin-top:10px}
+    .tax-box .tax-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+    .tax-box .tax-title{font-size:12px;font-weight:700;color:var(--success);display:flex;align-items:center;gap:8px}
+    .switch-row{display:flex;align-items:center;gap:10px}
+    .switch-row input[type="checkbox"]{display:none}
+    .switch-pill{position:relative;width:48px;height:28px;border-radius:999px;background:rgba(148,163,184,.4);cursor:pointer;transition:.2s}
+    .switch-pill::after{content:"";position:absolute;top:3px;left:4px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 4px 10px rgba(15,23,42,.18);transition:.2s}
+    .switch-row input[type="checkbox"]:checked + .switch-pill{background:#22c55e}
+    .switch-row input[type="checkbox"]:checked + .switch-pill::after{left:22px}
+    .switch-label{font-size:12px;color:var(--muted);font-weight:700}
+    .tax-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .tax-note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4}
+    @media(max-width:768px){.tax-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'packages', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-box-seam"></i> <%= t('admin.packages.title', 'Paket Internet') %></div>
+    <div class="tb-right">
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+  <div class="page">
+
+    <% if (msg) { %>
+    <div class="alert alert-<%= msg.type==='success'?'s':'d' %>">
+      <i class="bi bi-<%= msg.type==='success'?'check-circle':'exclamation-circle' %>"></i> <%= msg.text %>
+    </div>
+    <% } %>
+
+    <div class="card">
+      <div class="card-hd">
+        <h6><i class="bi bi-box-seam"></i> <%= t('admin.packages.list', 'Daftar Paket') %> (<%= packages.length %>)</h6>
+        <button class="btn btn-p btn-sm" onclick="openModal('addModal')"><i class="bi bi-plus-lg"></i> <%= t('admin.packages.add', 'Tambah Paket') %></button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="dtbl">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th><%= t('admin.packages.table.name', 'Nama Paket') %></th>
+              <th><%= t('admin.packages.table.price_month', 'Harga / Bulan') %></th>
+              <th>Promo / Prorata</th>
+              <th><%= t('admin.packages.table.speed', 'Kecepatan') %></th>
+              <th><%= t('admin.packages.table.description', 'Deskripsi') %></th>
+              <th>Tampil Portal</th>
+              <th><%= t('admin.packages.table.customers', 'Pelanggan') %></th>
+              <th><%= t('admin.packages.table.status', 'Status') %></th>
+              <th><%= t('common.actions', 'Aksi') %></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% if (packages.length===0) { %>
+            <tr><td colspan="10" class="text-center text-muted" style="padding:32px"><%= t('admin.packages.empty', 'Belum ada paket. Tambah paket pertama!') %></td></tr>
+          <% } %>
+          <% packages.forEach((p,i)=>{ %>
+            <tr>
+              <td class="text-muted"><%= i+1 %></td>
+              <td class="fw6">
+                <div><%= p.name %></div>
+                <div style="font-size:11px;color:var(--muted)">PPPoE: <%= p.pppoe_profile || '-' %></div>
+              </td>
+              <td class="fw6" style="color:var(--success)">
+                Rp <%= p.price.toLocaleString('id-ID') %>
+                <% if (p.include_ppn) { %>
+                  <div style="font-size:11px;color:var(--muted);margin-top:4px">Netto Rp <%= Number(p.price_before_tax || p.price || 0).toLocaleString('id-ID') %> • PPN <%= Number(p.ppn_percent || 0).toLocaleString('id-ID') %>%</div>
+                <% } %>
+              </td>
+              <td style="font-size:11px;max-width:160px">
+                <% if (p.promo_cycles > 0 && p.promo_price != null && p.promo_price !== '') { %>
+                  <span class="badge bp">Promo</span> Rp <%= Number(p.promo_price).toLocaleString('id-ID') %> x <%= p.promo_cycles %> bln
+                <% } else { %><span class="text-muted">-</span><% } %>
+                <% if (p.prorate_first_invoice) { %><br><span class="badge bs" style="margin-top:4px;display:inline-block">Prorata 1x</span><% } %>
+              </td>
+              <td>
+                <% if (p.speed_down) { %>
+                  <span class="badge bp">&darr; <%= (p.speed_down/1000).toFixed(0) %> Mbps</span>
+                  <span class="badge bm">&uarr; <%= (p.speed_up/1000).toFixed(0) %> Mbps</span>
+                <% } else { %><span class="text-muted">-</span><% } %>
+              </td>
+              <td style="color:var(--muted);font-size:12px"><%= p.description||'-' %></td>
+              <td><% if(Number(p.show_in_portal||0)===1){ %><span class="badge bs">Tampil</span><% } else { %><span class="badge bd">Sembunyi</span><% } %></td>
+              <td class="text-center"><span class="badge bm"><%= p.customer_count %> <%= t('admin.packages.customers_suffix', 'pelanggan') %></span></td>
+              <td><% if(p.is_active){%><span class="badge bs"><%= t('common.active', 'Aktif') %></span><%}else{%><span class="badge bd"><%= t('common.inactive', 'Nonaktif') %></span><%}%></td>
+              <td>
+                <button class="btn btn-g btn-icon btn-sm" data-idx="<%= i %>" onclick="editPkg(+this.dataset.idx)"><i class="bi bi-pencil"></i></button>
+                <form method="POST" action="/admin/packages/<%= p.id %>/delete" style="display:inline" onsubmit="return confirm('<%= t('admin.packages.confirm.delete', 'Hapus paket ini? Pelanggan yang menggunakan paket ini akan kehilangan referensi paket.') %>')">
+                  <button class="btn btn-d btn-icon btn-sm"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Tambah -->
+<div class="mo" id="addModal">
+  <div class="mb">
+    <div class="mh"><span class="mt"><i class="bi bi-plus-square"></i> <%= t('admin.packages.add', 'Tambah Paket') %></span><button class="mc" onclick="closeModal('addModal')">&times;</button></div>
+    <form method="POST" action="/admin/packages">
+      <div class="mbody">
+        <div class="fg">
+          <label class="fl"><%= t('admin.packages.form.name_profile', 'Nama Paket') %> *</label>
+          <div style="display:flex;gap:8px">
+            <select class="fs" id="add_profile_select" style="max-width:200px" onchange="applyAddProfile(this.value)">
+              <option value=""><%= t('admin.packages.form.pick_from_mikrotik', '-- Pilih dari MikroTik --') %></option>
+            </select>
+            <input class="fc" name="name" id="add_name" required placeholder="<%= t('admin.packages.form.type_manual', 'Atau ketik manual...') %>">
+          </div>
+        </div>
+        <div class="fg">
+          <label class="fl">Profil PPPoE Normal (MikroTik)</label>
+          <input class="fc" name="pppoe_profile" id="add_pppoe_profile" placeholder="Contoh: paket-5mb">
+        </div>
+        <div class="form-row">
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.price_month', 'Harga / Bulan (Rp)') %> *</label><input class="fc" name="price" id="add_price" type="number" min="0" required placeholder="150000"></div>
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.speed_down', 'Kecepatan Download (Mbps)') %></label><input class="fc" name="speed_down" type="number" step="any" min="0" placeholder="10"></div>
+        </div>
+        <div class="tax-box">
+          <div class="tax-head">
+            <div class="tax-title"><i class="bi bi-receipt-cutoff"></i> Pengaturan PPN</div>
+            <label class="switch-row">
+              <input type="checkbox" name="include_ppn" id="add_include_ppn" value="1">
+              <span class="switch-pill"></span>
+              <span class="switch-label">Harga sudah termasuk PPN</span>
+            </label>
+          </div>
+          <div class="tax-grid">
+            <div class="fg"><label class="fl">PPN (%)</label><input class="fc" name="ppn_percent" id="add_ppn_percent" type="number" step="0.01" min="0" value="11" placeholder="11"></div>
+            <div class="fg"><label class="fl">Harga pokok / netto</label><input class="fc" name="price_before_tax" id="add_price_before_tax" type="number" min="0" readonly placeholder="Otomatis"></div>
+            <div class="fg"><label class="fl">Nilai PPN</label><input class="fc" id="add_ppn_amount" type="number" min="0" readonly placeholder="Otomatis"></div>
+          </div>
+          <div class="tax-note">Kalau aktif, harga jual yang Anda isi tetap dipakai sebagai harga akhir. Sistem akan menghitung harga pokok/netto dan nilai PPN secara otomatis.</div>
+        </div>
+        <div style="background: rgba(34,197,94,0.06); padding: 12px 14px; border-radius: 10px; margin-top: 10px;">
+          <div class="fw6" style="font-size:12px;margin-bottom:8px;color:var(--success)"><i class="bi bi-percent"></i> Promo & prorata tagihan</div>
+          <div class="form-row">
+            <div class="fg"><label class="fl">Harga promo (Rp / siklus)</label><input class="fc" name="promo_price" type="number" min="0" placeholder="Opsional, mis. 99000"></div>
+            <div class="fg"><label class="fl">Jumlah bulan promo</label><input class="fc" name="promo_cycles" type="number" min="0" value="0" placeholder="0 = tanpa promo"></div>
+          </div>
+          <div class="flex ai-c" style="gap:8px;margin-top:4px">
+            <input type="checkbox" name="prorate_first_invoice" id="add_prorate" value="1">
+            <label for="add_prorate" style="margin:0;font-size:12px">Prorata tagihan <strong>pertama</strong> jika pasang di tengah bulan (proporsi sisa hari, perlu tanggal pasang di data pelanggan)</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.speed_up', 'Kecepatan Upload (Mbps)') %></label><input class="fc" name="speed_up" type="number" step="any" min="0" placeholder="5"></div>
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.status', 'Status') %></label>
+            <select class="fs" name="is_active"><option value="1"><%= t('common.active', 'Aktif') %></option><option value="0"><%= t('common.inactive', 'Nonaktif') %></option></select>
+          </div>
+        </div>
+        <div class="fg"><label class="fl"><%= t('admin.packages.form.description', 'Deskripsi') %></label><textarea class="fc" name="description" placeholder="<%= t('admin.packages.form.optional', 'Opsional...') %>"></textarea></div>
+        <div class="flex ai-c" style="gap:8px;margin-top:8px">
+          <input type="checkbox" name="show_in_portal" id="add_show_in_portal" value="1">
+          <label for="add_show_in_portal" style="margin:0;font-size:12px">Tampilkan paket ini ke portal pelanggan</label>
+        </div>
+        
+        <!-- Dynamic Speed & FUP Section -->
+        <div style="background: rgba(0,0,0,0.02); padding: 15px; border-radius: 12px; margin-top: 15px;">
+          <div class="flex ai-c mb8" style="gap:10px">
+            <input type="checkbox" name="use_night_speed" id="add_use_night" value="1" onchange="toggleAddNight()">
+            <h6 style="font-size:12px; margin: 0; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;"><i class="bi bi-clock"></i> Aktifkan Jam Kalong</h6>
+          </div>
+          <div id="add_night_fields" style="display:none">
+            <div class="fg">
+              <label class="fl">Nama Profile Malam (MikroTik)</label>
+              <div style="display:flex;gap:8px">
+                <select class="fs" id="add_night_profile_select" style="max-width:200px" onchange="document.getElementById('add_night_profile_input').value=this.value">
+                  <option value="">-- Pilih Profile --</option>
+                </select>
+                <input class="fc" name="night_profile_name" id="add_night_profile_input" placeholder="Atau ketik manual...">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg"><label class="fl">Download Malam (Mbps)</label><input class="fc" name="night_speed_down" type="number" step="any" min="0" placeholder="20"></div>
+              <div class="fg"><label class="fl">Upload Malam (Mbps)</label><input class="fc" name="night_speed_up" type="number" step="any" min="0" placeholder="10"></div>
+            </div>
+            <div style="font-size: 10px; color: var(--muted); margin-top: 4px;">Sistem akan ganti profile ppp pelanggan ke profile ini pada jam 00:00 - 06:00.</div>
+          </div>
+          
+          <hr style="opacity:0.1; margin: 15px 0;">
+
+          <div class="flex ai-c mb8" style="gap:10px">
+            <input type="checkbox" name="use_fup" id="add_use_fup" value="1" onchange="toggleAddFup()">
+            <h6 style="font-size:12px; margin: 0; color: var(--danger); text-transform: uppercase; letter-spacing: 0.5px;"><i class="bi bi-speedometer2"></i> Aktifkan FUP</h6>
+          </div>
+          <div id="add_fup_fields" style="display:none">
+            <div class="fg">
+              <label class="fl">Nama Profile FUP (MikroTik)</label>
+              <div style="display:flex;gap:8px">
+                <select class="fs" id="add_fup_profile_select" style="max-width:200px" onchange="document.getElementById('add_fup_profile_input').value=this.value">
+                  <option value="">-- Pilih Profile --</option>
+                </select>
+                <input class="fc" name="fup_profile_name" id="add_fup_profile_input" placeholder="Atau ketik manual...">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg"><label class="fl">Batas Kuota (GB)</label><input class="fc" name="fup_limit_gb" type="number" step="any" min="0" placeholder="300"></div>
+              <div class="fg"><label class="fl">Speed Setelah FUP (Mbps)</label><input class="fc" name="fup_speed_down" type="number" step="any" min="0" placeholder="2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn btn-g" onclick="closeModal('addModal')"><%= t('common.cancel', 'Batal') %></button>
+        <button type="submit" class="btn btn-p"><i class="bi bi-check-lg"></i> <%= t('common.save', 'Simpan') %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Edit -->
+<div class="mo" id="editModal">
+  <div class="mb">
+    <div class="mh"><span class="mt"><i class="bi bi-pencil"></i> <%= t('admin.packages.edit', 'Edit Paket') %></span><button class="mc" onclick="closeModal('editModal')">&times;</button></div>
+    <form method="POST" id="editForm">
+      <div class="mbody">
+        <div class="fg">
+          <label class="fl"><%= t('admin.packages.form.name_profile', 'Nama Paket') %> *</label>
+          <div style="display:flex;gap:8px">
+            <select class="fs" id="e_profile_select" style="max-width:200px" onchange="applyEditProfile(this.value)">
+              <option value=""><%= t('admin.packages.form.pick_from_mikrotik', '-- Pilih dari MikroTik --') %></option>
+            </select>
+            <input class="fc" name="name" id="e_name" required>
+          </div>
+        </div>
+        <div class="fg">
+          <label class="fl">Profil PPPoE Normal (MikroTik)</label>
+          <input class="fc" name="pppoe_profile" id="e_pppoe_profile" placeholder="Contoh: paket-5mb">
+        </div>
+        <div class="form-row">
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.price_month', 'Harga / Bulan (Rp)') %> *</label><input class="fc" name="price" id="e_price" type="number" min="0" required></div>
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.speed_down', 'Kecepatan Download (Mbps)') %></label><input class="fc" name="speed_down" id="e_down" type="number" step="any" min="0"></div>
+        </div>
+        <div class="tax-box">
+          <div class="tax-head">
+            <div class="tax-title"><i class="bi bi-receipt-cutoff"></i> Pengaturan PPN</div>
+            <label class="switch-row">
+              <input type="checkbox" name="include_ppn" id="e_include_ppn" value="1">
+              <span class="switch-pill"></span>
+              <span class="switch-label">Harga sudah termasuk PPN</span>
+            </label>
+          </div>
+          <div class="tax-grid">
+            <div class="fg"><label class="fl">PPN (%)</label><input class="fc" name="ppn_percent" id="e_ppn_percent" type="number" step="0.01" min="0" value="11" placeholder="11"></div>
+            <div class="fg"><label class="fl">Harga pokok / netto</label><input class="fc" name="price_before_tax" id="e_price_before_tax" type="number" min="0" readonly placeholder="Otomatis"></div>
+            <div class="fg"><label class="fl">Nilai PPN</label><input class="fc" id="e_ppn_amount" type="number" min="0" readonly placeholder="Otomatis"></div>
+          </div>
+          <div class="tax-note">Edit harga jual dan persen PPN, lalu harga pokok akan dihitung otomatis.</div>
+        </div>
+        <div style="background: rgba(34,197,94,0.06); padding: 12px 14px; border-radius: 10px; margin-top: 10px;">
+          <div class="fw6" style="font-size:12px;margin-bottom:8px;color:var(--success)"><i class="bi bi-percent"></i> Promo & prorata tagihan</div>
+          <div class="form-row">
+            <div class="fg"><label class="fl">Harga promo (Rp / siklus)</label><input class="fc" name="promo_price" id="e_promo_price" type="number" min="0" placeholder="Kosong = tanpa harga promo"></div>
+            <div class="fg"><label class="fl">Jumlah bulan promo</label><input class="fc" name="promo_cycles" id="e_promo_cycles" type="number" min="0" value="0"></div>
+          </div>
+          <div class="flex ai-c" style="gap:8px;margin-top:4px">
+            <input type="checkbox" name="prorate_first_invoice" id="e_prorate" value="1">
+            <label for="e_prorate" style="margin:0;font-size:12px">Prorata tagihan pertama (tanggal pasang = bulan tagihan)</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.speed_up', 'Kecepatan Upload (Mbps)') %></label><input class="fc" name="speed_up" id="e_up" type="number" step="any" min="0"></div>
+          <div class="fg"><label class="fl"><%= t('admin.packages.form.status', 'Status') %></label>
+            <select class="fs" name="is_active" id="e_active"><option value="1"><%= t('common.active', 'Aktif') %></option><option value="0"><%= t('common.inactive', 'Nonaktif') %></option></select>
+          </div>
+        </div>
+        <div class="fg"><label class="fl"><%= t('admin.packages.form.description', 'Deskripsi') %></label><textarea class="fc" name="description" id="e_desc"></textarea></div>
+        <div class="flex ai-c" style="gap:8px;margin-top:8px">
+          <input type="checkbox" name="show_in_portal" id="e_show_in_portal" value="1">
+          <label for="e_show_in_portal" style="margin:0;font-size:12px">Tampilkan paket ini ke portal pelanggan</label>
+        </div>
+
+        <!-- Dynamic Speed & FUP Section (Edit) -->
+        <div style="background: rgba(0,0,0,0.02); padding: 15px; border-radius: 12px; margin-top: 15px;">
+          <div class="flex ai-c mb8" style="gap:10px">
+            <input type="checkbox" name="use_night_speed" id="e_use_night" value="1" onchange="toggleEditNight()">
+            <h6 style="font-size:12px; margin: 0; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;"><i class="bi bi-clock"></i> Aktifkan Jam Kalong</h6>
+          </div>
+          <div id="e_night_fields" style="display:none">
+            <div class="fg">
+              <label class="fl">Nama Profile Malam (MikroTik)</label>
+              <div style="display:flex;gap:8px">
+                <select class="fs" id="e_night_profile_select" style="max-width:200px" onchange="document.getElementById('e_night_profile').value=this.value">
+                  <option value="">-- Pilih Profile --</option>
+                </select>
+                <input class="fc" name="night_profile_name" id="e_night_profile">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg"><label class="fl">Download Malam (Mbps)</label><input class="fc" name="night_speed_down" id="e_night_down" type="number" step="any" min="0"></div>
+              <div class="fg"><label class="fl">Upload Malam (Mbps)</label><input class="fc" name="night_speed_up" id="e_night_up" type="number" step="any" min="0"></div>
+            </div>
+          </div>
+          
+          <hr style="opacity:0.1; margin: 15px 0;">
+
+          <div class="flex ai-c mb8" style="gap:10px">
+            <input type="checkbox" name="use_fup" id="e_use_fup" value="1" onchange="toggleEditFup()">
+            <h6 style="font-size:12px; margin: 0; color: var(--danger); text-transform: uppercase; letter-spacing: 0.5px;"><i class="bi bi-speedometer2"></i> Aktifkan FUP</h6>
+          </div>
+          <div id="e_fup_fields" style="display:none">
+            <div class="fg">
+              <label class="fl">Nama Profile FUP (MikroTik)</label>
+              <div style="display:flex;gap:8px">
+                <select class="fs" id="e_fup_profile_select" style="max-width:200px" onchange="document.getElementById('e_fup_profile').value=this.value">
+                  <option value="">-- Pilih Profile --</option>
+                </select>
+                <input class="fc" name="fup_profile_name" id="e_fup_profile">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg"><label class="fl">Batas Kuota (GB)</label><input class="fc" name="fup_limit_gb" id="e_fup_limit" type="number" step="any" min="0"></div>
+              <div class="fg"><label class="fl">Speed Setelah FUP (Mbps)</label><input class="fc" name="fup_speed_down" id="e_fup_speed" type="number" step="any" min="0"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn btn-g" onclick="closeModal('editModal')"><%= t('common.cancel', 'Batal') %></button>
+        <button type="submit" class="btn btn-p"><i class="bi bi-check-lg"></i> <%= t('admin.packages.update', 'Update') %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="application/json" id="packages-data"><%- JSON.stringify(packages) %></script>
+<script>
+const packagesData = JSON.parse(document.getElementById('packages-data').textContent);
+function openModal(id){document.getElementById(id).classList.add('show')}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+function editPkg(idx) {
+  const p = packagesData[idx];
+  if (!p) return;
+  document.getElementById('editForm').action='/admin/packages/'+p.id+'/update';
+  document.getElementById('e_name').value=p.name||'';
+  document.getElementById('e_pppoe_profile').value=p.pppoe_profile||'';
+  document.getElementById('e_price').value=p.price||0;
+  document.getElementById('e_include_ppn').checked=!!p.include_ppn;
+  document.getElementById('e_ppn_percent').value=(p.ppn_percent != null ? p.ppn_percent : 0);
+  document.getElementById('e_price_before_tax').value=(p.price_before_tax != null ? p.price_before_tax : p.price || 0);
+  document.getElementById('e_promo_price').value = (p.promo_price != null && p.promo_price !== '') ? p.promo_price : '';
+  document.getElementById('e_promo_cycles').value = p.promo_cycles != null ? p.promo_cycles : 0;
+  document.getElementById('e_prorate').checked = !!p.prorate_first_invoice;
+  document.getElementById('e_down').value=p.speed_down ? (p.speed_down/1000) : 0;
+  document.getElementById('e_up').value=p.speed_up ? (p.speed_up/1000) : 0;
+  document.getElementById('e_night_down').value=p.night_speed_down ? (p.night_speed_down/1000) : 0;
+  document.getElementById('e_night_up').value=p.night_speed_up ? (p.night_speed_up/1000) : 0;
+  document.getElementById('e_night_profile').value=p.night_profile_name || '';
+  document.getElementById('e_use_night').checked = !!p.use_night_speed;
+  document.getElementById('e_night_fields').style.display = p.use_night_speed ? 'block' : 'none';
+
+  document.getElementById('e_fup_limit').value=p.fup_limit_gb || 0;
+  document.getElementById('e_fup_speed').value=p.fup_speed_down ? (p.fup_speed_down/1000) : 0;
+  document.getElementById('e_fup_profile').value=p.fup_profile_name || '';
+  document.getElementById('e_use_fup').checked = !!p.use_fup;
+  document.getElementById('e_fup_fields').style.display = p.use_fup ? 'block' : 'none';
+
+  document.getElementById('e_active').value=p.is_active?'1':'0';
+  document.getElementById('e_desc').value=p.description||'';
+  document.getElementById('e_show_in_portal').checked=!!p.show_in_portal;
+  updateTaxPreview('edit');
+  openModal('editModal');
+}
+
+function toggleAddNight() { document.getElementById('add_night_fields').style.display = document.getElementById('add_use_night').checked ? 'block' : 'none'; }
+function toggleAddFup() { document.getElementById('add_fup_fields').style.display = document.getElementById('add_use_fup').checked ? 'block' : 'none'; }
+function toggleEditNight() { document.getElementById('e_night_fields').style.display = document.getElementById('e_use_night').checked ? 'block' : 'none'; }
+function toggleEditFup() { document.getElementById('e_fup_fields').style.display = document.getElementById('e_use_fup').checked ? 'block' : 'none'; }
+function applyAddProfile(value) {
+  const profile = value || '';
+  document.getElementById('add_pppoe_profile').value = profile;
+  const nameEl = document.getElementById('add_name');
+  if (profile && !nameEl.value.trim()) nameEl.value = profile;
+}
+function applyEditProfile(value) {
+  document.getElementById('e_pppoe_profile').value = value || '';
+}
+function updateTaxPreview(mode) {
+  const prefix = mode === 'edit' ? 'e' : 'add';
+  const grossEl = document.getElementById(`${prefix}_price`);
+  const includeEl = document.getElementById(`${prefix}_include_ppn`);
+  const percentEl = document.getElementById(`${prefix}_ppn_percent`);
+  const baseEl = document.getElementById(`${prefix}_price_before_tax`);
+  const amountEl = document.getElementById(`${prefix}_ppn_amount`);
+  if (!grossEl || !includeEl || !percentEl || !baseEl || !amountEl) return;
+  const gross = Math.max(0, parseInt(grossEl.value || '0', 10) || 0);
+  const includePpn = !!includeEl.checked;
+  const percent = includePpn ? Math.max(0, parseFloat(percentEl.value || '0') || 0) : 0;
+  if (!includePpn || percent <= 0) {
+    baseEl.value = gross || 0;
+    amountEl.value = 0;
+    return;
+  }
+  const divisor = 1 + (percent / 100);
+  const base = divisor > 0 ? Math.round(gross / divisor) : gross;
+  const ppnAmount = Math.max(0, gross - base);
+  baseEl.value = base;
+  amountEl.value = ppnAmount;
+}
+['add','edit'].forEach((mode) => {
+  const prefix = mode === 'edit' ? 'e' : 'add';
+  ['price','ppn_percent','include_ppn'].forEach((name) => {
+    const el = document.getElementById(`${prefix}_${name}`);
+    if (!el) return;
+    const eventName = name === 'include_ppn' ? 'change' : 'input';
+    el.addEventListener(eventName, () => updateTaxPreview(mode));
+  });
+  updateTaxPreview(mode);
+});
+setTimeout(()=>document.querySelectorAll('.alert').forEach(a=>a.style.display='none'),4000);
+
+// Load MikroTik profiles into select dropdowns
+async function loadProfiles() {
+  try {
+    const res = await fetch('/admin/api/mikrotik/profiles');
+    if (!res.ok) return;
+    const profiles = await res.json();
+    const selAdd = document.getElementById('add_profile_select');
+    const selEdit = document.getElementById('e_profile_select');
+    const selAddNight = document.getElementById('add_night_profile_select');
+    const selAddFup = document.getElementById('add_fup_profile_select');
+    const selEditNight = document.getElementById('e_night_profile_select');
+    const selEditFup = document.getElementById('e_fup_profile_select');
+
+    profiles.forEach(p => {
+      const opt = `<option value="${p.name}">${p.name}</option>`;
+      selAdd.innerHTML += opt;
+      selEdit.innerHTML += opt;
+      if (selAddNight) selAddNight.innerHTML += opt;
+      if (selAddFup) selAddFup.innerHTML += opt;
+      if (selEditNight) selEditNight.innerHTML += opt;
+      if (selEditFup) selEditFup.innerHTML += opt;
+    });
+  } catch (e) {
+    console.error('Failed to load MikroTik profiles', e);
+  }
+}
+loadProfiles();
+</script>
+</body>
+</html>

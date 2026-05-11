@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title>Laporan Kasir | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .cashier-stat-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .cashier-stat { border:1px solid var(--border); border-radius:18px; padding:14px 16px; background:rgba(255,255,255,0.04); }
+    .cashier-stat-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:5px; }
+    .cashier-stat-value { font-size:15px; font-weight:800; color:var(--text); }
+    .cashier-mobile-list { display:none; }
+    .cashier-mobile-card { border:1px solid var(--border); border-radius:18px; background:rgba(255,255,255,0.03); padding:14px 16px; }
+    .cashier-mobile-card + .cashier-mobile-card { margin-top:12px; }
+    .cashier-mobile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .cashier-mobile-name { font-size:14px; font-weight:800; color:var(--text); }
+    .cashier-mobile-sub { font-size:12px; color:var(--muted); margin-top:4px; }
+    .cashier-mobile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .cashier-mobile-cell { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,0.04); }
+    .cashier-mobile-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
+    .cashier-mobile-value { font-size:13px; font-weight:700; color:var(--text); word-break:break-word; }
+    @media (max-width: 768px) {
+      .tbl-wrap { display:none; }
+      .cashier-mobile-list { display:block; }
+      .card-bd[style] { flex-direction:column; align-items:stretch !important; }
+      .card-bd[style] .fs { min-width:0 !important; width:100%; }
+    }
+    @media (max-width: 520px) {
+      .cashier-stat-grid,
+      .cashier-mobile-grid { grid-template-columns:1fr; }
+      .cashier-mobile-head { flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'cashiers_reports', company }) %>
+
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title">
+      <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+      <i class="bi bi-journal-text"></i>
+      <span>Laporan Kasir</span>
+    </div>
+    <div class="tb-right">
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+      <a href="/admin/billing" class="btn btn-g btn-sm"><i class="bi bi-arrow-left"></i></a>
+    </div>
+  </div>
+
+  <div class="page">
+    <% if (msg) { %>
+      <div class="alert alert-<%= msg.type==='error'?'d':'s' %>"><%= msg.text %></div>
+    <% } %>
+
+    <div class="cashier-stat-grid" style="margin-bottom:16px">
+      <div class="cashier-stat">
+        <div class="cashier-stat-label">Total Transaksi</div>
+        <div class="cashier-stat-value"><%= Number(summary?.count || 0) %></div>
+      </div>
+      <div class="cashier-stat">
+        <div class="cashier-stat-label">Total Nominal</div>
+        <div class="cashier-stat-value">Rp <%= Number(summary?.total || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="cashier-stat">
+        <div class="cashier-stat-label">Tagihan</div>
+        <div class="cashier-stat-value"><%= Number(summary?.invoice_count || 0) %> transaksi</div>
+      </div>
+      <div class="cashier-stat">
+        <div class="cashier-stat-label">Deposit Agent</div>
+        <div class="cashier-stat-value"><%= Number(summary?.topup_count || 0) %> transaksi</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd">
+        <h6><i class="bi bi-funnel"></i> Filter</h6>
+      </div>
+      <div class="card-bd" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <% if (cashiers && cashiers.length > 1) { %>
+          <select class="fs" style="min-width:240px" onchange="location='/admin/cashiers/reports?cashierId='+encodeURIComponent(this.value)">
+            <option value="">Semua Kasir</option>
+            <% (cashiers || []).forEach(c => { %>
+              <option value="<%= c.id %>" <%= cashierId && Number(cashierId)===Number(c.id) ? 'selected' : '' %>><%= c.name %> (@<%= c.username %>)</option>
+            <% }) %>
+          </select>
+        <% } else if (cashiers && cashiers.length === 1) { %>
+          <span class="badge bm"><%= cashiers[0].name %><%= cashiers[0].username ? (' (@' + cashiers[0].username + ')') : '' %></span>
+        <% } %>
+        <span class="badge bm"><%= Number(summary?.count || 0) %> transaksi</span>
+        <span class="badge bs">Rp <%= Number(summary?.total || 0).toLocaleString('id-ID') %></span>
+        <span class="badge bm">Tagihan: <%= Number(summary?.invoice_count || 0) %> (Rp <%= Number(summary?.invoice_total || 0).toLocaleString('id-ID') %>)</span>
+        <span class="badge bm">Deposit Agent: <%= Number(summary?.topup_count || 0) %> (Rp <%= Number(summary?.topup_total || 0).toLocaleString('id-ID') %>)</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-hd">
+        <h6><i class="bi bi-list-ul"></i> Riwayat Transaksi</h6>
+      </div>
+      <div class="tbl-wrap">
+        <table class="dtbl">
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Kasir</th>
+              <th>Jenis</th>
+              <th>Detail</th>
+              <th class="num">Nominal</th>
+              <th>Catatan</th>
+              <th class="num">Ref</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!rows || rows.length === 0) { %>
+              <tr><td colspan="7" class="text-center text-muted" style="padding:24px">Belum ada transaksi kasir.</td></tr>
+            <% } else { %>
+              <% rows.forEach(r => { %>
+                <tr>
+                  <td style="font-size:11px;color:var(--muted)"><%= r.at ? new Date(r.at).toLocaleString((lang || 'id') === 'en' ? 'en-US' : 'id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-' %></td>
+                  <td class="fw6"><%= r.actor_name || '-' %></td>
+                  <td>
+                    <% if (r.kind === 'agent_topup') { %>
+                      <span class="badge bs">DEPOSIT</span>
+                    <% } else { %>
+                      <span class="badge bm">TAGIHAN</span>
+                    <% } %>
+                  </td>
+                  <td style="font-size:12px">
+                    <% if (r.kind === 'agent_topup') { %>
+                      <div class="fw6"><%= r.agent_name || '-' %> <span class="text-muted" style="font-size:11px"><%= r.agent_username ? '(@' + r.agent_username + ')' : '' %></span></div>
+                    <% } else { %>
+                      <div class="fw6"><%= r.customer_name || '-' %></div>
+                      <div style="font-size:11px;color:var(--muted)">
+                        <%= r.customer_phone || '' %><%= r.period_month && r.period_year ? (' - ' + r.period_month + '/' + r.period_year) : '' %><%= r.package_name ? (' - ' + r.package_name) : '' %>
+                      </div>
+                    <% } %>
+                  </td>
+                  <td class="num fw6" style="color:var(--success)">Rp <%= Number(r.amount||0).toLocaleString('id-ID') %></td>
+                  <td style="font-size:11px;color:var(--muted)"><%= r.notes ? r.notes : '-' %></td>
+                  <td class="num"><code>#<%= r.ref_id %></code></td>
+                </tr>
+              <% }) %>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+      <div class="cashier-mobile-list">
+        <% if (!rows || rows.length === 0) { %>
+          <div class="cashier-mobile-card">
+            <div class="cashier-mobile-name">Belum ada transaksi kasir.</div>
+          </div>
+        <% } else { %>
+          <% rows.forEach(r => { %>
+            <div class="cashier-mobile-card">
+              <div class="cashier-mobile-head">
+                <div>
+                  <div class="cashier-mobile-name"><%= r.kind === 'agent_topup' ? (r.agent_name || '-') : (r.customer_name || '-') %></div>
+                  <div class="cashier-mobile-sub"><%= r.actor_name || '-' %> &bull; <%= r.at ? new Date(r.at).toLocaleString((lang || 'id') === 'en' ? 'en-US' : 'id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-' %></div>
+                </div>
+                <% if (r.kind === 'agent_topup') { %>
+                  <span class="badge bs">DEPOSIT</span>
+                <% } else { %>
+                  <span class="badge bm">TAGIHAN</span>
+                <% } %>
+              </div>
+              <div class="cashier-mobile-grid">
+                <div class="cashier-mobile-cell">
+                  <div class="cashier-mobile-label">Nominal</div>
+                  <div class="cashier-mobile-value" style="color:var(--success)">Rp <%= Number(r.amount||0).toLocaleString('id-ID') %></div>
+                </div>
+                <div class="cashier-mobile-cell">
+                  <div class="cashier-mobile-label">Referensi</div>
+                  <div class="cashier-mobile-value">#<%= r.ref_id %></div>
+                </div>
+                <div class="cashier-mobile-cell">
+                  <div class="cashier-mobile-label">Detail</div>
+                  <div class="cashier-mobile-value">
+                    <% if (r.kind === 'agent_topup') { %>
+                      <%= r.agent_username ? ('@' + r.agent_username) : '-' %>
+                    <% } else { %>
+                      <%= r.customer_phone || '' %><%= r.period_month && r.period_year ? (' - ' + r.period_month + '/' + r.period_year) : '' %><%= r.package_name ? (' - ' + r.package_name) : '' %>
+                    <% } %>
+                  </div>
+                </div>
+                <div class="cashier-mobile-cell">
+                  <div class="cashier-mobile-label">Catatan</div>
+                  <div class="cashier-mobile-value"><%= r.notes ? r.notes : '-' %></div>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

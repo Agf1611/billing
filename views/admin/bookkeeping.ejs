@@ -1,0 +1,736 @@
+<%
+  const pageLang = (typeof lang !== 'undefined' && lang) ? lang : 'id';
+  const pageSession = (typeof session !== 'undefined' && session) ? session : {};
+  const pageMsg = (typeof msg !== 'undefined' && msg) ? msg : null;
+  const pageEntries = Array.isArray(entries) ? entries : [];
+  const pageCategories = categories || { income: [], expense: [] };
+  const now = new Date();
+  const selectedMonth = Number(filterMonth || (now.getMonth() + 1));
+  const selectedYear = Number(filterYear || now.getFullYear());
+  const selectedType = String(type || '').trim();
+  const selectedSearch = String(search || '').trim();
+  const monthNames = (pageLang === 'en')
+    ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    : ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const monthLabel = monthNames[Math.max(0, Math.min(11, selectedMonth - 1))] || monthNames[now.getMonth()];
+  const totalIncome = Number(summary?.total_income || 0);
+  const totalExpense = Number(summary?.total_expense || 0);
+  const balance = totalIncome - totalExpense;
+  const incomeCount = Number(summary?.income_count || 0);
+  const expenseCount = Number(summary?.expense_count || 0);
+%>
+<!DOCTYPE html>
+<html lang="<%= pageLang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title><%= title %> | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .bk-filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background:
+        linear-gradient(135deg, rgba(124, 116, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--surface-soft);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+    .bk-filter-copy {
+      display: grid;
+      gap: 4px;
+    }
+    .bk-filter-copy strong {
+      font-size: 16px;
+      color: var(--text);
+    }
+    .bk-filter-copy span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bk-filter-form {
+      display: grid;
+      grid-template-columns: 118px 108px 150px minmax(170px, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      width: min(100%, 760px);
+    }
+    .bk-filter-form .btn {
+      min-width: 120px;
+      box-shadow: 0 14px 28px rgba(92, 141, 255, 0.18);
+    }
+    .bk-layout {
+      display: grid;
+      grid-template-columns: minmax(290px, 0.92fr) minmax(0, 1.4fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .bk-stats {
+      margin-bottom: 18px;
+    }
+    .bk-stats .sc {
+      min-height: 136px;
+    }
+    .bk-stats .sc.bk-income {
+      background:
+        radial-gradient(circle at top right, rgba(52, 211, 153, 0.16), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        var(--surface);
+    }
+    .bk-stats .sc.bk-expense {
+      background:
+        radial-gradient(circle at top right, rgba(251, 113, 133, 0.16), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        var(--surface);
+    }
+    .bk-stats .sc.bk-balance {
+      background:
+        radial-gradient(circle at top right, rgba(124, 116, 255, 0.16), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+        var(--surface);
+    }
+    .bk-stats .sc-val {
+      letter-spacing: -0.05em;
+    }
+    .bk-stats .sc-sub {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .bk-stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .bk-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+    .bk-panel .card-hd {
+      padding: 15px 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+        rgba(255, 255, 255, 0.015);
+    }
+    .bk-panel .card-bd {
+      padding: 18px;
+    }
+    .bk-form-note {
+      margin-top: 12px;
+      padding: 11px 12px;
+      border-radius: 14px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+      border: 1px solid var(--border);
+    }
+    .bk-summary-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .bk-summary-copy {
+      display: grid;
+      gap: 4px;
+    }
+    .bk-summary-copy strong {
+      font-size: 16px;
+      color: var(--text);
+    }
+    .bk-summary-copy span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bk-chip-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .bk-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .bk-chip i {
+      color: var(--primary);
+    }
+    .bk-chip strong {
+      color: var(--text);
+    }
+    .bk-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .bk-type.income {
+      background: rgba(34, 197, 94, 0.14);
+      color: #22c55e;
+    }
+    .bk-type.expense {
+      background: rgba(251, 113, 133, 0.14);
+      color: #fb7185;
+    }
+    .bk-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+    .bk-source.invoice {
+      color: var(--primary);
+      border-color: rgba(124, 116, 255, 0.18);
+      background: rgba(124, 116, 255, 0.08);
+    }
+    .bk-entry-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .bk-entry-main {
+      color: var(--text);
+      font-weight: 700;
+      line-height: 1.45;
+    }
+    .bk-entry-sub {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .bk-amount {
+      text-align: right;
+      font-weight: 800;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .bk-amount.income {
+      color: #22c55e;
+    }
+    .bk-amount.expense {
+      color: #fb7185;
+    }
+    .bk-empty {
+      padding: 26px 18px;
+      border: 1px dashed var(--border);
+      border-radius: 18px;
+      background: var(--surface-soft);
+      text-align: center;
+    }
+    .bk-empty i {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 12px;
+      border-radius: 18px;
+      background: var(--surface-soft);
+      color: var(--primary);
+      font-size: 20px;
+    }
+    .bk-empty strong {
+      display: block;
+      font-size: 15px;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+    .bk-empty span {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .bk-mobile-list {
+      display: none;
+    }
+    .bk-mobile-card {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
+        var(--surface-soft);
+      padding: 15px 16px;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+    }
+    .bk-mobile-card::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      border-radius: 18px 0 0 18px;
+      background: linear-gradient(180deg, var(--primary), var(--primary-2));
+    }
+    .bk-mobile-card.income::before {
+      background: linear-gradient(180deg, #22c55e, #34d399);
+    }
+    .bk-mobile-card.expense::before {
+      background: linear-gradient(180deg, #fb7185, #ff9db0);
+    }
+    .bk-mobile-card + .bk-mobile-card {
+      margin-top: 12px;
+    }
+    .bk-mobile-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .bk-mobile-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .bk-mobile-top .bk-date {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .bk-mobile-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .bk-mobile-cell {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--surface-soft);
+    }
+    .bk-mobile-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .bk-mobile-value {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .bk-mobile-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+    body[data-theme="light"] .bk-panel,
+    body[data-theme="light"] .bk-mobile-card,
+    body[data-theme="light"] .bk-empty {
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 16px 36px rgba(165, 162, 211, 0.12);
+    }
+    body[data-theme="light"] .bk-stats .sc.bk-income {
+      background:
+        radial-gradient(circle at top right, rgba(22, 163, 116, 0.15), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(247, 252, 249, 0.94)),
+        var(--surface);
+    }
+    body[data-theme="light"] .bk-stats .sc.bk-expense {
+      background:
+        radial-gradient(circle at top right, rgba(239, 71, 111, 0.14), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 248, 0.94)),
+        var(--surface);
+    }
+    body[data-theme="light"] .bk-stats .sc.bk-balance {
+      background:
+        radial-gradient(circle at top right, rgba(105, 88, 255, 0.14), transparent 34%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(246, 247, 255, 0.94)),
+        var(--surface);
+    }
+    body[data-theme="light"] .bk-filter-bar {
+      background:
+        linear-gradient(135deg, rgba(105, 88, 255, 0.08), rgba(92, 141, 255, 0.06)),
+        rgba(255, 255, 255, 0.86);
+    }
+    body[data-theme="light"] .bk-panel .card-hd {
+      background:
+        linear-gradient(180deg, rgba(105, 88, 255, 0.04), transparent),
+        rgba(255, 255, 255, 0.92);
+    }
+    @media (max-width: 1100px) {
+      .bk-layout {
+        grid-template-columns: 1fr;
+      }
+      .bk-filter-form {
+        width: 100%;
+      }
+    }
+    @media (max-width: 900px) {
+      .stat-grid.bk-stats,
+      .stat-grid.bk-stats[style] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+      .bk-filter-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-filter-form .bk-filter-action {
+        grid-column: 1 / -1;
+      }
+      .bk-filter-form .btn {
+        width: 100%;
+      }
+    }
+    @media (max-width: 768px) {
+      .bk-filter-bar {
+        padding: 12px 14px;
+        border-radius: 16px;
+      }
+      .bk-filter-copy strong {
+        font-size: 15px;
+      }
+      .bk-filter-form {
+        grid-template-columns: 1fr;
+      }
+      .bk-summary-row {
+        align-items: flex-start;
+      }
+      .tbl-wrap {
+        display: none;
+      }
+      .bk-mobile-list {
+        display: block;
+      }
+    }
+    @media (max-width: 576px) {
+      .stat-grid.bk-stats,
+      .stat-grid.bk-stats[style] {
+        grid-template-columns: 1fr !important;
+      }
+      .bk-panel .card-hd,
+      .bk-panel .card-bd {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+      .bk-mobile-grid {
+        grid-template-columns: 1fr;
+      }
+      .bk-mobile-head {
+        flex-direction: column;
+      }
+      .bk-amount {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'bookkeeping', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title">
+      <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+      <i class="bi bi-cash-coin"></i>
+      <span>Pembukuan</span>
+    </div>
+    <div class="tb-right">
+      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+        <i class="bi bi-sun"></i>
+        <span>Terang</span>
+      </button>
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= pageSession.isCashier ? 'Kasir' : 'Admin' %></span>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+
+  <div class="page">
+    <% if (pageMsg && pageMsg.text) { %>
+      <div class="alert alert-<%= pageMsg.type === 'error' ? 'd' : 's' %>" style="margin-bottom:16px"><%= pageMsg.text %></div>
+    <% } %>
+
+    <div class="bk-filter-bar">
+      <div class="bk-filter-copy">
+        <strong>Periode Pembukuan</strong>
+        <span><%= monthLabel %> <%= selectedYear %> • <%= pageEntries.length %> entri tampil</span>
+      </div>
+      <form method="GET" action="/admin/bookkeeping" class="bk-filter-form">
+        <select class="fs" name="month" aria-label="Bulan">
+          <% for (let m = 1; m <= 12; m++) { %>
+            <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
+          <% } %>
+        </select>
+        <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
+        <select class="fs" name="type" aria-label="Jenis transaksi">
+          <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
+          <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
+          <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
+        </select>
+        <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan">
+        <div class="bk-filter-action">
+          <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="stat-grid bk-stats" style="grid-template-columns:repeat(3,1fr)">
+      <div class="sc s bk-income">
+        <i class="bi bi-arrow-down-left-circle sc-icon"></i>
+        <div class="sc-label">Kas Masuk</div>
+        <div class="sc-val" style="font-size:22px">Rp <%= totalIncome.toLocaleString('id-ID') %></div>
+        <div class="sc-sub">
+          <span><%= incomeCount %> transaksi masuk</span>
+          <span class="bk-stat-pill"><i class="bi bi-graph-up-arrow"></i> arus sehat</span>
+        </div>
+      </div>
+      <div class="sc d bk-expense">
+        <i class="bi bi-arrow-up-right-circle sc-icon"></i>
+        <div class="sc-label">Kas Keluar</div>
+        <div class="sc-val" style="font-size:22px">Rp <%= totalExpense.toLocaleString('id-ID') %></div>
+        <div class="sc-sub">
+          <span><%= expenseCount %> transaksi keluar</span>
+          <span class="bk-stat-pill"><i class="bi bi-receipt-cutoff"></i> operasional</span>
+        </div>
+      </div>
+      <div class="sc <%= balance >= 0 ? 'p' : 'w' %> bk-balance">
+        <i class="bi bi-wallet2 sc-icon"></i>
+        <div class="sc-label">Selisih</div>
+        <div class="sc-val" style="font-size:22px">Rp <%= balance.toLocaleString('id-ID') %></div>
+        <div class="sc-sub">
+          <span>Hasil periode terpilih</span>
+          <span class="bk-stat-pill"><i class="bi bi-calendar3"></i> <%= monthLabel %></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bk-layout">
+      <section class="bk-panel">
+        <div class="card-hd">
+          <h6><i class="bi bi-plus-circle"></i> Tambah Pemasukan / Pengeluaran</h6>
+        </div>
+        <div class="card-bd">
+          <form method="POST" action="/admin/bookkeeping">
+            <div class="form-row">
+              <div>
+                <label class="fl">Jenis</label>
+                <select class="fc" name="type" id="entryType" onchange="syncCategoryOptions()">
+                  <option value="expense">Pengeluaran</option>
+                  <option value="income">Pemasukan</option>
+                </select>
+              </div>
+              <div>
+                <label class="fl">Tanggal</label>
+                <input class="fc" type="date" name="entry_date" value="<%= new Date().toISOString().slice(0,10) %>">
+              </div>
+            </div>
+
+            <div class="form-row" style="margin-top:14px">
+              <div>
+                <label class="fl">Nominal</label>
+                <input class="fc" type="number" min="0" name="amount" required placeholder="Contoh: 250000">
+              </div>
+              <div>
+                <label class="fl">Kategori</label>
+                <select class="fc" name="category" id="entryCategory"></select>
+              </div>
+            </div>
+
+            <div style="margin-top:14px">
+              <label class="fl">Kategori Lainnya</label>
+              <input class="fc" name="custom_category" placeholder="Isi jika kategori belum tersedia">
+            </div>
+
+            <div style="margin-top:14px">
+              <label class="fl">Keterangan</label>
+              <textarea class="fc" rows="4" name="description" placeholder="Contoh: Bayar listrik kantor, pembayaran pelanggan, gaji teknisi"></textarea>
+            </div>
+
+            <div class="bk-form-note">
+              Pemasukan untuk kas masuk manual. Pengeluaran untuk operasional seperti listrik, bandwidth, gaji, dan kebutuhan lapangan.
+            </div>
+
+            <button class="btn btn-p" type="submit" style="margin-top:16px"><i class="bi bi-save2"></i> Simpan Pembukuan</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="bk-panel">
+        <div class="card-hd">
+          <h6><i class="bi bi-journal-text"></i> Riwayat Pembukuan</h6>
+        </div>
+        <div class="card-bd">
+          <div class="bk-summary-row">
+            <div class="bk-summary-copy">
+              <strong>Riwayat Transaksi</strong>
+              <span>Semua entri untuk <%= monthLabel %> <%= selectedYear %></span>
+            </div>
+            <div class="bk-chip-row">
+              <span class="bk-chip"><i class="bi bi-wallet2"></i> Total <strong><%= pageEntries.length %></strong> entri</span>
+              <span class="bk-chip"><i class="bi bi-arrow-down-left-circle"></i> Masuk <strong><%= incomeCount %></strong></span>
+              <span class="bk-chip"><i class="bi bi-arrow-up-right-circle"></i> Keluar <strong><%= expenseCount %></strong></span>
+            </div>
+          </div>
+
+          <% if (!pageEntries.length) { %>
+            <div class="bk-empty">
+              <i class="bi bi-journal-x"></i>
+              <strong>Belum ada data pembukuan</strong>
+              <span>Masukkan pemasukan atau pengeluaran baru untuk mulai mencatat arus kas usaha Anda.</span>
+            </div>
+          <% } else { %>
+            <div class="tbl-wrap">
+              <table class="dtbl">
+                <thead>
+                  <tr>
+                    <th style="width:116px">Tanggal</th>
+                    <th style="width:120px">Jenis</th>
+                    <th style="width:150px">Kategori</th>
+                    <th>Keterangan</th>
+                    <th style="width:130px">Petugas</th>
+                    <th class="num" style="width:160px">Nominal</th>
+                    <th class="num" style="width:74px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% pageEntries.forEach((entry) => { %>
+                    <tr>
+                      <td><span class="bk-entry-main"><%= entry.entry_date || '-' %></span></td>
+                      <td>
+                        <span class="bk-type <%= entry.type === 'income' ? 'income' : 'expense' %>">
+                          <i class="bi <%= entry.type === 'income' ? 'bi-arrow-down-left' : 'bi-arrow-up-right' %>"></i>
+                          <%= entry.type === 'income' ? 'Masuk' : 'Keluar' %>
+                        </span>
+                      </td>
+                      <td>
+                        <div class="bk-entry-copy">
+                          <span class="bk-entry-main"><%= entry.category || '-' %></span>
+                          <% if (entry.source_type) { %>
+                            <span class="bk-source <%= entry.source_type === 'invoice' ? 'invoice' : '' %>"><%= entry.source_type %></span>
+                          <% } %>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="bk-entry-copy">
+                          <span class="bk-entry-main"><%= entry.description || '-' %></span>
+                          <% if (entry.customer_name) { %><span class="bk-entry-sub"><%= entry.customer_name %></span><% } %>
+                        </div>
+                      </td>
+                      <td><span class="bk-entry-main"><%= entry.created_by_name || '-' %></span></td>
+                      <td class="num bk-amount <%= entry.type === 'income' ? 'income' : 'expense' %>">Rp <%= Number(entry.amount || 0).toLocaleString('id-ID') %></td>
+                      <td class="num">
+                        <% if (String(entry.source_type || '') !== 'invoice') { %>
+                          <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
+                            <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i></button>
+                          </form>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bk-mobile-list">
+              <% pageEntries.forEach((entry) => { %>
+                <article class="bk-mobile-card <%= entry.type === 'income' ? 'income' : 'expense' %>">
+                  <div class="bk-mobile-head">
+                    <div>
+                      <div class="bk-mobile-top">
+                        <span class="bk-type <%= entry.type === 'income' ? 'income' : 'expense' %>">
+                          <i class="bi <%= entry.type === 'income' ? 'bi-arrow-down-left' : 'bi-arrow-up-right' %>"></i>
+                          <%= entry.type === 'income' ? 'Masuk' : 'Keluar' %>
+                        </span>
+                        <span class="bk-date"><%= entry.entry_date || '-' %></span>
+                      </div>
+                      <div class="bk-entry-main"><%= entry.category || '-' %></div>
+                      <div class="bk-entry-sub"><%= entry.description || '-' %></div>
+                    </div>
+                    <div class="bk-amount <%= entry.type === 'income' ? 'income' : 'expense' %>">Rp <%= Number(entry.amount || 0).toLocaleString('id-ID') %></div>
+                  </div>
+
+                  <div class="bk-mobile-grid">
+                    <div class="bk-mobile-cell">
+                      <div class="bk-mobile-label">Petugas</div>
+                      <div class="bk-mobile-value"><%= entry.created_by_name || '-' %></div>
+                    </div>
+                    <div class="bk-mobile-cell">
+                      <div class="bk-mobile-label">Sumber</div>
+                      <div class="bk-mobile-value"><%= entry.source_type || 'manual' %></div>
+                    </div>
+                    <% if (entry.customer_name) { %>
+                      <div class="bk-mobile-cell" style="grid-column:1 / -1">
+                        <div class="bk-mobile-label">Pelanggan</div>
+                        <div class="bk-mobile-value"><%= entry.customer_name %></div>
+                      </div>
+                    <% } %>
+                  </div>
+
+                  <% if (String(entry.source_type || '') !== 'invoice') { %>
+                    <div class="bk-mobile-actions">
+                      <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
+                        <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i> Hapus</button>
+                      </form>
+                    </div>
+                  <% } %>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CATEGORY_OPTIONS = <%- JSON.stringify(pageCategories) %>;
+  function syncCategoryOptions() {
+    const type = document.getElementById('entryType').value === 'income' ? 'income' : 'expense';
+    const select = document.getElementById('entryCategory');
+    const options = Array.isArray(CATEGORY_OPTIONS[type]) ? CATEGORY_OPTIONS[type] : [];
+    select.innerHTML = options.map((item) => `<option value="${String(item).replace(/"/g, '&quot;')}">${item}</option>`).join('');
+  }
+  syncCategoryOptions();
+</script>
+</body>
+</html>

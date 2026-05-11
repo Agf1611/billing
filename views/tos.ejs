@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+
+<head>
+  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title><%= t('customer.pages.tos.meta_title', 'Syarat & Ketentuan') %> | <%= company %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#f6faff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="<%= logoSrc %>">
+  <link rel="icon" href="<%= logoSrc %>">
+  <style>
+    :root {
+      --bg-top: #ffffff;
+      --bg-bottom: #eef5ff;
+      --surface: rgba(255, 255, 255, 0.94);
+      --surface-soft: #f8fbff;
+      --line: rgba(98, 128, 184, 0.16);
+      --line-strong: rgba(45, 107, 255, 0.22);
+      --text-main: #1a2740;
+      --text-soft: #697897;
+      --text-faint: #8c99b0;
+      --brand: #2d6bff;
+      --brand-deep: #204fd7;
+      --teal: #0f9f9a;
+      --shadow: 0 28px 70px rgba(41, 79, 143, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at top left, rgba(67, 156, 255, 0.18) 0%, rgba(67, 156, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(15, 159, 154, 0.12) 0%, rgba(15, 159, 154, 0) 28%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.16;
+      background-image:
+        linear-gradient(rgba(45, 107, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(45, 107, 255, 0.04) 1px, transparent 1px);
+      background-size: 34px 34px;
+    }
+
+    .page-wrap {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 980px);
+      margin: 0 auto;
+      padding: calc(20px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom));
+    }
+
+    .hero-card,
+    .content-card {
+      border-radius: 28px;
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .hero-card {
+      padding: 18px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .hero-card::before {
+      content: "";
+      position: absolute;
+      inset: auto auto auto auto;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .brand-mark {
+      width: 64px;
+      height: 64px;
+      flex: 0 0 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(236,244,255,0.95));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 16px 28px rgba(45, 107, 255, 0.12);
+    }
+
+    .brand-mark img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+
+    .brand-copy strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 800;
+      color: var(--text-faint);
+    }
+
+    .brand-copy span {
+      display: block;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: 24px;
+      line-height: 1.04;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .hero-copy {
+      padding: 18px;
+      border-radius: 22px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.95), rgba(244,249,255,0.92));
+      border: 1px solid rgba(255,255,255,0.7);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(45, 107, 255, 0.08);
+      color: var(--brand-deep);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    .hero-copy h1 {
+      margin: 0 0 8px;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: clamp(28px, 4vw, 38px);
+      line-height: 1.02;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .hero-copy p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 14px;
+      line-height: 1.65;
+      max-width: 60ch;
+    }
+
+    .summary-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: linear-gradient(155deg, rgba(45, 107, 255, 0.96), rgba(33, 80, 215, 0.92));
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 100%;
+    }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .summary-card p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.88);
+    }
+
+    .summary-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .summary-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 12px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.14);
+    }
+
+    .summary-item i {
+      font-size: 15px;
+      color: #dbe7ff;
+      margin-top: 1px;
+    }
+
+    .summary-item span {
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .legal-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .legal-tab {
+      min-height: 46px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 15px;
+      text-decoration: none;
+      border: 1px solid rgba(45, 107, 255, 0.12);
+      background: rgba(255,255,255,0.88);
+      color: var(--brand-deep);
+      font-size: 12px;
+      font-weight: 800;
+      transition: 0.2s ease;
+    }
+
+    .legal-tab.active {
+      background: linear-gradient(135deg, var(--brand) 0%, #4d8cff 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 14px 26px rgba(45, 107, 255, 0.18);
+    }
+
+    .legal-tab:hover {
+      color: inherit;
+      transform: translateY(-1px);
+    }
+
+    .content-card {
+      padding: 20px;
+    }
+
+    .lead-copy {
+      margin-bottom: 16px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(247,250,255,0.95), rgba(240,246,255,0.92));
+      border: 1px solid var(--line);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-soft);
+    }
+
+    .lead-copy strong {
+      color: var(--text-main);
+    }
+
+    .section-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .section-card {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      gap: 14px;
+      padding: 16px 18px;
+      border-radius: 20px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+    }
+
+    .section-index {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: rgba(45, 107, 255, 0.1);
+      color: var(--brand);
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .section-body h2 {
+      margin: 0 0 8px;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .section-body p,
+    .section-body li {
+      font-size: 14px;
+      line-height: 1.72;
+      color: var(--text-soft);
+    }
+
+    .section-body p:last-child,
+    .section-body ul:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-body ul {
+      padding-left: 18px;
+      margin: 0;
+    }
+
+    .page-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .page-actions .note {
+      font-size: 12px;
+      color: var(--text-soft);
+      line-height: 1.5;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 46px;
+      padding: 0 16px;
+      border-radius: 15px;
+      border: 1px solid rgba(45, 107, 255, 0.14);
+      background: rgba(45, 107, 255, 0.06);
+      color: var(--brand-deep);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 800;
+      transition: 0.2s ease;
+    }
+
+    .btn-back:hover {
+      color: var(--brand-deep);
+      background: rgba(45, 107, 255, 0.1);
+      border-color: rgba(45, 107, 255, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    @media (max-width: 860px) {
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page-wrap {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .brand-row {
+        align-items: flex-start;
+      }
+
+      .brand-mark {
+        width: 56px;
+        height: 56px;
+        flex-basis: 56px;
+      }
+
+      .brand-mark img {
+        width: 42px;
+        height: 42px;
+      }
+
+      .brand-copy span {
+        font-size: 21px;
+      }
+
+      .hero-copy,
+      .summary-card,
+      .content-card,
+      .section-card {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .legal-tabs {
+        grid-template-columns: 1fr;
+      }
+
+      .section-card {
+        grid-template-columns: 1fr;
+      }
+
+      .page-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page-wrap">
+    <section class="hero-card">
+      <div class="brand-row">
+        <div class="brand-mark">
+          <img src="<%= logoSrc %>" alt="Logo <%= company %>">
+        </div>
+        <div class="brand-copy">
+          <strong>Portal Pelanggan</strong>
+          <span><%= company %></span>
+        </div>
+      </div>
+
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow"><i class="bi bi-file-earmark-text"></i> Halaman Resmi Layanan</div>
+          <h1><%= t('customer.pages.tos.title', 'Syarat & Ketentuan') %></h1>
+          <p><%= t('customer.pages.tos.subtitle', 'Harap baca dengan teliti sebelum menggunakan layanan kami.') %></p>
+        </div>
+
+        <aside class="summary-card">
+          <div>
+            <strong>Ringkasan utama</strong>
+            <p>Halaman ini menjelaskan aturan penggunaan layanan internet, alur tagihan, kebijakan suspend, dan batas tanggung jawab layanan.</p>
+          </div>
+          <div class="summary-list">
+            <div class="summary-item">
+              <i class="bi bi-wallet2"></i>
+              <span>Pembayaran dan tagihan diproses mengikuti siklus berlangganan pelanggan.</span>
+            </div>
+            <div class="summary-item">
+              <i class="bi bi-shield-lock"></i>
+              <span>Layanan bisa dinonaktifkan sementara jika tagihan melewati batas waktu.</span>
+            </div>
+            <div class="summary-item">
+              <i class="bi bi-headset"></i>
+              <span>Jika ada kendala pembayaran, pelanggan dapat menghubungi support resmi.</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="legal-tabs">
+        <a href="/customer/tos" class="legal-tab active">
+          <i class="bi bi-file-text"></i>
+          <span>Ketentuan</span>
+        </a>
+        <a href="/customer/privacy" class="legal-tab">
+          <i class="bi bi-shield-check"></i>
+          <span>Privasi</span>
+        </a>
+        <a href="/customer/contact" class="legal-tab">
+          <i class="bi bi-headset"></i>
+          <span>Kontak</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="lead-copy">
+        <%- String(t('customer.pages.tos.p1', 'Selamat datang di layanan internet <strong>{company}</strong>. Dengan menggunakan layanan kami dan melakukan pembayaran melalui sistem ini, Anda setuju untuk terikat oleh syarat dan ketentuan berikut:')).replace('{company}', company) %>
+      </div>
+
+      <div class="section-list">
+        <article class="section-card">
+          <div class="section-index">1</div>
+          <div class="section-body">
+            <h2><%= t('customer.pages.tos.s1_title', 'Layanan') %></h2>
+            <p><%= t('customer.pages.tos.s1_body', 'Kami menyediakan layanan akses internet (RTRWNet/ISP) kepada pelanggan sesuai dengan paket yang dipilih. Kualitas layanan dapat dipengaruhi oleh faktor teknis, lokasi geografis, dan kondisi cuaca yang ekstrem.') %></p>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-index">2</div>
+          <div class="section-body">
+            <h2><%= t('customer.pages.tos.s2_title', 'Pembayaran & Tagihan') %></h2>
+            <ul>
+              <li><%= t('customer.pages.tos.s2_li1', 'Tagihan internet akan diterbitkan secara otomatis oleh sistem setiap bulan sesuai dengan siklus langganan Anda.') %></li>
+              <li><%= t('customer.pages.tos.s2_li2', 'Pembayaran dapat dilakukan secara mandiri melalui Portal Pelanggan menggunakan metode QRIS, Virtual Account, atau Retail Outlet yang tersedia.') %></li>
+              <li><%= t('customer.pages.tos.s2_li3', 'Setiap pembayaran yang sudah berhasil diverifikasi oleh sistem bersifat final dan tidak dapat dibatalkan atau dikembalikan (Non-Refundable).') %></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-index">3</div>
+          <div class="section-body">
+            <h2><%= t('customer.pages.tos.s3_title', 'Kebijakan Isolir (Suspend)') %></h2>
+            <p><%= t('customer.pages.tos.s3_body', 'Sistem kami akan melakukan pemutusan layanan sementara (Isolir) secara otomatis apabila tagihan belum dilunasi hingga melewati batas waktu (Jatuh Tempo) yang telah ditentukan. Layanan akan aktif kembali secara otomatis segera setelah pembayaran terverifikasi.') %></p>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-index">4</div>
+          <div class="section-body">
+            <h2><%= t('customer.pages.tos.s4_title', 'Pengembalian Dana (Refund)') %></h2>
+            <p><%= t('customer.pages.tos.s4_body', 'Pengembalian dana hanya dapat dipertimbangkan jika terjadi kesalahan sistem pada payment gateway kami yang menyebabkan transaksi ganda untuk satu tagihan yang sama.') %></p>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-index">5</div>
+          <div class="section-body">
+            <h2><%= t('customer.pages.tos.s5_title', 'Batasan Tanggung Jawab') %></h2>
+            <p><%= String(t('customer.pages.tos.s5_body', '{company} tidak bertanggung jawab atas kerugian yang disebabkan oleh gangguan teknis dari penyedia hulu (Upstream), kerusakan perangkat akibat kelalaian pelanggan, atau kejadian luar biasa (Force Majeure).')).replace('{company}', company) %></p>
+          </div>
+        </article>
+      </div>
+
+      <div class="page-actions">
+        <div class="note">Dokumen ini menjadi acuan saat pelanggan menggunakan portal, menerima layanan, dan melakukan pembayaran.</div>
+        <a href="<%= isLoggedIn ? '/customer/dashboard' : '/customer/login' %>" class="btn-back">
+          <i class="bi bi-arrow-left"></i>
+          <span><%= t('common.back_to', 'Kembali ke') %> <%= isLoggedIn ? t('customer.dashboard_title', 'Dashboard Pelanggan') : t('common.portal', 'Portal') %></span>
+        </a>
+      </div>
+    </section>
+
+    <div class="footer">
+      &copy; <%= new Date().getFullYear() %> <%= company %> • <%= t('customer.pages.tos.footer_tagline', 'Semua Hak Dilindungi') %>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/customer/' }).catch(() => {});
+      });
+    }
+  </script>
+  <%- include('partials/customer_bottom_nav', { activeNav: 'none' }) %>
+</body>
+
+</html>

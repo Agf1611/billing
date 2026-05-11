@@ -1,0 +1,29 @@
+<script>
+  (function() {
+    try {
+      var theme = localStorage.getItem('admin-theme') || 'dark';
+      var root = document.documentElement;
+      root.setAttribute('data-admin-theme', theme);
+      root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+      root.classList.add('admin-theme-loading');
+
+      var applyTheme = function() {
+        if (!document.body) {
+          requestAnimationFrame(applyTheme);
+          return;
+        }
+        document.body.dataset.theme = theme;
+        root.classList.remove('admin-theme-loading');
+      };
+
+      applyTheme();
+    } catch (error) {
+      document.documentElement.classList.remove('admin-theme-loading');
+    }
+  })();
+</script>
+<style>
+  html.admin-theme-loading body {
+    opacity: 0;
+  }
+</style>

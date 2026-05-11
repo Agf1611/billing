@@ -1,0 +1,4422 @@
+<%
+  const monthNames = [null, 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const customerData = customer || {};
+  const profileData = profile || {};
+  const companyName = settings?.company_header || 'Portal Pelanggan';
+  const companyLogoUrl = settings?.company_logo_url || '/img/logo.png';
+  const companyLegalName = String(settings?.company_legal_name || '').trim();
+  const upstreamProviderName = String(settings?.upstream_provider_name || '').trim();
+  const companyAddressText = String(settings?.company_address || '').trim();
+  const companyPhoneText = String(settings?.company_phone || '').trim();
+  const companyEmailText = String(settings?.company_email || '').trim();
+  const manualPaymentBank = String(settings?.manual_payment_bank || '').trim();
+  const manualPaymentAccountNumber = String(settings?.manual_payment_account_number || '').trim();
+  const manualPaymentAccountName = String(settings?.manual_payment_account_name || '').trim();
+  const manualPaymentNotes = String(settings?.manual_payment_notes || '').trim();
+  const hasManualPayment = Boolean(manualPaymentBank && manualPaymentAccountNumber);
+  const customerCode = String(profileData.genieacs_tag || profileData.pppoe_username || profileData.phone || customerData.phone || profileData.id || '-').trim();
+  const customerName = profileData.name || customerData.name || 'Pelanggan';
+  const packageName = profileData.package_name || customerData.package_name || 'Paket Internet';
+  const customerPhone = profileData.phone || customerData.phone || '-';
+  const customerAddress = profileData.address || customerData.lokasi || '-';
+  const customerOdp = profileData.odp_name || '-';
+  const customerIdLabel = customerCode || String(profileData.id || '-');
+  const routerDisplayName = profileData.router_name || customerData.model || customerData.productClass || '-';
+  const monthlyPrice = Number(profileData.package_price || 0);
+  const uploadBytes = Math.max(0, Number(profileData.bytes_out || 0));
+  const downloadBytes = Math.max(0, Number(profileData.bytes_in || 0));
+  const totalBytes = uploadBytes + downloadBytes;
+  const useFup = Number(profileData.use_fup || 0) === 1 && Number(profileData.fup_limit_gb || 0) > 0;
+  const quotaLimitBytes = useFup ? Number(profileData.fup_limit_gb || 0) * 1024 * 1024 * 1024 : 0;
+  const quotaPercent = quotaLimitBytes > 0 ? Math.min(100, (totalBytes / quotaLimitBytes) * 100) : 0;
+  const usageStartDate = new Date();
+  usageStartDate.setDate(1);
+  usageStartDate.setHours(0, 0, 0, 0);
+  const usageEndDate = new Date();
+  const liveDownloadCap = Number(trafficMaxDownMbps || Math.max(1, Math.round(Number(profileData.speed_down || 10000) / 1000) || 10));
+  const liveUploadCap = Number(trafficMaxUpMbps || Math.max(1, Math.round(Number(profileData.speed_up || 10000) / 1000) || 10));
+  const unpaidInvoices = (invoices || []).filter((inv) => String(inv.status || '').toLowerCase() !== 'paid');
+  const paidInvoices = (invoices || []).filter((inv) => String(inv.status || '').toLowerCase() === 'paid');
+  const latestInvoice = unpaidInvoices[0] || (invoices || [])[0] || null;
+  const usersOnline = Array.isArray(connectedUsers) ? connectedUsers.filter((item) => String(item.status || '').toLowerCase() === 'online') : [];
+  const connectedDeviceCount = Array.isArray(connectedUsers) ? connectedUsers.length : 0;
+  const activeTickets = (tickets || []).filter((ticket) => !['resolved', 'closed', 'done'].includes(String(ticket.status || '').toLowerCase()));
+  const pppoeStatusText = String(customerData.pppoeStatusText || profileData.pppoe_status || '').trim();
+  const isPppoeOnline = /online|connected|aktif/i.test(pppoeStatusText);
+  const hasRouterPortalAccess = Boolean(
+    (customerData.ssid && customerData.ssid !== '-') ||
+    (customerData.serialNumber && customerData.serialNumber !== '-') ||
+    (customerData.rxPower && customerData.rxPower !== '-') ||
+    (customerData.model && customerData.model !== '-') ||
+    (customerData.productClass && customerData.productClass !== '-') ||
+    (Array.isArray(connectedUsers) && connectedUsers.length > 0)
+  );
+  const supportPhone = String(settings?.whatsapp_admin || settings?.admin_phone || settings?.company_phone || '').replace(/\D/g, '');
+  const supportUrl = supportPhone ? `https://wa.me/${supportPhone}` : '/customer/contact';
+  const appNotif = (typeof notif !== 'undefined' ? notif : null) || null;
+  const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
+  const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
+  const recentActivities = [];
+
+  function formatCurrency(value) {
+    return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+  }
+
+  function formatBytes(bytes) {
+    const num = Number(bytes || 0);
+    if (!Number.isFinite(num) || num <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = num;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(digits)} ${units[unitIndex]}`;
+  }
+
+  function formatUsageGb(bytes) {
+    const num = Math.max(0, Number(bytes || 0));
+    const gb = num / (1024 * 1024 * 1024);
+    if (gb >= 1) return gb.toFixed(2);
+    const mb = num / (1024 * 1024);
+    return (mb / 1024).toFixed(2);
+  }
+
+  function formatDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  (unpaidInvoices || []).slice(0, 2).forEach((inv) => {
+    recentActivities.push({
+      type: 'invoice-unpaid',
+      title: `Invoice INV-${inv.id}`,
+      subtitle: `Tagihan ${monthNames[Number(inv.period_month)] || inv.period_month} ${inv.period_year}`,
+      meta: formatCurrency(inv.amount),
+      time: `${monthNames[Number(inv.period_month)] || inv.period_month} ${inv.period_year}`,
+      ts: new Date(Number(inv.period_year), Number(inv.period_month) - 1, 1).getTime() || 0,
+      icon: 'bi-receipt-cutoff'
+    });
+  });
+
+  (paidInvoices || []).slice(0, 2).forEach((inv) => {
+    recentActivities.push({
+      type: 'invoice-paid',
+      title: `Pembayaran INV-${inv.id}`,
+      subtitle: `Tagihan lunas ${monthNames[Number(inv.period_month)] || inv.period_month} ${inv.period_year}`,
+      meta: formatCurrency(inv.amount),
+      time: formatDateTime(inv.paid_at),
+      ts: inv.paid_at ? new Date(inv.paid_at).getTime() : 0,
+      icon: 'bi-patch-check'
+    });
+  });
+
+  (tickets || []).slice(0, 3).forEach((ticket) => {
+    recentActivities.push({
+      type: 'ticket',
+      title: ticket.subject || `Tiket #${ticket.id}`,
+      subtitle: ticket.message || 'Keluhan pelanggan',
+      meta: String(ticket.status || 'open').toUpperCase(),
+      time: formatDateTime(ticket.created_at),
+      ts: ticket.created_at ? new Date(ticket.created_at).getTime() : 0,
+      icon: 'bi-life-preserver'
+    });
+  });
+
+  recentActivities.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+%>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dashboard Pelanggan | <%= companyName %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#2f6bff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="<%= companyLogoUrl %>">
+  <link rel="icon" href="<%= companyLogoUrl %>">
+  <style>
+    :root {
+      --app-bg: #eef4ff;
+      --app-surface: rgba(255, 255, 255, 0.92);
+      --app-surface-strong: #ffffff;
+      --app-line: rgba(104, 129, 182, 0.16);
+      --app-text: #17223b;
+      --app-text-soft: #6a7897;
+      --app-blue: #2f6bff;
+      --app-blue-deep: #1d53dc;
+      --app-blue-soft: rgba(47, 107, 255, 0.12);
+      --app-danger: #f2485b;
+      --app-success: #20b26b;
+      --app-warning: #ff9e45;
+      --app-shadow: 0 24px 64px rgba(42, 74, 140, 0.16);
+      --shell-width: min(100vw, 430px);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(130, 180, 255, 0.38) 0%, rgba(130, 180, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(100, 216, 255, 0.28) 0%, rgba(100, 216, 255, 0) 30%),
+        linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
+      font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif;
+      color: var(--app-text);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(47, 107, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(47, 107, 255, 0.035) 1px, transparent 1px);
+      background-size: 26px 26px;
+      pointer-events: none;
+      opacity: 0.45;
+    }
+
+    body.pwa-body {
+      display: flex;
+      justify-content: center;
+      padding: 0;
+      overscroll-behavior-y: none;
+      touch-action: manipulation;
+    }
+
+    body.android-webview {
+      background:
+        linear-gradient(180deg, #f6faff 0%, #edf4ff 100%);
+    }
+
+    body.android-webview::before {
+      opacity: 0.24;
+    }
+
+    .app-shell {
+      position: relative;
+      width: var(--shell-width);
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 251, 255, 0.92) 100%);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+      box-shadow: var(--app-shadow);
+    }
+
+    .app-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(380px 180px at 50% -20%, rgba(47, 107, 255, 0.18), transparent 72%),
+        radial-gradient(280px 180px at 90% 18%, rgba(80, 180, 255, 0.12), transparent 70%);
+      pointer-events: none;
+    }
+
+    .app-splash {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at 50% 22%, rgba(176, 214, 255, 0.7), rgba(176, 214, 255, 0) 42%),
+        linear-gradient(180deg, #f8fbff 0%, #e9f1ff 100%);
+      z-index: 1400;
+      transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+
+    .app-splash.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .splash-card {
+      width: min(82vw, 280px);
+      padding: 22px 20px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      box-shadow: 0 22px 44px rgba(44, 79, 146, 0.16);
+      text-align: center;
+    }
+
+    .splash-logo {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 14px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #2f6bff 0%, #72a6ff 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 14px 24px rgba(47, 107, 255, 0.24);
+    }
+
+    .splash-logo img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+    }
+
+    .splash-card h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .splash-card p {
+      margin: 6px 0 14px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+    }
+
+    .splash-progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.1);
+      overflow: hidden;
+    }
+
+    .splash-progress span {
+      display: block;
+      height: 100%;
+      width: 42%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2f6bff 0%, #7bb3ff 100%);
+      animation: splashLoad 1.2s ease-in-out infinite;
+    }
+
+    @keyframes splashLoad {
+      0% { transform: translateX(-115%); }
+      100% { transform: translateX(250%); }
+    }
+
+    .app-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      padding: calc(env(safe-area-inset-top) + 4px) 14px 8px;
+      background: linear-gradient(180deg, rgba(248, 251, 255, 0.94) 0%, rgba(248, 251, 255, 0.78) 100%);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(110, 140, 198, 0.12);
+    }
+
+    .topbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .header-menu,
+    .brand-chip,
+    .header-action {
+      border: 0;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 10px 22px rgba(54, 86, 152, 0.1);
+      color: var(--app-text);
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+    }
+
+    .topbar-left,
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-menu,
+    .header-action {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      justify-content: center;
+      font-size: 16px;
+      flex: 0 0 auto;
+    }
+
+    .header-icon-wrap {
+      position: relative;
+      display: inline-flex;
+    }
+
+    .notif-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: #ff4d5f;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 18px rgba(242, 72, 91, 0.3);
+      border: 2px solid #f8fbff;
+    }
+
+    .account-menu {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: min(220px, calc(100vw - 40px));
+      padding: 10px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid rgba(110, 140, 198, 0.16);
+      box-shadow: 0 22px 40px rgba(44, 79, 146, 0.18);
+      display: none;
+      z-index: 1100;
+    }
+
+    .account-menu.is-open {
+      display: block;
+    }
+
+    .account-menu-head {
+      padding: 6px 8px 10px;
+      border-bottom: 1px solid rgba(110, 140, 198, 0.12);
+      margin-bottom: 8px;
+    }
+
+    .account-menu-head strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .account-menu-head span {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--app-text-soft);
+      font-weight: 700;
+    }
+
+    .account-menu button,
+    .account-menu a {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--app-text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .account-menu button:hover,
+    .account-menu a:hover {
+      background: rgba(47, 107, 255, 0.08);
+    }
+
+    .account-menu .danger-action {
+      color: var(--app-danger);
+    }
+
+    .brand-chip img {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+    }
+
+    .brand-meta {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.05;
+    }
+
+    .brand-meta strong {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-meta span {
+      font-size: 10px;
+      color: var(--app-text-soft);
+      font-weight: 700;
+    }
+
+    .page-title {
+      display: none;
+    }
+
+    .app-menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1080;
+      background: rgba(19, 31, 63, 0.22);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      backdrop-filter: blur(4px);
+    }
+
+    .app-menu-backdrop.is-open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .app-menu-sheet {
+      position: absolute;
+      top: calc(env(safe-area-inset-top) + 56px);
+      left: 14px;
+      right: 14px;
+      z-index: 1090;
+      padding: 12px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid rgba(110, 140, 198, 0.14);
+      box-shadow: 0 22px 46px rgba(44, 79, 146, 0.18);
+      display: grid;
+      gap: 10px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px) scale(0.98);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .app-menu-sheet.is-open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+    }
+
+    .app-menu-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 2px 4px;
+    }
+
+    .app-menu-head strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .app-menu-head span {
+      display: block;
+      margin-top: 4px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .app-menu-close {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 12px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .app-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .app-menu-tile {
+      border: 0;
+      border-radius: 18px;
+      padding: 12px;
+      background: linear-gradient(180deg, rgba(246, 250, 255, 0.95) 0%, rgba(236, 244, 255, 0.9) 100%);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      color: var(--app-text);
+    }
+
+    .app-menu-tile i {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: rgba(47, 107, 255, 0.12);
+      color: var(--app-blue);
+      font-size: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+    }
+
+    .app-menu-tile strong {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .app-menu-tile span {
+      display: block;
+      margin-top: 2px;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .page-title small {
+      display: block;
+      color: var(--app-text-soft);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .page-title h2 {
+      margin: 4px 0 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .app-main {
+      position: relative;
+      padding: 12px 16px 136px;
+    }
+
+    .app-screen {
+      display: none;
+      animation: screenFade 0.22s ease;
+    }
+
+    .app-screen.is-active {
+      display: block;
+    }
+
+    @keyframes screenFade {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-card {
+      position: relative;
+      padding: 13px 13px 12px;
+      border-radius: 24px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #2f6bff 0%, #4d8cff 50%, #2c66ea 100%);
+      box-shadow: 0 20px 40px rgba(47, 107, 255, 0.24);
+      overflow: hidden;
+    }
+
+    .hero-card::before,
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      pointer-events: none;
+    }
+
+    .hero-card::before {
+      width: 240px;
+      height: 240px;
+      top: -120px;
+      right: -110px;
+    }
+
+    .hero-card::after {
+      width: 170px;
+      height: 170px;
+      bottom: -88px;
+      left: -72px;
+    }
+
+    .hero-top,
+    .hero-bottom {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .hero-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      opacity: 0.84;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hero-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .hero-package {
+      margin: 5px 0 0;
+      font-size: 19px;
+      font-weight: 800;
+      line-height: 1.02;
+      letter-spacing: -0.05em;
+    }
+
+    .hero-sub {
+      margin-top: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .hero-billing {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .label-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      width: fit-content;
+      margin-bottom: 8px;
+    }
+
+    .label-chip.unpaid {
+      background: rgba(242, 72, 91, 0.18);
+    }
+
+    .label-chip.paid {
+      background: rgba(32, 178, 107, 0.18);
+    }
+
+    .hero-billing small {
+      display: block;
+      opacity: 0.84;
+      font-size: 10px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .hero-billing strong {
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .hero-amount {
+      text-align: right;
+    }
+
+    .hero-amount span {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      opacity: 0.84;
+    }
+
+    .hero-amount strong {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .hero-actions {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .primary-button,
+    .ghost-button,
+    .mini-button,
+    .quick-card,
+    .billing-card button,
+    .billing-card a,
+    .settings-submit,
+    .ticket-card button {
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .primary-button,
+    .ghost-button,
+    .mini-button,
+    .settings-submit {
+      border: 0;
+      border-radius: 999px;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .primary-button {
+      min-height: 44px;
+      padding: 10px 14px;
+      background: #ffffff;
+      color: var(--app-blue);
+      box-shadow: 0 12px 24px rgba(0, 24, 92, 0.18);
+      font-size: 12px;
+    }
+
+    .ghost-button {
+      min-height: 44px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      font-size: 12px;
+    }
+
+    .mini-button {
+      min-height: 42px;
+      padding: 10px 14px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      border: 0;
+    }
+
+    .primary-button:active,
+    .ghost-button:active,
+    .mini-button:active,
+    .quick-card:active,
+    .settings-submit:active,
+    .billing-card a:active,
+    .ticket-trigger:active {
+      transform: scale(0.985);
+    }
+
+    .section-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .metric-card,
+    .soft-card,
+    .billing-card,
+    .profile-card,
+    .ticket-card,
+    .settings-card,
+    .activity-card {
+      background: var(--app-surface);
+      border: 1px solid var(--app-line);
+      border-radius: 22px;
+      box-shadow: 0 14px 28px rgba(54, 86, 152, 0.07);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 12px 4px 9px;
+    }
+
+    .section-head-main {
+      min-width: 0;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .section-head span {
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .customer-focus-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 2px;
+    }
+
+    .focus-card {
+      border: 0;
+      padding: 14px 12px;
+      border-radius: 18px;
+      text-align: left;
+      background: var(--app-surface-strong);
+      box-shadow: 0 12px 24px rgba(52, 86, 154, 0.07);
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .focus-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .focus-card-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      color: var(--app-blue);
+      background: rgba(47, 107, 255, 0.1);
+      flex: 0 0 auto;
+    }
+
+    .focus-card-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+    }
+
+    .focus-card-state.good {
+      background: rgba(32, 178, 107, 0.12);
+      color: var(--app-success);
+    }
+
+    .focus-card-state.warn {
+      background: rgba(255, 158, 69, 0.14);
+      color: var(--app-warning);
+    }
+
+    .focus-card strong {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+
+    .focus-card b {
+      display: block;
+      margin-top: 2px;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.04em;
+      color: var(--app-text);
+    }
+
+    .focus-card p {
+      margin: 0;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .quick-card {
+      border: 0;
+      padding: 13px 10px 14px;
+      border-radius: 20px;
+      text-align: center;
+      background: var(--app-surface-strong);
+      box-shadow: 0 12px 24px rgba(52, 86, 154, 0.07);
+    }
+
+    .quick-card .quick-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 11px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--app-blue);
+    }
+
+    .quick-card h4 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .quick-card p {
+      margin: 4px 0 0;
+      font-size: 9px;
+      line-height: 1.32;
+      color: var(--app-text-soft);
+      font-weight: 700;
+    }
+
+    .quick-green { background: linear-gradient(180deg, rgba(207, 246, 223, 0.96), rgba(223, 249, 233, 0.76)); color: #15a55a; }
+    .quick-cyan { background: linear-gradient(180deg, rgba(210, 243, 255, 0.96), rgba(220, 247, 255, 0.76)); color: #0f8cd8; }
+    .quick-lilac { background: linear-gradient(180deg, rgba(229, 226, 255, 0.96), rgba(239, 237, 255, 0.76)); color: #6450f0; }
+    .quick-rose { background: linear-gradient(180deg, rgba(255, 221, 236, 0.96), rgba(255, 236, 244, 0.76)); color: #e05b8f; }
+    .quick-gold { background: linear-gradient(180deg, rgba(255, 236, 206, 0.96), rgba(255, 244, 226, 0.76)); color: #df8f26; }
+    .quick-sky { background: linear-gradient(180deg, rgba(220, 232, 255, 0.96), rgba(234, 240, 255, 0.76)); color: #3270ff; }
+    .quick-mint { background: linear-gradient(180deg, rgba(212, 249, 242, 0.96), rgba(228, 251, 246, 0.76)); color: #119d86; }
+    .quick-sunset { background: linear-gradient(180deg, rgba(255, 223, 205, 0.96), rgba(255, 238, 227, 0.76)); color: #ea6d38; }
+    .quick-navy { background: linear-gradient(180deg, rgba(221, 228, 244, 0.96), rgba(232, 236, 247, 0.76)); color: #365489; }
+
+    .soft-card,
+    .billing-card,
+    .profile-card,
+    .ticket-card,
+    .settings-card,
+    .activity-card {
+      padding: 18px 18px 16px;
+    }
+
+    .usage-overview {
+      display: grid;
+      gap: 14px;
+    }
+
+    .usage-split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .usage-chip {
+      border-radius: 16px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      display: grid;
+      gap: 3px;
+    }
+
+    .usage-chip small {
+      font-size: 10px;
+      color: var(--app-text-soft);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .usage-chip strong {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .progress-card {
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(16, 26, 54, 0.02);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .progress-label strong {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .progress-label span {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--app-text-soft);
+    }
+
+    .progress-track {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(47, 107, 255, 0.1);
+    }
+
+    .progress-track span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2f6bff 0%, #82b8ff 100%);
+    }
+
+    .speed-meter-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .speed-meter-card {
+      position: relative;
+      padding: 14px 14px 12px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .speed-meter-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .speed-meter-head small {
+      display: block;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .speed-meter-head strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .meter-badge {
+      min-width: 34px;
+      height: 34px;
+      padding: 0 9px;
+      border-radius: 12px;
+      background: rgba(47, 107, 255, 0.08);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--app-blue);
+      font-size: 15px;
+    }
+
+    .speed-meter {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 112px;
+      align-items: end;
+      gap: 12px;
+      min-height: 70px;
+    }
+
+    .meter-readout {
+      align-self: end;
+    }
+
+    .meter-readout strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .meter-readout strong span {
+      font-size: 13px;
+      color: var(--app-text-soft);
+      font-weight: 700;
+      margin-left: 4px;
+    }
+
+    .meter-readout span {
+      display: block;
+      margin-top: 3px;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .sparkline {
+      width: 112px;
+      height: 48px;
+      overflow: visible;
+    }
+
+    .sparkline polyline {
+      fill: none;
+      stroke: var(--meter-accent);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 6px 14px rgba(47, 107, 255, 0.12));
+    }
+
+    .sparkline circle {
+      fill: var(--meter-accent);
+      transition: cx 0.35s ease, cy 0.35s ease;
+    }
+
+    .meter-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .traffic-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .traffic-panel {
+      background: var(--app-surface);
+      border: 1px solid var(--app-line);
+      border-radius: 24px;
+      box-shadow: 0 14px 28px rgba(54, 86, 152, 0.07);
+      padding: 18px 18px 16px;
+    }
+
+    .traffic-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .traffic-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .traffic-panel-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      font-size: 20px;
+      color: var(--app-blue);
+      background: rgba(47, 107, 255, 0.12);
+    }
+
+    .traffic-panel-icon.warning {
+      color: var(--app-warning);
+      background: rgba(255, 158, 69, 0.15);
+    }
+
+    .traffic-panel-icon.purple {
+      color: #8b5cf6;
+      background: rgba(139, 92, 246, 0.12);
+    }
+
+    .traffic-panel-title h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .traffic-panel-title p {
+      margin: 4px 0 0;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: rgba(32, 178, 107, 0.1);
+      color: var(--app-success);
+      white-space: nowrap;
+    }
+
+    .live-pill i {
+      font-size: 9px;
+    }
+
+    .usage-bandwidth-total {
+      margin: 8px 0 14px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .usage-bandwidth-total strong {
+      font-size: 42px;
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+      color: #1290de;
+      font-weight: 800;
+    }
+
+    .usage-bandwidth-total span {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--app-text);
+      padding-bottom: 5px;
+    }
+
+    .usage-bandwidth-label {
+      color: var(--app-text-soft);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .usage-breakdown {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(104, 129, 182, 0.14);
+    }
+
+    .usage-breakdown-item {
+      display: grid;
+      gap: 5px;
+    }
+
+    .usage-breakdown-item small {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .usage-breakdown-item small::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .usage-breakdown-item.upload small {
+      color: #2f6bff;
+    }
+
+    .usage-breakdown-item.download small {
+      color: #20b26b;
+    }
+
+    .usage-breakdown-item strong {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .traffic-gauge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .traffic-gauge-card {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      padding: 8px 4px 4px;
+    }
+
+    .traffic-gauge {
+      position: relative;
+      width: 154px;
+      height: 92px;
+      overflow: hidden;
+    }
+
+    .traffic-gauge-arc {
+      position: absolute;
+      inset: 0;
+      border: 12px solid #e8edf6;
+      border-bottom: 0;
+      border-radius: 154px 154px 0 0;
+    }
+
+    .traffic-gauge-needle {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: 4px;
+      height: 74px;
+      transform-origin: center bottom;
+      transform: translateX(-50%) rotate(var(--gauge-rotate, -90deg));
+      transition: transform 0.35s ease;
+    }
+
+    .traffic-gauge-needle::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      width: 3px;
+      height: 58px;
+      border-radius: 999px;
+      background: #243042;
+      transform: translateX(-50%);
+      box-shadow: 0 0 0 1px rgba(36, 48, 66, 0.02);
+    }
+
+    .traffic-gauge-needle::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -1px;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: #243042;
+      transform: translateX(-50%);
+    }
+
+    .traffic-gauge-center {
+      position: absolute;
+      left: 50%;
+      bottom: 8px;
+      transform: translateX(-50%);
+      min-width: 96px;
+      padding: 12px 10px 10px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 12px 22px rgba(54, 86, 152, 0.08);
+      text-align: center;
+    }
+
+    .traffic-gauge-center strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+      color: #20b26b;
+    }
+
+    .traffic-gauge-center span {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--app-text-soft);
+    }
+
+    .traffic-gauge-card h5 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #263247;
+    }
+
+    .traffic-gauge-card.upload-tone .traffic-gauge-arc {
+      border-color: rgba(32, 178, 107, 0.26);
+      border-bottom: 0;
+    }
+
+    .traffic-gauge-card.upload-tone .traffic-gauge-center strong,
+    .traffic-gauge-card.upload-tone h5 {
+      color: #20b26b;
+    }
+
+    .traffic-gauge-card.download-tone .traffic-gauge-arc {
+      border-color: rgba(47, 107, 255, 0.22);
+      border-bottom: 0;
+    }
+
+    .traffic-gauge-card.download-tone .traffic-gauge-center strong,
+    .traffic-gauge-card.download-tone h5 {
+      color: #2f6bff;
+    }
+
+    .traffic-period-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .traffic-period-item {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(246, 249, 255, 0.92);
+      border: 1px solid rgba(104, 129, 182, 0.14);
+    }
+
+    .traffic-period-item small {
+      display: block;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    .traffic-period-item strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .traffic-period-item strong i {
+      color: #2f6bff;
+      font-size: 18px;
+    }
+
+    .speedtest-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .speedtest-panel {
+      background: var(--app-surface-strong);
+      border: 1px solid var(--app-line);
+      border-radius: 28px;
+      padding: 18px;
+      box-shadow: 0 18px 40px rgba(42, 74, 140, 0.08);
+    }
+
+    .speedtest-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .speedtest-head h4 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .speedtest-head p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--app-text-soft);
+    }
+
+    .speedtest-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.1);
+      color: var(--app-blue);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .speedtest-frame-wrap {
+      position: relative;
+      width: 100%;
+      min-height: 500px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      background:
+        radial-gradient(circle at top left, rgba(108, 179, 255, 0.2), rgba(108, 179, 255, 0) 42%),
+        linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    }
+
+    .speedtest-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
+    }
+
+    .speedtest-frame.light-embed {
+      filter: invert(1) hue-rotate(180deg) saturate(0.9) contrast(0.96) brightness(1.02);
+      transform: translateZ(0);
+      transform-origin: center;
+      background: #ffffff;
+    }
+
+    .speedtest-notes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .speedtest-note {
+      padding: 14px 15px;
+      border-radius: 20px;
+      background: rgba(47, 107, 255, 0.05);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+    }
+
+    .speedtest-note small {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--app-blue);
+    }
+
+    .speedtest-note p {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--app-text-soft);
+    }
+
+    .speedtest-action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    .speedtest-inline-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(47, 107, 255, 0.14);
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--app-text);
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .speedtest-inline-btn.primary {
+      background: linear-gradient(135deg, #2f6bff 0%, #5d92ff 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 16px 28px rgba(47, 107, 255, 0.22);
+    }
+
+    .home-compact {
+      display: grid;
+      gap: 14px;
+    }
+
+    .home-intro {
+      display: grid;
+      gap: 5px;
+    }
+
+    .home-intro h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #5d6983;
+      line-height: 1.15;
+    }
+
+    .home-intro-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .home-intro-line strong {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a2340;
+      letter-spacing: -0.05em;
+      line-height: 1.05;
+    }
+
+    .home-code-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .home-code {
+      font-size: 14px;
+      font-weight: 700;
+      color: #4d8cff;
+      letter-spacing: -0.02em;
+    }
+
+    .home-code-copy {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(47, 107, 255, 0.1);
+      color: var(--app-blue);
+      box-shadow: 0 10px 18px rgba(47, 107, 255, 0.12);
+    }
+
+    .mini-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(32, 178, 107, 0.12);
+      color: #178755;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .home-hero-card {
+      padding: 8px 10px;
+      border-radius: 20px;
+    }
+
+    .home-hero-card .hero-eyebrow {
+      font-size: 9px;
+      letter-spacing: 0.05em;
+    }
+
+    .home-hero-card .hero-package {
+      margin-top: 2px;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .home-hero-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .home-hero-main,
+    .home-hero-side {
+      display: grid;
+      align-content: start;
+    }
+
+    .home-hero-main {
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .home-hero-side {
+      gap: 6px;
+      justify-items: end;
+      text-align: right;
+    }
+
+    .home-plan-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 0 11px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .home-hero-meta {
+      gap: 4px;
+      margin-top: 0;
+      font-size: 9px;
+    }
+
+    .home-status-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 1px;
+    }
+
+    .home-bill-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
+      font-size: 9px;
+      font-weight: 800;
+      margin-top: 0;
+      white-space: nowrap;
+    }
+
+    .home-bill-state.warn {
+      background: #f2485b;
+    }
+
+    .home-bill-state.okay {
+      background: rgba(32, 178, 107, 0.24);
+    }
+
+    .home-due-inline {
+      display: grid;
+      justify-items: end;
+      gap: 1px;
+      min-width: 0;
+    }
+
+    .home-due-inline small {
+      font-size: 8px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.84);
+      line-height: 1;
+    }
+
+    .home-due-inline strong {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: #ffffff;
+      line-height: 1;
+      text-align: right;
+    }
+
+    .home-amount-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .home-amount-wrap span {
+      display: block;
+      font-size: 8px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.84);
+      margin-bottom: 2px;
+    }
+
+    .home-amount-wrap strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1;
+      letter-spacing: -0.05em;
+      white-space: nowrap;
+    }
+
+    .home-pay-button {
+      min-width: 0;
+      min-height: 32px;
+      padding: 7px 10px;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .home-hero-divider {
+      position: relative;
+      z-index: 1;
+      height: 1px;
+      margin: 7px 0 6px;
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    .home-usage-grid {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .home-usage-card {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 6px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .home-usage-card.upload {
+      background: rgba(47, 107, 255, 0.16);
+      border-color: rgba(120, 160, 255, 0.22);
+    }
+
+    .home-usage-card.download {
+      background: rgba(32, 178, 107, 0.18);
+      border-color: rgba(101, 219, 160, 0.2);
+    }
+
+    .home-usage-card small {
+      display: inline-block;
+      margin-bottom: 0;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .home-usage-card strong {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      text-align: right;
+    }
+
+    .home-quick-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .home-quick-title {
+      margin: 0 4px;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: #1a2340;
+    }
+
+    .home-quick-grid {
+      gap: 12px;
+    }
+
+    .home-quick-card {
+      padding: 14px 10px 12px;
+      border-radius: 20px;
+    }
+
+    .home-quick-card .quick-icon {
+      width: 46px;
+      height: 46px;
+      margin-bottom: 10px;
+    }
+
+    .home-quick-card h4 {
+      font-size: 11px;
+    }
+
+    .home-quick-card p {
+      display: none;
+    }
+
+    .status-banner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 15px;
+      margin-bottom: 14px;
+      border-radius: 22px;
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 14px 30px rgba(54, 86, 152, 0.08);
+    }
+
+    .status-banner i {
+      font-size: 18px;
+      margin-top: 2px;
+    }
+
+    .status-banner strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .status-banner p {
+      margin: 0;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .status-banner.banner-success i { color: var(--app-success); }
+    .status-banner.banner-danger i { color: var(--app-danger); }
+    .status-banner.banner-warning i { color: var(--app-warning); }
+    .status-banner.banner-info i { color: var(--app-blue); }
+
+    .status-banner-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .status-detail {
+      border: 0;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 10px 14px;
+      white-space: nowrap;
+    }
+
+    .activity-list,
+    .billing-list,
+    .ticket-list,
+    .detail-list,
+    .device-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .activity-item,
+    .billing-item,
+    .ticket-item,
+    .detail-item,
+    .device-item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(47, 107, 255, 0.06);
+    }
+
+    .ticket-item,
+    .detail-item,
+    .device-item {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .item-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--app-blue);
+      background: rgba(47, 107, 255, 0.1);
+    }
+
+    .item-text strong,
+    .detail-item strong,
+    .device-item strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .item-text p,
+    .detail-item span,
+    .device-item span {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--app-text-soft);
+      font-weight: 700;
+    }
+
+    .item-meta {
+      text-align: right;
+      min-width: 74px;
+    }
+
+    .item-meta strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .item-meta span {
+      display: block;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .billing-item {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+    }
+
+    .billing-topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .billing-code {
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--app-text);
+      letter-spacing: -0.02em;
+    }
+
+    .billing-period {
+      margin-top: 3px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--app-text-soft);
+    }
+
+    .billing-amount {
+      white-space: nowrap;
+      text-align: right;
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1.1;
+      color: var(--app-text);
+    }
+
+    .billing-detail-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .billing-detail-line span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .billing-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .billing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .billing-badge.status-unpaid {
+      background: rgba(255, 196, 0, 0.14);
+      color: #b7791f;
+    }
+
+    .billing-badge.status-paid {
+      background: rgba(22, 163, 74, 0.12);
+      color: #15803d;
+    }
+
+    .billing-actions {
+      display: flex;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .billing-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .billing-card-head h4,
+    .profile-card h4,
+    .ticket-card h4,
+    .settings-card h4,
+    .activity-card h4 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .notification-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .notification-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+    }
+
+    .notification-item.unread::after {
+      content: "";
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #ff4d5f;
+      box-shadow: 0 0 0 6px rgba(255, 77, 95, 0.12);
+    }
+
+    .notification-item i {
+      width: 42px;
+      height: 42px;
+      border-radius: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(47, 107, 255, 0.09);
+      color: var(--app-blue);
+      font-size: 18px;
+    }
+
+    .notification-item strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 5px;
+      letter-spacing: -0.02em;
+    }
+
+    .notification-item p {
+      margin: 0;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .notification-item span {
+      display: block;
+      margin-top: 7px;
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .soft-muted {
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pay-action,
+    .ticket-trigger {
+      min-height: 40px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 0;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .pay-action {
+      background: var(--app-blue);
+      color: #ffffff;
+      box-shadow: 0 14px 26px rgba(47, 107, 255, 0.22);
+    }
+
+    .pay-action.secondary,
+    .ticket-trigger {
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      box-shadow: none;
+    }
+
+    .ticket-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .ticket-status,
+    .status-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+    }
+
+    .ticket-status.pending,
+    .status-dot.pending { background: rgba(255, 158, 69, 0.14); color: #d36d10; }
+    .ticket-status.closed,
+    .status-dot.closed { background: rgba(32, 178, 107, 0.14); color: #178755; }
+    .ticket-status.open,
+    .status-dot.open { background: rgba(47, 107, 255, 0.08); color: var(--app-blue); }
+
+    .ticket-meta {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ticket-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.06);
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .empty-card {
+      padding: 22px 18px;
+      border-radius: 24px;
+      text-align: center;
+      border: 1px dashed rgba(47, 107, 255, 0.18);
+      background: rgba(255, 255, 255, 0.62);
+      color: var(--app-text-soft);
+    }
+
+    .empty-card i {
+      display: inline-flex;
+      width: 58px;
+      height: 58px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      border-radius: 20px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 24px;
+    }
+
+    .empty-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--app-text);
+    }
+
+    .profile-grid,
+    .settings-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .router-detail-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .router-detail-grid .detail-item {
+      min-height: 100%;
+      align-items: flex-start;
+    }
+
+    .router-detail-grid .detail-item > div {
+      min-width: 0;
+    }
+
+    .router-detail-grid .detail-item strong,
+    .router-detail-grid .detail-item span {
+      word-break: break-word;
+    }
+
+    .detail-item,
+    .device-item {
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(47, 107, 255, 0.06);
+    }
+
+    .detail-item i,
+    .device-item i {
+      color: var(--app-blue);
+      font-size: 18px;
+      margin-top: 4px;
+    }
+
+    .profile-highlight {
+      padding: 16px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(47, 107, 255, 0.1), rgba(121, 179, 255, 0.08));
+      border: 1px solid rgba(47, 107, 255, 0.1);
+    }
+
+    .profile-highlight h4 {
+      margin-bottom: 8px;
+    }
+
+    .profile-highlight p {
+      margin: 0;
+      color: var(--app-text-soft);
+      font-size: 13px;
+      line-height: 1.55;
+      font-weight: 700;
+    }
+
+    .settings-form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .settings-field label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--app-text-soft);
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .settings-field input,
+    .settings-field textarea {
+      width: 100%;
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      border-radius: 18px;
+      padding: 14px 15px;
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--app-text);
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(47, 107, 255, 0.04);
+    }
+
+    .settings-field input:focus,
+    .settings-field textarea:focus {
+      border-color: rgba(47, 107, 255, 0.36);
+      box-shadow: 0 0 0 4px rgba(47, 107, 255, 0.12);
+    }
+
+    .settings-submit {
+      min-height: 48px;
+      padding: 12px 16px;
+      background: var(--app-blue);
+      color: #ffffff;
+      box-shadow: 0 16px 30px rgba(47, 107, 255, 0.22);
+    }
+
+    .settings-submit.secondary {
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      box-shadow: none;
+    }
+
+    .settings-submit.danger {
+      background: rgba(242, 72, 91, 0.14);
+      color: #c73345;
+      box-shadow: none;
+    }
+
+    .stack-actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .package-upgrade-card {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(104, 129, 182, 0.14);
+      box-shadow: 0 16px 36px rgba(42, 74, 140, 0.1);
+      display: grid;
+      gap: 14px;
+    }
+
+    .package-upgrade-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .package-upgrade-head h4 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .package-upgrade-head p {
+      margin: 4px 0 0;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+
+    .current-package-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .portal-package-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .portal-package-item {
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      background: linear-gradient(180deg, rgba(47, 107, 255, 0.05) 0%, rgba(255, 255, 255, 0.96) 100%);
+      box-shadow: 0 12px 24px rgba(42, 74, 140, 0.08);
+      display: grid;
+      gap: 12px;
+    }
+
+    .portal-package-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .portal-package-top strong {
+      display: block;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .portal-package-desc {
+      margin-top: 5px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+
+    .portal-package-price {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .portal-package-price strong {
+      display: block;
+      font-size: 17px;
+      color: var(--app-blue-deep);
+      font-weight: 800;
+    }
+
+    .portal-package-price span {
+      display: block;
+      margin-top: 4px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .portal-package-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .portal-package-meta .status-detail {
+      margin: 0;
+      min-height: auto;
+      padding: 8px 11px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 800;
+      box-shadow: none;
+    }
+
+    .portal-package-form {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .portal-package-form .settings-submit {
+      min-height: 42px;
+      padding: 10px 14px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .android-nav-wrap {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(8px + env(safe-area-inset-bottom));
+      width: min(calc(100vw - 18px), 398px);
+      z-index: 1100;
+      transition: transform 0.24s ease, opacity 0.24s ease, visibility 0.24s ease;
+    }
+
+    body.modal-open .android-nav-wrap {
+      opacity: 0;
+      visibility: hidden;
+      transform: translate(-50%, 24px);
+      pointer-events: none;
+    }
+
+    .android-nav {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 4px;
+      padding: 7px 8px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      box-shadow: 0 16px 34px rgba(54, 86, 152, 0.15);
+      backdrop-filter: blur(16px);
+    }
+
+    .android-nav button {
+      border: 0;
+      min-width: 0;
+      background: transparent;
+      padding: 5px 3px;
+      border-radius: 14px;
+      color: var(--app-text-soft);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .android-nav button i {
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    .android-nav button.is-active {
+      color: var(--app-blue);
+      background: rgba(47, 107, 255, 0.1);
+    }
+
+    .modal-content.app-modal {
+      border: 0;
+      border-radius: 28px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fbfdff 0%, #edf4ff 100%);
+      box-shadow: 0 28px 60px rgba(54, 86, 152, 0.18);
+    }
+
+    .app-modal .modal-header,
+    .app-modal .modal-footer {
+      border: 0;
+      padding: 18px 18px 0;
+      background: transparent;
+    }
+
+    .app-modal .modal-body {
+      padding: 18px 18px 24px;
+    }
+
+    .app-modal .btn-close {
+      background-size: 12px;
+      opacity: 0.65;
+    }
+
+    .payment-modal-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .payment-method-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .payment-method-chip {
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .business-card {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid rgba(104, 129, 182, 0.14);
+      box-shadow: 0 16px 36px rgba(42, 74, 140, 0.1);
+      display: grid;
+      gap: 14px;
+    }
+
+    .business-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .business-head img {
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      object-fit: cover;
+      background: rgba(47, 107, 255, 0.08);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+      padding: 6px;
+      flex: 0 0 auto;
+    }
+
+    .business-head strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .business-head span {
+      display: block;
+      margin-top: 2px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .manual-payment-box {
+      padding: 14px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(47, 107, 255, 0.08) 0%, rgba(47, 107, 255, 0.04) 100%);
+      border: 1px solid rgba(47, 107, 255, 0.14);
+      display: grid;
+      gap: 10px;
+    }
+
+    .manual-payment-box h5 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .manual-payment-bank {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--app-blue-deep);
+    }
+
+    .manual-payment-line {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+
+    .manual-payment-line strong {
+      color: var(--app-text);
+      min-width: 84px;
+      font-weight: 800;
+    }
+
+    @media (min-width: 600px) {
+      body.pwa-body {
+        padding: 16px 0;
+      }
+
+      .app-shell {
+        min-height: calc(100vh - 32px);
+        border-radius: 36px;
+        border: 1px solid rgba(47, 107, 255, 0.08);
+      }
+    }
+
+    @media (max-width: 399.98px) {
+      .app-topbar { padding-left: 15px; padding-right: 15px; }
+      .app-main { padding-left: 15px; padding-right: 15px; padding-bottom: 144px; }
+      .topbar-left,
+      .topbar-right { gap: 8px; }
+      .home-intro h1 { font-size: 14px; }
+      .home-intro-line strong { font-size: 20px; }
+      .home-code { font-size: 13px; }
+      .hero-card { padding: 10px 10px; border-radius: 18px; }
+      .hero-package { font-size: 18px; }
+      .home-hero-grid { grid-template-columns: 1fr; }
+      .home-hero-side { justify-items: start; text-align: left; }
+      .home-amount-row { width: 100%; justify-content: space-between; }
+      .home-amount-wrap strong { font-size: 14px; white-space: nowrap; }
+      .home-pay-button { width: auto; min-width: 0; }
+      .customer-focus-grid { grid-template-columns: 1fr; }
+      .focus-card { padding: 13px 12px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .router-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .router-detail-grid .detail-item {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 18px;
+      }
+      .router-detail-grid .detail-item i {
+        margin-top: 0;
+        font-size: 16px;
+      }
+      .router-detail-grid .detail-item strong {
+        font-size: 12px;
+        margin-bottom: 3px;
+      }
+      .router-detail-grid .detail-item span {
+        font-size: 11px;
+        line-height: 1.38;
+      }
+      .profile-highlight,
+      .settings-card,
+      .profile-card { border-radius: 20px; }
+      .profile-highlight { padding: 14px; }
+      .billing-card-head { gap: 10px; }
+      .billing-card-head h4,
+      .profile-card h4,
+      .settings-card h4 { font-size: 16px; }
+      .soft-muted { font-size: 11px; }
+      .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .quick-card { padding: 12px 8px 13px; border-radius: 18px; }
+      .quick-card .quick-icon { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
+      .quick-card h4 { font-size: 11px; }
+      .quick-card p { font-size: 8.5px; }
+      .android-nav button { font-size: 8.5px; }
+      .android-nav button i { font-size: 15px; }
+      .speed-meter-grid { grid-template-columns: 1fr; }
+      .speed-meter { grid-template-columns: minmax(0, 1fr) 94px; }
+      .sparkline { width: 94px; height: 42px; }
+      .status-detail { padding: 10px 13px; font-size: 11px; }
+      .package-upgrade-card { padding: 14px; border-radius: 20px; }
+      .package-upgrade-head { display: grid; gap: 8px; }
+      .portal-package-top { display: grid; gap: 8px; }
+      .portal-package-price { text-align: left; }
+      .portal-package-form { justify-content: stretch; }
+      .portal-package-form .settings-submit { width: 100%; }
+      .traffic-gauge-grid { grid-template-columns: 1fr; }
+      .traffic-gauge { width: 146px; height: 88px; }
+      .traffic-period-grid { grid-template-columns: 1fr; }
+      .speedtest-panel { border-radius: 24px; padding: 16px; }
+      .speedtest-head { flex-direction: column; }
+      .speedtest-frame-wrap { min-height: 460px; }
+      .speedtest-notes { grid-template-columns: 1fr; }
+      .speedtest-action-row { display: grid; grid-template-columns: 1fr; }
+      .speedtest-inline-btn { width: 100%; }
+    }
+
+    @media (max-width: 640px) {
+      body.android-webview {
+        display: block;
+      }
+
+      .billing-item {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .billing-amount {
+        font-size: 18px;
+      }
+
+      .item-meta {
+        min-width: 0;
+        text-align: left;
+      }
+
+      .billing-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        justify-content: stretch;
+      }
+
+      .pay-action {
+        width: 100%;
+        min-height: 38px;
+        padding: 9px 12px;
+        font-size: 11px;
+      }
+
+      body.android-webview .app-shell {
+        width: 100vw;
+        min-height: 100vh;
+        min-height: 100dvh;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(244, 249, 255, 0.98) 100%);
+      }
+
+      body.android-webview .app-topbar {
+        padding-top: calc(env(safe-area-inset-top) + 4px);
+      }
+
+      body.android-webview .app-main {
+        padding-bottom: calc(142px + env(safe-area-inset-bottom));
+      }
+
+      body.android-webview .app-menu-sheet {
+        top: calc(env(safe-area-inset-top) + 54px);
+      }
+
+      body.android-webview .modal.fade .modal-dialog {
+        margin: 0;
+        min-height: 100%;
+        display: flex;
+        align-items: flex-end;
+      }
+
+      body.android-webview .modal-content.app-modal {
+        width: 100%;
+        border-radius: 26px 26px 0 0;
+        box-shadow: 0 -18px 44px rgba(54, 86, 152, 0.18);
+      }
+    }
+  </style>
+</head>
+<body class="pwa-body">
+  <div class="app-splash" id="appSplash" aria-hidden="true">
+    <div class="splash-card">
+      <div class="splash-logo">
+        <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+      </div>
+      <h1><%= companyName %></h1>
+      <p>Menyiapkan dashboard pelanggan yang lebih ringan dan nyaman di HP.</p>
+      <div class="splash-progress"><span></span></div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <header class="app-topbar">
+      <div class="topbar-row">
+        <div class="topbar-left">
+          <button type="button" class="header-menu" aria-label="Menu cepat" onclick="toggleAppMenu()">
+            <i class="bi bi-list"></i>
+          </button>
+          <div class="brand-chip">
+            <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+            <div class="brand-meta">
+              <strong><%= companyName %></strong>
+              <span>Customer App</span>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="header-icon-wrap">
+            <button type="button" class="header-action" aria-label="Refresh halaman" title="Refresh halaman" onclick="window.location.reload()">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="header-icon-wrap">
+            <button type="button" class="header-action" aria-label="Notifikasi" onclick="openNotificationsPanel()">
+              <i class="bi bi-bell"></i>
+            </button>
+            <% if (notificationUnread > 0) { %>
+              <span class="notif-badge" id="notificationBadge"><%= notificationUnread > 99 ? '99+' : notificationUnread %></span>
+            <% } %>
+          </div>
+          <div class="header-icon-wrap">
+            <button type="button" class="header-action" aria-label="Akun" onclick="toggleAccountMenu()">
+              <i class="bi bi-person-circle"></i>
+            </button>
+            <div class="account-menu" id="accountMenu">
+              <div class="account-menu-head">
+                <strong><%= customerName %></strong>
+                <span><%= customerCode %></span>
+              </div>
+              <button type="button" onclick="openAppTab('profile'); closeAccountMenu();">
+                <i class="bi bi-person-badge"></i> Profil pelanggan
+              </button>
+              <% if (hasRouterPortalAccess) { %>
+                <button type="button" onclick="openAppTab('settings'); closeAccountMenu();">
+                  <i class="bi bi-router"></i> Router & WiFi
+                </button>
+              <% } %>
+              <form method="POST" action="/customer/logout">
+                <button type="submit" class="danger-action">
+                  <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="page-title">
+        <small id="appHeaderEyebrow">Halaman Utama</small>
+        <h2 id="appHeaderTitle">Dashboard Pelanggan</h2>
+      </div>
+    </header>
+
+    <div class="app-menu-backdrop" id="appMenuBackdrop" onclick="closeAppMenu()"></div>
+    <aside class="app-menu-sheet" id="appMenuSheet" aria-hidden="true">
+      <div class="app-menu-head">
+        <div>
+          <strong>Menu Cepat</strong>
+          <span>Pindah antar halaman pelanggan tanpa perlu scroll panjang.</span>
+        </div>
+        <button type="button" class="app-menu-close" aria-label="Tutup menu" onclick="closeAppMenu()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="app-menu-grid">
+        <button type="button" class="app-menu-tile" onclick="openAppTab('home'); closeAppMenu();">
+          <i class="bi bi-house-door"></i>
+          <div><strong>Home</strong><span>Ringkasan, kuota, dan aksi cepat</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('billing'); closeAppMenu();">
+          <i class="bi bi-wallet2"></i>
+          <div><strong>Tagihan</strong><span>Bayar dan lihat riwayat pembayaran</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('traffic'); closeAppMenu();">
+          <i class="bi bi-activity"></i>
+          <div><strong>Traffic</strong><span>Live speed dan statistik bandwidth</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('packages'); closeAppMenu();">
+          <i class="bi bi-box-seam"></i>
+          <div><strong>Paket WiFi</strong><span>Pilih paket lain yang tersedia untuk pelanggan</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('speedtest'); closeAppMenu();">
+          <i class="bi bi-speedometer2"></i>
+          <div><strong>Tes Speed</strong><span>Uji kecepatan langsung tanpa keluar portal</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('ticketing'); closeAppMenu();">
+          <i class="bi bi-headset"></i>
+          <div><strong>Bantuan</strong><span>Buat tiket dan cek progres gangguan</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openAppTab('profile'); closeAppMenu();">
+          <i class="bi bi-person-badge"></i>
+          <div><strong>Profil</strong><span>Nama, alamat, paket, dan identitas pelanggan</span></div>
+        </button>
+        <button type="button" class="app-menu-tile" onclick="openNotificationsPanel(); closeAppMenu();">
+          <i class="bi bi-bell"></i>
+          <div><strong>Notifikasi</strong><span>Tagihan dan update tiket terbaru</span></div>
+        </button>
+        <% if (hasRouterPortalAccess) { %>
+          <button type="button" class="app-menu-tile" onclick="openAppTab('settings'); closeAppMenu();">
+            <i class="bi bi-router"></i>
+            <div><strong>Router</strong><span>WiFi, password, status internet, dan perangkat</span></div>
+          </button>
+        <% } %>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <section class="app-screen is-active" data-tab="home">
+        <div class="home-compact">
+          <div class="home-intro">
+            <h1>Selamat datang kembali,</h1>
+            <div class="home-intro-line">
+              <strong><%= customerName %></strong>
+              <span class="mini-status"><i class="bi bi-check-circle-fill"></i> <%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
+            </div>
+            <div class="home-code-row">
+              <span class="home-code"><%= customerCode %></span>
+              <button class="home-code-copy" type="button" aria-label="Salin kode pelanggan" onclick="copyCustomerCode()">
+                <i class="bi bi-copy"></i>
+              </button>
+            </div>
+          </div>
+
+          <% if (appNotif && appNotif.text) { %>
+            <div class="status-banner banner-<%= appNotif.type === 'danger' ? 'danger' : appNotif.type === 'warning' ? 'warning' : appNotif.type === 'success' ? 'success' : 'info' %>">
+              <div class="status-banner-main">
+                <i class="bi <%= appNotif.type === 'danger' ? 'bi-x-octagon-fill' : appNotif.type === 'warning' ? 'bi-exclamation-triangle-fill' : appNotif.type === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill' %>"></i>
+                <div>
+                  <strong><%= appNotif.type === 'danger' ? 'Perlu perhatian' : appNotif.type === 'warning' ? 'Informasi penting' : appNotif.type === 'success' ? 'Berhasil' : 'Info' %></strong>
+                  <p><%= appNotif.text %></p>
+                </div>
+              </div>
+              <button class="status-detail" type="button" onclick="openAppTab('profile')">Detail</button>
+            </div>
+          <% } %>
+
+          <div class="hero-card home-hero-card">
+            <div class="home-hero-grid">
+              <div class="home-hero-main">
+                <div class="hero-eyebrow">Paket Anda</div>
+                <div class="hero-package"><%= packageName %></div>
+                <div class="hero-sub home-hero-meta">
+                  <span><i class="bi bi-speedometer2"></i> <%= liveDownloadCap %> Mbps / <%= liveUploadCap %> Mbps</span>
+                  <span><i class="bi bi-wifi"></i> <%= isPppoeOnline ? 'Internet normal' : (pppoeStatusText || 'Status belum terbaca') %></span>
+                </div>
+                <div class="home-status-line">
+                  <span class="home-bill-state <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'warn' : 'okay' %>">
+                    <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'Belum Bayar' : 'Aman' %>
+                  </span>
+                  <span class="home-due-inline">
+                    <small><%= latestInvoice ? 'Jatuh Tempo' : 'Status' %></small>
+                    <strong><%= latestInvoice ? formatDate(new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month) - 1, Math.min(Number(latestInvoice.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month), 0).getDate()))) : 'Tidak ada tagihan' %></strong>
+                  </span>
+                </div>
+              </div>
+              <div class="home-hero-side">
+                <span class="home-plan-state"><%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
+                <div class="home-amount-row">
+                  <div class="home-amount-wrap">
+                    <span>Nominal</span>
+                    <strong><%= latestInvoice ? formatCurrency(latestInvoice.amount) : formatCurrency(monthlyPrice) %></strong>
+                  </div>
+                  <button class="primary-button home-pay-button" type="button" onclick="openAppTab('billing')">
+                    <i class="bi bi-wallet2"></i> <%= latestInvoice ? 'Bayar' : 'Tagihan' %>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="home-hero-divider"></div>
+
+            <div class="home-usage-grid">
+              <div class="home-usage-card upload">
+                <small>Download</small>
+                <strong><%= formatBytes(uploadBytes) %></strong>
+              </div>
+              <div class="home-usage-card download">
+                <small>Upload</small>
+                <strong><%= formatBytes(downloadBytes) %></strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="home-quick-section">
+            <h3 class="home-quick-title">Aksi Cepat</h3>
+            <div class="quick-grid home-quick-grid">
+              <button class="quick-card home-quick-card" type="button" onclick="openAppTab('billing')">
+                <div class="quick-icon quick-green"><i class="bi bi-wallet2"></i></div>
+                <h4>Tagihan</h4>
+              </button>
+              <% if (hasRouterPortalAccess) { %>
+                <button class="quick-card home-quick-card" type="button" onclick="openAppTab('settings')">
+                  <div class="quick-icon quick-cyan"><i class="bi bi-router"></i></div>
+                  <h4>Router</h4>
+                </button>
+              <% } %>
+              <button class="quick-card home-quick-card" type="button" onclick="openAppTab('traffic')">
+                <div class="quick-icon quick-lilac"><i class="bi bi-graph-up-arrow"></i></div>
+                <h4>Traffic</h4>
+              </button>
+              <button class="quick-card home-quick-card" type="button" onclick="openAppTab('packages')">
+                <div class="quick-icon quick-sky"><i class="bi bi-box-seam"></i></div>
+                <h4>Paket WiFi</h4>
+              </button>
+              <button class="quick-card home-quick-card" type="button" onclick="openAppTab('speedtest')">
+                <div class="quick-icon quick-rose"><i class="bi bi-speedometer2"></i></div>
+                <h4>Tes Speed</h4>
+              </button>
+              <button class="quick-card home-quick-card" type="button" onclick="openTicketModal()">
+                <div class="quick-icon quick-gold"><i class="bi bi-chat-dots"></i></div>
+                <h4>Bantuan</h4>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-screen" data-tab="traffic">
+        <div class="traffic-stack">
+          <div class="traffic-panel">
+            <div class="traffic-panel-head">
+              <div class="traffic-panel-title">
+                <span class="traffic-panel-icon"><i class="bi bi-cpu"></i></span>
+                <div>
+                  <h4>Penggunaan Bandwidth</h4>
+                  <p>Statistik pemakaian bulan berjalan yang disimpan dari PPPoE pelanggan.</p>
+                </div>
+              </div>
+            </div>
+            <div class="usage-bandwidth-label">Total Penggunaan</div>
+            <div class="usage-bandwidth-total">
+              <strong id="usageTotalDisplay"><%= formatUsageGb(totalBytes) %></strong>
+              <span>GB</span>
+            </div>
+            <div class="usage-breakdown">
+              <div class="usage-breakdown-item upload">
+                <small>Download</small>
+                <strong id="usageUploadDisplay"><%= formatUsageGb(uploadBytes) %> GB</strong>
+              </div>
+              <div class="usage-breakdown-item download">
+                <small>Upload</small>
+                <strong id="usageDownloadDisplay"><%= formatUsageGb(downloadBytes) %> GB</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="traffic-panel">
+            <div class="traffic-panel-head">
+              <div class="traffic-panel-title">
+                <span class="traffic-panel-icon warning"><i class="bi bi-lightning-charge"></i></span>
+                <div>
+                  <h4>Penggunaan Traffic</h4>
+                  <p>Kecepatan realtime mengikuti pembacaan PPPoE aktif di MikroTik.</p>
+                </div>
+              </div>
+              <span class="live-pill"><i class="bi bi-circle-fill"></i> Live</span>
+            </div>
+            <div class="traffic-gauge-grid">
+              <div class="traffic-gauge-card upload-tone">
+                <div class="traffic-gauge" id="downloadGauge" style="--gauge-rotate:-90deg;">
+                  <div class="traffic-gauge-arc"></div>
+                  <div class="traffic-gauge-needle"></div>
+                  <div class="traffic-gauge-center">
+                    <strong id="liveRxValue">0.00</strong>
+                    <span>Mbps</span>
+                  </div>
+                </div>
+                <h5>UPLOAD</h5>
+              </div>
+              <div class="traffic-gauge-card download-tone">
+                <div class="traffic-gauge" id="uploadGauge" style="--gauge-rotate:-90deg;">
+                  <div class="traffic-gauge-arc"></div>
+                  <div class="traffic-gauge-needle"></div>
+                  <div class="traffic-gauge-center">
+                    <strong id="liveTxValue">0.00</strong>
+                    <span>Mbps</span>
+                  </div>
+                </div>
+                <h5>DOWNLOAD</h5>
+              </div>
+            </div>
+            <div class="soft-muted" id="trafficStatusText" style="margin-top:10px;">Menyiapkan pembacaan traffic live...</div>
+          </div>
+
+          <div class="traffic-panel">
+            <div class="traffic-panel-head">
+              <div class="traffic-panel-title">
+                <span class="traffic-panel-icon purple"><i class="bi bi-calendar-range"></i></span>
+                <div>
+                  <h4>Riwayat Traffic</h4>
+                  <p>Periode pemakaian yang sedang dihitung pada aplikasi pelanggan.</p>
+                </div>
+              </div>
+            </div>
+            <div class="traffic-period-grid">
+              <div class="traffic-period-item">
+                <small>Dari</small>
+                <strong><i class="bi bi-calendar-event"></i> <%= formatDateTime(usageStartDate) %></strong>
+              </div>
+              <div class="traffic-period-item">
+                <small>Sampai</small>
+                <strong><i class="bi bi-calendar-check"></i> <%= formatDateTime(usageEndDate) %></strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-screen" data-tab="speedtest">
+        <div class="speedtest-stack">
+          <div class="speedtest-panel">
+            <div class="speedtest-head">
+              <div>
+                <h4>Tes Speed Internet</h4>
+                <p>Jalankan speedtest langsung di dalam portal pelanggan. Pelanggan tetap berada di web app tanpa pindah ke layanan lain.</p>
+              </div>
+              <span class="speedtest-badge"><i class="bi bi-wifi"></i> Di Dalam Portal</span>
+            </div>
+
+            <div class="speedtest-frame-wrap">
+              <iframe
+                id="portalSpeedtestFrame"
+                class="speedtest-frame light-embed"
+                src="https://openspeedtest.com/speedtest?Run=3"
+                title="Tes Speed Pelanggan"
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allow="fullscreen">
+              </iframe>
+            </div>
+
+            <div class="speedtest-action-row">
+              <button type="button" class="speedtest-inline-btn primary" onclick="reloadPortalSpeedtest()">
+                <i class="bi bi-arrow-repeat"></i> Muat Ulang Speedtest
+              </button>
+              <a class="speedtest-inline-btn" href="https://openspeedtest.com/speedtest?Run=3" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right"></i> Buka Cadangan
+              </a>
+            </div>
+
+            <div class="speedtest-notes">
+              <div class="speedtest-note">
+                <small>Tips</small>
+                <p>Tutup aplikasi lain yang sedang download atau upload agar hasil tes lebih stabil dan mendekati kondisi asli koneksi pelanggan.</p>
+              </div>
+              <div class="speedtest-note">
+                <small>Catatan</small>
+                <p>Jika widget tertahan browser atau webview, tombol cadangan tetap bisa dipakai tanpa perlu logout dari portal pelanggan.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-screen" data-tab="billing">
+        <div class="billing-card">
+          <div class="billing-card-head">
+            <div>
+              <h4>Tagihan Aktif</h4>
+              <div class="soft-muted"><%= unpaidInvoices.length %> tagihan belum dibayar</div>
+            </div>
+            <button class="mini-button" type="button" onclick="openPaymentModal()">
+              <i class="bi bi-plus-circle"></i> Bayar
+            </button>
+          </div>
+
+          <% if (unpaidInvoices.length === 0) { %>
+            <div class="empty-card">
+              <i class="bi bi-patch-check"></i>
+              <strong>Semua tagihan lunas</strong>
+              <div>Tagihan baru akan muncul otomatis pada periode billing berikutnya.</div>
+            </div>
+          <% } else { %>
+            <div class="billing-list">
+              <% unpaidInvoices.forEach((inv) => { %>
+                <div class="billing-item">
+                  <div class="item-text">
+                    <div class="billing-topline">
+                      <div>
+                        <div class="billing-code">INV-<%= inv.id %></div>
+                        <div class="billing-period"><%= monthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
+                      </div>
+                      <div class="billing-amount"><%= formatCurrency(inv.amount) %></div>
+                    </div>
+                    <div class="billing-detail-line">
+                      <span><i class="bi bi-box-seam"></i> <%= inv.package_name || packageName %></span>
+                      <span><i class="bi bi-calendar-event"></i> Tgl <%= Math.min(Number(inv.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(inv.period_year), Number(inv.period_month), 0).getDate()) %></span>
+                    </div>
+                    <div class="billing-badges">
+                      <span class="billing-badge status-unpaid"><i class="bi bi-clock-history"></i> Belum Lunas</span>
+                      <% if (inv.payment_gateway) { %>
+                        <span class="billing-badge"><i class="bi bi-credit-card"></i> <%= String(inv.payment_gateway).toUpperCase() %></span>
+                      <% } %>
+                    </div>
+                  </div>
+                  <div class="item-meta">
+                    <div class="billing-actions">
+                      <a class="pay-action" href="/customer/payment/select/<%= inv.id %>">
+                        <i class="bi bi-wallet2"></i> Bayar
+                      </a>
+                      <a class="pay-action secondary" target="_blank" href="/customer/invoices/<%= inv.id %>/print?style=a4">
+                        <i class="bi bi-printer"></i> Invoice
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="billing-card" style="margin-top:16px;">
+          <div class="billing-card-head">
+            <div>
+              <h4>Riwayat Pembayaran</h4>
+              <div class="soft-muted">Transaksi yang sudah lunas</div>
+            </div>
+          </div>
+
+          <% if (paidInvoices.length === 0) { %>
+            <div class="empty-card">
+              <i class="bi bi-clock-history"></i>
+              <strong>Belum ada riwayat lunas</strong>
+              <div>Setelah pembayaran berhasil, histori akan muncul di sini.</div>
+            </div>
+          <% } else { %>
+            <div class="billing-list">
+              <% paidInvoices.slice(0, 10).forEach((inv) => { %>
+                <div class="billing-item">
+                  <div class="item-text">
+                    <div class="billing-topline">
+                      <div>
+                        <div class="billing-code">INV-<%= inv.id %></div>
+                        <div class="billing-period"><%= monthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
+                      </div>
+                      <div class="billing-amount"><%= formatCurrency(inv.amount) %></div>
+                    </div>
+                    <div class="billing-detail-line">
+                      <span><i class="bi bi-check2-circle"></i> <%= formatDateTime(inv.paid_at) %></span>
+                      <span><i class="bi bi-person-check"></i> <%= inv.paid_by_name || 'Customer' %></span>
+                    </div>
+                    <div class="billing-badges">
+                      <span class="billing-badge status-paid"><i class="bi bi-check-circle"></i> Lunas</span>
+                    </div>
+                  </div>
+                  <div class="item-meta">
+                    <div class="billing-actions">
+                      <a class="pay-action secondary" target="_blank" href="/customer/invoices/<%= inv.id %>/print?style=receipt">
+                        <i class="bi bi-receipt-cutoff"></i> Struk
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <% if (paymentChannels && paymentChannels.length > 0) { %>
+            <div class="payment-method-row">
+              <% paymentChannels.slice(0, 8).forEach((channel) => { %>
+                <% if (channel.active) { %>
+                  <span class="payment-method-chip"><%= channel.name || channel.code %></span>
+                <% } %>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <% if (companyLegalName || companyAddressText || companyPhoneText || companyEmailText || hasManualPayment) { %>
+          <div class="business-card">
+            <div class="business-head">
+              <img src="<%= companyLogoUrl %>" alt="Logo Usaha" onerror="this.onerror=null;this.src='/img/logo.png'">
+              <div>
+                <strong><%= companyName %></strong>
+                <span><%= companyLegalName || 'Identitas usaha dapat diatur dari menu admin.' %></span>
+              </div>
+            </div>
+
+            <div class="detail-grid">
+              <% if (companyAddressText) { %>
+                <div class="detail-item">
+                  <i class="bi bi-geo-alt"></i>
+                  <div>
+                    <strong>Alamat Usaha</strong>
+                    <span><%= companyAddressText %></span>
+                  </div>
+                </div>
+              <% } %>
+              <% if (companyPhoneText) { %>
+                <div class="detail-item">
+                  <i class="bi bi-telephone"></i>
+                  <div>
+                    <strong>Kontak</strong>
+                    <span><%= companyPhoneText %></span>
+                  </div>
+                </div>
+              <% } %>
+              <% if (companyEmailText) { %>
+                <div class="detail-item">
+                  <i class="bi bi-envelope"></i>
+                  <div>
+                    <strong>Email</strong>
+                    <span><%= companyEmailText %></span>
+                  </div>
+                </div>
+              <% } %>
+              <% if (upstreamProviderName) { %>
+                <div class="detail-item">
+                  <i class="bi bi-hdd-network"></i>
+                  <div>
+                    <strong>Sumber Internet</strong>
+                    <span><%= upstreamProviderName %></span>
+                  </div>
+                </div>
+              <% } %>
+            </div>
+
+            <% if (hasManualPayment) { %>
+              <div class="manual-payment-box">
+                <h5>Transfer Manual</h5>
+                <div class="manual-payment-bank"><%= manualPaymentBank %></div>
+                <div class="manual-payment-line"><strong>No. Rek</strong><span><%= manualPaymentAccountNumber %></span></div>
+                <% if (manualPaymentAccountName) { %>
+                  <div class="manual-payment-line"><strong>Atas Nama</strong><span><%= manualPaymentAccountName %></span></div>
+                <% } %>
+                <% if (manualPaymentNotes) { %>
+                  <div class="manual-payment-line"><strong>Catatan</strong><span><%= manualPaymentNotes %></span></div>
+                <% } %>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="app-screen" data-tab="ticketing">
+        <div class="ticket-card">
+          <div class="ticket-card-top">
+            <div>
+              <h4>Keluhan & Bantuan</h4>
+              <div class="soft-muted">Pantau status tiket dan kirim keluhan baru.</div>
+            </div>
+            <button class="ticket-trigger" type="button" onclick="openTicketModal()">
+              <i class="bi bi-plus-circle"></i> Tiket Baru
+            </button>
+          </div>
+
+          <% if (!tickets || tickets.length === 0) { %>
+            <div class="empty-card">
+              <i class="bi bi-life-preserver"></i>
+              <strong>Belum ada tiket</strong>
+              <div>Kalau koneksi bermasalah atau butuh bantuan, Anda bisa buat tiket dari sini.</div>
+            </div>
+          <% } else { %>
+            <div class="ticket-list">
+              <% tickets.forEach((ticket) => { const ticketStatus = String(ticket.status || 'open').toLowerCase(); %>
+                <div class="ticket-item">
+                  <div class="item-icon"><i class="bi bi-life-preserver"></i></div>
+                  <div class="item-text">
+                    <div class="ticket-card-top" style="margin:0 0 10px;">
+                      <strong><%= ticket.subject || `Tiket #${ticket.id}` %></strong>
+                      <span class="ticket-status <%= ticketStatus === 'closed' || ticketStatus === 'done' ? 'closed' : ticketStatus === 'pending' ? 'pending' : 'open' %>">
+                        <i class="bi <%= ticketStatus === 'closed' || ticketStatus === 'done' ? 'bi-check-circle' : ticketStatus === 'pending' ? 'bi-hourglass-split' : 'bi-lightning-charge' %>"></i>
+                        <%= String(ticket.status || 'open').toUpperCase() %>
+                      </span>
+                    </div>
+                    <p><%= ticket.message || 'Tidak ada detail pesan.' %></p>
+                    <div class="ticket-meta">
+                      <span><i class="bi bi-hash"></i> #<%= ticket.id %></span>
+                      <span><i class="bi bi-clock-history"></i> <%= formatDateTime(ticket.created_at) %></span>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="app-screen" data-tab="profile">
+        <div class="profile-card">
+          <div class="profile-highlight">
+            <h4>Profil Pelanggan</h4>
+          </div>
+
+          <div class="section-head" style="margin-top:18px;">
+            <h3>Info Identitas</h3>
+            <span>Data utama</span>
+          </div>
+
+          <div class="detail-grid">
+            <div class="detail-item">
+              <i class="bi bi-person"></i>
+              <div>
+                <strong>Nama Pelanggan</strong>
+                <span><%= customerName %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-phone"></i>
+              <div>
+                <strong>Nomor HP</strong>
+                <span><%= customerPhone %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-credit-card-2-front"></i>
+              <div>
+                <strong>ID Pelanggan</strong>
+                <span><%= customerIdLabel %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-box-seam"></i>
+              <div>
+                <strong>Paket Layanan</strong>
+                <span><%= packageName %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-diagram-3"></i>
+              <div>
+                <strong>ODP</strong>
+                <span><%= customerOdp %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-calendar-check"></i>
+              <div>
+                <strong>Tanggal Pasang</strong>
+                <span><%= formatDate(profileData.install_date) %></span>
+              </div>
+            </div>
+            <div class="detail-item" style="grid-column:1 / -1;">
+              <i class="bi bi-geo-alt"></i>
+              <div>
+                <strong>Alamat</strong>
+                <span><%= customerAddress %></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <section class="app-screen" data-tab="packages">
+        <div class="package-upgrade-card" style="margin-top:0;">
+          <div class="package-upgrade-head">
+            <div>
+              <h4>Pilihan Paket WiFi</h4>
+              <p>Pilih paket yang tersedia untuk pelanggan. Perubahan paket langsung diproses sistem dan tagihan aktif yang belum lunas ikut menyesuaikan.</p>
+            </div>
+            <div class="current-package-chip">
+              <i class="bi bi-check2-circle"></i>
+              Paket sekarang: <%= packageName %>
+            </div>
+          </div>
+
+          <% if (!portalPackages || portalPackages.length === 0) { %>
+            <div class="empty-card" style="margin:0;">
+              <i class="bi bi-box-seam"></i>
+              <strong>Belum ada paket lain yang dibuka</strong>
+              <div>Admin belum menampilkan pilihan paket upgrade di portal pelanggan.</div>
+            </div>
+          <% } else { %>
+            <div class="portal-package-list">
+              <% portalPackages.forEach((pkg) => { %>
+                <div class="portal-package-item">
+                  <div class="portal-package-top">
+                    <div>
+                      <strong><%= pkg.name %></strong>
+                      <div class="portal-package-desc"><%= pkg.description || 'Paket internet pelanggan dengan kecepatan stabil untuk kebutuhan harian.' %></div>
+                    </div>
+                    <div class="portal-package-price">
+                      <strong><%= formatCurrency(pkg.price || 0) %></strong>
+                      <span>/ bulan</span>
+                    </div>
+                  </div>
+                  <div class="portal-package-meta">
+                    <% if (Number(pkg.speed_down || 0) > 0 || Number(pkg.speed_up || 0) > 0) { %>
+                      <span class="status-detail success">
+                        <i class="bi bi-speedometer2"></i>
+                        <%= Number(pkg.speed_down || 0) > 0 ? `${Math.round(Number(pkg.speed_down || 0) / 1000)} Mbps` : '-' %><%= Number(pkg.speed_up || 0) > 0 ? ` / ${Math.round(Number(pkg.speed_up || 0) / 1000)} Mbps` : '' %>
+                      </span>
+                    <% } %>
+                    <% if (Number(pkg.include_ppn || 0) === 1 && Number(pkg.ppn_percent || 0) > 0) { %>
+                      <span class="status-detail info">
+                        <i class="bi bi-receipt-cutoff"></i>
+                        Termasuk PPN <%= Number(pkg.ppn_percent || 0).toLocaleString('id-ID') %>%
+                      </span>
+                    <% } %>
+                  </div>
+                  <form class="portal-package-form" method="POST" action="/customer/packages/change" onsubmit="return confirm('Ganti paket ini? Tagihan aktif yang belum lunas akan ikut diperbarui.');">
+                    <input type="hidden" name="package_id" value="<%= pkg.id %>">
+                    <button class="settings-submit" type="submit">
+                      <i class="bi bi-arrow-up-circle"></i> Pilih Paket Ini
+                    </button>
+                  </form>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <% if (hasRouterPortalAccess) { %>
+      <section class="app-screen" data-tab="settings">
+        <div class="settings-card">
+          <div class="billing-card-head">
+            <div>
+              <h4>Router & WiFi</h4>
+              <div class="soft-muted">WiFi, status internet, dan perangkat yang terhubung.</div>
+            </div>
+          </div>
+
+          <div class="detail-grid router-detail-grid" style="margin-bottom:16px;">
+            <div class="detail-item">
+              <i class="bi bi-wifi"></i>
+              <div>
+                <strong>Status Internet</strong>
+                <span><%= isPppoeOnline ? 'Online' : (customerData.pppoeStatusText || customerData.status || 'Belum terbaca') %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-router"></i>
+              <div>
+                <strong>Router / ONU</strong>
+                <span><%= routerDisplayName %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-broadcast-pin"></i>
+              <div>
+                <strong>Nama WiFi (SSID)</strong>
+                <span><%= customerData.ssid || '-' %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-globe2"></i>
+              <div>
+                <strong>PPPoE Username</strong>
+                <span><%= customerData.pppoeUsername || profileData.pppoe_username || '-' %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-hdd-network"></i>
+              <div>
+                <strong>IP Internet</strong>
+                <span><%= customerData.pppoeIP || profileData.static_ip || '-' %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-upc-scan"></i>
+              <div>
+                <strong>Serial Number</strong>
+                <span><%= customerData.serialNumber || '-' %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-reception-4"></i>
+              <div>
+                <strong>RX Power</strong>
+                <span><%= customerData.rxPower || '-' %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-phone"></i>
+              <div>
+                <strong>Perangkat Terdeteksi</strong>
+                <span><%= usersOnline.length %> online dari <%= connectedDeviceCount %> perangkat</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <form class="settings-form" method="POST" action="/customer/change-ssid">
+              <div class="settings-field">
+                <label for="ssidField">Nama WiFi (SSID)</label>
+                <input id="ssidField" type="text" name="ssid" value="<%= customerData.ssid && customerData.ssid !== '-' ? customerData.ssid : '' %>" placeholder="Contoh: Rumah-Huda-WiFi" required>
+              </div>
+              <button class="settings-submit" type="submit">
+                <i class="bi bi-broadcast-pin"></i> Simpan SSID
+              </button>
+            </form>
+
+            <form class="settings-form" method="POST" action="/customer/change-password">
+              <div class="settings-field">
+                <label for="wifiPasswordField">Password WiFi Baru</label>
+                <input id="wifiPasswordField" type="password" name="password" placeholder="Minimal 8 karakter" minlength="8" required>
+              </div>
+              <button class="settings-submit" type="submit">
+                <i class="bi bi-shield-lock"></i> Update Password
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div class="settings-card" style="margin-top:16px;">
+          <div class="billing-card-head">
+            <div>
+              <h4>Perangkat Terkoneksi</h4>
+              <div class="soft-muted">Perangkat yang terbaca dari router / ONU.</div>
+            </div>
+          </div>
+
+          <% if (!connectedUsers || connectedUsers.length === 0) { %>
+            <div class="empty-card">
+              <i class="bi bi-router"></i>
+              <strong>Belum ada perangkat terbaca</strong>
+              <div>Jika GenieACS / ONU belum mengirim inform lengkap, daftar perangkat akan muncul setelah sinkron.</div>
+            </div>
+          <% } else { %>
+            <div class="device-list">
+              <% connectedUsers.forEach((user) => { %>
+                <div class="device-item">
+                  <i class="bi bi-phone"></i>
+                  <div>
+                    <strong><%= user.hostname || 'Unknown Device' %></strong>
+                    <span><%= user.ip || '-' %> / <%= user.mac || '-' %> / <%= user.iface || '-' %></span>
+                    <div class="ticket-meta">
+                      <span class="status-dot <%= String(user.status || '').toLowerCase() === 'online' ? 'closed' : 'pending' %>">
+                        <i class="bi <%= String(user.status || '').toLowerCase() === 'online' ? 'bi-wifi' : 'bi-wifi-off' %>"></i>
+                        <%= user.status || 'Unknown' %>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="settings-card" style="margin-top:16px;">
+          <div class="billing-card-head">
+            <div>
+              <h4>Aksi Router</h4>
+              <div class="soft-muted">Perintah cepat untuk perangkat.</div>
+            </div>
+          </div>
+
+          <div class="stack-actions">
+            <form method="POST" action="/customer/reboot" onsubmit="return confirm('Reboot perangkat pelanggan sekarang?')">
+              <button class="settings-submit secondary" type="submit" style="width:100%;">
+                <i class="bi bi-arrow-repeat"></i> Reboot Perangkat
+              </button>
+            </form>
+
+            <a class="settings-submit secondary" href="<%= supportUrl %>" target="_blank" rel="noopener" style="text-decoration:none;">
+              <i class="bi bi-headset"></i> Hubungi Admin
+            </a>
+
+            <form method="POST" action="/customer/logout">
+              <button class="settings-submit danger" type="submit" style="width:100%;">
+                <i class="bi bi-box-arrow-right"></i> Keluar dari Aplikasi
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+      <% } %>
+    </main>
+  </div>
+
+  <nav class="android-nav-wrap" aria-label="Navigasi bawah">
+    <div class="android-nav">
+      <button type="button" data-nav-tab="home" class="is-active">
+        <i class="bi bi-grid-1x2-fill"></i>
+        <span>Home</span>
+      </button>
+      <button type="button" data-nav-tab="billing">
+        <i class="bi bi-wallet2"></i>
+        <span>Tagihan</span>
+      </button>
+      <button type="button" data-nav-tab="traffic">
+        <i class="bi bi-activity"></i>
+        <span>Traffic</span>
+      </button>
+      <button type="button" data-nav-tab="ticketing">
+        <i class="bi bi-headset"></i>
+        <span>Bantuan</span>
+      </button>
+      <button type="button" data-nav-tab="profile">
+        <i class="bi bi-person"></i>
+        <span>Akun</span>
+      </button>
+    </div>
+  </nav>
+
+  <form id="quickRebootForm" method="POST" action="/customer/reboot" class="d-none"></form>
+
+  <div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content app-modal">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-1">Bayar Tagihan</h5>
+            <div class="soft-muted">Pilih invoice yang ingin dibayar sekarang.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+        <div class="modal-body">
+          <% if (unpaidInvoices.length === 0) { %>
+            <div class="empty-card">
+              <i class="bi bi-check-circle"></i>
+              <strong>Tidak ada tagihan aktif</strong>
+              <div>Semua tagihan pelanggan sudah lunas.</div>
+            </div>
+          <% } else { %>
+            <div class="payment-modal-list">
+              <% unpaidInvoices.forEach((inv) => { %>
+                <div class="billing-item">
+                  <div class="item-text">
+                    <strong>INV-<%= inv.id %></strong>
+                    <p><%= monthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %> • <%= formatCurrency(inv.amount) %></p>
+                  </div>
+                  <div class="item-meta">
+                    <a class="pay-action" href="/customer/payment/select/<%= inv.id %>">
+                      <i class="bi bi-wallet2"></i> Pilih Metode
+                    </a>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="ticketModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content app-modal">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-1">Buat Tiket Baru</h5>
+            <div class="soft-muted">Jelaskan kendala dengan singkat dan jelas.</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+        <div class="modal-body">
+          <form class="settings-form" method="POST" action="/customer/tickets/create">
+            <input type="hidden" name="customerId" value="<%= profileData.id || '' %>">
+            <div class="settings-field">
+              <label for="ticketSubject">Judul Keluhan</label>
+              <input id="ticketSubject" type="text" name="subject" placeholder="Contoh: Internet putus sejak pagi" required>
+            </div>
+            <div class="settings-field">
+              <label for="ticketMessage">Detail Keluhan</label>
+              <textarea id="ticketMessage" name="message" rows="5" placeholder="Tuliskan kronologi, jam kejadian, dan gejala yang Anda rasakan." required></textarea>
+            </div>
+            <button class="settings-submit" type="submit">
+              <i class="bi bi-send"></i> Kirim Tiket
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="notificationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content app-modal">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-1">Notifikasi</h5>
+            <div class="soft-muted"><%= notificationUnread %> notifikasi perlu perhatian</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+        <div class="modal-body">
+          <% if (!notificationItems.length) { %>
+            <div class="empty-card">
+              <i class="bi bi-bell-slash"></i>
+              <strong>Belum ada notifikasi</strong>
+              <div>Info tagihan dan update tiket akan muncul di sini.</div>
+            </div>
+          <% } else { %>
+            <div class="notification-list">
+              <% notificationItems.forEach((item) => { %>
+                <button type="button" class="notification-item <%= item.unread ? 'unread' : '' %>" onclick='goToNotification(<%- JSON.stringify(item.tab || "home") %>)'>
+                  <i class="bi <%= item.kind === 'invoice' ? 'bi-receipt-cutoff' : item.kind === 'ticket' ? 'bi-life-preserver' : 'bi-info-circle' %>"></i>
+                  <div>
+                    <strong><%= item.title %></strong>
+                    <p><%= item.body %></p>
+                    <span><%= formatDateTime(item.time) %></span>
+                  </div>
+                </button>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const NOTIFICATION_UNREAD = <%- JSON.stringify(notificationUnread) %>;
+    const TAB_META = {
+      home: { eyebrow: 'Halaman Utama', title: 'Dashboard Pelanggan' },
+      billing: { eyebrow: 'Pembayaran', title: 'Tagihan & Riwayat' },
+      traffic: { eyebrow: 'Statistik', title: 'Statistik Penggunaan' },
+      packages: { eyebrow: 'Paket WiFi', title: 'Pilih Paket Internet' },
+      speedtest: { eyebrow: 'Tes Speed', title: 'Tes Speed Internet' },
+      ticketing: { eyebrow: 'Bantuan', title: 'Bantuan & Tiket' },
+      profile: { eyebrow: 'Profil', title: 'Profil Pelanggan' },
+      settings: { eyebrow: 'Router', title: 'Router & WiFi' }
+    };
+
+    const HAS_ROUTER_PORTAL_ACCESS = <%- JSON.stringify(hasRouterPortalAccess) %>;
+
+    const LEGACY_HASH_MAP = {
+      '#home-section': 'home',
+      '#traffic-section': 'traffic',
+      '#speedtest-section': 'speedtest',
+      '#ticket-section': 'ticketing',
+      '#profile-section': 'profile',
+      '#activity-section': 'home',
+      '#settings-section': 'settings',
+      '#router-section': 'settings'
+    };
+
+    let paymentModal = null;
+    let ticketModal = null;
+    let notificationModal = null;
+    let trafficTimer = null;
+    const trafficHistory = {
+      rx: Array(8).fill(0),
+      tx: Array(8).fill(0)
+    };
+    const LIVE_CAPS = {
+      rx: <%- JSON.stringify(liveDownloadCap) %>,
+      tx: <%- JSON.stringify(liveUploadCap) %>
+    };
+
+    function getTabFromHash() {
+      const rawHash = String(window.location.hash || '').trim().toLowerCase();
+      if (!rawHash) return 'home';
+      if (LEGACY_HASH_MAP[rawHash]) return LEGACY_HASH_MAP[rawHash];
+      const clean = rawHash.replace('#', '');
+      return TAB_META[clean] ? clean : 'home';
+    }
+
+    function updateHeader(tabName) {
+      const meta = TAB_META[tabName] || TAB_META.home;
+      const eyebrow = document.getElementById('appHeaderEyebrow');
+      const title = document.getElementById('appHeaderTitle');
+      if (eyebrow) eyebrow.textContent = meta.eyebrow;
+      if (title) title.textContent = meta.title;
+    }
+
+    function openAppTab(tabName, updateHash = true) {
+      let nextTab = TAB_META[tabName] ? tabName : 'home';
+      if (nextTab === 'settings' && !HAS_ROUTER_PORTAL_ACCESS) {
+        nextTab = 'home';
+      }
+      closeAppMenu();
+      closeAccountMenu();
+      document.querySelectorAll('.app-screen').forEach((screen) => {
+        screen.classList.toggle('is-active', screen.dataset.tab === nextTab);
+      });
+      document.querySelectorAll('[data-nav-tab]').forEach((button) => {
+        button.classList.toggle('is-active', button.dataset.navTab === nextTab);
+      });
+      updateHeader(nextTab);
+      if (updateHash) {
+        const nextHash = `#${nextTab}`;
+        if (window.location.hash !== nextHash) {
+          history.replaceState(null, '', nextHash);
+        }
+      }
+      scheduleTrafficRefresh(nextTab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function openPaymentModal() {
+      if (!paymentModal) return;
+      paymentModal.show();
+    }
+
+    function openTicketModal() {
+      if (!ticketModal) return;
+      ticketModal.show();
+    }
+
+    function toggleAccountMenu(forceOpen = null) {
+      closeAppMenu();
+      const menu = document.getElementById('accountMenu');
+      if (!menu) return;
+      const shouldOpen = forceOpen === null ? !menu.classList.contains('is-open') : Boolean(forceOpen);
+      menu.classList.toggle('is-open', shouldOpen);
+    }
+
+    function closeAccountMenu() {
+      toggleAccountMenu(false);
+    }
+
+    function toggleAppMenu(forceOpen = null) {
+      closeAccountMenu();
+      const backdrop = document.getElementById('appMenuBackdrop');
+      const sheet = document.getElementById('appMenuSheet');
+      if (!backdrop || !sheet) return;
+      const shouldOpen = forceOpen === null ? !sheet.classList.contains('is-open') : Boolean(forceOpen);
+      backdrop.classList.toggle('is-open', shouldOpen);
+      sheet.classList.toggle('is-open', shouldOpen);
+      sheet.setAttribute('aria-hidden', shouldOpen ? 'false' : 'true');
+    }
+
+    function closeAppMenu() {
+      const backdrop = document.getElementById('appMenuBackdrop');
+      const sheet = document.getElementById('appMenuSheet');
+      backdrop?.classList.remove('is-open');
+      sheet?.classList.remove('is-open');
+      sheet?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function markNotificationsRead() {
+      if (!NOTIFICATION_UNREAD) return;
+      try {
+        await fetch('/customer/notifications/read', {
+          method: 'POST',
+          headers: { 'x-requested-with': 'fetch' }
+        });
+        const badge = document.getElementById('notificationBadge');
+        if (badge) badge.remove();
+      } catch {}
+    }
+
+    async function openNotificationsPanel() {
+      closeAccountMenu();
+      await markNotificationsRead();
+      if (notificationModal) {
+        notificationModal.show();
+        return;
+      }
+      openAppTab('billing');
+    }
+
+    function goToNotification(tabName) {
+      if (notificationModal) notificationModal.hide();
+      openAppTab(tabName || 'home');
+    }
+
+    function copyCustomerCode() {
+      const code = <%- JSON.stringify(customerCode) %>;
+      if (!code || code === '-') return;
+      navigator.clipboard?.writeText(code).then(() => {
+        const statusText = document.getElementById('trafficStatusText');
+        if (statusText) statusText.textContent = 'Kode pelanggan berhasil disalin.';
+      }).catch(() => {});
+    }
+
+    function quickReboot() {
+      const ok = window.confirm('Reboot perangkat pelanggan sekarang? Koneksi akan terputus beberapa menit.');
+      if (!ok) return;
+      const form = document.getElementById('quickRebootForm');
+      if (form) form.submit();
+    }
+
+    function reloadPortalSpeedtest() {
+      const frame = document.getElementById('portalSpeedtestFrame');
+      if (!frame) return;
+      frame.src = `https://openspeedtest.com/speedtest?Run=3&ts=${Date.now()}`;
+    }
+
+    function setSpeedMeter(kind, rawValue) {
+      const valueNode = document.getElementById(kind === 'rx' ? 'liveRxValue' : 'liveTxValue');
+      const polyline = document.getElementById(kind === 'rx' ? 'rxSparklinePath' : 'txSparklinePath');
+      const dot = document.getElementById(kind === 'rx' ? 'rxSparklineDot' : 'txSparklineDot');
+      const gauge = document.getElementById(kind === 'rx' ? 'downloadGauge' : 'uploadGauge');
+      const cap = Math.max(1, Number(kind === 'rx' ? LIVE_CAPS.rx : LIVE_CAPS.tx) || 1);
+      const mbps = Math.max(0, Number(rawValue || 0));
+      const ratio = Math.max(0, Math.min(1, mbps / cap));
+      const degree = -90 + (ratio * 180);
+
+      if (valueNode) {
+        valueNode.textContent = mbps.toFixed(2);
+      }
+
+      if (gauge) {
+        gauge.style.setProperty('--gauge-rotate', `${degree}deg`);
+      }
+
+      const nextHistory = [...(trafficHistory[kind] || []), mbps].slice(-8);
+      trafficHistory[kind] = nextHistory;
+
+      if (polyline && dot) {
+        const maxValue = Math.max(cap, ...nextHistory, 0.1);
+        const points = nextHistory.map((value, index) => {
+          const x = Math.round((112 / (nextHistory.length - 1 || 1)) * index);
+          const ratio = Math.max(0, Math.min(1, value / maxValue));
+          const y = Math.round(42 - (ratio * 28));
+          return { x, y };
+        });
+        polyline.setAttribute('points', points.map((point) => `${point.x},${point.y}`).join(' '));
+        const lastPoint = points[points.length - 1] || { x: 112, y: 42 };
+        dot.setAttribute('cx', String(lastPoint.x));
+        dot.setAttribute('cy', String(lastPoint.y));
+      }
+    }
+
+    async function refreshTrafficNow() {
+      const statusText = document.getElementById('trafficStatusText');
+      const rxNode = document.getElementById('liveRxValue');
+      const txNode = document.getElementById('liveTxValue');
+      if (!rxNode || !txNode) return;
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4500);
+        const response = await fetch('/customer/api/pppoe-traffic', {
+          headers: { 'x-requested-with': 'fetch' },
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const data = await response.json();
+
+        if (!data || data.ok === false) {
+          setSpeedMeter('rx', 0);
+          setSpeedMeter('tx', 0);
+          if (statusText) statusText.textContent = data?.error ? `Traffic live belum tersedia: ${data.error}` : 'Traffic live belum tersedia.';
+          return;
+        }
+
+        const customerDownloadMbps = Number(data.downloadMbps ?? data.rxMbps ?? data.txMbps ?? 0) || 0;
+        const customerUploadMbps = Number(data.uploadMbps ?? data.txMbps ?? data.rxMbps ?? 0) || 0;
+        setSpeedMeter('rx', customerDownloadMbps);
+        setSpeedMeter('tx', customerUploadMbps);
+
+        const usageTotalNode = document.getElementById('usageTotalDisplay');
+        const usageDownloadNode = document.getElementById('usageDownloadDisplay');
+        const usageUploadNode = document.getElementById('usageUploadDisplay');
+        const usageDownBytes = Number(data.usageDownloadBytes ?? data.usageBytesIn ?? data.usageBytesOut ?? 0) || 0;
+        const usageUpBytes = Number(data.usageUploadBytes ?? data.usageBytesOut ?? data.usageBytesIn ?? 0) || 0;
+        const usageTotalBytes = usageDownBytes + usageUpBytes;
+        const formatUsageGb = (bytes) => ((Math.max(0, Number(bytes || 0)) / (1024 * 1024 * 1024))).toFixed(2);
+        if (usageTotalNode) usageTotalNode.textContent = formatUsageGb(usageTotalBytes);
+        if (usageDownloadNode) usageDownloadNode.textContent = `${formatUsageGb(usageDownBytes)} GB`;
+        if (usageUploadNode) usageUploadNode.textContent = `${formatUsageGb(usageUpBytes)} GB`;
+
+        if (data.available === false) {
+          if (statusText) statusText.textContent = 'PPPoE belum terdeteksi untuk akun ini.';
+          return;
+        }
+
+        if (data.online === false) {
+          if (statusText) statusText.textContent = 'PPPoE sedang offline.';
+          return;
+        }
+
+        if (data.warmup) {
+          if (statusText) statusText.textContent = 'Traffic live sedang kalibrasi. Coba lagi beberapa detik.';
+          return;
+        }
+
+        const ifaceInfo = data.iface ? ` • ${data.iface}` : '';
+        if (statusText) statusText.textContent = `Traffic live aktif${ifaceInfo}${data.uptime ? ` • uptime ${data.uptime}` : ''}`;
+      } catch (error) {
+        setSpeedMeter('rx', 0);
+        setSpeedMeter('tx', 0);
+        if (statusText) statusText.textContent = 'Gagal mengambil traffic live. Dashboard tetap bisa dipakai.';
+      }
+    }
+
+    function scheduleTrafficRefresh(tabName) {
+      if (trafficTimer) {
+        clearInterval(trafficTimer);
+        trafficTimer = null;
+      }
+
+      if (tabName !== 'traffic') return;
+      refreshTrafficNow();
+      trafficTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        refreshTrafficNow();
+      }, 12000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));
+      ticketModal = new bootstrap.Modal(document.getElementById('ticketModal'));
+      notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
+
+      ['paymentModal', 'ticketModal', 'notificationModal'].forEach((modalId) => {
+        const modalEl = document.getElementById(modalId);
+        if (!modalEl) return;
+        modalEl.addEventListener('shown.bs.modal', () => document.body.classList.add('modal-open'));
+        modalEl.addEventListener('hidden.bs.modal', () => {
+          const anyOpen = Array.from(document.querySelectorAll('.modal.show')).length > 0;
+          document.body.classList.toggle('modal-open', anyOpen);
+        });
+      });
+
+      document.querySelectorAll('[data-nav-tab]').forEach((button) => {
+        button.addEventListener('click', () => openAppTab(button.dataset.navTab));
+      });
+
+      document.addEventListener('click', (event) => {
+        const menu = document.getElementById('accountMenu');
+        if (!menu) return;
+        const wrap = event.target.closest('.header-icon-wrap');
+        if (!wrap || !wrap.contains(menu)) {
+          if (!event.target.closest('[aria-label="Akun"]')) closeAccountMenu();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeAccountMenu();
+          closeAppMenu();
+        }
+      });
+
+      const isAndroidLike = /android/i.test(navigator.userAgent || '') || window.matchMedia('(display-mode: standalone)').matches;
+      if (isAndroidLike) {
+        document.body.classList.add('android-webview');
+      }
+
+      setSpeedMeter('rx', 0);
+      setSpeedMeter('tx', 0);
+
+      const initialTab = getTabFromHash();
+      openAppTab(initialTab, true);
+
+      const splash = document.getElementById('appSplash');
+      const seenBefore = sessionStorage.getItem('customer-pwa-splash') === '1';
+      window.setTimeout(() => {
+        splash?.classList.add('is-hidden');
+        sessionStorage.setItem('customer-pwa-splash', '1');
+      }, seenBefore ? 120 : 420);
+
+      window.addEventListener('hashchange', () => {
+        openAppTab(getTabFromHash(), false);
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/customer/' }).catch(() => {});
+        });
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          const active = document.querySelector('.app-screen.is-active');
+          if (active) scheduleTrafficRefresh(active.dataset.tab);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

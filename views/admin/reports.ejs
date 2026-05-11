@@ -1,0 +1,567 @@
+<%
+  const pageLang = (typeof lang !== 'undefined' && lang) ? lang : 'id';
+  const tt = (key, fallback) => (typeof t === 'function' ? t(key, fallback) : fallback);
+  const pageSession = (typeof session !== 'undefined' && session) ? session : {};
+  const pageMonthlyData = Array.isArray(monthlyData) ? monthlyData : [];
+  const pageChartData = Array.isArray(chartData) ? chartData : [];
+  const pageRecentPayments = Array.isArray(recentPayments) ? recentPayments : [];
+  const pageTopUnpaid = Array.isArray(topUnpaid) ? topUnpaid : [];
+  const pageCollectionOverview = collectionOverview || {};
+  const pageFilterYear = Number(filterYear || new Date().getFullYear());
+  const pageFilterMonth = Number(filterMonth || 0);
+  const pageMonthNames = (pageLang === 'en')
+    ? ['All Months','January','February','March','April','May','June','July','August','September','October','November','December']
+    : ['Semua Bulan','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const pagePeriodLabel = pageFilterMonth > 0
+    ? `${pageMonthNames[pageFilterMonth]} ${pageFilterYear}`
+    : `Tahun ${pageFilterYear}`;
+  const pageTrendValues = Array.from({ length: 12 }, () => 0);
+  pageChartData.forEach((entry) => {
+    const monthIndex = Number(entry?.month || 0) - 1;
+    if (monthIndex >= 0 && monthIndex < pageTrendValues.length) {
+      pageTrendValues[monthIndex] = Number(entry?.revenue || 0);
+    }
+  });
+  const pageTrendIndex = pageFilterMonth > 0
+    ? Math.max(0, Math.min(11, pageFilterMonth - 1))
+    : Math.max(0, pageTrendValues.reduce((latest, value, index) => (value > 0 ? index : latest), new Date().getMonth()));
+  const pageTrendCurrent = Number(pageTrendValues[pageTrendIndex] || 0);
+  const pageTrendPrev = Number(pageTrendValues[Math.max(0, pageTrendIndex - 1)] || 0);
+  const pageTrendDiff = pageTrendCurrent - pageTrendPrev;
+  const pageTrendPct = pageTrendPrev > 0 ? Math.round((pageTrendDiff / pageTrendPrev) * 100) : (pageTrendCurrent > 0 ? 100 : 0);
+  const pageTrendUp = pageTrendDiff >= 0;
+  const pageTrendMonthLabel = `${pageMonthNames[pageTrendIndex + 1]} ${pageFilterYear}`;
+%>
+<!DOCTYPE html>
+<html lang="<%= pageLang %>">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title><%= tt('admin.nav.finance_report', 'Laporan Keuangan') %> | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .report-stats + .report-stats { margin-top: 14px; }
+    .report-panels { display:grid; grid-template-columns:1.7fr 1fr; gap:18px; margin-top:18px; align-items:start; }
+    .report-filter-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;padding:14px 16px;border:1px solid var(--border);border-radius:18px;background:var(--surface-soft)}
+    .report-filter-copy{display:grid;gap:4px}
+    .report-filter-copy strong{font-size:16px;color:var(--text)}
+    .report-filter-copy span{font-size:12px;color:var(--muted)}
+    .report-filter-form{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .report-filter-form .fs{min-width:132px}
+    .report-filter-form .btn{min-width:96px}
+    .trend-shell{display:grid;gap:12px}
+    .trend-canvas-wrap{
+      position:relative;
+      height:118px;
+      max-height:118px;
+      min-height:118px;
+      overflow:hidden;
+      border-radius:14px;
+      padding:4px 0 0;
+    }
+    .trend-canvas-wrap canvas{
+      display:block;
+      width:100% !important;
+      height:100% !important;
+      max-height:118px !important;
+    }
+    .trend-summary{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .trend-copy{display:grid;gap:6px}
+    .trend-copy strong{font-size:18px;color:var(--text);line-height:1.1}
+    .trend-copy span{font-size:12px;color:var(--muted)}
+    .trend-mini{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:16px;background:var(--surface-soft)}
+    .trend-mini i{font-size:16px}
+    .trend-mini.up{color:#22c55e}
+    .trend-mini.down{color:#f97316}
+    .trend-mini strong{display:block;font-size:13px;line-height:1.1}
+    .trend-mini span{display:block;font-size:11px;color:var(--muted);margin-top:2px}
+    .trend-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .trend-note{font-size:12px;color:var(--muted)}
+    .trend-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:800}
+    .trend-chip.up{background:rgba(34,197,94,.14);color:#22c55e}
+    .trend-chip.down{background:rgba(249,115,22,.15);color:#f97316}
+    .top-unpaid-list { padding:14px; display:grid; gap:10px; }
+    .top-unpaid-item { padding:13px 14px; border:1px solid var(--border); border-radius:16px; background:var(--surface-soft); display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .due-meta{display:grid;gap:4px}
+    .due-main{font-size:13px;font-weight:700;color:var(--text)}
+    .due-sub{font-size:11px;color:var(--muted)}
+    .due-side{display:grid;gap:6px;justify-items:end}
+    .due-amount{font-size:13px;font-weight:800;color:var(--text)}
+    .due-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+    .due-chip.info{background:rgba(59,130,246,.14);color:#3b82f6}
+    .due-chip.warn{background:rgba(245,158,11,.16);color:#f59e0b}
+    .due-chip.danger{background:rgba(239,68,68,.14);color:#ef4444}
+    .mobile-report-list { display:none; }
+    .mobile-report-card { border:1px solid var(--border); border-radius:18px; background:var(--surface-soft); padding:14px 16px; }
+    .mobile-report-card + .mobile-report-card { margin-top:12px; }
+    .mobile-report-title { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .mobile-report-name { font-size:14px; font-weight:800; color:var(--text); }
+    .mobile-report-sub { font-size:12px; color:var(--muted); margin-top:3px; }
+    .mobile-report-amount { font-size:15px; font-weight:800; color:var(--success); text-align:right; }
+    .mobile-report-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .mobile-report-cell { padding:10px 12px; border-radius:14px; background:var(--surface-soft); }
+    .mobile-report-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
+    .mobile-report-value { font-size:13px; font-weight:700; color:var(--text); }
+    .report-progress { display:flex; align-items:center; gap:8px; margin-top:10px; }
+    .report-progress-bar { flex:1; background:var(--bg3); border-radius:999px; height:7px; overflow:hidden; }
+    .report-progress-fill { height:100%; background:linear-gradient(90deg,#3fb950,#4ade80); border-radius:999px; }
+    .report-progress-text { width:38px; font-size:12px; font-weight:700; color:var(--muted); text-align:right; }
+    body[data-theme="light"] .mobile-report-card,
+    body[data-theme="light"] .top-unpaid-item {
+      background:rgba(255,255,255,.92);
+      box-shadow:0 14px 30px rgba(165,162,211,.12);
+    }
+    body[data-theme="light"] .mobile-report-name,
+    body[data-theme="light"] .mobile-report-value {
+      color:#24304a;
+    }
+    body[data-theme="light"] .mobile-report-sub,
+    body[data-theme="light"] .report-progress-text {
+      color:#6f7d98;
+    }
+    @media (max-width: 900px) {
+      .report-panels { grid-template-columns:1fr; }
+    }
+    @media (max-width: 768px) {
+      .report-stats,
+      .report-stats[style] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+      .topbar .tb-right { gap:10px; }
+      .topbar .tb-right .fs { width:76px !important; }
+      .report-filter-bar{padding:12px 14px;border-radius:16px}
+      .report-filter-copy strong{font-size:15px}
+      .report-filter-form{width:100%}
+      .report-filter-form .fs,
+      .report-filter-form .btn{width:100%;min-width:0}
+      .top-unpaid-list { padding:0 16px 16px; }
+      .top-unpaid-item { padding:14px 16px; align-items:flex-start; }
+      .tbl-wrap { display:none; }
+      .mobile-report-list { display:block; padding:0 16px 16px; }
+      .trend-canvas-wrap{
+        height:104px;
+        max-height:104px;
+        min-height:104px;
+      }
+      .trend-canvas-wrap canvas{
+        max-height:104px !important;
+      }
+    }
+    @media (max-width: 520px) {
+      .report-stats,
+      .report-stats[style] { grid-template-columns:1fr !important; }
+      .mobile-report-grid { grid-template-columns:1fr; }
+      .mobile-report-title { flex-direction:column; }
+      .mobile-report-amount { text-align:left; }
+      .top-unpaid-item { flex-direction:column; }
+      .due-side { justify-items:start; }
+    }
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'reports', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-bar-chart-line"></i> <%= tt('admin.nav.finance_report', 'Laporan Keuangan') %></div>
+    <div class="tb-right">
+      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+        <i class="bi bi-sun"></i>
+        <span>Terang</span>
+      </button>
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= pageSession.isCashier ? tt('admin.role.cashier', 'Kasir') : tt('admin.role.admin', 'Admin') %></span>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+  <div class="page">
+    <% if (typeof msg !== 'undefined' && msg && msg.text) { %>
+      <div class="alert alert-<%= msg.type === 'error' ? 'd' : 's' %>" style="margin-bottom:16px"><%= msg.text %></div>
+    <% } %>
+
+    <div class="report-filter-bar">
+      <div class="report-filter-copy">
+        <strong>Periode Laporan</strong>
+        <span><%= pagePeriodLabel %></span>
+      </div>
+      <form method="GET" action="/admin/reports" class="report-filter-form">
+        <select class="fs" name="month">
+          <% for(let m=0; m<=12; m++){ %>
+            <option value="<%= m %>" <%= pageFilterMonth===m?'selected':'' %>><%= pageMonthNames[m] %></option>
+          <% } %>
+        </select>
+        <select class="fs" name="year">
+          <% for(let y=new Date().getFullYear(); y>=2023; y--){ %>
+            <option value="<%= y %>" <%= pageFilterYear==y?'selected':'' %>><%= y %></option>
+          <% } %>
+        </select>
+        <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+      </form>
+    </div>
+
+    <!-- Big Stats -->
+    <div class="stat-grid report-stats" style="grid-template-columns:repeat(4,1fr)">
+      <div class="sc s"><i class="bi bi-cash-stack sc-icon"></i>
+        <div class="sc-label"><%= pageFilterMonth > 0 ? 'Pendapatan Bulan Dipilih' : `${tt('admin.reports.total_revenue_year', 'Total Pendapatan')} ${pageFilterYear}` %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= totalRevenue.toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc p"><i class="bi bi-receipt sc-icon"></i>
+        <div class="sc-label"><%= pageFilterMonth > 0 ? 'Omzet Periode Ini' : tt('admin.reports.this_month', 'Bulan Ini') %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= thisMonth.toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc d"><i class="bi bi-hourglass sc-icon"></i>
+        <div class="sc-label"><%= tt('admin.reports.pending_receivable', 'Piutang Belum Bayar') %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= pendingAmount.toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc w"><i class="bi bi-people sc-icon"></i>
+        <div class="sc-label"><%= tt('admin.reports.active_customers_total', 'Total Pelanggan Aktif') %></div>
+        <div class="sc-val"><%= activeCustomers %></div>
+      </div>
+    </div>
+
+    <div class="stat-grid report-stats" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
+      <div class="sc bp"><i class="bi bi-receipt-cutoff sc-icon"></i>
+        <div class="sc-label"><%= pageFilterMonth > 0 ? 'Pendapatan Via Agent' : `${tt('admin.reports.revenue_via_agent_year', 'Pendapatan Via Agent')} ${pageFilterYear}` %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= (revenueYearAgent || 0).toLocaleString('id-ID') %></div>
+        <div class="sc-sub"><%= tt('admin.reports.this_month_prefix', 'Bulan ini:') %> Rp <%= (revenueThisMonthAgent || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc bm"><i class="bi bi-person-badge sc-icon"></i>
+        <div class="sc-label"><%= pageFilterMonth > 0 ? 'Deposit Agent Masuk' : `${tt('admin.reports.agent_deposit_year', 'Deposit Agent Masuk')} ${pageFilterYear}` %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= (agentDepositYear || 0).toLocaleString('id-ID') %></div>
+        <div class="sc-sub"><%= tt('admin.reports.this_month_prefix', 'Bulan ini:') %> Rp <%= (agentDepositThisMonth || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc s"><i class="bi bi-wallet2 sc-icon"></i>
+        <div class="sc-label"><%= pageFilterMonth > 0 ? 'Kas Masuk Periode Ini' : `${tt('admin.reports.cash_in_year', 'Kas Masuk (Tanpa Double)')} ${pageFilterYear}` %></div>
+        <div class="sc-val" style="font-size:20px">Rp <%= (cashInYear || 0).toLocaleString('id-ID') %></div>
+        <div class="sc-sub"><%= tt('admin.reports.this_month_prefix', 'Bulan ini:') %> Rp <%= (cashInThisMonth || 0).toLocaleString('id-ID') %></div>
+      </div>
+    </div>
+
+    <div class="stat-grid report-stats" style="grid-template-columns:repeat(4,1fr);margin-top:14px">
+      <div class="sc bm"><i class="bi bi-journal-check sc-icon"></i>
+        <div class="sc-label">Total Tagihan <%= pageFilterYear %></div>
+        <div class="sc-val"><%= Number(pageCollectionOverview.totalInvoices || 0) %></div>
+        <div class="sc-sub">Rp <%= Number(pageCollectionOverview.totalAmount || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc s"><i class="bi bi-check2-circle sc-icon"></i>
+        <div class="sc-label">Lunas Tepat Waktu</div>
+        <div class="sc-val"><%= Number(pageCollectionOverview.ontimePaidCount || 0) %></div>
+        <div class="sc-sub">Rp <%= Number(pageCollectionOverview.ontimePaidAmount || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc w"><i class="bi bi-clock-history sc-icon"></i>
+        <div class="sc-label">Lunas Telat</div>
+        <div class="sc-val"><%= Number(pageCollectionOverview.latePaidCount || 0) %></div>
+        <div class="sc-sub">Rp <%= Number(pageCollectionOverview.latePaidAmount || 0).toLocaleString('id-ID') %></div>
+      </div>
+      <div class="sc d"><i class="bi bi-x-circle sc-icon"></i>
+        <div class="sc-label">Belum Bayar</div>
+        <div class="sc-val"><%= Number(pageCollectionOverview.unpaidCount || 0) %></div>
+        <div class="sc-sub">Rp <%= Number(pageCollectionOverview.unpaidAmount || 0).toLocaleString('id-ID') %></div>
+      </div>
+    </div>
+
+    <!-- Chart & Monthly Table -->
+    <div class="report-panels">
+
+      <!-- Trend Chart -->
+      <div class="card">
+        <div class="card-hd"><h6><i class="bi bi-activity"></i> Tren Pendapatan</h6></div>
+        <div class="card-bd">
+          <div class="trend-shell">
+            <div class="trend-summary">
+              <div class="trend-copy">
+                <strong>Rp <%= pageTrendCurrent.toLocaleString('id-ID') %></strong>
+                <span><%= pageTrendMonthLabel %></span>
+              </div>
+              <div class="trend-mini <%= pageTrendUp ? 'up' : 'down' %>">
+                <i class="bi <%= pageTrendUp ? 'bi-arrow-up-right' : 'bi-arrow-down-right' %>"></i>
+                <div>
+                  <strong><%= pageTrendUp ? '+' : '' %><%= pageTrendPct %>%</strong>
+                  <span>vs bulan sebelumnya</span>
+                </div>
+              </div>
+            </div>
+            <div class="trend-canvas-wrap">
+              <canvas id="revenueChart" height="118"></canvas>
+            </div>
+            <div class="trend-foot">
+              <div class="trend-note">Grafik ringkas pergerakan omzet bulanan.</div>
+              <div class="trend-chip <%= pageTrendUp ? 'up' : 'down' %>">
+                <i class="bi <%= pageTrendUp ? 'bi-graph-up-arrow' : 'bi-graph-down-arrow' %>"></i>
+                <span><%= pageTrendUp ? 'Naik' : 'Turun' %> Rp <%= Math.abs(pageTrendDiff).toLocaleString('id-ID') %></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Due Soon -->
+      <div class="card">
+        <div class="card-hd"><h6><i class="bi bi-hourglass-split"></i> Hampir Jatuh Tempo</h6></div>
+        <div class="card-bd top-unpaid-list">
+          <% if (pageTopUnpaid.length===0) { %>
+            <div class="text-center text-muted" style="padding:24px;font-size:13px">Tidak ada tagihan mendekati jatuh tempo.</div>
+          <% } %>
+          <% pageTopUnpaid.forEach(u=>{ %>
+          <div class="top-unpaid-item">
+            <div class="due-meta">
+              <div class="due-main"><%= u.name %></div>
+              <div class="due-sub"><%= u.phone || '-' %></div>
+              <div class="due-sub">Periode <%= pageMonthNames[Number(u.period_month || 0)] || '-' %> <%= u.period_year %> • Jatuh tempo tgl <%= Number(u.due_day_snapshot || 0) || '-' %></div>
+            </div>
+            <div class="due-side">
+              <div class="due-amount">Rp <%= Number(u.amount || 0).toLocaleString('id-ID') %></div>
+              <% const dueClass = Number(u.days_left) < 0 ? 'danger' : (Number(u.days_left) <= 3 ? 'warn' : 'info'); %>
+              <span class="due-chip <%= dueClass %>">
+                <i class="bi <%= Number(u.days_left) < 0 ? 'bi-exclamation-circle' : (Number(u.days_left) <= 3 ? 'bi-alarm' : 'bi-calendar-event') %>"></i>
+                <% if (Number(u.days_left) < 0) { %>
+                  Terlambat <%= Math.abs(Number(u.days_left)) %> hari
+                <% } else if (Number(u.days_left) === 0) { %>
+                  Jatuh tempo hari ini
+                <% } else { %>
+                  <%= Number(u.days_left) %> hari lagi
+                <% } %>
+              </span>
+            </div>
+          </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Breakdown Table -->
+    <div class="card">
+      <div class="card-hd"><h6><i class="bi bi-table"></i> <%= tt('admin.reports.monthly_breakdown', 'Rincian Per Bulan') %> <%= pageFilterYear %></h6></div>
+      <div class="tbl-wrap">
+        <table class="dtbl">
+          <thead>
+            <tr>
+              <th><%= tt('admin.reports.table.month', 'Bulan') %></th>
+              <th class="num"><%= tt('admin.reports.table.total_invoices', 'Total Tagihan') %></th>
+              <th class="num"><%= tt('admin.reports.table.paid', 'Sudah Bayar') %></th>
+              <th class="num">Lunas Tepat</th>
+              <th class="num">Lunas Telat</th>
+              <th class="num"><%= tt('admin.reports.table.unpaid', 'Belum Bayar') %></th>
+              <th class="num"><%= tt('admin.reports.table.revenue', 'Pendapatan') %></th>
+              <th><%= tt('admin.reports.table.pct', 'Persentase') %></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% const mns = (pageLang === 'en')
+            ? ['January','February','March','April','May','June','July','August','September','October','November','December']
+            : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+             let grandTotal=0, grandPaid=0;
+             pageMonthlyData.forEach(m=>{ grandTotal+=m.total_invoices; grandPaid+=m.paid_count; }); %>
+          <% if(pageMonthlyData.length===0){ %>
+            <tr><td colspan="8" class="text-center text-muted" style="padding:24px"><%= tt('admin.reports.no_data_year_prefix', 'Belum ada data untuk tahun') %> <%= pageFilterYear %></td></tr>
+          <% } %>
+          <% pageMonthlyData.forEach(m=>{ const pct=m.total_invoices>0?Math.round(m.paid_count/m.total_invoices*100):0; %>
+            <tr>
+              <td class="fw6"><%= mns[m.month-1] %></td>
+              <td class="num"><%= m.total_invoices %></td>
+              <td class="num" style="color:var(--success)">
+                <div><%= m.paid_count %></div>
+                <div style="font-size:11px;color:var(--muted)">Rp <%= Number(m.paid_amount || 0).toLocaleString('id-ID') %></div>
+              </td>
+              <td class="num" style="color:var(--success)">
+                <div><%= Number(m.ontime_paid_count || 0) %></div>
+                <div style="font-size:11px;color:var(--muted)">Rp <%= Number(m.ontime_paid_amount || 0).toLocaleString('id-ID') %></div>
+              </td>
+              <td class="num" style="color:#fbbf24">
+                <div><%= Number(m.late_paid_count || 0) %></div>
+                <div style="font-size:11px;color:var(--muted)">Rp <%= Number(m.late_paid_amount || 0).toLocaleString('id-ID') %></div>
+              </td>
+              <td class="num" style="color:var(--danger)">
+                <div><%= m.unpaid_count %></div>
+                <div style="font-size:11px;color:var(--muted)">Rp <%= Number(m.unpaid_amount || 0).toLocaleString('id-ID') %></div>
+              </td>
+              <td class="num fw6" style="color:var(--success)">Rp <%= m.revenue.toLocaleString('id-ID') %></td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+                    <div <%- `style="width:${pct}%;height:100%;background:linear-gradient(90deg,#3fb950,#4ade80);border-radius:4px"` %>></div>
+                  </div>
+                  <span style="font-size:12px;color:var(--muted);width:32px"><%= pct %>%</span>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <div class="mobile-report-list">
+        <% if(pageMonthlyData.length===0){ %>
+          <div class="mobile-report-card">
+            <div class="mobile-report-name"><%= tt('admin.reports.no_data_year_prefix', 'Belum ada data untuk tahun') %> <%= pageFilterYear %></div>
+          </div>
+        <% } %>
+        <% pageMonthlyData.forEach(m=>{ const pct=m.total_invoices>0?Math.round(m.paid_count/m.total_invoices*100):0; %>
+          <div class="mobile-report-card">
+            <div class="mobile-report-title">
+              <div>
+                <div class="mobile-report-name"><%= mns[m.month-1] %></div>
+                <div class="mobile-report-sub"><%= m.total_invoices %> <%= tt('admin.reports.invoices_suffix', 'tagihan') %> tercatat</div>
+              </div>
+              <div class="mobile-report-amount">Rp <%= m.revenue.toLocaleString('id-ID') %></div>
+            </div>
+            <div class="mobile-report-grid">
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label"><%= tt('admin.reports.table.paid', 'Sudah Bayar') %></div>
+                <div class="mobile-report-value" style="color:var(--success)"><%= m.paid_count %></div>
+                <div class="mobile-report-sub">Rp <%= Number(m.paid_amount || 0).toLocaleString('id-ID') %></div>
+              </div>
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label">Lunas Tepat</div>
+                <div class="mobile-report-value" style="color:var(--success)"><%= Number(m.ontime_paid_count || 0) %></div>
+                <div class="mobile-report-sub">Rp <%= Number(m.ontime_paid_amount || 0).toLocaleString('id-ID') %></div>
+              </div>
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label">Lunas Telat</div>
+                <div class="mobile-report-value" style="color:#fbbf24"><%= Number(m.late_paid_count || 0) %></div>
+                <div class="mobile-report-sub">Rp <%= Number(m.late_paid_amount || 0).toLocaleString('id-ID') %></div>
+              </div>
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label"><%= tt('admin.reports.table.unpaid', 'Belum Bayar') %></div>
+                <div class="mobile-report-value" style="color:var(--danger)"><%= m.unpaid_count %></div>
+                <div class="mobile-report-sub">Rp <%= Number(m.unpaid_amount || 0).toLocaleString('id-ID') %></div>
+              </div>
+            </div>
+            <div class="report-progress">
+              <div class="report-progress-bar"><div class="report-progress-fill" style="width:<%= pct %>%"></div></div>
+              <div class="report-progress-text"><%= pct %>%</div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+    <!-- Recent Payments -->
+    <div class="card">
+      <div class="card-hd"><h6><i class="bi bi-clock-history"></i> <%= tt('admin.reports.recent_payments', 'Pembayaran Terakhir') %></h6></div>
+      <div class="tbl-wrap">
+        <table class="dtbl">
+          <thead>
+            <tr>
+              <th><%= tt('admin.reports.table.customer', 'Pelanggan') %></th>
+              <th><%= tt('admin.reports.table.period', 'Periode') %></th>
+              <th class="num"><%= tt('admin.reports.table.amount', 'Jumlah') %></th>
+              <th><%= tt('admin.reports.table.recorded_by', 'Dicatat Oleh') %></th>
+              <th><%= tt('admin.reports.table.time', 'Waktu') %></th>
+            </tr>
+          </thead>
+          <tbody>
+          <% const mn2 = (pageLang === 'en')
+            ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+            : ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']; %>
+          <% if(pageRecentPayments.length===0){%><tr><td colspan="5" class="text-center text-muted" style="padding:24px"><%= tt('admin.reports.no_payments', 'Belum ada pembayaran') %></td></tr><%}%>
+          <% pageRecentPayments.forEach(p=>{ %>
+            <tr>
+              <td class="fw6"><%= p.customer_name %></td>
+              <td><span class="badge bm"><%= mn2[p.period_month-1] %> <%= p.period_year %></span></td>
+              <td class="num fw6" style="color:var(--success)">Rp <%= p.amount.toLocaleString('id-ID') %></td>
+              <td style="font-size:12px"><%= p.paid_by_name||'-' %></td>
+              <td style="font-size:11px;color:var(--muted)"><%= p.paid_at ? new Date(p.paid_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-' %></td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <div class="mobile-report-list">
+        <% if(pageRecentPayments.length===0){ %>
+          <div class="mobile-report-card">
+            <div class="mobile-report-name"><%= tt('admin.reports.no_payments', 'Belum ada pembayaran') %></div>
+          </div>
+        <% } %>
+        <% pageRecentPayments.forEach(p=>{ %>
+          <div class="mobile-report-card">
+            <div class="mobile-report-title">
+              <div>
+                <div class="mobile-report-name"><%= p.customer_name %></div>
+                <div class="mobile-report-sub"><%= mn2[p.period_month-1] %> <%= p.period_year %> &bull; <%= p.paid_by_name||'-' %></div>
+              </div>
+              <div class="mobile-report-amount">Rp <%= p.amount.toLocaleString('id-ID') %></div>
+            </div>
+            <div class="mobile-report-grid">
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label"><%= t('admin.reports.table.period', 'Periode') %></div>
+                <div class="mobile-report-value"><%= mn2[p.period_month-1] %> <%= p.period_year %></div>
+              </div>
+              <div class="mobile-report-cell">
+                <div class="mobile-report-label"><%= t('admin.reports.table.time', 'Waktu') %></div>
+                <div class="mobile-report-value"><%= p.paid_at ? new Date(p.paid_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-' %></div>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const cssVars = getComputedStyle(document.body);
+const monthLabels = <%- JSON.stringify((pageLang === 'en')
+  ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  : ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']) %>;
+const revenueData = JSON.parse(`<%- JSON.stringify(pageChartData) %>`);
+const labels = monthLabels;
+const values = Array(12).fill(0);
+revenueData.forEach(d=>{
+  const monthIndex = Number(d?.month || 0) - 1;
+  if (monthIndex >= 0 && monthIndex < values.length) values[monthIndex] = Number(d?.revenue || 0);
+});
+const mutedColor = cssVars.getPropertyValue('--muted').trim() || '#7d8590';
+const primaryColor = cssVars.getPropertyValue('--primary').trim() || '#6366f1';
+const primaryDim = cssVars.getPropertyValue('--pdim').trim() || 'rgba(99,102,241,0.22)';
+const gridColor = document.body.dataset.theme === 'light'
+  ? 'rgba(148,163,184,0.18)'
+  : 'rgba(240,246,252,0.08)';
+
+new Chart(document.getElementById('revenueChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: "Tren Pendapatan",
+      data: values,
+      backgroundColor: 'rgba(99,102,241,0.08)',
+      borderColor: primaryColor,
+      borderWidth: 3,
+      fill: false,
+      tension: 0.38,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: primaryColor,
+      pointBorderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        displayColors: false,
+        backgroundColor: document.body.dataset.theme === 'light' ? '#ffffff' : '#111827',
+        titleColor: document.body.dataset.theme === 'light' ? '#1f2937' : '#f8fafc',
+        bodyColor: document.body.dataset.theme === 'light' ? '#1f2937' : '#f8fafc',
+        borderColor: gridColor,
+        borderWidth: 1,
+        callbacks: { label: ctx => 'Rp ' + ctx.raw.toLocaleString('id-ID') }
+      }
+    },
+    scales: {
+      x: { ticks: { color: mutedColor, maxRotation: 0 }, grid: { display:false } },
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: mutedColor,
+          maxTicksLimit: 4,
+          callback: v => 'Rp ' + (v/1000).toFixed(0)+'k'
+        },
+        grid: { color: gridColor, drawBorder:false }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

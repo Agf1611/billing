@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title><%= t('admin.broadcast.title', 'Broadcast WhatsApp') %> | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .wa-card-actions { border-top:1px solid var(--border); background:var(--bg2); display:flex; justify-content:flex-end; gap:10px; }
+    .wa-card-actions .btn { min-width:180px; justify-content:center; }
+    .wa-template-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+    .wa-template-note { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.5; }
+    .wa-template-note code { font-size:11px; }
+    .wa-inline-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .wa-stack { display:flex; flex-direction:column; gap:18px; }
+    .wa-muted-box {
+      border:1px dashed var(--border);
+      background:var(--bg2);
+      border-radius:16px;
+      padding:14px 16px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.55;
+    }
+    @media (max-width: 1024px) {
+      .wa-template-grid, .wa-inline-grid { grid-template-columns:1fr; }
+    }
+    @media (max-width: 768px) {
+      .wa-tabs { overflow:auto; padding-bottom:12px; scrollbar-width:none; }
+      .wa-tabs::-webkit-scrollbar { display:none; }
+      .wa-tab { white-space:nowrap; }
+      .wa-card-actions { flex-direction:column; }
+      .wa-card-actions .btn { width:100%; min-width:0; }
+      .topbar .tb-right { gap:10px; }
+      .card-bd .form-row { gap:12px; }
+      textarea.fc { min-height:180px; }
+    }
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'whatsapp', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-megaphone"></i> <%= t('admin.broadcast.title', 'Broadcast WhatsApp') %></div>
+    <div class="tb-right">
+      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+        <i class="bi bi-sun"></i>
+        <span>Terang</span>
+      </button>
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+  <div class="page">
+    <% const waTab = 'broadcast'; %>
+    <% const defaultBroadcastDelay = getSetting('whatsapp_broadcast_delay', 2); %>
+    <% const defaultGroupLink = String(getSetting('whatsapp_group_invite_link', '') || '').trim(); %>
+    <% const billingTemplate = String(getSetting('whatsapp_billing_message', templateDefaults.billing) || templateDefaults.billing); %>
+    <% const dueReminderTemplate = String(getSetting('whatsapp_due_reminder_message', templateDefaults.dueReminder) || templateDefaults.dueReminder); %>
+    <% const isolationTemplate = String(getSetting('whatsapp_isolation_message', templateDefaults.isolation) || templateDefaults.isolation); %>
+    <% const welcomeTemplate = String(getSetting('whatsapp_welcome_message', templateDefaults.welcome) || templateDefaults.welcome); %>
+    <% const reactivationTemplate = String(getSetting('whatsapp_reactivation_message', templateDefaults.reactivation) || templateDefaults.reactivation); %>
+    <% const paidTemplate = String(getSetting('whatsapp_paid_message', templateDefaults.paid) || templateDefaults.paid); %>
+
+    <% if (msg) { %>
+    <div class="alert alert-<%= msg.type==='success'?'s':'d' %>">
+      <i class="bi bi-<%= msg.type==='success'?'check-circle':'exclamation-circle' %>"></i> <%= msg.text %>
+    </div>
+    <% } %>
+
+    <div class="wa-tabs">
+      <a href="/admin/whatsapp" class="wa-tab <%= waTab==='status' ? 'active' : '' %>"><i class="bi bi-phone"></i> Status</a>
+      <a href="/admin/whatsapp/broadcast" class="wa-tab <%= waTab==='broadcast' ? 'active' : '' %>"><i class="bi bi-megaphone"></i> Broadcast & Template</a>
+    </div>
+
+    <div class="wa-stack">
+      <div class="card">
+        <div class="card-hd" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <h6><i class="bi bi-send-fill"></i> <%= t('admin.broadcast.send_mass', 'Kirim Pesan Massal') %></h6>
+          <div id="broadcastCounter" class="badge bp" style="display:none;">
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            Mengirim <span id="sentCount">0</span>/<span id="totalCount">0</span>
+            (<span id="failedCount" class="text-danger ms-1">0</span> gagal)
+          </div>
+        </div>
+        <form id="broadcastForm" method="POST" action="/admin/whatsapp/broadcast" data-confirm="Kirim pesan broadcast sekarang? Pastikan target dan isi pesannya sudah benar.">
+          <div class="card-bd">
+            <div class="alert alert-i" style="margin-bottom:14px;">
+              <i class="bi bi-info-circle"></i> Pesan akan dikirim memakai akun WhatsApp bot yang sedang terhubung. Gunakan jeda aman agar pengiriman lebih stabil.
+            </div>
+            <div class="alert alert-d alert-permanent" style="margin-bottom:18px; border:1px solid rgba(248,81,73,0.4);">
+              <i class="bi bi-exclamation-triangle-fill"></i> Gunakan broadcast seperlunya. Pengiriman massal berlebihan tetap berisiko dibatasi oleh WhatsApp.
+            </div>
+            <div class="wa-inline-grid" style="margin-bottom:14px;">
+              <div class="fg">
+                <label class="fl">Target Penerima</label>
+                <select class="fs" name="target" id="targetSelect" required>
+                  <option value="all">Semua Pelanggan</option>
+                  <option value="active">Hanya Pelanggan Aktif</option>
+                  <option value="suspended">Hanya Pelanggan Terisolir</option>
+                  <option value="unpaid">Hanya Pelanggan Menunggak</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Jeda Antar Pesan (Detik)</label>
+                <input class="fc" type="number" name="delay" value="<%= defaultBroadcastDelay %>" min="1" max="60">
+              </div>
+              <div class="fg">
+                <label class="fl">Limit per Jam</label>
+                <input class="fc" type="number" name="hourlyLimit" value="80" min="10" max="300">
+              </div>
+            </div>
+            <div class="fg">
+              <label class="fl">Isi Pesan WhatsApp</label>
+              <textarea class="fc" name="message" id="messageBox" rows="9" required></textarea>
+              <div class="wa-template-note">
+                Variabel yang bisa dipakai:
+                <code>{{nama}}</code>,
+                <code>{{paket}}</code>,
+                <code>{{tagihan}}</code>,
+                <code>{{rincian}}</code>,
+                <code>{{link}}</code>,
+                <code>{{portal_link}}</code>,
+                <code>{{invoice_link}}</code>,
+                <code>{{invoice_no}}</code>,
+                <code>{{login_id}}</code>,
+                <code>{{group_link}}</code>,
+                <code>{{group_line}}</code>.
+              </div>
+            </div>
+          </div>
+          <div class="card-bd wa-card-actions">
+            <button type="submit" class="btn btn-p" id="broadcastSubmitBtn"><i class="bi bi-send"></i> Mulai Broadcast</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <h6><i class="bi bi-alarm"></i> Pengingat Tagihan Otomatis</h6>
+        </div>
+        <form method="POST" action="/admin/whatsapp/auto-billing" onsubmit="return confirm('Simpan pengaturan pengingat tagihan otomatis?');">
+          <div class="card-bd">
+            <div class="wa-inline-grid">
+              <div class="fg">
+                <label class="fl">Status</label>
+                <label style="display:flex; align-items:center; gap:10px; font-weight:800; color:var(--text);">
+                  <input type="checkbox" name="enabled" value="1" <%= getSetting('whatsapp_auto_billing_enabled', false) ? 'checked' : '' %>>
+                  Aktifkan pengingat otomatis
+                </label>
+              </div>
+              <div class="fg">
+                <label class="fl">Jeda Antar Pesan (Detik)</label>
+                <input class="fc" type="number" name="delay" value="<%= defaultBroadcastDelay %>" min="1" max="60">
+              </div>
+              <div class="wa-muted-box">
+                Reminder berjalan otomatis pada H-3, H-2, dan H-1 sebelum jatuh tempo. Isi pesannya mengikuti template <b>Pengingat Jatuh Tempo</b> di bawah.
+              </div>
+            </div>
+          </div>
+          <div class="card-bd wa-card-actions">
+            <button type="submit" class="btn btn-p"><i class="bi bi-save"></i> Simpan Pengingat</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <h6><i class="bi bi-chat-square-heart"></i> Template Chat Pelanggan</h6>
+        </div>
+        <form method="POST" action="/admin/whatsapp/templates" onsubmit="return confirm('Simpan template WhatsApp pelanggan?');">
+          <div class="card-bd">
+            <div class="fg" style="margin-bottom:16px;">
+              <label class="fl">Link Grup WhatsApp Pelanggan</label>
+              <input class="fc" type="url" name="whatsapp_group_invite_link" value="<%= defaultGroupLink %>" placeholder="https://chat.whatsapp.com/...">
+              <div class="wa-template-note">Link ini opsional. Jika diisi, template welcome dan aktif kembali bisa otomatis menyisipkan link grup pelanggan.</div>
+            </div>
+
+            <div class="wa-template-grid">
+              <div class="fg">
+                <label class="fl">Template Selamat Datang</label>
+                <textarea class="fc" name="whatsapp_welcome_message" rows="9"><%= welcomeTemplate %></textarea>
+                <div class="wa-template-note">Dikirim otomatis setelah pelanggan baru berhasil dibuat.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Template Pengingat Jatuh Tempo</label>
+                <textarea class="fc" name="whatsapp_due_reminder_message" rows="9"><%= dueReminderTemplate %></textarea>
+                <div class="wa-template-note">Dipakai oleh reminder otomatis H-3, H-2, dan H-1 sebelum jatuh tempo.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Template Tagihan / Invoice</label>
+                <textarea class="fc" name="whatsapp_billing_message" rows="9"><%= billingTemplate %></textarea>
+                <div class="wa-template-note">Dipakai saat kirim tagihan manual dari menu tagihan atau broadcast terarah.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Template Lunas Bayar / Nota</label>
+                <textarea class="fc" name="whatsapp_paid_message" rows="9"><%= paidTemplate %></textarea>
+                <div class="wa-template-note">Dipakai saat pembayaran berhasil agar pelanggan menerima nota/link resmi.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Template Pelanggan Terisolir</label>
+                <textarea class="fc" name="whatsapp_isolation_message" rows="9"><%= isolationTemplate %></textarea>
+                <div class="wa-template-note">Dikirim saat layanan pelanggan diisolir karena menunggak.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Template Aktif Kembali</label>
+                <textarea class="fc" name="whatsapp_reactivation_message" rows="9"><%= reactivationTemplate %></textarea>
+                <div class="wa-template-note">Dikirim saat pelanggan diaktifkan kembali setelah pembayaran atau pembukaan isolir.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Panduan Variabel</label>
+                <div class="wa-muted-box">
+                  <div><code>{{nama}}</code> nama pelanggan</div>
+                  <div><code>{{paket}}</code> nama paket</div>
+                  <div><code>{{tagihan}}</code> total tagihan</div>
+                  <div><code>{{rincian}}</code> periode tagihan</div>
+                  <div><code>{{link}}</code> link cek tagihan</div>
+                  <div><code>{{portal_link}}</code> link login portal</div>
+                  <div><code>{{invoice_link}}</code> link invoice publik</div>
+                  <div><code>{{receipt_link}}</code> link nota / struk publik</div>
+                  <div><code>{{invoice_no}}</code> nomor invoice</div>
+                  <div><code>{{login_id}}</code> ID login pelanggan</div>
+                  <div><code>{{group_link}}</code> link grup WhatsApp</div>
+                  <div><code>{{group_line}}</code> baris otomatis berisi link grup</div>
+                  <div><code>{{alasan}}</code> alasan isolir</div>
+                  <div><code>{{paid_by}}</code> metode / petugas pembayaran</div>
+                  <div><code>{{paid_at}}</code> waktu pembayaran</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card-bd wa-card-actions">
+            <button type="submit" class="btn btn-p"><i class="bi bi-save"></i> Simpan Template</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <h6><i class="bi bi-envelope-paper-heart"></i> Test Message</h6>
+        </div>
+        <form method="POST" action="/admin/whatsapp/test-template" onsubmit="return confirm('Kirim test message ke nomor WhatsApp yang sedang tertaut?');">
+          <div class="card-bd">
+            <div class="wa-inline-grid">
+              <div class="fg">
+                <label class="fl">Pilih Template</label>
+                <select class="fs" name="template_key" required>
+                  <option value="welcome">Selamat Datang</option>
+                  <option value="due_reminder">Pengingat Jatuh Tempo</option>
+                  <option value="billing">Tagihan / Invoice</option>
+                  <option value="paid">Lunas Bayar / Nota</option>
+                  <option value="isolation">Pelanggan Terisolir</option>
+                  <option value="reactivation">Aktif Kembali</option>
+                </select>
+              </div>
+              <div class="wa-muted-box">
+                Test message akan dikirim ke nomor WhatsApp yang sedang tertaut ke bot. Jika nomor tertaut tidak terbaca, sistem akan memakai nomor admin WhatsApp yang tersimpan.
+              </div>
+            </div>
+          </div>
+          <div class="card-bd wa-card-actions">
+            <button type="submit" class="btn btn-p"><i class="bi bi-send-check"></i> Kirim Test Message</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const I18N = {
+  confirmChangeTarget: "Ganti target penerima? Pesan yang sedang diketik akan diganti ke template default target baru.",
+  sendingText: "Sedang Mengirim...",
+  donePrefix: "Selesai:",
+  sentSuffix: "terkirim",
+  startBtn: "Mulai Broadcast"
+};
+
+const templates = {
+  all: `Halo {{nama}},\n\nKami ingin menyampaikan informasi penting untuk pelanggan {{company}}.\n\nPaket Anda: {{paket}}\nPortal pelanggan: {{portal_link}}\nCek tagihan: {{link}}\n{{group_line}}\n\nTerima kasih.`,
+  active: `Halo {{nama}},\n\nTerima kasih sudah memakai layanan {{company}}.\n\nPaket Anda: {{paket}}\nPortal pelanggan: {{portal_link}}\nCek tagihan: {{link}}\n{{group_line}}\n\nSemoga layanan kami selalu nyaman dipakai.`,
+  suspended: `Halo {{nama}},\n\nLayanan internet Anda saat ini sedang dinonaktifkan sementara.\n\nTagihan belum lunas: Rp {{tagihan}}\nPeriode: {{rincian}}\nCek tagihan: {{link}}\nLihat invoice: {{invoice_link}}\n\nSilakan hubungi admin jika sudah melakukan pembayaran.`,
+  unpaid: `Halo {{nama}},\n\nIni pengingat tagihan internet Anda.\n\nPaket: {{paket}}\nTotal tagihan: Rp {{tagihan}}\nPeriode: {{rincian}}\nCek tagihan: {{link}}\nLihat invoice: {{invoice_link}}\n\nTerima kasih.`
+};
+
+const targetSelect = document.getElementById('targetSelect');
+const messageBox = document.getElementById('messageBox');
+
+if (targetSelect && messageBox) {
+  messageBox.value = templates[targetSelect.value];
+  targetSelect.addEventListener('change', function() {
+    if (confirm(I18N.confirmChangeTarget)) {
+      messageBox.value = templates[this.value];
+    }
+  });
+}
+
+setTimeout(() => {
+  document.querySelectorAll('.alert:not(.alert-permanent)').forEach((a) => {
+    a.style.display = 'none';
+  });
+}, 5000);
+
+const broadcastCounter = document.getElementById('broadcastCounter');
+const sentCountEl = document.getElementById('sentCount');
+const totalCountEl = document.getElementById('totalCount');
+const failedCountEl = document.getElementById('failedCount');
+const submitBtn = document.getElementById('broadcastSubmitBtn');
+const broadcastForm = document.getElementById('broadcastForm');
+
+if (broadcastForm) {
+  broadcastForm.addEventListener('submit', function (e) {
+    const msg = String(broadcastForm.dataset.confirm || '').trim();
+    if (msg && !confirm(msg)) e.preventDefault();
+  });
+}
+
+async function checkBroadcastStatus() {
+  try {
+    const res = await fetch('/admin/api/whatsapp/broadcast-status');
+    const status = await res.json();
+    if (status.active) {
+      broadcastCounter.style.display = 'inline-flex';
+      sentCountEl.textContent = status.sent;
+      totalCountEl.textContent = status.total;
+      failedCountEl.textContent = status.failed;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + I18N.sendingText;
+      return;
+    }
+
+    if (status.total > 0 && status.sent + status.failed === status.total) {
+      broadcastCounter.style.display = 'inline-flex';
+      broadcastCounter.className = 'badge bs';
+      broadcastCounter.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i> ${I18N.donePrefix} ${status.sent}/${status.total} ${I18N.sentSuffix}`;
+    } else {
+      broadcastCounter.style.display = 'none';
+    }
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-send"></i> ' + I18N.startBtn;
+  } catch (e) {
+    console.error('Status check failed', e);
+  }
+}
+
+setInterval(checkBroadcastStatus, 2000);
+checkBroadcastStatus();
+</script>
+</body>
+</html>

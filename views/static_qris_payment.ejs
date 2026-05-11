@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+
+<head>
+  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title><%= pageTitle || 'Pembayaran QRIS Statis' %> | <%= settings.company_header || 'Portal ISP' %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#f6faff">
+  <link rel="apple-touch-icon" href="<%= logoSrc %>">
+  <link rel="icon" href="<%= logoSrc %>">
+  <style>
+    :root {
+      --bg-top: #ffffff;
+      --bg-bottom: #edf5ff;
+      --surface: rgba(255,255,255,0.94);
+      --surface-soft: #f7fbff;
+      --line: rgba(98,128,184,0.16);
+      --text-main: #1a2740;
+      --text-soft: #697897;
+      --brand: #2d6bff;
+      --brand-deep: #204fd7;
+      --mint: #10a37f;
+      --shadow: 0 28px 70px rgba(41, 79, 143, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at top left, rgba(67, 156, 255, 0.18) 0%, rgba(67, 156, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(16, 163, 127, 0.12) 0%, rgba(16, 163, 127, 0) 28%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+    }
+
+    .wrap {
+      width: min(100%, 980px);
+      margin: 0 auto;
+      padding: calc(20px + env(safe-area-inset-top)) 18px calc(96px + env(safe-area-inset-bottom));
+    }
+
+    .shell,
+    .panel,
+    .guide,
+    .compact-note {
+      border-radius: 28px;
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.72);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .brand-mark {
+      width: 62px;
+      height: 62px;
+      flex: 0 0 62px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(236,244,255,0.95));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 16px 28px rgba(45, 107, 255, 0.12);
+    }
+
+    .brand-mark img {
+      width: 46px;
+      height: 46px;
+      object-fit: contain;
+    }
+
+    .brand-copy span {
+      display: block;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: 22px;
+      line-height: 1.08;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border-radius: 999px;
+      background: rgba(45, 107, 255, 0.08);
+      color: var(--brand-deep);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0;
+    }
+
+    .shell {
+      padding: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel,
+    .guide {
+      padding: 18px;
+    }
+
+    .qr-box {
+      padding: 12px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(247,250,255,0.98), rgba(240,246,255,0.92));
+      border: 1px solid var(--line);
+      text-align: center;
+    }
+
+    .qr-box img {
+      width: min(100%, 360px);
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      border-radius: 22px;
+      background: #fff;
+      padding: 12px;
+      box-shadow: inset 0 0 0 1px rgba(98,128,184,0.16);
+    }
+
+    .qr-box canvas {
+      width: min(100%, 360px);
+      aspect-ratio: 1 / 1;
+      display: block;
+      margin: 0 auto;
+      border-radius: 22px;
+      background: #fff;
+      padding: 12px;
+      box-shadow: inset 0 0 0 1px rgba(98,128,184,0.16);
+    }
+
+    .amount-card {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(45,107,255,0.96), rgba(77,140,255,0.92));
+      color: #fff;
+      text-align: center;
+      box-shadow: 0 18px 30px rgba(45,107,255,0.18);
+    }
+
+    .amount-card span {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.88;
+      margin-bottom: 6px;
+      font-weight: 800;
+    }
+
+    .amount-card strong {
+      display: block;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: clamp(28px, 5vw, 38px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+      font-weight: 800;
+    }
+
+    .code-badge {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.16);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .invoice-meta {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+    }
+
+    .meta-card strong,
+    .meta-card span {
+      display: block;
+    }
+
+    .meta-card strong {
+      margin-bottom: 5px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8c99b0;
+      font-weight: 800;
+    }
+
+    .meta-card span {
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--text-main);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .guide h2 {
+      margin: 0 0 12px;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .notice {
+      padding: 13px 15px;
+      border-radius: 18px;
+      background: rgba(45,107,255,0.07);
+      border: 1px solid rgba(45,107,255,0.14);
+      color: var(--brand-deep);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .btn-soft,
+    .btn-primary {
+      min-height: 46px;
+      padding: 0 16px;
+      border-radius: 15px;
+      font-size: 13px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .btn-soft {
+      border: 1px solid rgba(45,107,255,0.14);
+      background: rgba(45,107,255,0.06);
+      color: var(--brand-deep);
+    }
+
+    .btn-primary {
+      border: 0;
+      background: linear-gradient(135deg, var(--brand) 0%, #4d8cff 100%);
+      color: #fff;
+      box-shadow: 0 18px 30px rgba(45,107,255,0.18);
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+
+    @media (max-width: 860px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .wrap {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .brand-row {
+        align-items: flex-start;
+      }
+
+      .brand-mark {
+        width: 56px;
+        height: 56px;
+        flex-basis: 56px;
+      }
+
+      .brand-mark img {
+        width: 42px;
+        height: 42px;
+      }
+
+      .brand-copy span {
+        font-size: 19px;
+      }
+
+      .shell,
+      .panel,
+      .guide,
+      .compact-note {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .wrap {
+        padding-bottom: calc(40px + env(safe-area-inset-bottom));
+      }
+
+      .qr-box {
+        padding: 10px;
+      }
+
+      .qr-box img {
+        width: 100%;
+        max-width: none;
+        border-radius: 18px;
+        padding: 10px;
+      }
+
+      .amount-card strong {
+        font-size: 32px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .btn-soft,
+      .btn-primary {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <section class="shell" style="margin-bottom:16px">
+      <div class="brand-row">
+        <div class="brand-mark">
+          <img src="<%= logoSrc %>" alt="Logo <%= settings.company_header || 'Portal ISP' %>">
+        </div>
+        <div class="brand-copy">
+          <span><%= settings.company_header || 'Portal ISP' %></span>
+        </div>
+        <div style="margin-left:auto">
+          <div class="eyebrow"><i class="bi bi-qr-code-scan"></i> QRIS</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="shell">
+      <div class="grid">
+        <div class="panel">
+          <div class="qr-box">
+            <% if (qrisPayload) { %>
+              <canvas id="dynamicQrisCanvas" aria-label="QRIS dinamis <%= settings.company_header || 'Portal ISP' %>"></canvas>
+            <% } else { %>
+              <img src="<%= qrisUrl %>" alt="QRIS statik <%= settings.company_header || 'Portal ISP' %>">
+            <% } %>
+          </div>
+
+          <div class="amount-card">
+            <span>Nominal yang harus dibayar</span>
+            <strong>Rp <%= Number(exactAmount || 0).toLocaleString('id-ID') %></strong>
+            <% if (qrisCode) { %>
+              <div class="code-badge">
+                <i class="bi bi-hash"></i>
+                <span>Kode unik <%= String(qrisCode).padStart(3, '0') %></span>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <div class="guide">
+          <h2>Detail tagihan</h2>
+
+          <div class="invoice-meta">
+            <div class="meta-card">
+              <strong>Pelanggan</strong>
+              <span><%= customer?.name || invoice?.customer_name || '-' %></span>
+            </div>
+            <div class="meta-card">
+              <strong>Invoice</strong>
+              <span>INV-<%= invoice.id %> • Periode <%= invoice.period_month %>/<%= invoice.period_year %></span>
+            </div>
+            <div class="meta-card">
+              <strong>Tagihan dasar</strong>
+              <span>Rp <%= Number(invoice.amount || 0).toLocaleString('id-ID') %></span>
+            </div>
+            <% if (customer?.package_name || invoice?.package_name) { %>
+              <div class="meta-card">
+                <strong>Paket</strong>
+                <span><%= customer?.package_name || invoice?.package_name %></span>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="notice" style="margin-top:16px">
+            <% if (qrisPayload) { %>
+              Saat QR di-scan, nominal pembayaran akan langsung terisi otomatis sesuai tagihan ini. Setelah transfer berhasil, tekan cek lagi.
+            <% } else { %>
+              Bayar sesuai nominal di atas, lalu tekan cek lagi setelah transfer selesai.
+            <% } %>
+          </div>
+
+          <div class="actions">
+            <a href="<%= backUrl %>" class="btn-soft">
+              <i class="bi bi-arrow-left"></i>
+              <span>Kembali</span>
+            </a>
+            <a href="<%= backUrl %>" class="btn-primary">
+              <i class="bi bi-arrow-repeat"></i>
+              <span>Saya sudah transfer, cek lagi</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      &copy; <%= new Date().getFullYear() %> <%= settings.company_header || 'Portal ISP' %> • Pembayaran QRIS statik internal
+    </div>
+  </div>
+
+  <script>
+    const dynamicQrisPayload = <%- JSON.stringify(qrisPayload || '') %>;
+    if (dynamicQrisPayload && window.QRCode) {
+      const canvas = document.getElementById('dynamicQrisCanvas');
+      if (canvas) {
+        QRCode.toCanvas(canvas, dynamicQrisPayload, {
+          width: 360,
+          margin: 1,
+          color: {
+            dark: '#0f172a',
+            light: '#ffffff'
+          }
+        }).catch(() => {});
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/customer/' }).catch(() => {});
+      });
+    }
+  </script>
+</body>
+
+</html>

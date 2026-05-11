@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<%
+  function normalizePhoneLocal(input, defaultCountryCode = '62') {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    let digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (digits.startsWith(defaultCountryCode)) return digits;
+    if (digits.startsWith('0')) return defaultCountryCode + digits.slice(1);
+    if (digits.startsWith('8')) return defaultCountryCode + digits;
+    return defaultCountryCode + digits;
+  }
+  function formatPhoneLocal(input) {
+    const digits = normalizePhoneLocal(input);
+    return digits ? `+${digits}` : '-';
+  }
+  function terbilang(input) {
+    const angka = Math.floor(Math.abs(Number(input || 0)));
+    const words = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+    function say(n) {
+      if (n < 12) return words[n];
+      if (n < 20) return `${say(n - 10)} belas`;
+      if (n < 100) return `${say(Math.floor(n / 10))} puluh${n % 10 ? ` ${say(n % 10)}` : ''}`;
+      if (n < 200) return `seratus${n - 100 ? ` ${say(n - 100)}` : ''}`;
+      if (n < 1000) return `${say(Math.floor(n / 100))} ratus${n % 100 ? ` ${say(n % 100)}` : ''}`;
+      if (n < 2000) return `seribu${n - 1000 ? ` ${say(n - 1000)}` : ''}`;
+      if (n < 1000000) return `${say(Math.floor(n / 1000))} ribu${n % 1000 ? ` ${say(n % 1000)}` : ''}`;
+      if (n < 1000000000) return `${say(Math.floor(n / 1000000))} juta${n % 1000000 ? ` ${say(n % 1000000)}` : ''}`;
+      if (n < 1000000000000) return `${say(Math.floor(n / 1000000000))} miliar${n % 1000000000 ? ` ${say(n % 1000000000)}` : ''}`;
+      return `${say(Math.floor(n / 1000000000000))} triliun${n % 1000000000000 ? ` ${say(n % 1000000000000)}` : ''}`;
+    }
+    return angka > 0 ? `${say(angka).replace(/\s+/g, ' ').trim()} rupiah` : 'nol rupiah';
+  }
+  const requestedPrintStyle = typeof printStyle !== 'undefined' ? printStyle : 'a4';
+  const activeStyle = String(requestedPrintStyle || 'a4').toLowerCase() === 'receipt' ? 'receipt' : 'a4';
+  const companyLogo = settings?.company_logo_url || '/img/logo.png';
+  const companyName = company || settings?.company_header || 'Billing ISP';
+  const companyLegalName = settings?.company_legal_name || '';
+  const companyAddress = settings?.company_address || 'Alamat usaha belum diatur';
+  const companyPhone = (settings?.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0)
+    ? formatPhoneLocal(settings.whatsapp_admin_numbers[0])
+    : formatPhoneLocal(settings?.company_phone || '');
+  const companyEmail = settings?.company_email || '';
+  const companyManager = settings?.company_manager || 'Admin Pusat';
+  const signerTitle = settings?.invoice_signer_title || 'Finance';
+  const signatureUrl = settings?.invoice_signature_url || '';
+  const stampUrl = settings?.invoice_stamp_url || '';
+  const supportByEnabled = settings?.support_by_enabled === true || settings?.support_by_enabled === 'true' || settings?.support_by_enabled === 1 || settings?.support_by_enabled === '1';
+  const supportLogo = settings?.support_isp_logo_url || '';
+  const manualPaymentBank = settings?.manual_payment_bank || '-';
+  const manualPaymentAccountNumber = settings?.manual_payment_account_number || '-';
+  const manualPaymentAccountName = settings?.manual_payment_account_name || '-';
+  const manualPaymentNotes = settings?.manual_payment_notes || '';
+  const mns = (lang || 'id') === 'en'
+    ? ['January','February','March','April','May','June','July','August','September','October','November','December']
+    : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const shortMns = (lang || 'id') === 'en'
+    ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    : ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
+  const now = new Date();
+  const invoiceDate = invoice?.created_at ? new Date(invoice.created_at) : now;
+  const paidDate = invoice?.paid_at ? new Date(invoice.paid_at) : null;
+  const dueDay = Math.min(Number(invoice?.due_day_snapshot || customer?.isolate_day || 28), new Date(Number(invoice?.period_year || now.getFullYear()), Number(invoice?.period_month || (now.getMonth() + 1)), 0).getDate());
+  const dueDate = new Date(Number(invoice?.period_year || now.getFullYear()), Number(invoice?.period_month || (now.getMonth() + 1)) - 1, dueDay);
+  const invoiceCode = `INV-${invoice.id}-${invoice.period_month}-${invoice.period_year}`;
+  const printTarget = printBasePath || '';
+  const normalizedStatus = String(invoice?.status || '').trim().toLowerCase();
+  const isPaid = normalizedStatus === 'paid' || normalizedStatus === 'lunas';
+  const statusText = isPaid ? 'LUNAS' : 'BELUM LUNAS';
+  const documentLabel = isPaid ? 'NOTA PEMBAYARAN' : 'TAGIHAN INTERNET';
+  const documentLead = isPaid ? 'Bukti pembayaran layanan internet pelanggan.' : 'Dokumen penagihan layanan internet pelanggan.';
+  const documentMetaLabel = isPaid ? 'Pembayaran' : 'Penagihan';
+  const amountLabel = isPaid ? 'Total Dibayar' : 'Total Tagihan';
+  const paymentInfoTitle = isPaid ? 'Informasi Pembayaran' : 'Cara Pembayaran';
+  const footerDocText = isPaid ? 'Dokumen bukti pembayaran pelanggan yang sah.' : 'Dokumen tagihan pelanggan yang sah.';
+  const packageName = customer?.package_name || 'Internet Service';
+  const customerCode = customer?.customer_code || customer?.phone || customer?.genieacs_tag || customer?.pppoe_username || customer?.id || '-';
+  const customerPhoneDisplay = formatPhoneLocal(customer?.phone || '');
+  const customerAddress = String(customer?.address || customer?.install_address || '').trim() || '-';
+  const invoicePeriodLabel = `${shortMns[Number(invoice.period_month) - 1] || invoice.period_month} ${invoice.period_year}`;
+  const invoiceServiceLabel = `${packageName} - Periode ${invoicePeriodLabel}`;
+  const invoiceAmount = Number(invoice?.amount || 0);
+  const packageIncludePpn = Number(customer?.package_include_ppn || 0) === 1;
+  const packagePpnPercent = packageIncludePpn ? Math.max(0, Number(customer?.package_ppn_percent || 0)) : 0;
+  const packageTaxDivisor = 1 + (packagePpnPercent / 100);
+  const invoiceBaseAmount = packageIncludePpn && packageTaxDivisor > 0
+    ? Math.round(invoiceAmount / packageTaxDivisor)
+    : invoiceAmount;
+  const invoicePpnAmount = packageIncludePpn
+    ? Math.max(0, invoiceAmount - invoiceBaseAmount)
+    : 0;
+  const invoiceAmountWords = terbilang(invoiceAmount);
+  const supportBrandName = settings?.upstream_provider_name || companyLegalName || companyName;
+  const showSupportFooter = supportByEnabled && String(supportBrandName || '').trim().length > 0;
+  const supportLines = [companyAddress, companyPhone !== '-' ? `Telp/WA: ${companyPhone}` : '', companyEmail ? `Email: ${companyEmail}` : ''].filter(Boolean);
+%>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= activeStyle === 'receipt' ? (isPaid ? 'Struk Pembayaran' : 'Struk Tagihan') : documentLabel %> #<%= invoice.id %></title>
+  <style>
+    :root{
+      --ink:#0f172a;
+      --muted:#64748b;
+      --line:#dbe3f0;
+      --soft:#f8fbff;
+      --accent:#2563eb;
+      --accent-soft:#e8f1ff;
+      --success:#16a34a;
+      --warn:#f59e0b;
+      --shadow:0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; color:var(--ink); }
+    body{
+      font-family: "Segoe UI", Arial, sans-serif;
+      background:#eef5ff;
+      padding:12px;
+    }
+    .top-actions{
+      position:sticky;
+      top:0;
+      z-index:20;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin:0 auto 14px;
+      max-width:960px;
+    }
+    .top-actions a,
+    .top-actions button{
+      border:0;
+      border-radius:999px;
+      padding:12px 18px;
+      font:600 13px/1 "Segoe UI", Arial, sans-serif;
+      cursor:pointer;
+      text-decoration:none;
+      color:#fff;
+      background:var(--accent);
+      box-shadow:0 10px 24px rgba(37, 99, 235, 0.24);
+    }
+    .top-actions a.alt,
+    .top-actions button.alt{
+      background:#fff;
+      color:var(--ink);
+      border:1px solid rgba(15,23,42,.08);
+      box-shadow:none;
+    }
+    .invoice-sheet{
+      width:210mm;
+      margin:0 auto;
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 22px 54px rgba(15, 23, 42, 0.1);
+      overflow:hidden;
+      position:relative;
+      border:1px solid #d9e3f1;
+    }
+    .sheet-head{
+      display:grid;
+      grid-template-columns:1.18fr .82fr;
+      gap:10px;
+      padding:15px 16px 9px;
+      background:
+        radial-gradient(circle at top right, rgba(37,99,235,.14), transparent 42%),
+        linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border-bottom:1px solid var(--line);
+    }
+    .brand-box{
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .brand-box img{
+      width:48px;
+      height:48px;
+      object-fit:contain;
+      border-radius:14px;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.06);
+      padding:8px;
+    }
+    .brand-copy h1{
+      margin:0;
+      font-size:19px;
+      letter-spacing:.03em;
+      line-height:1.1;
+    }
+    .brand-copy h2{
+      margin:2px 0 5px;
+      font-size:9.5px;
+      letter-spacing:.25em;
+      color:var(--muted);
+      font-weight:700;
+      text-transform:uppercase;
+    }
+    .brand-copy p{
+      margin:2px 0;
+      color:var(--muted);
+      font-size:10px;
+      line-height:1.28;
+    }
+    .invoice-meta-card{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:11px 13px;
+      align-self:start;
+    }
+    .invoice-meta-card .label{
+      color:var(--muted);
+      text-transform:uppercase;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.16em;
+    }
+    .invoice-meta-card .title{
+      margin:6px 0 10px;
+      font-size:22px;
+      line-height:1;
+      letter-spacing:.05em;
+    }
+    .meta-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px 10px;
+    }
+    .meta-grid .meta-item small{
+      display:block;
+      color:var(--muted);
+      margin-bottom:4px;
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+    }
+    .meta-grid .meta-item strong{
+      display:block;
+      font-size:11px;
+    }
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      margin-top:9px;
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      background:<%= isPaid ? '#e8fff1' : '#fff7e7' %>;
+      color:<%= isPaid ? '#14803d' : '#b45309' %>;
+    }
+    .sheet-body{
+      padding:10px 16px 10px;
+    }
+    .hero-grid{
+      display:grid;
+      grid-template-columns:1.2fr .8fr;
+      gap:9px;
+      margin-bottom:9px;
+    }
+    .panel{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:11px 12px;
+      background:#fff;
+      page-break-inside:avoid;
+    }
+    .panel.soft{
+      background:var(--soft);
+    }
+    .panel h3{
+      margin:0 0 8px;
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      color:var(--muted);
+    }
+    .recipient-name{
+      margin:0 0 6px;
+      font-size:17px;
+      line-height:1.1;
+    }
+    .recipient-lines{
+      display:grid;
+      gap:5px;
+      color:#334155;
+      font-size:10.8px;
+    }
+    .recipient-lines strong{
+      color:var(--ink);
+    }
+    .summary-total{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      align-items:flex-end;
+      justify-content:center;
+      min-height:100%;
+    }
+    .summary-total small{
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      font-weight:700;
+      font-size:11px;
+    }
+    .summary-total strong{
+      font-size:22px;
+      color:var(--accent);
+      line-height:1;
+    }
+    .service-table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:6px;
+    }
+    .service-table th,
+    .service-table td{
+      padding:7px 6px;
+      border-bottom:1px solid var(--line);
+      vertical-align:top;
+      text-align:left;
+    }
+    .service-table th{
+      font-size:10px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.14em;
+    }
+    .service-table td strong{
+      font-size:11px;
+    }
+    .service-note{
+      color:var(--muted);
+      font-size:9.5px;
+      margin-top:3px;
+    }
+    .totals-card{
+      margin-top:8px;
+      padding:9px 11px;
+      border-radius:14px;
+      background:linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      border:1px solid var(--line);
+    }
+    .totals-row{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      padding:4px 0;
+      font-size:11px;
+    }
+    .totals-row + .totals-row{
+      border-top:1px dashed rgba(100,116,139,.22);
+    }
+    .totals-row.total{
+      font-size:15px;
+      font-weight:800;
+      color:var(--accent);
+    }
+    .footer-grid{
+      display:grid;
+      grid-template-columns:1.15fr .85fr;
+      gap:9px;
+      margin-top:9px;
+    }
+    .payment-card{
+      display:flex;
+      flex-direction:column;
+      gap:5px;
+    }
+    .bank-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:5px 9px;
+      border-radius:12px;
+      background:var(--accent-soft);
+      color:var(--accent);
+      font-weight:800;
+      width:max-content;
+      font-size:10px;
+    }
+    .bank-number{
+      font-size:18px;
+      font-weight:900;
+      letter-spacing:.06em;
+    }
+    .payment-mini{
+      display:grid;
+      gap:5px;
+      color:#334155;
+      font-size:10.5px;
+      line-height:1.35;
+    }
+    .info-list{
+      margin:0;
+      padding-left:16px;
+      color:#334155;
+      display:grid;
+      gap:3px;
+      font-size:9.5px;
+    }
+    .signature-card{
+      position:relative;
+      min-height:138px;
+      padding-top:4px;
+    }
+    .signature-label{
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      font-size:11px;
+      font-weight:700;
+    }
+    .signature-visual{
+      position:relative;
+      height:82px;
+      margin:4px 0 9px;
+      width:210px;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-start;
+      overflow:visible;
+    }
+    .signature-visual img.signature-img{
+      max-width:134px;
+      max-height:48px;
+      object-fit:contain;
+      position:relative;
+      z-index:2;
+      margin-left:28px;
+      margin-bottom:7px;
+      filter:contrast(1.02) saturate(1.04);
+    }
+    .signature-visual img.stamp-img{
+      width:92px;
+      height:92px;
+      object-fit:contain;
+      position:absolute;
+      left:0;
+      top:-4px;
+      z-index:3;
+      opacity:.9;
+      transform:rotate(-11deg);
+      transform-origin:center;
+      mix-blend-mode:multiply;
+    }
+    .signature-line{
+      border-top:2px solid #0f172a;
+      padding-top:7px;
+      width:210px;
+    }
+    .signature-line strong{
+      display:block;
+      font-size:12px;
+    }
+    .signature-line span{
+      color:var(--muted);
+      font-size:10px;
+    }
+    .status-card{
+      display:grid;
+      gap:9px;
+      align-content:start;
+    }
+    .status-box{
+      border:1px dashed var(--line);
+      border-radius:14px;
+      padding:9px 11px;
+      background:var(--soft);
+    }
+    .status-box strong{
+      display:block;
+      font-size:11px;
+      margin-bottom:7px;
+    }
+    .status-box .big{
+      font-size:16px;
+      font-weight:900;
+      color:<%= isPaid ? '#14803d' : '#b45309' %>;
+    }
+    .sheet-foot{
+      padding:7px 16px 9px;
+      border-top:1px solid var(--line);
+      color:var(--muted);
+      font-size:9.5px;
+      display:grid;
+      gap:8px;
+      justify-items:center;
+      text-align:center;
+    }
+    .sheet-foot-main{
+      display:block;
+    }
+    .support-footer{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      font-size:10px;
+      font-weight:700;
+      color:#334155;
+    }
+    .support-footer img{
+      width:20px;
+      height:20px;
+      object-fit:contain;
+      border-radius:6px;
+      background:#fff;
+      border:1px solid rgba(15,23,42,.08);
+      padding:2px;
+    }
+    .invoice-period-line{
+      font-size:11px;
+      color:var(--muted);
+      margin-top:2px;
+    }
+    .amount-words{
+      font-size:10px;
+      color:var(--muted);
+      text-align:right;
+      margin-top:4px;
+      font-style:italic;
+    }
+    .totals-row.ppn strong,
+    .totals-row.ppn span{
+      color:#0f766e;
+    }
+
+    .receipt-page{
+      max-width:70mm;
+      margin:0 auto;
+      background:#fff;
+      border-radius:24px;
+      box-shadow:var(--shadow);
+      padding:18px 14px 20px;
+      font-family:"Courier New", monospace;
+      color:#000;
+    }
+    .receipt-logo{
+      width:62px;
+      height:62px;
+      object-fit:contain;
+      display:block;
+      margin:0 auto 8px;
+    }
+    .receipt-center{text-align:center;}
+    .receipt-title{
+      font-size:16px;
+      font-weight:800;
+      text-transform:uppercase;
+      margin:0 0 4px;
+    }
+    .receipt-sub{
+      font-size:10px;
+      line-height:1.45;
+      color:#111;
+    }
+    .receipt-divider{
+      border-bottom:1px dashed #000;
+      margin:10px 0;
+    }
+    .receipt-row{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      font-size:11px;
+      margin:4px 0;
+    }
+    .receipt-row strong{ font-size:12px; }
+    .receipt-total{
+      font-size:15px;
+      font-weight:800;
+      text-align:right;
+      margin-top:6px;
+    }
+    .receipt-sign{
+      margin-top:16px;
+      text-align:right;
+      font-size:11px;
+    }
+    .receipt-sign img{
+      max-width:110px;
+      max-height:48px;
+      object-fit:contain;
+      display:block;
+      margin:6px 0 6px auto;
+    }
+
+    @media print{
+      @page{
+        size: <%= activeStyle === 'receipt' ? '80mm auto' : 'A4' %>;
+        margin:<%= activeStyle === 'receipt' ? '4mm' : '6mm' %>;
+      }
+      body{
+        background:#fff;
+        padding:0;
+      }
+      .top-actions{ display:none; }
+      .invoice-sheet,
+      .receipt-page{
+        box-shadow:none;
+        border-radius:0;
+        width:auto;
+        min-height:auto;
+        margin:0;
+      }
+      .sheet-head{ padding-top:6px; }
+      .sheet-foot{ padding-bottom:5px; }
+      .sheet-head,
+      .hero-grid,
+      .panel,
+      .totals-card,
+      .footer-grid,
+      .sheet-foot{
+        page-break-inside:avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-actions">
+    <% if (printTarget) { %>
+      <a class="<%= activeStyle === 'a4' ? '' : 'alt' %>" href="<%= printTarget %>?style=a4">Mode A4</a>
+      <a class="<%= activeStyle === 'receipt' ? '' : 'alt' %>" href="<%= printTarget %>?style=receipt">Mode Struk</a>
+    <% } %>
+    <button type="button" class="alt" onclick="window.print()">Print</button>
+  </div>
+
+  <% if (activeStyle === 'receipt') { %>
+    <div class="receipt-page">
+      <img class="receipt-logo" src="<%= companyLogo %>" alt="Logo" onerror="this.style.display='none'">
+      <div class="receipt-center">
+        <div class="receipt-title"><%= companyName %></div>
+        <% if (companyLegalName) { %><div class="receipt-sub"><%= companyLegalName %></div><% } %>
+        <div class="receipt-sub"><%= companyAddress %></div>
+        <div class="receipt-sub">Telp/WA: <%= companyPhone %></div>
+      </div>
+
+      <div class="receipt-divider"></div>
+
+      <div class="receipt-center" style="font-weight:800;"><%= isPaid ? 'STRUK PEMBAYARAN' : 'STRUK TAGIHAN' %></div>
+      <div class="receipt-row"><span>No. Invoice</span><strong><%= invoiceCode %></strong></div>
+      <div class="receipt-row"><span><%= isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih' %></span><strong><%= (paidDate || invoiceDate).toLocaleString('id-ID') %></strong></div>
+      <div class="receipt-row"><span>Status</span><strong><%= statusText %></strong></div>
+
+      <div class="receipt-divider"></div>
+
+      <div class="receipt-row"><span>Pelanggan</span><strong><%= customer.name %></strong></div>
+      <div class="receipt-row"><span>ID Pelanggan</span><strong><%= customerCode %></strong></div>
+      <div class="receipt-row"><span>Paket</span><strong><%= packageName %></strong></div>
+      <div class="receipt-row"><span>Periode</span><strong><%= invoicePeriodLabel %></strong></div>
+      <div class="receipt-row"><span>Jatuh Tempo</span><strong><%= dueDate.toLocaleDateString('id-ID') %></strong></div>
+
+      <div class="receipt-divider"></div>
+
+      <% if (packageIncludePpn) { %>
+        <div class="receipt-row"><span>Dasar Tagihan</span><strong>Rp <%= invoiceBaseAmount.toLocaleString('id-ID') %></strong></div>
+        <div class="receipt-row"><span>PPN <%= packagePpnPercent.toLocaleString('id-ID') %>%</span><strong>Rp <%= invoicePpnAmount.toLocaleString('id-ID') %></strong></div>
+      <% } %>
+      <div class="receipt-row"><span><%= isPaid ? 'Dibayar' : 'Tagihan' %></span><strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong></div>
+      <div class="receipt-total"><%= isPaid ? 'TOTAL DIBAYAR' : 'TOTAL TAGIHAN' %>: Rp <%= invoiceAmount.toLocaleString('id-ID') %></div>
+
+      <div class="receipt-divider"></div>
+
+      <div class="receipt-sub">
+        <%= isPaid ? 'Pembayaran melalui' : 'Pembayaran ke' %>: <strong><%= manualPaymentBank %></strong><br>
+        No. Rek: <strong><%= manualPaymentAccountNumber %></strong><br>
+        A/N: <strong><%= manualPaymentAccountName %></strong>
+      </div>
+      <% if (manualPaymentNotes) { %>
+        <div class="receipt-sub" style="margin-top:8px;"><%= manualPaymentNotes %></div>
+      <% } %>
+
+      <div class="receipt-sign">
+        Hormat Kami,<br>
+        <% if (signatureUrl) { %><img src="<%= signatureUrl %>" alt="Tanda Tangan"><% } %>
+        <strong><%= companyManager %></strong><br>
+        <span><%= signerTitle %></span>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="invoice-sheet">
+      <div class="sheet-head">
+        <div class="brand-box">
+          <img src="<%= companyLogo %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+          <div class="brand-copy">
+            <h1><%= companyLegalName || companyName %></h1>
+            <h2>Internet Service Provider</h2>
+            <% supportLines.forEach((line) => { %>
+              <p><%= line %></p>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="invoice-meta-card">
+          <div class="label">Invoice</div>
+          <div class="title">INVOICE</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;"><%= documentLabel %></div>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <small>No. Invoice</small>
+              <strong><%= invoiceCode %></strong>
+            </div>
+            <div class="meta-item">
+              <small><%= isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih' %></small>
+              <strong><%= (paidDate || invoiceDate).toLocaleDateString('id-ID') %></strong>
+            </div>
+            <div class="meta-item">
+              <small>Periode</small>
+              <strong><%= `1 - ${new Date(Number(invoice.period_year), Number(invoice.period_month), 0).getDate()} ${mns[Number(invoice.period_month) - 1]} ${invoice.period_year}` %></strong>
+            </div>
+            <div class="meta-item">
+              <small>Jatuh Tempo</small>
+              <strong><%= dueDate.toLocaleDateString('id-ID') %></strong>
+            </div>
+            <div class="meta-item">
+              <small>Status Invoice</small>
+              <strong><%= statusText %></strong>
+            </div>
+          </div>
+          <div class="status-pill">
+            <span>●</span>
+            <span><%= statusText %></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="hero-grid">
+          <div class="panel">
+            <h3>Tagihan Kepada</h3>
+            <h4 class="recipient-name"><%= customer.name %></h4>
+            <div class="recipient-lines">
+              <div><strong>ID Pelanggan:</strong> <%= customerCode %></div>
+              <% if (customerPhoneDisplay && customerPhoneDisplay !== '-') { %>
+                <div><strong>Telepon:</strong> <%= customerPhoneDisplay %></div>
+              <% } %>
+              <div><strong>Alamat:</strong> <%= customerAddress %></div>
+              <div><strong>Layanan:</strong> <%= packageName %></div>
+            </div>
+          </div>
+
+          <div class="panel soft">
+            <div class="summary-total">
+              <small><%= isPaid ? 'Total Pembayaran' : 'Total Tagihan' %></small>
+              <strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong>
+              <div class="amount-words"><%= invoiceAmountWords.charAt(0).toUpperCase() + invoiceAmountWords.slice(1) %></div>
+              <div style="color:var(--muted);font-size:10px;text-align:right;"><%= isPaid ? `Pembayaran diterima ${paidDate ? paidDate.toLocaleDateString('id-ID') : invoiceDate.toLocaleDateString('id-ID')}` : `Bayar sebelum ${dueDate.toLocaleDateString('id-ID')}` %></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Rincian Layanan</h3>
+          <table class="service-table">
+            <thead>
+              <tr>
+                <th style="width:56px;">No</th>
+                <th>Layanan</th>
+                <th style="width:150px;">Periode</th>
+                <th style="width:170px;">Keterangan</th>
+                <th style="width:170px;text-align:right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td>
+                  <strong><%= packageName %></strong>
+                  <div class="service-note">Internet broadband <%= Number(customer?.speed_down || 0) > 0 ? `${(Number(customer.speed_down) / 1000).toFixed(0)} Mbps` : '' %></div>
+                </td>
+                <td>
+                  <strong><%= invoicePeriodLabel %></strong>
+                  <div class="service-note"><%= `1 ${mns[Number(invoice.period_month) - 1]} - ${new Date(Number(invoice.period_year), Number(invoice.period_month), 0).getDate()} ${mns[Number(invoice.period_month) - 1]} ${invoice.period_year}` %></div>
+                </td>
+                <td>
+                  <strong><%= isPaid ? 'Pembayaran layanan internet' : 'Biaya langganan internet' %></strong>
+                  <div class="service-note"><%= isPaid ? 'Pembayaran pelanggan internet' : 'Tagihan pelanggan internet' %></div>
+                </td>
+                <td style="text-align:right;">
+                  <strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="totals-card">
+            <div class="totals-row">
+              <span>Subtotal</span>
+              <strong>Rp <%= invoiceBaseAmount.toLocaleString('id-ID') %></strong>
+            </div>
+            <% if (packageIncludePpn) { %>
+            <div class="totals-row ppn">
+              <span>PPN <%= packagePpnPercent.toLocaleString('id-ID') %>%</span>
+              <strong>Rp <%= invoicePpnAmount.toLocaleString('id-ID') %></strong>
+            </div>
+            <% } %>
+            <div class="totals-row">
+              <span>Biaya Lainnya</span>
+              <strong>Rp 0</strong>
+            </div>
+            <div class="totals-row total">
+              <span><%= isPaid ? 'Total Dibayar' : 'Total Tagihan' %></span>
+              <strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="footer-grid">
+          <div class="panel">
+            <h3><%= paymentInfoTitle %></h3>
+            <div class="payment-card">
+              <% if (manualPaymentBank !== '-' || manualPaymentAccountNumber !== '-' || manualPaymentAccountName !== '-') { %>
+              <span class="bank-pill">Transfer <%= manualPaymentBank %></span>
+              <div class="bank-number"><%= manualPaymentAccountNumber %></div>
+              <div style="font-size:15px;font-weight:700;"><%= manualPaymentAccountName %></div>
+              <% } else { %>
+              <span class="bank-pill">Konfirmasi Manual</span>
+              <% } %>
+              <div class="payment-mini">
+                <div><%= isPaid ? 'Tanggal bayar' : 'Jatuh tempo' %>: <strong><%= (isPaid ? (paidDate || invoiceDate) : dueDate).toLocaleDateString('id-ID') %></strong></div>
+                <div>Kontak admin: <strong><%= companyPhone %></strong></div>
+              </div>
+              <ul class="info-list">
+                <li><%= isPaid ? 'Dokumen ini menjadi bukti bahwa pembayaran telah terverifikasi.' : 'Invoice dinyatakan lunas setelah dana diterima dan terverifikasi.' %></li>
+                <% if (packageIncludePpn) { %><li>Nominal sudah termasuk PPN <%= packagePpnPercent.toLocaleString('id-ID') %>% sebesar Rp <%= invoicePpnAmount.toLocaleString('id-ID') %>.</li><% } %>
+                <% if (manualPaymentNotes) { %><li><%= manualPaymentNotes %></li><% } %>
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel signature-card">
+            <div class="signature-label">Pengesahan</div>
+            <div class="signature-visual">
+              <% if (signatureUrl) { %>
+                <img class="signature-img" src="<%= signatureUrl %>" alt="Tanda Tangan">
+              <% } %>
+              <% if (stampUrl) { %>
+                <img class="stamp-img" src="<%= stampUrl %>" alt="Cap Invoice">
+              <% } %>
+            </div>
+            <div class="signature-line">
+              <strong><%= companyManager %></strong>
+              <span><%= signerTitle %></span>
+            </div>
+            <div class="status-card" style="margin-top:12px;">
+              <div class="status-box">
+                <strong><%= isPaid ? 'Status Pembayaran' : 'Status Tagihan' %></strong>
+                <div class="big"><%= statusText %></div>
+                <div style="font-size:11px;color:#475569;margin-top:6px;">Dicetak pada <%= now.toLocaleString('id-ID') %></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-foot">
+        <div class="sheet-foot-main"><%= footerDocText %></div>
+        <% if (showSupportFooter) { %>
+          <div class="support-footer">
+            <% if (supportLogo) { %><img src="<%= supportLogo %>" alt="Logo Support" onerror="this.style.display='none'"><% } %>
+            <span>Support by <%= supportBrandName %></span>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  <% } %>
+
+  <script>
+    window.onload = function () {
+      setTimeout(function () {
+        window.print();
+      }, 450);
+    };
+  </script>
+</body>
+</html>
