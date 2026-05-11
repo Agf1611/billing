@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getSetting } = require('../config/settingsManager');
+const billingSvc = require('./billingService');
 
 function b64urlEncode(input) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(String(input), 'utf8');
@@ -127,6 +128,16 @@ function buildPublicInvoiceReceiptLink(invoice = {}, customer = {}, ttlMs = 48 *
   return `${printLink}?style=receipt`;
 }
 
+function formatInvoiceDueDate(invoice = {}, customer = {}, locale = 'id-ID') {
+  const dueAt = billingSvc.getInvoiceDueDate(invoice, customer?.isolate_day);
+  if (!(dueAt instanceof Date) || Number.isNaN(dueAt.getTime())) return '-';
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(dueAt);
+}
+
 function parsePublicInvoiceCode(code, secret, expectedCustomerId = 0) {
   const raw = String(code || '').trim();
   const [invoicePart, expPart, sigPart] = raw.split('-');
@@ -152,6 +163,7 @@ function defaultBillingWhatsappTemplate(companyName = getSetting('company_header
     'Paket: {{paket}}',
     'Total tagihan: Rp {{tagihan}}',
     'Periode: {{rincian}}',
+    'Jatuh tempo: {{jatuh_tempo}}',
     'Cek tagihan: {{link}}',
     'Lihat invoice: {{invoice_link}}',
     '',
@@ -171,6 +183,7 @@ function defaultDueReminderWhatsappTemplate(companyName = getSetting('company_he
     'Paket: {{paket}}',
     'Total tagihan: Rp {{tagihan}}',
     'Periode: {{rincian}}',
+    'Jatuh tempo: {{jatuh_tempo}}',
     'Cek tagihan: {{link}}',
     'Lihat invoice: {{invoice_link}}',
     '',
@@ -190,6 +203,7 @@ function defaultIsolationWhatsappTemplate(companyName = getSetting('company_head
     'Paket: {{paket}}',
     'Tagihan belum lunas: Rp {{tagihan}}',
     'Periode: {{rincian}}',
+    'Jatuh tempo: {{jatuh_tempo}}',
     'Alasan: {{alasan}}',
     'Cek tagihan: {{link}}',
     'Lihat invoice: {{invoice_link}}',
@@ -246,6 +260,7 @@ function defaultPaidWhatsappTemplate(companyName = getSetting('company_header', 
     'Paket: {{paket}}',
     'Invoice: {{invoice_no}}',
     'Periode: {{rincian}}',
+    'Jatuh tempo tagihan: {{jatuh_tempo}}',
     'Total dibayar: Rp {{tagihan}}',
     'Metode bayar: {{paid_by}}',
     'Waktu bayar: {{paid_at}}',
@@ -272,6 +287,19 @@ function fillWhatsappTemplate(template, replacements = {}) {
   return output;
 }
 
+function ensureDueDateLine(message, dueDateText) {
+  const text = String(message || '').trim();
+  const dueDate = String(dueDateText || '').trim();
+  if (!text || !dueDate || dueDate === '-') return text;
+  if (/jatuh tempo/i.test(text)) return text;
+
+  const dueLine = `Jatuh tempo: ${dueDate}`;
+  if (/^Periode:.*$/im.test(text)) {
+    return text.replace(/^Periode:.*$/im, (line) => `${line}\n${dueLine}`);
+  }
+  return `${text}\n${dueLine}`;
+}
+
 module.exports = {
   createSignedPublicToken,
   parsePublicInvoiceCode,
@@ -284,6 +312,7 @@ module.exports = {
   buildCustomerCheckBillingLink,
   buildPublicInvoicePrintLink,
   buildPublicInvoiceReceiptLink,
+  formatInvoiceDueDate,
   defaultBillingWhatsappTemplate,
   defaultDueReminderWhatsappTemplate,
   defaultIsolationWhatsappTemplate,
@@ -291,5 +320,6 @@ module.exports = {
   defaultReactivationWhatsappTemplate,
   defaultPaidWhatsappTemplate,
   defaultIsolationPortalNotice,
-  fillWhatsappTemplate
+  fillWhatsappTemplate,
+  ensureDueDateLine
 };

@@ -73,29 +73,6 @@ router.get('/', requireAgentSession, (req, res) => {
     });
   const txs = agentSvc.listAgentTransactions({ agentId, limit: 40 });
 
-  const digiflazzMarkup = Number(getSetting('digiflazz_markup', 0) || 0);
-  const digiflazzConfigured = Boolean(
-    String(getSetting('digiflazz_username', '') || '').trim() &&
-    String(getSetting('digiflazz_api_key', '') || '').trim()
-  );
-
-  const digiflazzCatalogProducts = digiflazzConfigured
-    ? agentSvc.listDigiflazzProducts({ include_inactive: false, limit: 3000 })
-    : [];
-
-  const digiflazzBrandsMap = new Map();
-  for (const p of (digiflazzCatalogProducts || [])) {
-    const brandName = String(p.brand || '').trim() || '-';
-    const categoryName = String(p.category || '').trim() || '-';
-    const key = `${categoryName}__${brandName}`;
-    if (!digiflazzBrandsMap.has(key)) {
-      digiflazzBrandsMap.set(key, { key, name: brandName, category: categoryName, items: [] });
-    }
-    digiflazzBrandsMap.get(key).items.push(p);
-  }
-  const digiflazzBrandsData = Array.from(digiflazzBrandsMap.values());
-  const digiflazzCategories = Array.from(new Set((digiflazzCatalogProducts || []).map(p => String(p.category || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-
   res.render('agent/dashboard', {
     title: 'Dashboard Agent',
     company: company(),
@@ -104,10 +81,6 @@ router.get('/', requireAgentSession, (req, res) => {
     invoices: visibleInvoices,
     prices,
     txs,
-    digiflazzMarkup,
-    digiflazzConfigured,
-    digiflazzCategories,
-    digiflazzBrandsData,
     msg: flashMsg(req),
     receipt: popReceipt(req)
   });
@@ -208,6 +181,20 @@ router.post('/sell-voucher', requireAgentSession, express.urlencoded({ extended:
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
   res.redirect('/agent');
+});
+
+router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }), (req, res, next) => {
+  req.session._msg = { type: 'warning', text: 'Layanan produk digital sudah dinonaktifkan.' };
+  return res.redirect('/agent');
+});
+
+router.post('/api/pulsa/order', requireAgentSession, express.json({ limit: '50kb' }), (req, res, next) => {
+  return res.status(410).json({ success: false, message: 'Layanan produk digital sudah dinonaktifkan.' });
+});
+
+router.post('/pulsa/check', requireAgentSession, express.urlencoded({ extended: true }), (req, res, next) => {
+  req.session._msg = { type: 'warning', text: 'Cek status produk digital sudah dinonaktifkan.' };
+  return res.redirect('/agent');
 });
 
 router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }), async (req, res) => {

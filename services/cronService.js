@@ -13,10 +13,12 @@ const {
   buildCustomerCheckBillingLink,
   buildCustomerPortalLoginLink,
   buildPublicInvoicePrintLink,
+  formatInvoiceDueDate,
   defaultBillingWhatsappTemplate,
   defaultDueReminderWhatsappTemplate,
   defaultIsolationWhatsappTemplate,
-  fillWhatsappTemplate
+  fillWhatsappTemplate,
+  ensureDueDateLine
 } = require('./publicLinkService');
 
 function getEffectiveCustomerBillingDay(rawDay, month, year) {
@@ -84,6 +86,7 @@ function buildWhatsappMessageContext(customer, invoices = []) {
     paket: String(customer?.package_name || primaryInvoice?.package_name || '-').trim() || '-',
     tagihan: Number(totalTagihan || 0).toLocaleString('id-ID'),
     rincian: buildInvoicePeriods(invoiceList),
+    jatuh_tempo: primaryInvoice ? formatInvoiceDueDate(primaryInvoice, customer) : '-',
     link: buildCustomerCheckBillingLink(customer),
     portal_link: buildCustomerPortalLoginLink(),
     invoice_link: primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer) : buildCustomerCheckBillingLink(customer),
@@ -155,12 +158,13 @@ function startCronJobs() {
               defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))
             ).trim();
             if (c.phone) {
+              const messageContext = buildWhatsappMessageContext(c, unpaidInvoices);
               await sendCustomerWhatsapp(
                 c.phone,
-                fillWhatsappTemplate(isolationTemplate, {
-                  ...buildWhatsappMessageContext(c, unpaidInvoices),
+                ensureDueDateLine(fillWhatsappTemplate(isolationTemplate, {
+                  ...messageContext,
                   alasan: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.'
-                })
+                }), messageContext.jatuh_tempo)
               );
             }
             
@@ -266,11 +270,12 @@ function startCronJobs() {
           await new Promise(r => setTimeout(r, randomDelay));
 
           const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
+          const messageContext = buildWhatsappMessageContext(c, unpaidInvoices);
 
-          let formattedMsg = fillWhatsappTemplate(
+          let formattedMsg = ensureDueDateLine(fillWhatsappTemplate(
             reminderTemplate,
-            buildWhatsappMessageContext(c, unpaidInvoices)
-          );
+            messageContext
+          ), messageContext.jatuh_tempo);
 
           // Add subtle variation untuk menghindari spam detection
           formattedMsg = addMessageVariation(formattedMsg, i);

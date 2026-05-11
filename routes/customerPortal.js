@@ -21,8 +21,10 @@ const {
   buildCustomerPortalLoginLink,
   buildPublicInvoicePrintLink,
   buildPublicInvoiceReceiptLink,
+  formatInvoiceDueDate,
   defaultPaidWhatsappTemplate,
-  fillWhatsappTemplate
+  fillWhatsappTemplate,
+  ensureDueDateLine
 } = require('../services/publicLinkService');
 const { buildDynamicQrisPayload } = require('../services/qrisService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
@@ -112,11 +114,13 @@ function buildPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl)
   ).trim();
   const invoiceLink = buildPublicInvoicePrintLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
   const receiptLink = buildPublicInvoiceReceiptLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
-  return fillWhatsappTemplate(template, {
+  const dueDateText = formatInvoiceDueDate(invoice, customer);
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
     nama: customer?.name || 'Pelanggan',
     paket: String(customer?.package_name || invoice?.package_name || '-').trim() || '-',
     tagihan: Number(invoice?.amount || 0).toLocaleString('id-ID'),
     rincian: `${invoice?.period_month || '-'}/${invoice?.period_year || '-'}`,
+    jatuh_tempo: dueDateText,
     link: buildCustomerCheckBillingLink(customer, { baseUrl }),
     portal_link: buildCustomerPortalLoginLink({ baseUrl }),
     invoice_link: invoiceLink || buildCustomerCheckBillingLink(customer, { baseUrl }),
@@ -128,7 +132,7 @@ function buildPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl)
     company: settings?.company_header || 'ISP',
     paid_by: String(gateway || '-').trim() || '-',
     paid_at: new Date().toLocaleString('id-ID')
-  });
+  }), dueDateText);
 }
 
 async function withTimeout(promise, timeoutMs, label, fallbackValue = null) {

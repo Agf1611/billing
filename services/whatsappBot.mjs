@@ -23,6 +23,16 @@ const rateLimitStore = new Map(); // Format: { phone: { count: 0, lastReset: tim
 const MAX_COMMANDS_PER_MINUTE = 10;
 const COMMAND_COOLDOWN_MS = 2000; // 2 detik cooldown antar perintah
 const commandCooldownStore = new Map(); // Format: { phone: lastCommandTimestamp }
+const recentOutgoingMessages = new Map();
+const OUTGOING_MESSAGE_DEDUPE_TTL_MS = 30000;
+
+function pruneRecentOutgoingMessages(now = Date.now()) {
+  for (const [key, ts] of recentOutgoingMessages.entries()) {
+    if (!ts || (now - ts) >= OUTGOING_MESSAGE_DEDUPE_TTL_MS) {
+      recentOutgoingMessages.delete(key);
+    }
+  }
+}
 
 function checkRateLimit(phone) {
   const now = Date.now();
@@ -348,10 +358,6 @@ function parseCommand(text, isAdmin) {
     return { cmd: 'listonu', admin: true };
   }
 
-  if (isAdmin && ['saldodigi', 'ceksaldodigi', 'digisaldo', 'ceksaldo.digi'].includes(cmd)) {
-    return { cmd: 'digiflazz_balance', admin: true };
-  }
-
   if (isAdmin && ['topup', 'topupagent', 'tfagent', 'transferagent', 'depositagent'].includes(cmd) && parts.length >= 3) {
     return { cmd: 'topupagent', admin: true, agentKey: parts[1], amount: parts[2], note: parts.slice(3).join(' ') };
   }
@@ -387,14 +393,6 @@ function parseCommand(text, isAdmin) {
   }
   if (isAdmin && cmd === 'gantisandi' && parts.length >= 3) {
     return { cmd: 'gantisandi', admin: true, targetTag: parts[1], rest: parts.slice(2).join(' ') };
-  }
-
-  if (['pulsa', 'belipulsa'].includes(cmd) && parts.length >= 3) {
-    const sellPrice = parts.length >= 4 ? Number(String(parts[3]).replace(/[^\d]/g, '')) : 0;
-    return { cmd: 'agent_pulsa', sku: parts[1], target: parts[2], sellPrice: Number.isFinite(sellPrice) ? sellPrice : 0 };
-  }
-  if (['cekpulsa', 'statuspulsa'].includes(cmd) && parts.length >= 2) {
-    return { cmd: 'agent_pulsa_check', txId: parts[1] };
   }
 
   // Customer Commands
@@ -524,8 +522,6 @@ ${sep}
 🏢 *${companyHeader}*
 ${sep}
 
-🏦 *Digiflazz:*
-💳 \`saldodigi\` — Cek saldo deposit Digiflazz
 
 👥 *Agent:*
 💸 \`topup\` _nama/username/id/nohp nominal_ — Transfer saldo ke agent
@@ -556,9 +552,7 @@ ${sep}
 📶 \`gantissid\` _TAG_ _namaSSID_ — Ubah SSID ONU
 🔑 \`gantisandi\` _TAG_ _password_ — Ubah password ONU (min 8)
 
-⚡ *Digiflazz (Admin):*
 ⚡ \`pulsa\` _SKU TARGET_ — Transaksi pulsa/produk
-🔎 \`cekpulsa\` _TXID_ — Cek status transaksi
 
 ${sep}
 ${footerInfo ? footerInfo : '💡 _Tanpa TAG = perintah untuk device yang terikat ke WA Anda._'}`;
@@ -686,22 +680,34 @@ export async function ensureWhatsAppReady(maxWaitMs = 20000) {
 
 export async function sendWA(to, text) {
   const messageText = String(text || '').trim();
+  if (!messageText) return false;
+  let digits = String(to || '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (digits.startsWith('0')) {
+    digits = '62' + digits.slice(1);
+  }
+  const now = Date.now();
+  pruneRecentOutgoingMessages(now);
+  const dedupeKey = `${digits}|${messageText}`;
+  const existing = Number(recentOutgoingMessages.get(dedupeKey) || 0);
+  if (existing && (now - existing) < OUTGOING_MESSAGE_DEDUPE_TTL_MS) {
+    logger.warn(`WhatsApp: Duplikat pesan dicegah ke ${digits}.`);
+    return true;
+  }
+
   const ready = await ensureWhatsAppReady(20000);
   if (!ready || !currentSock || whatsappStatus.connection !== 'open') {
     logger.warn('WhatsApp: Gagal kirim pesan, bot belum terhubung.');
     return false;
   }
-  if (!messageText) return false;
+
+  recentOutgoingMessages.set(dedupeKey, now);
   try {
-    let digits = String(to || '').replace(/\D/g, '');
-    if (!digits) return false;
-    if (digits.startsWith('0')) {
-      digits = '62' + digits.slice(1);
-    }
     const jid = String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`;
     await currentSock.sendMessage(jid, { text: messageText });
     return true;
   } catch (e) {
+    recentOutgoingMessages.delete(dedupeKey);
     logger.error('Gagal kirim WA:', e.message);
     return false;
   }
@@ -905,12 +911,6 @@ export async function startWhatsAppBot(options = {}) {
           if (isAdmin) body += '\n\n_Anda admin — ketik `admin` untuk perintah kelola semua tag._';
           const phone = getPhoneFromKey(m.key);
           const agent = phone ? agentSvc.getAgentByPhone(phone) : null;
-          if (agent) {
-            body +=
-              '\n\n📱 *MENU AGENT*\n' +
-              '⚡ `pulsa SKU TARGET` — Beli pulsa/produk Digiflazz\n' +
-              '🔎 `cekpulsa TXID` — Cek status transaksi pulsa';
-          }
           await reply(body);
           continue;
         }
@@ -920,7 +920,9 @@ export async function startWhatsAppBot(options = {}) {
             await reply('❌ Perintah ini khusus nomor admin (pengaturan whatsapp_admin_numbers).');
             continue;
           }
-          await reply(getAdminMenuText());
+          await reply(
+            getAdminMenuText()
+          );
           continue;
         }
 
@@ -1136,20 +1138,6 @@ export async function startWhatsAppBot(options = {}) {
           continue;
         }
 
-        if (parsed.admin && parsed.cmd === 'digiflazz_balance') {
-          if (!isAdmin) {
-            await reply('❌ Akses ditolak. Perintah ini khusus admin.');
-            continue;
-          }
-          try {
-            const r = await agentSvc.digiflazzCheckBalance();
-            await reply(`🏦 *SALDO DIGIFLAZZ*\n\n💳 Deposit: Rp ${Number(r?.deposit || 0).toLocaleString('id-ID')}`);
-          } catch (e) {
-            await reply('❌ Gagal cek saldo Digiflazz: ' + e.message);
-          }
-          continue;
-        }
-
         if (parsed.admin && parsed.cmd === 'topupagent') {
           if (!isAdmin) {
             await reply('❌ Akses ditolak. Perintah ini khusus admin.');
@@ -1213,119 +1201,6 @@ export async function startWhatsAppBot(options = {}) {
             );
           } catch (e) {
             await reply('❌ Gagal topup agent: ' + e.message);
-          }
-          continue;
-        }
-
-        if (parsed.cmd === 'agent_pulsa') {
-          try {
-            const phone = getPhoneFromKey(m.key);
-            const agent = phone ? agentSvc.getAgentByPhone(phone) : null;
-
-            const sku = String(parsed.sku || '').trim();
-            const target = String(parsed.target || '').trim();
-            const sellPrice = Math.max(0, Math.floor(Number(parsed.sellPrice || 0) || 0));
-
-            if (agent) {
-              const result = await agentSvc.buyPulsaAsAgent(agent.id, sku, target, { sell_price: sellPrice });
-              const status = String(result?.tx?.digi_status || 'pending').toLowerCase();
-              const icon = status === 'success' ? '✅' : status === 'failed' ? '❌' : '⏳';
-
-              const lines = [];
-              lines.push(`${icon} *TRANSAKSI PULSA*`);
-              lines.push('');
-              lines.push(`👤 Agent: *${agent.name}* (@${agent.username})`);
-              lines.push(`📦 SKU: *${sku}*`);
-              lines.push(`🎯 Target: *${target}*`);
-              lines.push(`🧾 TX ID: *#${result?.tx?.id || '-'}*`);
-              lines.push(`🧾 Ref ID: *${result?.tx?.digi_ref_id || '-'}*`);
-              lines.push(`📡 Status: *${status.toUpperCase()}*`);
-              if (result?.tx?.digi_sn) lines.push(`🔢 SN: *${result.tx.digi_sn}*`);
-              if (result?.tx?.digi_message) lines.push(`💬 Pesan: ${result.tx.digi_message}`);
-              lines.push(`💰 Potong Saldo: Rp ${(Number(result?.tx?.amount_sell || 0) || 0).toLocaleString('id-ID')}`);
-              lines.push(`💳 Sisa Saldo: Rp ${(Number(result?.agent?.balance || 0) || 0).toLocaleString('id-ID')}`);
-              if (status === 'pending') lines.push(`\nKetik: \`cekpulsa ${result?.tx?.id || ''}\` untuk cek ulang.`);
-              await reply(lines.join('\n'));
-              continue;
-            }
-
-            if (!isAdmin) {
-              await reply('❌ Nomor ini tidak terdaftar sebagai agent.');
-              continue;
-            }
-
-            const result = await agentSvc.buyPulsaAsAdmin({
-              sku,
-              target,
-              actorPhone: phone || '',
-              actorName: 'WhatsApp Admin'
-            });
-            const status = String(result?.tx?.status || 'pending').toLowerCase();
-            const icon = status === 'success' ? '✅' : status === 'failed' ? '❌' : '⏳';
-            const lines = [];
-            lines.push(`${icon} *TRANSAKSI PULSA (ADMIN)*`);
-            lines.push('');
-            lines.push(`📦 SKU: *${sku}*`);
-            lines.push(`🎯 Target: *${target}*`);
-            lines.push(`🧾 TX ID: *#${result?.tx?.id || '-'}*`);
-            lines.push(`🧾 Ref ID: *${result?.tx?.ref_id || '-'}*`);
-            lines.push(`📡 Status: *${status.toUpperCase()}*`);
-            if (result?.tx?.sn) lines.push(`🔢 SN: *${result.tx.sn}*`);
-            if (result?.tx?.message) lines.push(`💬 Pesan: ${result.tx.message}`);
-            if (Number(result?.tx?.price || 0) > 0) lines.push(`💰 Harga Vendor: Rp ${Number(result.tx.price || 0).toLocaleString('id-ID')}`);
-            if (status === 'pending') lines.push(`\nKetik: \`cekpulsa ${result?.tx?.id || ''}\` untuk cek ulang.`);
-            await reply(lines.join('\n'));
-          } catch (e) {
-            await reply('❌ Gagal transaksi pulsa: ' + e.message);
-          }
-          continue;
-        }
-
-        if (parsed.cmd === 'agent_pulsa_check') {
-          try {
-            const phone = getPhoneFromKey(m.key);
-            const agent = phone ? agentSvc.getAgentByPhone(phone) : null;
-            const txId = Number(String(parsed.txId || '').replace(/[^\d]/g, '')) || 0;
-            if (!txId) {
-              await reply('❌ Format salah. Gunakan: `cekpulsa TXID`');
-              continue;
-            }
-
-            if (agent) {
-              const result = await agentSvc.checkPulsaStatusAsAgent(agent.id, txId);
-              const status = String(result?.tx?.digi_status || 'pending').toLowerCase();
-              const icon = status === 'success' ? '✅' : status === 'failed' ? '❌' : '⏳';
-              const lines = [];
-              lines.push(`${icon} *STATUS PULSA*`);
-              lines.push('');
-              lines.push(`🧾 TX ID: *#${txId}*`);
-              lines.push(`🧾 Ref ID: *${result?.tx?.digi_ref_id || '-'}*`);
-              lines.push(`📡 Status: *${status.toUpperCase()}*`);
-              if (result?.tx?.digi_sn) lines.push(`🔢 SN: *${result.tx.digi_sn}*`);
-              if (result?.tx?.digi_message) lines.push(`💬 Pesan: ${result.tx.digi_message}`);
-              await reply(lines.join('\n'));
-              continue;
-            }
-
-            if (!isAdmin) {
-              await reply('❌ Nomor ini tidak terdaftar sebagai agent.');
-              continue;
-            }
-
-            const result = await agentSvc.checkPulsaStatusAsAdmin(txId);
-            const status = String(result?.tx?.status || 'pending').toLowerCase();
-            const icon = status === 'success' ? '✅' : status === 'failed' ? '❌' : '⏳';
-            const lines = [];
-            lines.push(`${icon} *STATUS PULSA (ADMIN)*`);
-            lines.push('');
-            lines.push(`🧾 TX ID: *#${txId}*`);
-            lines.push(`🧾 Ref ID: *${result?.tx?.ref_id || '-'}*`);
-            lines.push(`📡 Status: *${status.toUpperCase()}*`);
-            if (result?.tx?.sn) lines.push(`🔢 SN: *${result.tx.sn}*`);
-            if (result?.tx?.message) lines.push(`💬 Pesan: ${result.tx.message}`);
-            await reply(lines.join('\n'));
-          } catch (e) {
-            await reply('❌ Gagal cek status pulsa: ' + e.message);
           }
           continue;
         }

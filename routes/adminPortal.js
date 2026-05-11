@@ -35,6 +35,7 @@ const {
   buildCustomerPortalLoginLink,
   buildPublicInvoicePrintLink,
   buildPublicInvoiceReceiptLink,
+  formatInvoiceDueDate,
   defaultBillingWhatsappTemplate,
   defaultDueReminderWhatsappTemplate,
   defaultIsolationWhatsappTemplate,
@@ -42,6 +43,7 @@ const {
   defaultReactivationWhatsappTemplate,
   defaultPaidWhatsappTemplate,
   fillWhatsappTemplate,
+  ensureDueDateLine,
   resolveAppBaseUrl,
   resolveRequestBaseUrl
 } = require('../services/publicLinkService');
@@ -333,6 +335,7 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
     paket: packageLabel,
     tagihan: Number(totalTagihan || Number(primaryInvoice?.amount || 0) || 0).toLocaleString('id-ID'),
     rincian: formatInvoicePeriods(primaryInvoice ? invoiceList.length ? invoiceList : [primaryInvoice] : invoiceList),
+    jatuh_tempo: primaryInvoice ? formatInvoiceDueDate(primaryInvoice, customer) : '-',
     link: checkBillingLink,
     portal_link: portalLink,
     invoice_link: invoiceLink || checkBillingLink,
@@ -350,10 +353,10 @@ function buildBillingWhatsappMessage(customer, invoices = [], fallbackInvoice = 
     defaultBillingWhatsappTemplate(getSetting('company_header', 'ISP'))
   ).trim();
   const payload = buildWhatsappCustomerPayload(customer, invoices, fallbackInvoice, options);
-  return fillWhatsappTemplate(template, {
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
     ...payload,
     company: getSetting('company_header', 'ISP')
-  });
+  }), payload.jatuh_tempo);
 }
 
 function buildIsolationWhatsappMessage(customer, invoices = [], reasonText = '', options = {}) {
@@ -362,11 +365,11 @@ function buildIsolationWhatsappMessage(customer, invoices = [], reasonText = '',
     defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))
   ).trim();
   const payload = buildWhatsappCustomerPayload(customer, invoices, null, options);
-  return fillWhatsappTemplate(template, {
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
     ...payload,
     alasan: reasonText || 'Masih ada tagihan yang belum lunas.',
     company: getSetting('company_header', 'ISP')
-  });
+  }), payload.jatuh_tempo);
 }
 
 function buildDueReminderWhatsappMessage(customer, invoices = [], options = {}) {
@@ -375,10 +378,10 @@ function buildDueReminderWhatsappMessage(customer, invoices = [], options = {}) 
     defaultDueReminderWhatsappTemplate(getSetting('company_header', 'ISP'))
   ).trim();
   const payload = buildWhatsappCustomerPayload(customer, invoices, null, options);
-  return fillWhatsappTemplate(template, {
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
     ...payload,
     company: getSetting('company_header', 'ISP')
-  });
+  }), payload.jatuh_tempo);
 }
 
 function buildWelcomeWhatsappMessage(customer, options = {}) {
@@ -412,12 +415,12 @@ function buildPaidWhatsappMessage(customer, invoices = [], fallbackInvoice = nul
     defaultPaidWhatsappTemplate(getSetting('company_header', 'ISP'))
   ).trim();
   const payload = buildWhatsappCustomerPayload(customer, invoices, fallbackInvoice, options);
-  return fillWhatsappTemplate(template, {
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
     ...payload,
     company: getSetting('company_header', 'ISP'),
     paid_by: String(options.paidBy || '-').trim() || '-',
     paid_at: String(options.paidAt || new Date().toLocaleString('id-ID')).trim()
-  });
+  }), payload.jatuh_tempo);
 }
 
 async function sendPaidWhatsappNotification(customer, invoices = [], fallbackInvoice = null, options = {}) {
