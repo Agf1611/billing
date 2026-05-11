@@ -1,5 +1,7 @@
 <%- include('partials/header') %>
 
+<% const operationalTasksList = Array.isArray(operationalTasks) ? operationalTasks : []; %>
+
 <div class="mb-4">
   <div class="text-secondary small"><%= t('tech.dashboard.greeting', 'Halo, Selamat Bekerja!') %></div>
   <div class="fs-5 fw-bold"><i class="bi bi-person-badge text-primary me-2"></i><%= techName %></div>
@@ -25,16 +27,16 @@
 </div>
 
 <h6 class="mb-3 text-secondary fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 1px;">
-  <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= (operationalTasks || []).length %>)
+  <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= operationalTasksList.length %>)
 </h6>
 
-<% if (!operationalTasks || operationalTasks.length === 0) { %>
+<% if (operationalTasksList.length === 0) { %>
   <div class="text-center py-4">
     <i class="bi bi-clipboard-check text-primary" style="font-size: 34px;"></i>
     <p class="text-secondary mt-2 small">Belum ada job operasional yang ditugaskan. Jika admin membuat pemasangan baru, survey, atau perbaikan lapangan, job-nya akan muncul di sini.</p>
   </div>
 <% } else { %>
-  <% operationalTasks.forEach((task) => { %>
+  <% operationalTasksList.forEach((task) => { %>
     <div class="t-card">
       <div class="d-flex justify-content-between align-items-start mb-2">
         <span class="badge-status badge-<%= task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open' %>">

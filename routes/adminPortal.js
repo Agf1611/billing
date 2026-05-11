@@ -261,6 +261,115 @@ async function trySendWhatsappPayment(customerPhone, message) {
   }
 }
 
+const TECHNICIAN_TASK_TYPE_LABELS = {
+  install: 'Pemasangan Baru',
+  repair: 'Perbaikan',
+  survey: 'Survey',
+  maintenance: 'Maintenance',
+  collection: 'Penagihan Lapangan',
+  relocation: 'Relokasi',
+  other: 'Lainnya'
+};
+
+const TECHNICIAN_TASK_PRIORITY_LABELS = {
+  low: 'Rendah',
+  medium: 'Sedang',
+  high: 'Tinggi',
+  urgent: 'Urgent'
+};
+
+const TECHNICIAN_TASK_STATUS_LABELS = {
+  assigned: 'Ditugaskan',
+  in_progress: 'Dikerjakan',
+  done: 'Selesai',
+  cancelled: 'Dibatalkan'
+};
+
+function formatTechnicianTaskDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  const parsed = new Date(`${raw}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+function buildTechnicianTaskPortalLink(options = {}) {
+  const baseUrl = resolveAppBaseUrl(options.baseUrl || options.fallbackBaseUrl || '');
+  if (!baseUrl) return '/tech/tasks';
+  return `${baseUrl}/tech/tasks`;
+}
+
+function buildTechnicianTaskWhatsappMessage(task, technician, options = {}) {
+  const mode = String(options.mode || 'assigned').trim() || 'assigned';
+  const taskType = TECHNICIAN_TASK_TYPE_LABELS[String(task?.task_type || '').trim()] || String(task?.task_type || 'Tugas Teknisi').trim();
+  const priority = TECHNICIAN_TASK_PRIORITY_LABELS[String(task?.priority || '').trim()] || String(task?.priority || '-').trim() || '-';
+  const status = TECHNICIAN_TASK_STATUS_LABELS[String(task?.status || '').trim()] || String(task?.status || '-').trim() || '-';
+  const title =
+    mode === 'updated' ? '🔄 *UPDATE TUGAS TEKNISI*'
+      : mode === 'done' ? '✅ *TUGAS TEKNISI SELESAI*'
+        : '📋 *TUGAS TEKNISI BARU*';
+  const customerName = String(task?.customer_name || task?.linked_customer_name || '-').trim() || '-';
+  const customerPhone = String(task?.customer_phone || task?.linked_customer_phone || '-').trim() || '-';
+  const customerAddress = String(task?.customer_address || '-').trim() || '-';
+  const locationNote = String(task?.location_note || '').trim();
+  const description = String(task?.description || '-').trim() || '-';
+  const technicianName = String(technician?.name || task?.technician_name || 'Teknisi').trim() || 'Teknisi';
+  const portalLink = buildTechnicianTaskPortalLink(options);
+  const lines = [
+    title,
+    '',
+    `Halo ${technicianName},`,
+    '',
+    `Judul: ${String(task?.title || '-').trim() || '-'}`,
+    `Jenis: ${taskType}`,
+    `Status: ${status}`,
+    `Prioritas: ${priority}`,
+    `Pelanggan: ${customerName}`,
+    `No. HP: ${customerPhone}`,
+    `Alamat: ${customerAddress}`,
+    `Jadwal: ${formatTechnicianTaskDate(task?.scheduled_date)}`,
+    `Deadline: ${formatTechnicianTaskDate(task?.due_date)}`,
+    `Detail: ${description}`
+  ];
+
+  if (locationNote) lines.push(`Patokan: ${locationNote}`);
+  lines.push('', `Buka tugas: ${portalLink}`);
+
+  return lines.join('\n');
+}
+
+function hasTechnicianTaskOperationalChange(previousTask, nextTask) {
+  if (!previousTask || !nextTask) return true;
+  const watchedFields = [
+    'technician_id',
+    'title',
+    'task_type',
+    'description',
+    'customer_id',
+    'customer_name',
+    'customer_phone',
+    'customer_address',
+    'location_note',
+    'priority',
+    'status',
+    'scheduled_date',
+    'due_date'
+  ];
+  return watchedFields.some((field) => String(previousTask[field] ?? '') !== String(nextTask[field] ?? ''));
+}
+
+async function trySendTechnicianTaskWhatsappNotification(task, technician, options = {}) {
+  if (!task || !technician) return false;
+  const phone = String(technician.phone || '').trim();
+  if (!phone) return false;
+  const message = buildTechnicianTaskWhatsappMessage(task, technician, options);
+  return trySendWhatsappPayment(phone, message);
+}
+
 function resolveWhatsappTestRecipient(whatsappStatus = null) {
   const linkedDigits = String(whatsappStatus?.user?.id || '')
     .split(':')[0]
@@ -1446,11 +1555,11 @@ router.get('/technician-tasks', requireAdminSession, restrictToAdmin, (req, res)
   });
 });
 
-router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const customerId = Number(req.body.customer_id || 0) || null;
     const linkedCustomer = customerId ? customerSvc.getCustomerById(customerId) : null;
-    techSvc.createTechnicianTask({
+    const createResult = techSvc.createTechnicianTask({
       title: String(req.body.title || '').trim(),
       task_type: String(req.body.task_type || 'repair').trim(),
       description: String(req.body.description || '').trim(),
@@ -1466,18 +1575,33 @@ router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.u
       due_date: String(req.body.due_date || '').trim() || null,
       created_by_name: resolvePaidByName(req, 'Admin')
     });
-    req.session._msg = { type: 'success', text: 'Tugas teknisi berhasil dibuat.' };
+    const createdTask = createResult?.lastInsertRowid ? techSvc.getTechnicianTaskById(createResult.lastInsertRowid, null) : null;
+    const technicians = adminSvc.getAllTechnicians();
+    const assignedTechnician = createdTask
+      ? technicians.find((tech) => Number(tech.id || 0) === Number(createdTask.technician_id || 0))
+      : null;
+    const notified = await trySendTechnicianTaskWhatsappNotification(createdTask, assignedTechnician, {
+      mode: 'assigned',
+      baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
+    });
+    req.session._msg = {
+      type: 'success',
+      text: notified
+        ? 'Tugas teknisi berhasil dibuat dan notifikasi WhatsApp sudah dikirim.'
+        : 'Tugas teknisi berhasil dibuat.'
+    };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal membuat tugas teknisi: ' + (e.message || String(e)) };
   }
   res.redirect('/admin/technician-tasks');
 });
 
-router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const taskId = Number(req.params.id || 0);
     const customerId = Number(req.body.customer_id || 0) || null;
     const linkedCustomer = customerId ? customerSvc.getCustomerById(customerId) : null;
+    const previousTask = techSvc.getTechnicianTaskById(taskId, null);
     techSvc.updateTechnicianTask(taskId, {
       title: String(req.body.title || '').trim(),
       task_type: String(req.body.task_type || 'repair').trim(),
@@ -1494,7 +1618,25 @@ router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin
       due_date: String(req.body.due_date || '').trim() || null,
       completion_note: String(req.body.completion_note || '').trim()
     });
-    req.session._msg = { type: 'success', text: 'Tugas teknisi berhasil diperbarui.' };
+    const updatedTask = techSvc.getTechnicianTaskById(taskId, null);
+    const technicians = adminSvc.getAllTechnicians();
+    const assignedTechnician = updatedTask
+      ? technicians.find((tech) => Number(tech.id || 0) === Number(updatedTask.technician_id || 0))
+      : null;
+    const shouldNotify = hasTechnicianTaskOperationalChange(previousTask, updatedTask);
+    const wasReassigned = String(previousTask?.technician_id || '') !== String(updatedTask?.technician_id || '');
+    const notified = shouldNotify
+      ? await trySendTechnicianTaskWhatsappNotification(updatedTask, assignedTechnician, {
+          mode: wasReassigned ? 'assigned' : 'updated',
+          baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
+        })
+      : false;
+    req.session._msg = {
+      type: 'success',
+      text: notified
+        ? 'Tugas teknisi berhasil diperbarui dan notifikasi WhatsApp sudah dikirim.'
+        : 'Tugas teknisi berhasil diperbarui.'
+    };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal memperbarui tugas teknisi: ' + (e.message || String(e)) };
   }

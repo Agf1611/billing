@@ -90,6 +90,9 @@
         <button class="btn btn-p btn-sm" type="button" onclick="openModal('addTaskModal')"><i class="bi bi-plus-lg"></i> Tugas Baru</button>
       </div>
       <div class="card-bd">
+        <div class="alert alert-s" style="margin-bottom:14px">
+          <i class="bi bi-whatsapp"></i> Saat tugas baru dibuat atau diubah, teknisi yang ditugaskan akan otomatis mendapat notifikasi WhatsApp jika nomor teknisinya sudah terisi dan koneksi WhatsApp aktif.
+        </div>
         <form method="GET" action="/admin/technician-tasks" class="task-filters" style="margin-bottom:16px">
           <select class="fs" name="status" style="width:160px" onchange="this.form.submit()">
             <option value="all" <%= filterStatus === 'all' ? 'selected' : '' %>>Semua Status</option>

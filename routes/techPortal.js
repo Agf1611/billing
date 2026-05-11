@@ -76,7 +76,7 @@ router.get('/', requireTechSession, (req, res) => {
   const techId = req.session.techId;
   const stats = techSvc.getTechStats(techId);
   const myTickets = techSvc.getAssignedTickets(techId);
-  const operationalTasks = techSvc.getTechnicianTasks(techId, { status: 'all' }).slice(0, 4);
+  const operationalTasks = (techSvc.getTechnicianTasks(techId, { status: 'all' }) || []).slice(0, 4);
 
   renderTechPage(req, res, 'tech/dashboard', {
     title: 'Dashboard Teknisi', 
