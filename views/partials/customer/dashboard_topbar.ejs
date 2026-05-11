@@ -1,3 +1,11 @@
+<%
+  const pageCompanyName = typeof companyName !== 'undefined'
+    ? companyName
+    : (settings?.company_header || 'Portal Pelanggan');
+  const pageCompanyLogoUrl = typeof companyLogoUrl !== 'undefined'
+    ? companyLogoUrl
+    : (settings?.company_logo_url || '/img/logo.png');
+%>
 <header class="app-topbar">
   <div class="topbar-row">
     <div class="topbar-left">
@@ -5,9 +13,9 @@
         <i class="bi bi-list"></i>
       </button>
       <div class="brand-chip">
-        <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <img src="<%= pageCompanyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
         <div class="brand-meta">
-          <strong><%= companyName %></strong>
+          <strong><%= pageCompanyName %></strong>
           <span>Customer App</span>
         </div>
       </div>
