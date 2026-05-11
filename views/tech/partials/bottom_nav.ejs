@@ -7,6 +7,7 @@
     </a>
     <a href="/tech/pool" class="nav-item <%= activePage === 'pool' ? 'active' : '' %>">
       <i class="bi bi-inbox-fill"></i>
+      <% if (techNav && techNav.openTickets > 0) { %><span class="nav-count"><%= techNav.openTickets > 99 ? '99+' : techNav.openTickets %></span><% } %>
       <span><%= t('tech.nav.new_tickets', 'Tiket Baru') %></span>
     </a>
     <a href="/tech/map" class="nav-item <%= activePage === 'map' ? 'active' : '' %>">
@@ -24,6 +25,33 @@
   </nav>
 
   <script>
+    (function () {
+      const html = document.documentElement;
+      const btn = document.getElementById('themeToggleBtn');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      const syncThemeButton = () => {
+        const isLight = html.getAttribute('data-theme') === 'light';
+        if (btn) {
+          btn.replaceChildren();
+          const icon = document.createElement('i');
+          icon.className = isLight ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+          const label = document.createElement('span');
+          label.textContent = isLight ? 'Terang' : 'Gelap';
+          btn.appendChild(icon);
+          btn.appendChild(label);
+        }
+        if (meta) meta.setAttribute('content', isLight ? '#f5f7fb' : '#0f172a');
+      };
+
+      syncThemeButton();
+      btn?.addEventListener('click', () => {
+        const nextTheme = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', nextTheme);
+        localStorage.setItem('tech-portal-theme', nextTheme);
+        syncThemeButton();
+      });
+    })();
+
     setTimeout(() => {
       document.querySelectorAll('.alert').forEach(a => {
         const bsAlert = new bootstrap.Alert(a);

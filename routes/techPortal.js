@@ -23,6 +23,30 @@ function flashMsg(req) {
 
 function company() { return getSetting('company_header', 'ISP App'); }
 
+function isTruthyFormValue(value) {
+  return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+}
+
+function getTechNav(techId) {
+  const stats = techSvc.getTechStats(techId);
+  return {
+    openTickets: Number(stats?.open || 0),
+    myTickets: Number(stats?.total || 0),
+    inProgress: Number(stats?.inProgress || 0),
+    resolved: Number(stats?.resolved || 0)
+  };
+}
+
+function renderTechPage(req, res, view, payload = {}) {
+  const techId = Number(req.session?.techId || 0) || 0;
+  return res.render(view, {
+    company: company(),
+    techName: req.session?.techName || '',
+    techNav: techId ? getTechNav(techId) : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 },
+    ...payload
+  });
+}
+
 // --- AUTH ---
 router.get('/login', (req, res) => {
   if (req.session && req.session.isTechnician) return res.redirect('/tech');
@@ -51,11 +75,9 @@ router.get('/', requireTechSession, (req, res) => {
   const techId = req.session.techId;
   const stats = techSvc.getTechStats(techId);
   const myTickets = techSvc.getAssignedTickets(techId);
-  
-  res.render('tech/dashboard', {
+
+  renderTechPage(req, res, 'tech/dashboard', {
     title: 'Dashboard Teknisi', 
-    company: company(), 
-    techName: req.session.techName,
     activePage: 'dashboard',
     stats,
     tickets: myTickets,
@@ -66,9 +88,8 @@ router.get('/', requireTechSession, (req, res) => {
 // --- OPEN TICKETS (Pool) ---
 router.get('/pool', requireTechSession, (req, res) => {
   const openTickets = techSvc.getOpenTickets();
-  res.render('tech/pool', {
+  renderTechPage(req, res, 'tech/pool', {
     title: 'Tiket Baru', 
-    company: company(), 
     activePage: 'pool',
     tickets: openTickets,
     msg: flashMsg(req)
@@ -79,9 +100,8 @@ router.get('/pool', requireTechSession, (req, res) => {
 router.get('/history', requireTechSession, (req, res) => {
   const techId = req.session.techId;
   const historyTickets = techSvc.getResolvedTickets(techId);
-  res.render('tech/history', {
+  renderTechPage(req, res, 'tech/history', {
     title: 'Riwayat Tiket', 
-    company: company(), 
     activePage: 'history',
     tickets: historyTickets,
     msg: flashMsg(req)
@@ -92,10 +112,9 @@ router.get('/history', requireTechSession, (req, res) => {
 router.get('/map', requireTechSession, (req, res) => {
   const customers = customerSvc.getAllCustomers();
   const odps = odpSvc.getAllOdps();
-  
-  res.render('tech/map', { 
+
+  renderTechPage(req, res, 'tech/map', { 
     title: 'Peta Jaringan', 
-    company: company(), 
     activePage: 'map', 
     customers, 
     odps,
@@ -182,9 +201,8 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
 
 // --- MONITORING ONU ---
 router.get('/monitoring', requireTechSession, (req, res) => {
-  res.render('tech/monitoring', {
+  renderTechPage(req, res, 'tech/monitoring', {
     title: 'Monitoring ONU',
-    company: company(),
     activePage: 'monitoring',
     msg: flashMsg(req)
   });
@@ -204,9 +222,8 @@ router.get('/customers/new', requireTechSession, (req, res) => {
     ORDER BY r.id DESC
     LIMIT 20
   `).all(req.session.techId);
-  res.render('tech/create_customer', {
+  renderTechPage(req, res, 'tech/create_customer', {
     title: 'Tambah Pelanggan',
-    company: company(),
     activePage: 'create_customer',
     packages,
     odps,
@@ -228,7 +245,10 @@ router.post('/customers', requireTechSession, express.urlencoded({ extended: tru
       email: String(req.body.email || '').trim(),
       address: String(req.body.address || '').trim(),
       package_id: req.body.package_id ? Number(req.body.package_id) : null,
+      create_pppoe_secret: isTruthyFormValue(req.body.create_pppoe_secret) ? 1 : 0,
       pppoe_username: String(req.body.pppoe_username || '').trim(),
+      pppoe_password: String(req.body.pppoe_password || '').trim(),
+      normal_pppoe_profile: String(req.body.normal_pppoe_profile || '').trim(),
       router_id: req.body.router_id ? Number(req.body.router_id) : null,
       olt_id: req.body.olt_id ? Number(req.body.olt_id) : null,
       odp_id: req.body.odp_id ? Number(req.body.odp_id) : null,
@@ -243,21 +263,31 @@ router.post('/customers', requireTechSession, express.urlencoded({ extended: tru
       isolate_day: req.body.isolate_day !== undefined ? Number(req.body.isolate_day) : 10
     };
 
+    if (customerData.pppoe_password && customerData.pppoe_password.length < 4) {
+      throw new Error('Password akun internet minimal 4 karakter');
+    }
+
     if (customerData.pppoe_username) {
       const existing = db.prepare('SELECT id, name FROM customers WHERE router_id IS ? AND pppoe_username = ? LIMIT 1').get(customerData.router_id ?? null, customerData.pppoe_username);
       if (existing) throw new Error(`PPPoE Username sudah dipakai pelanggan lain: ${existing.name}`);
 
-      let conn = null;
-      try {
-        conn = await mikrotikService.getConnection(customerData.router_id || null);
-        const results = await conn.client.menu('/ppp/secret')
-          .where('service', 'pppoe')
-          .where('name', customerData.pppoe_username)
-          .get();
-        if (!Array.isArray(results) || results.length === 0) throw new Error('PPPoE Username tidak ditemukan di MikroTik');
-      } finally {
-        if (conn && conn.api) conn.api.close();
+      if (!customerData.create_pppoe_secret) {
+        let conn = null;
+        try {
+          conn = await mikrotikService.getConnection(customerData.router_id || null);
+          const results = await conn.client.menu('/ppp/secret')
+            .where('service', 'pppoe')
+            .where('name', customerData.pppoe_username)
+            .get();
+          if (!Array.isArray(results) || results.length === 0) throw new Error('PPPoE Username tidak ditemukan di MikroTik');
+        } finally {
+          if (conn && conn.api) conn.api.close();
+        }
       }
+    }
+
+    if (customerData.create_pppoe_secret && !customerData.pppoe_username) {
+      throw new Error('Username PPPoE wajib diisi jika ingin membuat secret baru');
     }
 
     db.prepare(`

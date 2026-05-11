@@ -3,18 +3,19 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h5 class="mb-0 fw-bold">Monitoring ONU</h5>
-    <div class="text-secondary" style="font-size: 12px;">Kelola perangkat pelanggan di lapangan</div>
+    <div class="text-secondary" style="font-size:12px;">Kelola perangkat pelanggan di lapangan dengan tampilan yang lebih nyaman di mode gelap maupun terang.</div>
   </div>
-  <button class="btn btn-sm btn-outline-primary rounded-circle" onclick="loadDevices()">
+  <button class="btn btn-sm btn-outline-primary rounded-circle" onclick="loadDevices()" aria-label="Refresh perangkat">
     <i class="bi bi-arrow-clockwise"></i>
   </button>
 </div>
 
-<div class="mb-3">
-  <div class="input-group">
-    <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
-    <input type="text" id="search-input" class="form-control bg-dark border-secondary text-white shadow-none" placeholder="Cari: Nama / No HP / PPPoE / SN / Tag..." oninput="filterDevices()">
+<div class="t-card">
+  <div class="input-group tech-input-group">
+    <span class="input-group-text"><i class="bi bi-search"></i></span>
+    <input type="text" id="search-input" class="form-control tech-field shadow-none" placeholder="Cari nama, nomor pelanggan, akun PPPoE, serial number, atau tag..." oninput="filterDevices()">
   </div>
+  <div class="field-hint">Cari cepat berdasarkan identitas pelanggan atau perangkat agar teknisi lebih cepat menemukan ONU yang sedang dicek.</div>
 </div>
 
 <div id="device-list">
@@ -26,10 +27,10 @@
 
 <div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered mx-3">
-    <div class="modal-content bg-dark border-secondary text-white">
-      <div class="modal-header border-secondary">
+    <div class="modal-content surface-soft">
+      <div class="modal-header" style="border-color:var(--tech-border)">
         <h6 class="modal-title" id="modalTitle">Ubah Pengaturan</h6>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="modal-device-tag">
@@ -37,12 +38,12 @@
 
         <div id="ssid-input-group" class="d-none">
           <label class="form-label small text-secondary">Nama WiFi (SSID) Baru</label>
-          <input type="text" id="new-ssid" class="form-control bg-dark border-secondary text-white" placeholder="Masukkan SSID baru">
+          <input type="text" id="new-ssid" class="form-control tech-field" placeholder="Masukkan SSID baru">
         </div>
 
         <div id="pass-input-group" class="d-none">
           <label class="form-label small text-secondary">Password WiFi Baru</label>
-          <input type="text" id="new-password" class="form-control bg-dark border-secondary text-white" placeholder="Minimal 8 karakter">
+          <input type="text" id="new-password" class="form-control tech-field" placeholder="Minimal 8 karakter">
         </div>
 
         <div id="reboot-confirm" class="d-none text-center py-2">
@@ -50,7 +51,7 @@
           <p class="mt-2 mb-0">Apakah Anda yakin ingin melakukan reboot pada perangkat ini?</p>
         </div>
       </div>
-      <div class="modal-footer border-secondary">
+      <div class="modal-footer" style="border-color:var(--tech-border)">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
         <button type="button" id="btn-submit-action" class="btn btn-primary btn-sm">Simpan Perubahan</button>
       </div>
@@ -103,19 +104,19 @@ function renderDevices(devices) {
       : '';
 
     container.insertAdjacentHTML('beforeend', `
-      <div class="t-card mb-3 p-3" style="border-left: 4px solid ${isOn ? '#10b981' : '#ef4444'}">
+      <div class="t-card mb-3 p-3" style="border-left:4px solid ${isOn ? 'var(--tech-success)' : 'var(--tech-danger)'}">
         <div class="d-flex justify-content-between align-items-start mb-2">
           <div>
-            <div class="fw-bold" style="font-size: 15px;">${escHtml(title)}</div>
+            <div class="fw-bold" style="font-size:15px;">${escHtml(title)}</div>
             <div class="text-secondary small">${escHtml(sub)}</div>
-            ${device.customerPhone ? `<div class="text-secondary small">📞 ${escHtml(device.customerPhone)}</div>` : ''}
+            ${device.customerPhone ? `<div class="text-secondary small">No. HP: ${escHtml(device.customerPhone)}</div>` : ''}
           </div>
           <span class="badge-status badge-${isOn ? 'resolved' : 'open'}">${isOn ? 'Online' : 'Offline'}</span>
         </div>
 
-        <div class="row g-2 mb-3 mt-1" style="font-size: 12px;">
+        <div class="row g-2 mb-3 mt-1" style="font-size:12px;">
           <div class="col-6">
-            <div class="text-secondary"><i class="bi bi-person-badge me-1"></i> PPPoE User</div>
+            <div class="text-secondary"><i class="bi bi-person-badge me-1"></i> Akun PPPoE</div>
             <div class="fw-semibold text-truncate">${escHtml(device.pppoeUsername && device.pppoeUsername !== 'N/A' ? device.pppoeUsername : '-')}</div>
           </div>
           <div class="col-6">
@@ -196,7 +197,7 @@ function openActionModal(tag, type, currentSsid = '') {
   } else if (type === 'reboot') {
     document.getElementById('modalTitle').innerText = 'Reboot Perangkat';
     document.getElementById('reboot-confirm').classList.remove('d-none');
-    submitBtn.innerText = 'Ya, Reboot Now';
+    submitBtn.innerText = 'Ya, reboot sekarang';
     submitBtn.className = 'btn btn-danger btn-sm';
   }
 
@@ -223,7 +224,6 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
     body = { password };
   } else if (type === 'reboot') {
     url = `/tech/api/device/${tag}/reboot`;
-    body = {};
   }
 
   btn.disabled = true;
@@ -242,7 +242,7 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
     const result = await res.json();
 
     if (result.success || result.ok) {
-      alert('Perintah berhasil dikirim!');
+      alert('Perintah berhasil dikirim.');
       actionModal.hide();
       setTimeout(loadDevices, 2000);
     } else {

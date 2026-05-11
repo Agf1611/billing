@@ -179,9 +179,13 @@
                 <div class="request-cell"><span class="request-label">No. HP</span><span class="request-value"><%= row.customer_phone || '-' %></span></div>
                 <div class="request-cell"><span class="request-label">Paket</span><span class="request-value"><%= row.package_name || '-' %></span></div>
                 <div class="request-cell"><span class="request-label">Router</span><span class="request-value"><%= row.router_name || '-' %></span></div>
+                <div class="request-cell"><span class="request-label">Mode Secret</span><span class="request-value"><%= payload.create_pppoe_secret ? 'Buat baru saat approve' : 'Pakai secret existing' %></span></div>
                 <div class="request-cell"><span class="request-label">PPPoE</span><span class="request-value"><%= row.pppoe_username || '-' %></span></div>
+                <div class="request-cell"><span class="request-label">Password PPPoE</span><span class="request-value"><%= payload.pppoe_password || '(ikut username)' %></span></div>
+                <div class="request-cell"><span class="request-label">Profile Normal</span><span class="request-value"><%= payload.normal_pppoe_profile || '(ikut paket)' %></span></div>
                 <div class="request-cell"><span class="request-label">Alamat</span><span class="request-value"><%= payload.address || '-' %></span></div>
                 <div class="request-cell"><span class="request-label">Status Pelanggan</span><span class="request-value"><%= payload.status || 'active' %></span></div>
+                <div class="request-cell"><span class="request-label">Tanggal Pasang</span><span class="request-value"><%= payload.install_date || '-' %></span></div>
               </div>
 
               <% if (row.review_note) { %>

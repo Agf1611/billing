@@ -1,68 +1,99 @@
 <%- include('partials/header') %>
 
 <div class="t-card">
-  <div class="d-flex justify-content-between align-items-center mb-2">
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
     <div>
-      <div class="fw-bold" style="font-size: 15px;"><i class="bi bi-person-plus-fill text-primary me-2"></i>Pengajuan Pelanggan Baru</div>
-      <div class="text-secondary small">Isi data pelanggan. Admin akan review sebelum pelanggan aktif di sistem.</div>
+      <div class="fw-bold" style="font-size:16px;"><i class="bi bi-person-plus-fill text-primary me-2"></i>Pengajuan Pelanggan Baru</div>
+      <div class="text-secondary small">Isi data sejelas mungkin. Admin akan review lebih cepat jika akun internet, alamat, dan lokasi sudah lengkap.</div>
     </div>
+    <span class="badge-status badge-open" style="white-space:nowrap">Butuh approval admin</span>
   </div>
 
   <form method="POST" action="/tech/customers">
+    <div class="fw-bold mb-2" style="font-size:13px; letter-spacing:.3px;">Identitas Pelanggan</div>
     <div class="mb-3">
       <label class="form-label text-secondary small">Nama Pelanggan</label>
-      <input name="name" class="form-control rounded-4" required>
+      <input name="name" class="form-control rounded-4 tech-field" placeholder="Nama lengkap pelanggan" required>
     </div>
+
     <div class="row g-2">
       <div class="col-6">
-        <label class="form-label text-secondary small">No. HP</label>
-        <input name="phone" class="form-control rounded-4" placeholder="08xxxxxxxxxx">
+        <label class="form-label text-secondary small">No. HP / WhatsApp</label>
+        <input name="phone" class="form-control rounded-4 tech-field" placeholder="08xxxxxxxxxx">
       </div>
       <div class="col-6">
         <label class="form-label text-secondary small">Paket</label>
-        <select name="package_id" class="form-select rounded-4">
+        <select name="package_id" class="form-select rounded-4 tech-select" id="package_id">
           <option value="">-- Pilih Paket --</option>
-          <% packages.forEach(p => { %>
-            <option value="<%= p.id %>"><%= p.name %> (Rp <%= Number(p.price||0).toLocaleString('id-ID') %>)</option>
+          <% packages.forEach((p) => { %>
+            <option value="<%= p.id %>" data-profile="<%= p.pppoe_profile || '' %>"><%= p.name %> (Rp <%= Number(p.price || 0).toLocaleString('id-ID') %>)</option>
           <% }) %>
         </select>
       </div>
     </div>
+
     <div class="mt-3">
       <label class="form-label text-secondary small">Email</label>
-      <input name="email" class="form-control rounded-4" type="email" placeholder="opsional">
-    </div>
-    <div class="mt-3">
-      <label class="form-label text-secondary small">Alamat</label>
-      <textarea name="address" class="form-control rounded-4" rows="2"></textarea>
+      <input name="email" class="form-control rounded-4 tech-field" type="email" placeholder="opsional">
     </div>
 
-    <div class="row g-2 mt-1">
+    <div class="mt-3">
+      <label class="form-label text-secondary small">Alamat</label>
+      <textarea name="address" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Nama jalan, patokan rumah, RT/RW, atau titik penting lainnya"></textarea>
+      <div class="field-hint">Semakin jelas alamat, semakin mudah teknisi lain atau admin menindaklanjuti tiket di masa depan.</div>
+    </div>
+
+    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">Akun Internet</div>
+    <div class="mb-2">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="create_pppoe_secret" name="create_pppoe_secret" value="1" onchange="toggleSecretMode()">
+        <label class="form-check-label small" for="create_pppoe_secret">Buat secret PPPoE baru</label>
+      </div>
+      <div id="secretModeHint" class="field-hint">Mode default memakai secret yang sudah ada di MikroTik. Aktifkan tombol ini jika teknisi ingin mengajukan secret baru, dan secret baru akan dibuat aktif hanya setelah admin approve.</div>
+    </div>
+
+    <div class="row g-2">
       <div class="col-6">
         <label class="form-label text-secondary small">Router (MikroTik)</label>
-        <select id="router_id" name="router_id" class="form-select rounded-4" onchange="loadPppoeUsers(); loadPppoeProfiles()">
+        <select id="router_id" name="router_id" class="form-select rounded-4 tech-select" onchange="loadPppoeUsers(); loadPppoeProfiles()">
           <option value="">Default Router</option>
-          <% (routers || []).forEach(r => { %>
+          <% (routers || []).forEach((r) => { %>
             <option value="<%= r.id %>"><%= r.name %></option>
           <% }) %>
         </select>
       </div>
       <div class="col-6">
-        <label class="form-label text-secondary small">PPPoE Username</label>
-        <input id="pppoe_username" name="pppoe_username" class="form-control rounded-4" list="pppoeList" placeholder="Pilih / cari dari MikroTik">
+        <label class="form-label text-secondary small">Akun PPPoE</label>
+        <input id="pppoe_username" name="pppoe_username" class="form-control rounded-4 tech-field" list="pppoeList" placeholder="Pilih / cari akun internet">
         <datalist id="pppoeList"></datalist>
-        <div id="pppoeHint" class="text-secondary small mt-1"></div>
+        <div id="pppoeHint" class="field-hint"></div>
+      </div>
+    </div>
+
+    <div class="row g-2 mt-1">
+      <div class="col-6">
+        <label class="form-label text-secondary small">Password PPPoE</label>
+        <input id="pppoe_password" name="pppoe_password" class="form-control rounded-4 tech-field" placeholder="Kosongkan bila sama dengan username">
+        <div class="field-hint">Bisa diisi sendiri. Jika kosong, sistem anggap password mengikuti username.</div>
+      </div>
+      <div class="col-6">
+        <label class="form-label text-secondary small">Profile Normal</label>
+        <select id="normal_pppoe_profile" name="normal_pppoe_profile" class="form-select rounded-4 tech-select">
+          <option value="">Ikuti profile paket</option>
+        </select>
       </div>
     </div>
 
     <div class="row g-2 mt-1">
       <div class="col-6">
         <label class="form-label text-secondary small">Profile Isolir</label>
-        <select id="isolir_profile" name="isolir_profile" class="form-select rounded-4"></select>
+        <select id="isolir_profile" name="isolir_profile" class="form-select rounded-4 tech-select">
+          <option value="BEATISOLIR">BEATISOLIR</option>
+        </select>
       </div>
       <div class="col-6">
-        <label class="form-label text-secondary small">Status</label>
-        <select name="status" class="form-select rounded-4">
+        <label class="form-label text-secondary small">Status Pelanggan</label>
+        <select name="status" class="form-select rounded-4 tech-select">
           <option value="active">Aktif</option>
           <option value="suspended">Suspend</option>
           <option value="inactive">Nonaktif</option>
@@ -73,114 +104,111 @@
     <div class="row g-2 mt-1">
       <div class="col-6">
         <label class="form-label text-secondary small">Isolir Otomatis</label>
-        <select name="auto_isolate" class="form-select rounded-4">
+        <select name="auto_isolate" class="form-select rounded-4 tech-select">
           <option value="1">Aktif</option>
           <option value="0">Tidak Aktif</option>
         </select>
       </div>
       <div class="col-6">
         <label class="form-label text-secondary small">Tanggal Isolir (1-31)</label>
-        <input name="isolate_day" type="number" min="1" max="31" value="10" class="form-control rounded-4">
+        <input name="isolate_day" type="number" min="1" max="31" value="10" class="form-control rounded-4 tech-field">
       </div>
     </div>
 
     <div class="row g-2 mt-1">
       <div class="col-6">
         <label class="form-label text-secondary small">Tanggal Pasang</label>
-        <input name="install_date" type="date" class="form-control rounded-4">
+        <input name="install_date" type="date" class="form-control rounded-4 tech-field">
       </div>
       <div class="col-6">
         <label class="form-label text-secondary small">OLT</label>
-        <select name="olt_id" class="form-select rounded-4">
+        <select name="olt_id" class="form-select rounded-4 tech-select">
           <option value="">-- Tanpa OLT --</option>
-          <% (olts || []).forEach(o => { %>
+          <% (olts || []).forEach((o) => { %>
             <option value="<%= o.id %>"><%= o.name %></option>
           <% }) %>
         </select>
       </div>
     </div>
 
-    <div class="mt-4">
-      <div class="fw-bold mb-2" style="font-size: 13px; letter-spacing: .3px;">
-        <i class="bi bi-geo-alt-fill text-warning me-2"></i>Lokasi Pelanggan
+    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">
+      <i class="bi bi-geo-alt-fill text-warning me-2"></i>Lokasi Pelanggan
+    </div>
+    <div class="row g-2">
+      <div class="col-6">
+        <label class="form-label text-secondary small">Latitude</label>
+        <input id="lat" name="lat" class="form-control rounded-4 tech-field" placeholder="-6.2">
       </div>
-      <div class="row g-2">
-        <div class="col-6">
-          <label class="form-label text-secondary small">Latitude</label>
-          <input id="lat" name="lat" class="form-control rounded-4" placeholder="-6.2">
-        </div>
-        <div class="col-6">
-          <label class="form-label text-secondary small">Longitude</label>
-          <input id="lng" name="lng" class="form-control rounded-4" placeholder="106.8">
-        </div>
+      <div class="col-6">
+        <label class="form-label text-secondary small">Longitude</label>
+        <input id="lng" name="lng" class="form-control rounded-4 tech-field" placeholder="106.8">
       </div>
-      <button type="button" class="btn btn-outline-info btn-action" onclick="getLocation()">
-        <i class="bi bi-crosshair me-2"></i>Ambil Lokasi HP
-      </button>
+    </div>
+    <button type="button" class="btn btn-outline-info btn-action" onclick="getLocation()">
+      <i class="bi bi-crosshair me-2"></i>Ambil lokasi HP
+    </button>
+
+    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">
+      <i class="bi bi-diagram-3-fill text-success me-2"></i>ODP & Port
+    </div>
+    <div class="mb-2">
+      <label class="form-label text-secondary small">ODP</label>
+      <select id="odp_id" name="odp_id" class="form-select rounded-4 tech-select" onchange="onOdpChanged()">
+        <option value="">-- Pilih ODP --</option>
+        <% odps.forEach((o) => { %>
+          <option value="<%= o.id %>" data-lat="<%= o.lat || '' %>" data-lng="<%= o.lng || '' %>" data-pon="<%= o.pon_port || '' %>" data-cap="<%= o.port_capacity || 16 %>"><%= o.name %></option>
+        <% }) %>
+      </select>
+      <div id="odpInfo" class="field-hint"></div>
     </div>
 
-    <div class="mt-4">
-      <div class="fw-bold mb-2" style="font-size: 13px; letter-spacing: .3px;">
-        <i class="bi bi-diagram-3-fill text-success me-2"></i>ODP & Port
+    <div class="row g-2">
+      <div class="col-6">
+        <label class="form-label text-secondary small">Port Pelanggan (ODP)</label>
+        <input id="pon_port" name="pon_port" class="form-control rounded-4 tech-field" placeholder="Contoh: 1">
       </div>
-      <div class="mb-2">
-        <label class="form-label text-secondary small">ODP</label>
-        <select id="odp_id" name="odp_id" class="form-select rounded-4" onchange="onOdpChanged()">
-          <option value="">-- Pilih ODP --</option>
-          <% odps.forEach(o => { %>
-            <option value="<%= o.id %>" data-lat="<%= o.lat || '' %>" data-lng="<%= o.lng || '' %>" data-pon="<%= o.pon_port || '' %>" data-cap="<%= o.port_capacity || 16 %>"><%= o.name %></option>
-          <% }) %>
+      <div class="col-6">
+        <label class="form-label text-secondary small">Update data ODP</label>
+        <select name="update_odp" id="update_odp" class="form-select rounded-4 tech-select" onchange="toggleOdpEdit()">
+          <option value="0">Tidak</option>
+          <option value="1">Ya</option>
         </select>
-        <div id="odpInfo" class="text-secondary small mt-2"></div>
       </div>
+    </div>
+
+    <div id="odpEdit" class="mt-3" style="display:none">
       <div class="row g-2">
         <div class="col-6">
-          <label class="form-label text-secondary small">Port Pelanggan (ODP)</label>
-          <input id="pon_port" name="pon_port" class="form-control rounded-4" placeholder="contoh: 1">
+          <label class="form-label text-secondary small">ODP Latitude</label>
+          <input id="odp_lat" name="odp_lat" class="form-control rounded-4 tech-field">
         </div>
         <div class="col-6">
-          <label class="form-label text-secondary small">Update ODP</label>
-          <select name="update_odp" id="update_odp" class="form-select rounded-4" onchange="toggleOdpEdit()">
-            <option value="0">Tidak</option>
-            <option value="1">Ya</option>
-          </select>
+          <label class="form-label text-secondary small">ODP Longitude</label>
+          <input id="odp_lng" name="odp_lng" class="form-control rounded-4 tech-field">
         </div>
       </div>
-
-      <div id="odpEdit" class="mt-3" style="display:none">
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label text-secondary small">ODP Latitude</label>
-            <input id="odp_lat" name="odp_lat" class="form-control rounded-4">
-          </div>
-          <div class="col-6">
-            <label class="form-label text-secondary small">ODP Longitude</label>
-            <input id="odp_lng" name="odp_lng" class="form-control rounded-4">
-          </div>
+      <div class="row g-2 mt-1">
+        <div class="col-6">
+          <label class="form-label text-secondary small">ODP PON Port (Trunk)</label>
+          <input id="odp_pon_port" name="odp_pon_port" class="form-control rounded-4 tech-field" placeholder="opsional">
         </div>
-        <div class="row g-2 mt-1">
-          <div class="col-6">
-            <label class="form-label text-secondary small">ODP PON Port (Trunk)</label>
-            <input id="odp_pon_port" name="odp_pon_port" class="form-control rounded-4" placeholder="opsional">
-          </div>
-          <div class="col-6">
-            <label class="form-label text-secondary small">Kapasitas Port ODP</label>
-            <input id="odp_port_capacity" name="odp_port_capacity" type="number" min="1" class="form-control rounded-4" value="16">
-          </div>
+        <div class="col-6">
+          <label class="form-label text-secondary small">Kapasitas Port ODP</label>
+          <input id="odp_port_capacity" name="odp_port_capacity" type="number" min="1" class="form-control rounded-4 tech-field" value="16">
         </div>
-        <button type="button" class="btn btn-outline-warning btn-action" onclick="copyCustomerToOdp()">
-          <i class="bi bi-arrow-down-circle me-2"></i>Samakan Lokasi ODP = Lokasi Pelanggan
-        </button>
       </div>
+      <button type="button" class="btn btn-outline-warning btn-action" onclick="copyCustomerToOdp()">
+        <i class="bi bi-arrow-down-circle me-2"></i>Samakan lokasi ODP dengan lokasi pelanggan
+      </button>
     </div>
 
     <div class="mt-3">
       <label class="form-label text-secondary small">Catatan</label>
-      <textarea name="notes" class="form-control rounded-4" rows="2" placeholder="opsional"></textarea>
+      <textarea name="notes" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Contoh: rumah belakang masjid, kabel sudah ditarik, ONU bawaan pelanggan, dan lainnya"></textarea>
     </div>
 
     <button type="submit" class="btn btn-primary btn-action mt-3">
-      <i class="bi bi-send-check me-2"></i>Kirim Pengajuan
+      <i class="bi bi-send-check me-2"></i>Kirim pengajuan
     </button>
   </form>
 </div>
@@ -191,12 +219,14 @@
     <div class="text-secondary small">Belum ada pengajuan pelanggan.</div>
   <% } else { %>
     <div class="d-flex flex-column gap-2">
-      <% requests.forEach(r => { %>
-        <div class="rounded-4 p-3" style="background:rgba(255,255,255,.04);border:1px solid rgba(148,163,184,.14)">
+      <% requests.forEach((r) => { const payload = JSON.parse(String(r.payload_json || '{}') || '{}'); %>
+        <div class="rounded-4 p-3 surface-soft">
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <div class="fw-bold"><%= r.customer_name %></div>
               <div class="text-secondary small"><%= r.package_name || 'Tanpa paket' %> • <%= r.customer_phone || '-' %></div>
+              <div class="text-secondary small">Mode secret: <%= payload.create_pppoe_secret ? 'Buat baru saat approval admin' : 'Pakai secret yang sudah ada' %></div>
+              <div class="text-secondary small">Akun: <%= r.pppoe_username || payload.pppoe_username || '-' %> • Password: <%= payload.pppoe_password || '(ikut username)' %></div>
             </div>
             <span class="badge <%= r.status === 'approved' ? 'text-bg-success' : (r.status === 'rejected' ? 'text-bg-danger' : 'text-bg-warning') %>"><%= String(r.status || '').toUpperCase() %></span>
           </div>
@@ -210,6 +240,45 @@
 </div>
 
 <script>
+  function applyPackageProfileHint() {
+    const packageSelect = document.getElementById('package_id');
+    const profileSelect = document.getElementById('normal_pppoe_profile');
+    if (!packageSelect || !profileSelect) return;
+    const packageOption = packageSelect.options[packageSelect.selectedIndex];
+    const suggestedProfile = String(packageOption?.dataset?.profile || '').trim();
+    if (suggestedProfile && !profileSelect.value) {
+      const hasOption = Array.from(profileSelect.options).some((opt) => opt.value === suggestedProfile);
+      if (hasOption) profileSelect.value = suggestedProfile;
+    }
+  }
+
+  function toggleSecretMode() {
+    const createSecret = document.getElementById('create_pppoe_secret');
+    const usernameInput = document.getElementById('pppoe_username');
+    const passwordInput = document.getElementById('pppoe_password');
+    const hint = document.getElementById('pppoeHint');
+    const modeHint = document.getElementById('secretModeHint');
+    const isCreateMode = Boolean(createSecret?.checked);
+
+    if (usernameInput) {
+      usernameInput.setAttribute('list', isCreateMode ? '' : 'pppoeList');
+      usernameInput.placeholder = isCreateMode ? 'Masukkan username secret baru' : 'Pilih / cari akun internet';
+    }
+    if (passwordInput) {
+      passwordInput.placeholder = isCreateMode ? 'Isi password secret baru atau kosongkan = sama dengan username' : 'Kosongkan bila sama dengan username';
+    }
+    if (hint) {
+      hint.innerText = isCreateMode
+        ? 'Mode secret baru aktif. Username tidak perlu sudah ada di MikroTik, dan secret baru akan dibuat setelah admin menyetujui pengajuan.'
+        : 'Mode memakai secret yang sudah ada. Silakan pilih akun PPPoE yang sudah tersedia di MikroTik.';
+    }
+    if (modeHint) {
+      modeHint.innerText = isCreateMode
+        ? 'Secret baru belum langsung dibuat saat teknisi kirim form. Sistem hanya menyimpan pengajuan, lalu admin akan membuat dan mengaktifkannya saat approve.'
+        : 'Mode default memakai secret yang sudah ada di MikroTik. Aktifkan tombol ini jika teknisi ingin mengajukan secret baru, dan secret baru akan dibuat aktif hanya setelah admin approve.';
+    }
+  }
+
   async function getLocation() {
     if (!navigator.geolocation) return alert('Geolocation tidak didukung di perangkat ini.');
     try {
@@ -269,27 +338,31 @@
 
   async function loadPppoeUsers() {
     const routerId = document.getElementById('router_id')?.value || '';
+    const createSecret = document.getElementById('create_pppoe_secret');
     const hint = document.getElementById('pppoeHint');
     const list = document.getElementById('pppoeList');
-    if (hint) hint.innerText = 'Memuat user PPPoE dari MikroTik...';
+    if (createSecret?.checked) {
+      if (list) list.replaceChildren();
+      if (hint) hint.innerText = 'Mode secret baru aktif. Tidak perlu mengambil daftar akun dari MikroTik.';
+      return;
+    }
+    if (hint) hint.innerText = 'Memuat akun internet dari MikroTik...';
     if (list) list.replaceChildren();
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-users?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-users`;
       const res = await fetch(url);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memuat user PPPoE');
+      if (!res.ok) throw new Error(data.error || 'Gagal memuat akun PPPoE');
       const users = Array.isArray(data) ? data : [];
       if (list) {
         list.replaceChildren();
-        users
-          .filter(u => u && u.name)
-          .forEach((u) => {
-            const option = document.createElement('option');
-            option.value = String(u.name);
-            list.appendChild(option);
-          });
+        users.filter((u) => u && u.name).forEach((u) => {
+          const option = document.createElement('option');
+          option.value = String(u.name);
+          list.appendChild(option);
+        });
       }
-      if (hint) hint.innerText = users.length ? `Tersedia ${users.length} user PPPoE.` : 'Tidak ada user PPPoE.';
+      if (hint) hint.innerText = users.length ? `Tersedia ${users.length} akun PPPoE yang belum dipakai.` : 'Tidak ada akun PPPoE tersedia.';
     } catch (e) {
       if (hint) hint.innerText = e.message;
     }
@@ -297,39 +370,73 @@
 
   async function loadPppoeProfiles() {
     const routerId = document.getElementById('router_id')?.value || '';
-    const sel = document.getElementById('isolir_profile');
-    if (sel) sel.replaceChildren();
+    const normalSel = document.getElementById('normal_pppoe_profile');
+    const isolirSel = document.getElementById('isolir_profile');
+    const previousNormal = normalSel?.value || '';
+    const previousIsolir = isolirSel?.value || 'BEATISOLIR';
+
+    if (normalSel) normalSel.replaceChildren();
+    if (isolirSel) isolirSel.replaceChildren();
+
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-profiles?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-profiles`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memuat profile PPPoE');
-      const profiles = Array.isArray(data) ? data : [];
-      if (sel) {
-        sel.replaceChildren();
-        const defaultOption = document.createElement('option');
-        defaultOption.value = 'isolir';
-        defaultOption.textContent = 'isolir';
-        sel.appendChild(defaultOption);
-        for (const p of profiles) {
-          if (!p || !p.name || p.name === 'isolir') continue;
-          const option = document.createElement('option');
-          option.value = String(p.name);
-          option.textContent = String(p.name);
-          sel.appendChild(option);
-        }
+      const profiles = (Array.isArray(data) ? data : []).filter((p) => p && p.name);
+
+      if (normalSel) {
+        const defaultNormal = document.createElement('option');
+        defaultNormal.value = '';
+        defaultNormal.textContent = 'Ikuti profile paket';
+        normalSel.appendChild(defaultNormal);
       }
+
+      if (isolirSel) {
+        const defaultIsolir = document.createElement('option');
+        defaultIsolir.value = 'BEATISOLIR';
+        defaultIsolir.textContent = 'BEATISOLIR';
+        isolirSel.appendChild(defaultIsolir);
+      }
+
+      profiles.forEach((p) => {
+        const name = String(p.name);
+        if (normalSel && name !== 'BEATISOLIR') {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          normalSel.appendChild(option);
+        }
+        if (isolirSel && name !== 'BEATISOLIR') {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          isolirSel.appendChild(option);
+        }
+      });
+
+      if (normalSel) normalSel.value = previousNormal || '';
+      if (isolirSel) isolirSel.value = previousIsolir || 'BEATISOLIR';
+      applyPackageProfileHint();
     } catch (e) {
-      if (sel) {
-        sel.replaceChildren();
-        const defaultOption = document.createElement('option');
-        defaultOption.value = 'isolir';
-        defaultOption.textContent = 'isolir';
-        sel.appendChild(defaultOption);
+      if (normalSel) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Ikuti profile paket';
+        normalSel.appendChild(option);
+      }
+      if (isolirSel) {
+        const option = document.createElement('option');
+        option.value = 'BEATISOLIR';
+        option.textContent = 'BEATISOLIR';
+        isolirSel.appendChild(option);
       }
     }
   }
 
+  document.getElementById('package_id')?.addEventListener('change', applyPackageProfileHint);
+
+  toggleSecretMode();
   loadPppoeUsers();
   loadPppoeProfiles();
 </script>

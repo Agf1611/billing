@@ -5,6 +5,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem('tech-portal-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
+  <meta name="theme-color" content="#0f172a">
   <title>
     <%= title %> - <%= company %>
   </title>
@@ -12,29 +19,70 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <style>
+    :root,
+    html[data-theme="dark"] {
+      --tech-bg: #0f172a;
+      --tech-bg-soft: #1e293b;
+      --tech-bg-soft-2: rgba(255, 255, 255, .045);
+      --tech-border: #334155;
+      --tech-text: #f8fafc;
+      --tech-muted: #94a3b8;
+      --tech-primary: #3b82f6;
+      --tech-success: #10b981;
+      --tech-warning: #f59e0b;
+      --tech-danger: #ef4444;
+      --tech-nav-bg: rgba(30, 41, 59, .94);
+      --tech-shadow: 0 18px 48px rgba(15, 23, 42, .26);
+      --tech-input-bg: #172033;
+    }
+
+    html[data-theme="light"] {
+      --tech-bg: #f5f7fb;
+      --tech-bg-soft: rgba(255, 255, 255, .95);
+      --tech-bg-soft-2: rgba(59, 130, 246, .06);
+      --tech-border: rgba(148, 163, 184, .28);
+      --tech-text: #0f172a;
+      --tech-muted: #64748b;
+      --tech-primary: #2563eb;
+      --tech-success: #0f9f6e;
+      --tech-warning: #d97706;
+      --tech-danger: #dc2626;
+      --tech-nav-bg: rgba(255, 255, 255, .94);
+      --tech-shadow: 0 18px 42px rgba(148, 163, 184, .2);
+      --tech-input-bg: #ffffff;
+    }
+
+    html,
     body {
-      background-color: #0f172a;
-      color: #f8fafc;
+      background-color: var(--tech-bg);
+      color: var(--tech-text);
+    }
+
+    body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       padding-top: 60px;
       padding-bottom: 80px;
       -webkit-tap-highlight-color: transparent;
+      transition: background-color .2s ease, color .2s ease;
     }
 
-    /* Top Navigation */
+    a {
+      color: inherit;
+    }
+
     .top-nav {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       height: 60px;
-      background: rgba(30, 41, 59, 0.9);
+      background: var(--tech-nav-bg);
       backdrop-filter: blur(10px);
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid var(--tech-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 20px;
+      padding: 0 16px;
       z-index: 1000;
     }
 
@@ -42,26 +90,75 @@
       font-weight: 700;
       font-size: 18px;
       margin: 0;
+      max-width: 46vw;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-nav-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     .top-nav-btn {
       background: transparent;
       border: none;
-      color: #f8fafc;
+      color: var(--tech-text);
       font-size: 20px;
       padding: 5px;
+      text-decoration: none;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    /* Bottom Navigation */
+    .theme-switch-btn {
+      border: 1px solid var(--tech-border);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1;
+      background: var(--tech-bg-soft-2);
+      color: var(--tech-text);
+    }
+
+    .nav-icon-badge,
+    .nav-count {
+      position: absolute;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--tech-danger);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      box-shadow: 0 8px 18px rgba(239, 68, 68, .32);
+    }
+
+    .nav-icon-badge {
+      top: -3px;
+      right: -4px;
+    }
+
     .bottom-nav {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
       height: 65px;
-      background: rgba(30, 41, 59, 0.95);
+      background: var(--tech-nav-bg);
       backdrop-filter: blur(10px);
-      border-top: 1px solid #334155;
+      border-top: 1px solid var(--tech-border);
       display: flex;
       justify-content: space-around;
       align-items: center;
@@ -73,11 +170,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      color: #94a3b8;
+      color: var(--tech-muted);
       text-decoration: none;
       font-size: 11px;
       font-weight: 500;
-      transition: all 0.2s;
+      transition: all .2s;
+      position: relative;
+      min-width: 56px;
     }
 
     .nav-item i {
@@ -86,16 +185,21 @@
     }
 
     .nav-item.active {
-      color: #3b82f6;
+      color: var(--tech-primary);
     }
 
-    /* Cards & Utilities */
+    .nav-count {
+      top: -2px;
+      right: 7px;
+    }
+
     .t-card {
-      background: #1e293b;
-      border-radius: 16px;
+      background: var(--tech-bg-soft);
+      border-radius: 18px;
       padding: 15px;
       margin-bottom: 15px;
-      border: 1px solid #334155;
+      border: 1px solid var(--tech-border);
+      box-shadow: var(--tech-shadow);
     }
 
     .badge-status {
@@ -106,21 +210,21 @@
     }
 
     .badge-open {
-      background: rgba(239, 68, 68, 0.2);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, .14);
+      color: var(--tech-danger);
+      border: 1px solid rgba(239, 68, 68, .28);
     }
 
     .badge-in_progress {
-      background: rgba(245, 158, 11, 0.2);
-      color: #f59e0b;
-      border: 1px solid rgba(245, 158, 11, 0.3);
+      background: rgba(245, 158, 11, .16);
+      color: var(--tech-warning);
+      border: 1px solid rgba(245, 158, 11, .28);
     }
 
     .badge-resolved {
-      background: rgba(16, 185, 129, 0.2);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, .15);
+      color: var(--tech-success);
+      border: 1px solid rgba(16, 185, 129, .26);
     }
 
     .btn-action {
@@ -131,7 +235,6 @@
       margin-top: 10px;
     }
 
-    /* Stats Grid */
     .stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -140,11 +243,12 @@
     }
 
     .stat-box {
-      background: #1e293b;
+      background: var(--tech-bg-soft);
       border-radius: 16px;
       padding: 15px;
-      border: 1px solid #334155;
+      border: 1px solid var(--tech-border);
       text-align: center;
+      box-shadow: var(--tech-shadow);
     }
 
     .stat-box .val {
@@ -153,9 +257,53 @@
       margin: 5px 0 0 0;
     }
 
-    .stat-box .lbl {
-      font-size: 12px;
-      color: #94a3b8;
+    .stat-box .lbl,
+    .text-secondary,
+    .muted-text {
+      color: var(--tech-muted) !important;
+    }
+
+    .surface-soft {
+      background: var(--tech-bg-soft-2) !important;
+      border-color: var(--tech-border) !important;
+      color: var(--tech-text) !important;
+    }
+
+    .tech-field,
+    .tech-select,
+    .tech-textarea,
+    .tech-input-group .input-group-text {
+      background: var(--tech-input-bg) !important;
+      color: var(--tech-text) !important;
+      border-color: var(--tech-border) !important;
+      box-shadow: none !important;
+    }
+
+    .tech-field::placeholder,
+    .tech-textarea::placeholder {
+      color: var(--tech-muted) !important;
+    }
+
+    .field-hint {
+      color: var(--tech-muted);
+      font-size: 11px;
+      line-height: 1.45;
+      margin-top: 6px;
+    }
+
+    @media (max-width: 576px) {
+      .top-nav {
+        padding: 0 12px;
+      }
+
+      .top-nav-title {
+        font-size: 16px;
+        max-width: 36vw;
+      }
+
+      .theme-switch-btn span {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -166,21 +314,27 @@
     <h1 class="top-nav-title">
       <%= title %>
     </h1>
-    <div style="display:flex;gap:10px;align-items:center">
+    <div class="top-nav-actions">
       <a href="/lang/id" class="top-nav-btn" title="Bahasa Indonesia" style="font-size:12px;font-weight:700">ID</a>
       <a href="/lang/en" class="top-nav-btn" title="English" style="font-size:12px;font-weight:700">EN</a>
+      <button type="button" class="top-nav-btn theme-switch-btn" id="themeToggleBtn" aria-label="Ganti tema portal teknisi">
+        <i class="bi bi-moon-stars-fill"></i>
+        <span>Gelap</span>
+      </button>
       <a href="/tech/customers/new" class="top-nav-btn" title="<%= t('tech.new_customer', 'Tambah Pelanggan') %>"><i class="bi bi-person-plus-fill"></i></a>
+      <a href="/tech/pool" class="top-nav-btn" title="Tiket gangguan baru">
+        <i class="bi bi-bell-fill"></i>
+        <% if (techNav && techNav.openTickets > 0) { %><span class="nav-icon-badge"><%= techNav.openTickets > 99 ? '99+' : techNav.openTickets %></span><% } %>
+      </a>
       <a href="/tech/logout" class="top-nav-btn" onclick="return confirm('<%= t('tech.logout_confirm', 'Apakah Anda yakin ingin logout?') %>')"><i class="bi bi-box-arrow-right"></i></a>
     </div>
   </div>
 
   <div class="container py-3">
-    <% if (typeof msg !=='undefined' && msg) { %>
-      <div class="alert alert-<%= msg.type==='error'?'danger':'success' %> alert-dismissible fade show rounded-4"
-        role="alert" style="font-size: 13px;">
-        <i class="bi bi-<%= msg.type==='error'?'exclamation-circle':'check-circle' %>-fill me-2"></i>
+    <% if (typeof msg !== 'undefined' && msg) { %>
+      <div class="alert alert-<%= msg.type === 'error' ? 'danger' : 'success' %> alert-dismissible fade show rounded-4" role="alert" style="font-size: 13px;">
+        <i class="bi bi-<%= msg.type === 'error' ? 'exclamation-circle' : 'check-circle' %>-fill me-2"></i>
         <%= msg.text %>
-          <button type="button" class="btn-close btn-close-white" style="font-size: 10px;"
-            data-bs-dismiss="alert"></button>
+        <button type="button" class="btn-close" style="font-size: 10px;" data-bs-dismiss="alert"></button>
       </div>
-      <% } %>
+    <% } %>

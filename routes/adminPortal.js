@@ -1453,7 +1453,7 @@ router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res
   });
 });
 
-router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
     if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
@@ -1463,11 +1463,45 @@ router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdm
     if (String(row.status || '') !== 'pending') throw new Error('Request sudah diproses');
 
     const payload = JSON.parse(String(row.payload_json || '{}') || '{}');
+    const shouldCreateSecret = payload.create_pppoe_secret === true || payload.create_pppoe_secret === 1 || payload.create_pppoe_secret === '1' || payload.create_pppoe_secret === 'true' || payload.create_pppoe_secret === 'on';
     const pppoeUsername = String(payload.pppoe_username || '').trim();
+    const pppoePassword = String(payload.pppoe_password || '').trim();
     const routerId = payload.router_id ? Number(payload.router_id) : null;
+    const syncWarnings = [];
     if (pppoeUsername) {
       const existing = db.prepare('SELECT id, name FROM customers WHERE router_id IS ? AND pppoe_username = ? LIMIT 1').get(routerId ?? null, pppoeUsername);
       if (existing) throw new Error(`PPPoE Username sudah dipakai pelanggan lain: ${existing.name}`);
+
+      const desiredProfile = resolveCustomerPppoeProfile(
+        payload.package_id,
+        payload.status,
+        payload.isolir_profile,
+        payload.normal_pppoe_profile
+      );
+      const targetProfile = await resolveAvailablePppoeProfile(desiredProfile, routerId, 'default');
+      try {
+        const existingSecret = await getExistingPppoeSecretByUsername(pppoeUsername, routerId);
+        if (existingSecret && existingSecret.id) {
+          const updatePayload = {};
+          if (pppoePassword) updatePayload.password = pppoePassword;
+          if (targetProfile) updatePayload.profile = targetProfile;
+          if (Object.keys(updatePayload).length) {
+            await mikrotikService.updatePppoeSecret(existingSecret.id, updatePayload, routerId);
+          }
+        } else if (shouldCreateSecret) {
+          await mikrotikService.addPppoeSecret({
+            name: pppoeUsername,
+            password: pppoePassword || pppoeUsername,
+            service: 'pppoe',
+            profile: targetProfile,
+            comment: payload.name ? `Customer: ${String(payload.name).trim()}` : ''
+          }, routerId);
+        } else {
+          syncWarnings.push('Secret PPPoE belum ditemukan di router, jadi admin perlu mengecek akun existing sebelum layanan dipakai.');
+        }
+      } catch (syncErr) {
+        syncWarnings.push(`Sinkron akun internet belum sempurna: ${syncErr.message}`);
+      }
     }
 
     const createResult = customerSvc.createCustomer(payload);
@@ -1482,7 +1516,8 @@ router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdm
       WHERE id=?
     `).run(reviewNote, resolvePaidByName(req, 'Admin'), customerId, id);
 
-    req.session._msg = { type: 'success', text: `Pengajuan pelanggan "${row.customer_name}" disetujui.` };
+    const warningText = syncWarnings.length ? ` Catatan: ${syncWarnings.join(' | ')}` : '';
+    req.session._msg = { type: 'success', text: `Pengajuan pelanggan "${row.customer_name}" disetujui.${warningText}` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal approve: ' + (e.message || String(e)) };
   }
