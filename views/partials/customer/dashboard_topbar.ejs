@@ -5,6 +5,27 @@
   const pageCompanyLogoUrl = typeof companyLogoUrl !== 'undefined'
     ? companyLogoUrl
     : (settings?.company_logo_url || '/img/logo.png');
+  const unreadCount = typeof notificationUnread !== 'undefined'
+    ? Number(notificationUnread) || 0
+    : (typeof notificationUnreadCount !== 'undefined'
+      ? Number(notificationUnreadCount) || 0
+      : (Array.isArray(notifications) ? notifications.length : 0));
+  const viewerProfile = typeof profile !== 'undefined' ? profile : {};
+  const viewerCustomer = typeof customer !== 'undefined' ? customer : {};
+  const resolvedCustomerName = String(viewerProfile.name || viewerCustomer.name || 'Pelanggan');
+  const resolvedCustomerCode = String(
+    viewerProfile.genieacs_tag || viewerProfile.pppoe_username || viewerProfile.phone || viewerCustomer.phone || viewerProfile.id || viewerCustomer.id || '-'
+  ).trim();
+  const resolvedRouterAccess = typeof hasRouterPortalAccess !== 'undefined'
+    ? Boolean(hasRouterPortalAccess)
+    : Boolean(
+      (viewerCustomer.ssid && viewerCustomer.ssid !== '-') ||
+      (viewerCustomer.serialNumber && viewerCustomer.serialNumber !== '-') ||
+      (viewerCustomer.rxPower && viewerCustomer.rxPower !== '-') ||
+      (viewerCustomer.model && viewerCustomer.model !== '-') ||
+      (viewerCustomer.productClass && viewerCustomer.productClass !== '-') ||
+      (Array.isArray(viewerCustomer.connectedUsers) && viewerCustomer.connectedUsers.length > 0)
+    );
 %>
 <header class="app-topbar">
   <div class="topbar-row">
@@ -30,8 +51,8 @@
         <button type="button" class="header-action" aria-label="Notifikasi" onclick="openNotificationsPanel()">
           <i class="bi bi-bell"></i>
         </button>
-        <% if (notificationUnread > 0) { %>
-          <span class="notif-badge" id="notificationBadge"><%= notificationUnread > 99 ? '99+' : notificationUnread %></span>
+        <% if (unreadCount > 0) { %>
+          <span class="notif-badge" id="notificationBadge"><%= unreadCount > 99 ? '99+' : unreadCount %></span>
         <% } %>
       </div>
       <div class="header-icon-wrap">
@@ -40,13 +61,13 @@
         </button>
         <div class="account-menu" id="accountMenu">
           <div class="account-menu-head">
-            <strong><%= customerName %></strong>
-            <span><%= customerCode %></span>
+            <strong><%= resolvedCustomerName %></strong>
+            <span><%= resolvedCustomerCode %></span>
           </div>
           <button type="button" onclick="openAppTab('profile'); closeAccountMenu();">
             <i class="bi bi-person-badge"></i> Profil pelanggan
           </button>
-          <% if (hasRouterPortalAccess) { %>
+          <% if (resolvedRouterAccess) { %>
             <button type="button" onclick="openAppTab('settings'); closeAccountMenu();">
               <i class="bi bi-router"></i> Router & WiFi
             </button>

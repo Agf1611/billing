@@ -3065,10 +3065,42 @@
   </div>
 
   <div class="app-shell">
-    <%- include('partials/customer/dashboard_topbar') %>
+    <%- include('partials/customer/dashboard_topbar', {
+      companyLogoUrl,
+      companyName,
+      customerName,
+      customerCode,
+      hasRouterPortalAccess,
+      notificationUnread,
+      notificationUnreadCount,
+      notifications,
+      profileData,
+      customerData,
+      settings
+    }) %>
 
     <main class="app-main">
-      <%- include('partials/customer/dashboard_home_screen') %>
+      <%- include('partials/customer/dashboard_home_screen', {
+        customerName,
+        customerCode,
+        profileData,
+        customerData,
+        packageName,
+        liveDownloadCap,
+        liveUploadCap,
+        isPppoeOnline,
+        pppoeStatusText,
+        latestInvoice,
+        monthlyPrice,
+        uploadBytes,
+        downloadBytes,
+        appNotif,
+        hasRouterPortalAccess,
+        formatDate,
+        formatCurrency,
+        formatBytes,
+        connectedUsers
+      }) %>
 
       <section class="app-screen" data-tab="traffic">
         <div class="traffic-stack">
@@ -3163,7 +3195,27 @@
 
       <%- include('partials/customer/dashboard_speedtest_screen') %>
 
-      <%- include('partials/customer/dashboard_billing_screen') %>
+      <%- include('partials/customer/dashboard_billing_screen', {
+        companyName,
+        companyLogoUrl,
+        packageName,
+        profileData,
+        customerData,
+        settings,
+        notifications,
+        notificationUnreadCount,
+        formatCurrency,
+        formatDateTime,
+        manualPaymentBank,
+        manualPaymentAccountNumber,
+        manualPaymentAccountName,
+        manualPaymentNotes,
+        hasManualPayment,
+        companyLegalName,
+        companyAddressText,
+        companyPhoneText,
+        companyEmailText
+      }) %>
 
       <section class="app-screen" data-tab="ticketing">
         <div class="ticket-card">
