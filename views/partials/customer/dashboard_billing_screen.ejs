@@ -4,6 +4,8 @@
   const safeMonthNames = Array.isArray(monthNames)
     ? monthNames
     : [null, 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const safeUpstreamProviderName = typeof upstreamProviderName !== 'undefined' ? upstreamProviderName : '';
+  const safePaymentChannels = Array.isArray(paymentChannels) ? paymentChannels : [];
 %>
 <section class="app-screen" data-tab="billing">
   <div class="billing-card">
@@ -17,7 +19,7 @@
       </button>
     </div>
 
-    <% if (unpaidInvoices.length === 0) { %>
+    <% if (safeUnpaidInvoices.length === 0) { %>
       <div class="empty-card">
         <i class="bi bi-patch-check"></i>
         <strong>Semua tagihan lunas</strong>
@@ -25,13 +27,13 @@
       </div>
     <% } else { %>
       <div class="billing-list">
-        <% unpaidInvoices.forEach((inv) => { %>
+        <% safeUnpaidInvoices.forEach((inv) => { %>
           <div class="billing-item">
             <div class="item-text">
               <div class="billing-topline">
                 <div>
                   <div class="billing-code">INV-<%= inv.id %></div>
-                  <div class="billing-period"><%= monthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
+                  <div class="billing-period"><%= safeMonthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
                 </div>
                 <div class="billing-amount"><%= formatCurrency(inv.amount) %></div>
               </div>
@@ -70,7 +72,7 @@
       </div>
     </div>
 
-    <% if (paidInvoices.length === 0) { %>
+    <% if (safePaidInvoices.length === 0) { %>
       <div class="empty-card">
         <i class="bi bi-clock-history"></i>
         <strong>Belum ada riwayat lunas</strong>
@@ -78,13 +80,13 @@
       </div>
     <% } else { %>
       <div class="billing-list">
-        <% paidInvoices.slice(0, 10).forEach((inv) => { %>
+        <% safePaidInvoices.slice(0, 10).forEach((inv) => { %>
           <div class="billing-item">
             <div class="item-text">
               <div class="billing-topline">
                 <div>
                   <div class="billing-code">INV-<%= inv.id %></div>
-                  <div class="billing-period"><%= monthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
+                  <div class="billing-period"><%= safeMonthNames[Number(inv.period_month)] || inv.period_month %> <%= inv.period_year %></div>
                 </div>
                 <div class="billing-amount"><%= formatCurrency(inv.amount) %></div>
               </div>
@@ -108,9 +110,9 @@
       </div>
     <% } %>
 
-    <% if (paymentChannels && paymentChannels.length > 0) { %>
+    <% if (safePaymentChannels.length > 0) { %>
       <div class="payment-method-row">
-        <% paymentChannels.slice(0, 8).forEach((channel) => { %>
+        <% safePaymentChannels.slice(0, 8).forEach((channel) => { %>
           <% if (channel.active) { %>
             <span class="payment-method-chip"><%= channel.name || channel.code %></span>
           <% } %>
@@ -163,12 +165,12 @@
             </div>
           </div>
         <% } %>
-        <% if (upstreamProviderName) { %>
+        <% if (safeUpstreamProviderName) { %>
           <div class="detail-item">
             <i class="bi bi-hdd-network"></i>
             <div>
               <strong>Sumber Internet</strong>
-              <span><%= upstreamProviderName %></span>
+              <span><%= safeUpstreamProviderName %></span>
             </div>
           </div>
         <% } %>
