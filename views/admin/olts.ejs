@@ -7,39 +7,40 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
-    /* New Dashboard Layout Styles */
-    .olt-dashboard { display: flex; flex-direction: column; gap: 20px; }
+    /* OLT Dashboard */
+    .olt-dashboard { display: flex; flex-direction: column; gap: 14px; }
     
     .stats-row { 
       display: grid; 
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
-      gap: 15px; 
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); 
+      gap: 10px; 
     }
     
     .stat-card-v2 {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
+      background: var(--surface-strong);
+      border-radius: 18px;
+      padding: 14px 15px;
       display: flex;
       align-items: center;
-      gap: 15px;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-      border: 1px solid #e2e8f0;
+      gap: 12px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--border);
     }
     
     .stat-card-v2 .icon-box {
-      width: 48px;
-      height: 48px;
-      border-radius: 10px;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 19px;
       color: white;
+      flex: 0 0 auto;
     }
     
-    .stat-card-v2 .details h3 { margin: 0; font-size: 24px; font-weight: 700; color: #1e293b; line-height: 1; }
-    .stat-card-v2 .details p { margin: 0; font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+    .stat-card-v2 .details h3 { margin: 0; font-size: 22px; font-weight: 800; color: var(--text); line-height: 1; }
+    .stat-card-v2 .details p { margin: 3px 0 0; font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
     
     .bg-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
     .bg-green { background: linear-gradient(135deg, #10b981, #059669); }
@@ -47,92 +48,105 @@
     .bg-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
     
     .system-info-bar {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 12px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px 14px;
       display: flex;
       flex-wrap: wrap;
-      gap: 20px;
+      gap: 12px 16px;
       align-items: center;
-      font-size: 13px;
+      font-size: 12px;
+      box-shadow: var(--shadow-soft);
     }
     
-    .info-item { display: flex; align-items: center; gap: 8px; color: #475569; }
-    .info-item i { color: #3b82f6; }
+    .info-item { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+    .info-item strong { color: var(--text); font-weight: 700; }
+    .info-item i { color: var(--primary-2); }
     
     .olt-selector-container {
-      background: white;
-      padding: 15px 20px;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
+      background: var(--surface-strong);
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 15px;
+      gap: 10px;
       flex-wrap: wrap;
+      box-shadow: var(--shadow-soft);
     }
     
     .custom-select-v2 {
-      padding: 8px 12px;
-      border-radius: 8px;
-      border: 1px solid #cbd5e1;
+      padding: 8px 11px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
       font-weight: 600;
-      color: #1e293b;
+      color: var(--text);
       min-width: 250px;
       outline: none;
+      background: var(--bg3);
     }
     
-    .custom-select-v2:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .custom-select-v2:focus { border-color: var(--primary-2); box-shadow: 0 0 0 3px var(--pdim); }
 
     .onu-main-card {
-      background: white;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
+      background: var(--surface-strong);
+      border-radius: 18px;
+      border: 1px solid var(--border);
       overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-soft);
     }
     
     .onu-main-card .card-header {
-      padding: 15px 20px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 14px;
+      background: var(--surface-soft);
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
     
     .onu-table-v2 { width: 100%; border-collapse: collapse; }
     .onu-table-v2 th { 
-      background: #f1f5f9; 
-      padding: 12px 15px; 
+      background: color-mix(in srgb, var(--bg3) 86%, transparent); 
+      padding: 10px 12px; 
       text-align: left; 
-      font-size: 12px; 
-      font-weight: 700; 
-      color: #475569; 
+      font-size: 11px; 
+      font-weight: 800; 
+      color: var(--muted); 
       text-transform: uppercase;
-      border-bottom: 1px solid #e2e8f0;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: .06em;
+      white-space: nowrap;
     }
-    .onu-table-v2 td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #1e293b; }
-    .onu-table-v2 tr:hover { background: #f8fafc; }
+    .onu-table-v2 td { padding: 9px 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent); font-size: 12px; color: var(--text); vertical-align: middle; }
+    .onu-table-v2 tr:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
     
     .status-pill-v2 {
-      padding: 4px 10px;
+      padding: 3px 9px;
       border-radius: 20px;
-      font-size: 11px;
-      font-weight: 700;
+      font-size: 10px;
+      font-weight: 800;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
+      letter-spacing: .04em;
     }
     .pill-online { background: #dcfce7; color: #15803d; }
     .pill-offline { background: #fee2e2; color: #b91c1c; }
     
     .power-badge {
       font-family: 'JetBrains Mono', monospace;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 4px;
+      font-weight: 700;
+      padding: 3px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      display: inline-flex;
+      min-width: 72px;
+      justify-content: center;
     }
     .power-good { color: #059669; background: #ecfdf5; }
     .power-warning { color: #d97706; background: #fffbeb; }
@@ -150,39 +164,111 @@
     @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     .btn-action-v2 {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid #e2e8f0;
-      background: white;
-      color: #64748b;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--muted);
       transition: all 0.2s;
       cursor: pointer;
     }
-    .btn-action-v2:hover { background: #f1f5f9; color: #1e293b; border-color: #cbd5e1; }
+    .btn-action-v2:hover { background: var(--surface-soft); color: var(--text); border-color: var(--panel-border); }
     .btn-reboot-v2:hover { color: #ef4444; background: #fef2f2; border-color: #fee2e2; }
     .btn-rename-v2:hover { color: #3b82f6; background: #eff6ff; border-color: #dbeafe; }
     .btn-wan-v2:hover { color: #059669; background: #ecfdf5; border-color: #d1fae5; }
 
-    .traffic-v2 { display: flex; gap: 12px; font-family: monospace; font-size: 12px; font-weight: 600; }
+    .traffic-v2 { display: flex; gap: 10px; font-family: monospace; font-size: 11px; font-weight: 700; }
     .traffic-in-v2 { color: #10b981; }
     .traffic-out-v2 { color: #3b82f6; }
 
-    .empty-state { padding: 60px 20px; text-align: center; color: #94a3b8; }
-    .empty-state i { font-size: 48px; display: block; margin-bottom: 15px; }
+    .empty-state { padding: 42px 16px; text-align: center; color: var(--muted); }
+    .empty-state i { font-size: 40px; display: block; margin-bottom: 12px; }
+
+    .sn-mac {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .onu-name-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .onu-name-main {
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.25;
+    }
+
+    .onu-name-meta {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+
+    .onu-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-outline-primary.btn-sm.py-0.px-2 {
+      border-radius: 10px;
+      font-size: 11px !important;
+      padding: 4px 9px !important;
+      border-color: var(--border);
+      color: var(--primary-2);
+      background: var(--surface-soft);
+    }
+
+    .btn-outline-primary.btn-sm.py-0.px-2:hover {
+      background: var(--pdim);
+      border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+      color: var(--text);
+    }
 
     .loading-overlay {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(255,255,255,0.7);
+      background: color-mix(in srgb, var(--bg2) 72%, transparent);
       backdrop-filter: blur(2px);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 10;
+    }
+
+    @media (max-width: 1200px) {
+      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tbl-wrap { max-height: 520px !important; }
+    }
+
+    @media (max-width: 768px) {
+      .olt-dashboard { gap: 12px; }
+      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .stat-card-v2 { padding: 12px; }
+      .stat-card-v2 .details h3 { font-size: 18px; }
+      .system-info-bar { padding: 10px 12px; }
+      .olt-selector-container { padding: 12px; }
+      .custom-select-v2 { min-width: 100%; width: 100%; }
+      .onu-main-card .card-header { padding: 11px 12px; }
+      .onu-table-v2 th, .onu-table-v2 td { padding: 8px 10px; }
+      .btn-action-v2 { width: 28px; height: 28px; }
+      .traffic-v2 { width: 100%; justify-content: flex-start; }
     }
   </style>
 </head>
@@ -350,20 +436,21 @@
         <div class="tbl-wrap" style="max-height: 600px; overflow: auto;">
           <table class="onu-table-v2" id="onu-table">
             <thead>
-              <tr>
-                <th><%= t('admin.olts.table.no', 'No') %></th>
-                <th><%= t('admin.olts.table.id', 'Id') %></th>
-                <th><%= t('admin.olts.table.serial', 'Serial Number') %></th>
-                <th><%= t('admin.olts.table.status', 'Status') %></th>
-                <th><%= t('admin.olts.table.tx', 'TxPower') %></th>
-                <th><%= t('admin.olts.table.rx', 'RxPower') %></th>
-                <th><%= t('admin.olts.table.distance', 'Jarak') %></th>
-                <th style="text-align:right"><%= t('common.actions', 'Aksi') %></th>
-              </tr>
+                <tr>
+                  <th><%= t('admin.olts.table.no', 'No') %></th>
+                  <th>ONU</th>
+                  <th>MAC ONU</th>
+                  <th><%= t('admin.olts.table.serial', 'Serial Number') %></th>
+                  <th><%= t('admin.olts.table.status', 'Status') %></th>
+                  <th><%= t('admin.olts.table.tx', 'TxPower') %></th>
+                  <th><%= t('admin.olts.table.rx', 'RxPower') %></th>
+                  <th><%= t('admin.olts.table.distance', 'Jarak') %></th>
+                  <th style="text-align:right"><%= t('common.actions', 'Aksi') %></th>
+                </tr>
             </thead>
             <tbody id="onu-table-body">
               <tr>
-                <td colspan="8">
+                <td colspan="9">
                   <div class="empty-state">
                     <i class="bi bi-hdd-network"></i>
                     <p><%= t('admin.olts.empty_select', 'Pilih perangkat OLT di atas untuk memantau data ONU.') %></p>
@@ -554,6 +641,53 @@
           <label class="fl">VLAN ID</label>
           <input type="number" id="wan_vlan" class="fc" value="100" required>
         </div>
+
+        <div id="wan_tr069_extra" style="display:none">
+          <div class="alert alert-i" style="font-size:12px;padding:10px 12px">
+            <i class="bi bi-info-circle"></i> Mode TR069 cocok untuk dorong konfigurasi ulang modem yang sudah terhubung ke GenieACS. Aktifkan bootstrap ACS bila modem perlu diarahkan kembali ke server ACS setelah reset.
+          </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="d-flex align-items-center gap-2 small cursor-pointer" style="margin-top:6px">
+                <input type="checkbox" id="wan_bootstrap_acs" checked>
+                <span>Aktifkan bootstrap ACS</span>
+              </label>
+            </div>
+            <div class="fg">
+              <label class="d-flex align-items-center gap-2 small cursor-pointer" style="margin-top:6px">
+                <input type="checkbox" id="wan_reboot_after_apply" checked>
+                <span>Reboot modem setelah apply</span>
+              </label>
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">ACS URL modem</label>
+            <input type="text" id="wan_acs_url" class="fc" value="<%= settings.tr069_acs_url || '' %>" placeholder="http://domain-acs-anda:7547">
+          </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="fl">ACS Username modem</label>
+              <input type="text" id="wan_acs_username" class="fc" value="<%= settings.tr069_acs_username || '' %>" placeholder="opsional">
+            </div>
+            <div class="fg">
+              <label class="fl">ACS Password modem</label>
+              <input type="password" id="wan_acs_password" class="fc" value="<%= settings.tr069_acs_password || '' %>" placeholder="opsional">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="d-flex align-items-center gap-2 small cursor-pointer" style="margin-top:6px">
+                <input type="checkbox" id="wan_periodic_enable" <%= settings.tr069_periodic_enable === false ? '' : 'checked' %>>
+                <span>Aktifkan periodic inform</span>
+              </label>
+            </div>
+            <div class="fg">
+              <label class="fl">Interval inform (detik)</label>
+              <input type="number" id="wan_periodic_interval" class="fc" min="30" value="<%= settings.tr069_periodic_interval || 300 %>">
+            </div>
+          </div>
+        </div>
+
         <div id="wan_goapi_extra" style="display:none">
           <div class="form-row">
             <div class="fg"><label class="fl">CVLAN (opsional)</label><input type="number" id="wan_cvlan" class="fc" min="1" max="4094" placeholder="Default = VLAN"></div>
@@ -609,6 +743,13 @@
 </div>
 
 <div id="olt-data-store" data-olts='<%- JSON.stringify(olts || []) %>' style="display:none;"></div>
+<div id="olt-default-settings"
+     data-tr069-acs-url="<%= settings.tr069_acs_url || '' %>"
+     data-tr069-acs-username="<%= settings.tr069_acs_username || '' %>"
+     data-tr069-acs-password="<%= settings.tr069_acs_password || '' %>"
+     data-tr069-periodic-enable="<%= settings.tr069_periodic_enable === false ? 'false' : 'true' %>"
+     data-tr069-periodic-interval="<%= settings.tr069_periodic_interval || 300 %>"
+     style="display:none;"></div>
 
 <script>
 const I18N = {
@@ -632,6 +773,7 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 const oltsData = JSON.parse(document.getElementById('olt-data-store').dataset.olts);
+const oltDefaults = document.getElementById('olt-default-settings');
 
 function editOlt(id) {
   const olt = oltsData.find(o => o.id == id);
@@ -748,14 +890,20 @@ async function loadOltDashboard(id) {
         
         return `<tr>
           <td>${index + 1}</td>
-          <td><code class="sn-mac">${onu.id || '-'}</code></td>
+          <td>
+            <div class="onu-name-cell">
+              <span class="onu-name-main">${onu.name || '-'}</span>
+              <span class="onu-name-meta">${onu.id || '-'}${onu.firmware && onu.firmware !== '-' ? ` • FW ${onu.firmware}` : ''}</span>
+            </div>
+          </td>
+          <td><code class="sn-mac">${onu.mac || '-'}</code></td>
           <td><code class="sn-mac">${onu.sn || '-'}</code></td>
           <td><span class="status-pill-v2 ${statusClass}"><i class="bi bi-circle-fill" style="font-size:6px;"></i> ${formatStatus(statusVal) || '-'}</span></td>
           <td><span class="power-badge">${onu.tx || 'N/A'}</span></td>
           <td><span class="power-badge ${rxClass}">${onu.rx || 'N/A'}</span></td>
           <td><span class="small text-muted">${onu.distance != null ? onu.distance : '-'}</span></td>
           <td style="text-align:right">
-            <div class="d-flex justify-content-end gap-1">
+            <div class="onu-actions">
               <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="configureWanPrompt('${id}', '${onu.index}', '${onu.name}', '${onu.sn}')" style="font-size: 11px;">
                 <i class="bi bi-gear-fill"></i> WAN
               </button>
@@ -768,7 +916,7 @@ async function loadOltDashboard(id) {
     } else {
       document.getElementById('search-container').style.display = 'none';
       tbody.replaceChildren();
-      tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="8">
+      tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9">
         <div class="empty-state">
           <i class="bi bi-exclamation-triangle"></i>
           <p>${stats.error || I18N.noOnuData}</p>
@@ -779,7 +927,7 @@ async function loadOltDashboard(id) {
   } catch (e) {
     const tbody = document.getElementById('onu-table-body');
     tbody.replaceChildren();
-    tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="8" class="text-center p-5 text-danger">${I18N.errorPrefix}${e.message}</td></tr>`);
+    tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9" class="text-center p-5 text-danger">${I18N.errorPrefix}${e.message}</td></tr>`);
   } finally {
     overlay.style.display = 'none';
   }
@@ -871,6 +1019,13 @@ function configureWanPrompt(oltId, index, name, sn) {
   document.getElementById('wan_onu_name').value = name;
   document.getElementById('wan_onu_sn').value = sn;
   document.getElementById('wan_method').value = 'telnet';
+  document.getElementById('wan_bootstrap_acs').checked = true;
+  document.getElementById('wan_reboot_after_apply').checked = true;
+  document.getElementById('wan_acs_url').value = oltDefaults?.dataset?.tr069AcsUrl || '';
+  document.getElementById('wan_acs_username').value = oltDefaults?.dataset?.tr069AcsUsername || '';
+  document.getElementById('wan_acs_password').value = oltDefaults?.dataset?.tr069AcsPassword || '';
+  document.getElementById('wan_periodic_enable').checked = (oltDefaults?.dataset?.tr069PeriodicEnable || 'true') !== 'false';
+  document.getElementById('wan_periodic_interval').value = oltDefaults?.dataset?.tr069PeriodicInterval || '300';
   onWanMethodChange();
   openModal('wanConfigModal');
 }
@@ -879,9 +1034,11 @@ function onWanMethodChange() {
   const m = document.getElementById('wan_method').value;
   const hint = document.getElementById('wan_goapi_hint');
   const extra = document.getElementById('wan_goapi_extra');
+  const tr069 = document.getElementById('wan_tr069_extra');
   const modeSel = document.getElementById('wan_mode');
   if (hint) hint.style.display = m === 'go-api' ? 'block' : 'none';
   if (extra) extra.style.display = m === 'go-api' ? 'block' : 'none';
+  if (tr069) tr069.style.display = m === 'tr069' ? 'block' : 'none';
   if (m === 'go-api' && modeSel) {
     modeSel.value = 'Bridge';
     toggleWanFields();
@@ -914,7 +1071,14 @@ async function submitWanConfig(e) {
     username: document.getElementById('wan_username').value,
     password: document.getElementById('wan_password').value,
     lans: lans.join(','),
-    ssids: ssids.join(',')
+    ssids: ssids.join(','),
+    bootstrap_acs: document.getElementById('wan_bootstrap_acs').checked ? 'true' : 'false',
+    acs_url: document.getElementById('wan_acs_url').value,
+    acs_username: document.getElementById('wan_acs_username').value,
+    acs_password: document.getElementById('wan_acs_password').value,
+    periodic_enable: document.getElementById('wan_periodic_enable').checked ? 'true' : 'false',
+    periodic_interval: document.getElementById('wan_periodic_interval').value,
+    reboot_after_apply: document.getElementById('wan_reboot_after_apply').checked ? 'true' : 'false'
   };
   if (method === 'go-api') {
     payload.cvlan = document.getElementById('wan_cvlan').value;
@@ -933,7 +1097,10 @@ async function submitWanConfig(e) {
     });
     const data = await res.json();
     if (data.success) {
-      alert('Konfigurasi WAN berhasil diterapkan!');
+      let message = 'Konfigurasi WAN berhasil diterapkan!';
+      if (data.output?.rebootQueued) message += '\n\nReboot modem berhasil diantrikan melalui GenieACS.';
+      if (data.output?.warning) message += `\n\nCatatan: ${data.output.warning}`;
+      alert(message);
       closeModal('wanConfigModal');
       refreshCurrentOlt();
     } else {

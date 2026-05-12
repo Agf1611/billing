@@ -24,9 +24,22 @@ function normalizePhoneDigits(input, defaultCountryCode = '62') {
   return defaultCountryCode + digits;
 }
 
+function normalizeWhatsappTarget(input, defaultCountryCode = '62') {
+  return normalizePhoneDigits(input, defaultCountryCode);
+}
+
 function formatPhoneDisplay(input, defaultCountryCode = '62') {
   const normalized = normalizePhoneDigits(input, defaultCountryCode);
   return normalized ? `+${normalized}` : '';
+}
+
+function buildWhatsAppLink(input, text = '', defaultCountryCode = '62') {
+  const digits = normalizeWhatsappTarget(input, defaultCountryCode);
+  if (!digits) return '#';
+  const message = String(text || '').trim();
+  return message
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/${digits}`;
 }
 
 function normalizePhoneList(input) {
@@ -38,6 +51,8 @@ function normalizePhoneList(input) {
 
 module.exports = {
   normalizePhoneDigits,
+  normalizeWhatsappTarget,
   formatPhoneDisplay,
+  buildWhatsAppLink,
   normalizePhoneList
 };

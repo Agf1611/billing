@@ -43,7 +43,7 @@ function renderTechPage(req, res, view, payload = {}) {
   return res.render(view, {
     company: company(),
     techName: req.session?.techName || '',
-    techNav: techId ? getTechNav(techId) : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 },
+    techNav: techId ? getTechNav(techId) : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 },
     operationalTasks: [],
     ...payload
   });

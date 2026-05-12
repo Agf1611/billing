@@ -85,6 +85,26 @@
     lng: parseFloat(appSettings.office_lng) || 107.00277733308137
   };
 
+  function normalizeWhatsappDigits(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    let digits = raw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('00')) digits = digits.slice(2);
+    if (digits.startsWith('62')) return digits;
+    if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+    if (digits.startsWith('8')) return `62${digits}`;
+    return `62${digits}`;
+  }
+
+  function buildWhatsappLink(value, text = '') {
+    const digits = normalizeWhatsappDigits(value);
+    if (!digits) return '#';
+    return text
+      ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/${digits}`;
+  }
+
   // Initialize Map
   const map = L.map('map').setView([officeCoords.lat, officeCoords.lng], 13);
 
@@ -208,7 +228,7 @@
             <b>Status:</b> ${cust.status}
           </div>
           <div class="d-flex gap-1">
-            <a href="https://wa.me/${cust.phone}" class="btn btn-wa flex-grow-1 text-center">
+            <a href="${buildWhatsappLink(cust.phone)}" class="btn btn-wa flex-grow-1 text-center">
               <i class="bi bi-whatsapp"></i> Chat
             </a>
             <a href="https://www.google.com/maps/dir/?api=1&destination=${cust.lat},${cust.lng}" target="_blank" class="btn btn-wa flex-grow-1 text-center" style="background:#3b82f6">

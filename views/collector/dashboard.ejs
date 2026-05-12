@@ -1,261 +1,881 @@
 <!DOCTYPE html>
-<html lang="<%= lang || 'id' %>">
+<html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <%- include('../admin/partials/theme_init') %>
   <title><%= title %> | <%= company %></title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
-    :root{--bg:#0f172a;--panel:rgba(30,41,59,.92);--panel2:rgba(15,23,42,.55);--muted:#94a3b8;--text:#e2e8f0;--border:rgba(148,163,184,.18)}
-    body{background:var(--bg);color:var(--text)}
-    .cardx{background:var(--panel);border:1px solid var(--border);border-radius:16px}
-    .form-control{background:var(--panel2);border:1px solid var(--border);color:var(--text)}
-    .form-control:focus{box-shadow:none;border-color:rgba(99,102,241,.75)}
-    .muted{color:var(--muted)}
-    .badgey{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800;border:1px solid var(--border);background:var(--panel2)}
-    .badgey.s{color:#bbf7d0;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.1)}
-    .badgey.d{color:#fecaca;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1)}
-    .badgey.w{color:#fde68a;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.1)}
-    .tbl td{border-top:1px solid rgba(148,163,184,.12);padding:8px 0;font-size:12px;vertical-align:top}
-    .tbl td:first-child{color:var(--muted);width:120px;padding-right:12px}
-    .bn{position:fixed;left:0;right:0;bottom:0;z-index:2000;padding:10px 12px;background:rgba(15,23,42,.92);border-top:1px solid rgba(148,163,184,.14);backdrop-filter:blur(8px)}
-    .bnw{max-width:980px;margin:0 auto;display:flex;gap:8px;justify-content:space-between}
-    .bni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 6px;border-radius:14px;text-decoration:none;color:var(--muted);border:1px solid rgba(148,163,184,.08);background:rgba(30,41,59,.35)}
-    .bni i{font-size:18px;line-height:1}
-    .bni span{font-size:10px;font-weight:800;letter-spacing:.02em}
-    .bni.active{color:#e0e7ff;border-color:rgba(99,102,241,.35);background:rgba(99,102,241,.12)}
-    .bni.active i{color:#a5b4fc}
+    :root{
+      --bg:#08111f;
+      --bg-soft:#0d1729;
+      --surface:#101a2e;
+      --surface-soft:#16243d;
+      --surface-elevated:rgba(17,28,48,.92);
+      --border:rgba(148,163,184,.16);
+      --text:#e7eefb;
+      --muted:#99a9c4;
+      --primary:#5b6dfb;
+      --primary-2:#3b82f6;
+      --primary-soft:rgba(91,109,251,.14);
+      --success:#22c55e;
+      --success-soft:rgba(34,197,94,.14);
+      --warn:#f59e0b;
+      --warn-soft:rgba(245,158,11,.15);
+      --danger:#ef4444;
+      --danger-soft:rgba(239,68,68,.14);
+      --shadow:0 18px 44px rgba(1,7,18,.32);
+      --radius-lg:22px;
+      --radius-md:16px;
+      --radius-sm:12px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;
+      min-height:100%;
+      background:
+        radial-gradient(820px 400px at 0% 0%, rgba(91,109,251,.15), rgba(8,17,31,0) 58%),
+        radial-gradient(760px 360px at 100% 0%, rgba(59,130,246,.14), rgba(8,17,31,0) 52%),
+        linear-gradient(180deg, #0b1526 0%, var(--bg) 100%);
+      color:var(--text);
+      font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body{
+      padding:0 0 28px;
+      -webkit-tap-highlight-color:transparent;
+    }
+    body[data-theme="light"]{
+      --bg:#eef4ff;
+      --bg-soft:#f4f7ff;
+      --surface:#ffffff;
+      --surface-soft:#f7faff;
+      --surface-elevated:rgba(255,255,255,.96);
+      --border:rgba(110,140,198,.16);
+      --text:#13233f;
+      --muted:#6f819b;
+      --primary-soft:rgba(91,109,251,.08);
+      --success-soft:rgba(34,197,94,.12);
+      --warn-soft:rgba(245,158,11,.12);
+      --danger-soft:rgba(239,68,68,.10);
+      --shadow:0 18px 44px rgba(44,72,122,.12);
+    }
+    a{text-decoration:none;color:inherit}
+    button,input,select,textarea{font:inherit}
+
+    .collector-shell{
+      width:min(100%, 760px);
+      margin:0 auto;
+      padding:0 12px;
+    }
+
+    .collector-topbar{
+      position:sticky;
+      top:0;
+      z-index:1200;
+      backdrop-filter:blur(14px);
+      background:rgba(8,17,31,.82);
+      border-bottom:1px solid rgba(148,163,184,.12);
+    }
+    body[data-theme="light"] .collector-topbar{
+      background:rgba(245,248,255,.9);
+      border-bottom-color:rgba(110,140,198,.14);
+    }
+    .collector-topbar-inner{
+      width:min(100%, 760px);
+      margin:0 auto;
+      padding:10px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .collector-brand{
+      min-width:0;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .collector-brand-badge{
+      width:38px;
+      height:38px;
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 auto;
+      color:#dce8ff;
+      background:linear-gradient(135deg, rgba(91,109,251,.22), rgba(59,130,246,.18));
+      border:1px solid rgba(91,109,251,.26);
+      box-shadow:0 12px 26px rgba(59,130,246,.18);
+      font-size:16px;
+    }
+    .collector-brand-title{
+      font-size:14px;
+      font-weight:900;
+      letter-spacing:-.03em;
+      line-height:1.05;
+    }
+    .collector-brand-sub{
+      margin-top:3px;
+      font-size:11px;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .collector-topbar-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex:0 0 auto;
+    }
+    .icon-btn{
+      width:36px;
+      height:36px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.04);
+      color:var(--text);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    body[data-theme="light"] .icon-btn{background:rgba(91,109,251,.04)}
+
+    .sticky-tools{
+      position:sticky;
+      top:59px;
+      z-index:1150;
+      padding:10px 0 8px;
+      background:linear-gradient(180deg, rgba(8,17,31,.96) 0%, rgba(8,17,31,.90) 84%, rgba(8,17,31,0) 100%);
+      backdrop-filter:blur(16px);
+    }
+    body[data-theme="light"] .sticky-tools{
+      background:linear-gradient(180deg, rgba(244,247,255,.97) 0%, rgba(244,247,255,.91) 84%, rgba(244,247,255,0) 100%);
+    }
+
+    .tool-card,.section-card,.summary-strip,.history-card{
+      background:var(--surface-elevated);
+      border:1px solid var(--border);
+      box-shadow:var(--shadow);
+    }
+    .tool-card{
+      border-radius:20px;
+      padding:10px;
+      display:grid;
+      gap:10px;
+    }
+    .tool-search{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:16px;
+      background:var(--surface-soft);
+      border:1px solid var(--border);
+    }
+    .tool-search i{font-size:14px;color:var(--muted)}
+    .tool-search input{
+      flex:1 1 auto;
+      min-width:0;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:var(--text);
+      font-size:13px;
+      padding:0;
+    }
+    .tool-search input::placeholder{color:var(--muted)}
+    .tool-submit{
+      border:0;
+      border-radius:12px;
+      background:linear-gradient(135deg, var(--primary), var(--primary-2));
+      color:#fff;
+      padding:9px 11px;
+      font-size:12px;
+      font-weight:800;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      box-shadow:0 12px 24px rgba(59,130,246,.22);
+    }
+    .tool-meta{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:8px;
+    }
+    .tool-select{
+      width:100%;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      color:var(--text);
+      padding:9px 10px;
+      font-size:12px;
+      outline:none;
+    }
+    .filter-strip{
+      display:flex;
+      gap:8px;
+      overflow:auto;
+      padding-bottom:2px;
+      scrollbar-width:none;
+    }
+    .filter-strip::-webkit-scrollbar{display:none}
+    .filter-chip{
+      flex:0 0 auto;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      min-height:36px;
+      padding:0 12px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      color:var(--muted);
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .filter-chip.active{
+      background:rgba(91,109,251,.16);
+      border-color:rgba(91,109,251,.36);
+      color:#dce8ff;
+      box-shadow:0 10px 22px rgba(59,130,246,.18);
+    }
+    body[data-theme="light"] .filter-chip.active{color:#2f4ca8}
+
+    .summary-strip{
+      margin:12px 0 10px;
+      border-radius:20px;
+      padding:10px;
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:8px;
+    }
+    .summary-pill{
+      min-width:0;
+      border-radius:16px;
+      padding:10px 10px 9px;
+      background:var(--surface-soft);
+      border:1px solid var(--border);
+      display:grid;
+      gap:4px;
+    }
+    .summary-pill span{
+      font-size:10px;
+      color:var(--muted);
+      font-weight:700;
+      line-height:1.25;
+    }
+    .summary-pill strong{
+      font-size:18px;
+      font-weight:900;
+      line-height:1;
+      letter-spacing:-.04em;
+    }
+    .summary-pill small{
+      font-size:10px;
+      color:var(--muted);
+      font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .section-card,.history-card{
+      border-radius:22px;
+      overflow:hidden;
+      margin-top:10px;
+    }
+    .section-head{
+      padding:12px 14px 10px;
+      border-bottom:1px solid rgba(148,163,184,.08);
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:8px;
+    }
+    .section-title{
+      font-size:14px;
+      font-weight:900;
+      letter-spacing:-.02em;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .section-note{
+      margin-top:4px;
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.4;
+    }
+    .section-body{padding:12px}
+
+    .collector-list{
+      display:grid;
+      gap:10px;
+    }
+    .empty-state{
+      padding:24px 14px;
+      border-radius:18px;
+      background:var(--surface-soft);
+      border:1px dashed var(--border);
+      color:var(--muted);
+      text-align:center;
+      font-size:12px;
+      line-height:1.5;
+    }
+
+    .history-card details{padding:0}
+    .history-card summary{
+      list-style:none;
+      cursor:pointer;
+      padding:12px 14px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      font-size:14px;
+      font-weight:900;
+    }
+    .history-card summary::-webkit-details-marker{display:none}
+    .history-card summary small{
+      font-size:11px;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .history-list{
+      display:grid;
+      gap:8px;
+      padding:0 12px 12px;
+    }
+    .history-row{
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      border-radius:16px;
+      padding:10px 11px;
+      display:grid;
+      gap:5px;
+    }
+    .history-top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .history-name{
+      font-size:13px;
+      font-weight:900;
+      line-height:1.25;
+    }
+    .history-sub{
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.4;
+    }
+
+    .sheet-backdrop{
+      position:fixed;
+      inset:0;
+      z-index:1600;
+      background:rgba(2,8,23,.54);
+      backdrop-filter:blur(6px);
+      opacity:0;
+      visibility:hidden;
+      transition:opacity .2s ease, visibility .2s ease;
+    }
+    .sheet-backdrop.is-open{
+      opacity:1;
+      visibility:visible;
+    }
+    .action-sheet{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      z-index:1700;
+      transform:translateY(104%);
+      transition:transform .24s ease;
+      pointer-events:none;
+    }
+    .action-sheet.is-open{
+      transform:translateY(0);
+      pointer-events:auto;
+    }
+    .action-sheet-inner{
+      width:min(100%, 760px);
+      margin:0 auto;
+      border-radius:26px 26px 0 0;
+      background:var(--surface);
+      border:1px solid var(--border);
+      box-shadow:0 -18px 44px rgba(1,7,18,.38);
+      padding:10px 12px calc(16px + env(safe-area-inset-bottom));
+      max-height:min(78vh, 720px);
+      overflow:auto;
+    }
+    .sheet-handle{
+      width:44px;
+      height:5px;
+      border-radius:999px;
+      background:rgba(148,163,184,.32);
+      margin:0 auto 10px;
+    }
+    .sheet-head{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .sheet-title{
+      font-size:15px;
+      font-weight:900;
+      letter-spacing:-.03em;
+      line-height:1.15;
+    }
+    .sheet-sub{
+      margin-top:4px;
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.45;
+    }
+    .sheet-close{
+      width:34px;
+      height:34px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      color:var(--text);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 auto;
+    }
+    .sheet-status{
+      margin-top:12px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .sheet-grid{
+      margin-top:12px;
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
+    .sheet-cell{
+      padding:10px 11px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      min-width:0;
+    }
+    .sheet-cell span{
+      display:block;
+      font-size:10px;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      color:var(--muted);
+      font-weight:800;
+      margin-bottom:5px;
+    }
+    .sheet-cell strong{
+      display:block;
+      font-size:12px;
+      line-height:1.45;
+      word-break:break-word;
+    }
+    .sheet-actions{
+      margin-top:12px;
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+    }
+    .sheet-btn{
+      min-height:42px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      color:var(--text);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      font-size:12px;
+      font-weight:800;
+    }
+    .sheet-btn.primary{
+      border:0;
+      background:linear-gradient(135deg, var(--primary), var(--primary-2));
+      color:#fff;
+      box-shadow:0 14px 28px rgba(59,130,246,.22);
+    }
+    .sheet-note-wrap{
+      margin-top:12px;
+      display:none;
+      gap:8px;
+    }
+    .sheet-note-wrap.is-visible{display:grid}
+    .sheet-textarea{
+      width:100%;
+      min-height:88px;
+      resize:vertical;
+      border-radius:16px;
+      border:1px solid var(--border);
+      background:var(--surface-soft);
+      color:var(--text);
+      padding:11px 12px;
+      outline:none;
+      font-size:13px;
+    }
+    .sheet-submit-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:8px;
+      align-items:center;
+    }
+    .sheet-help{
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.5;
+    }
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      min-height:28px;
+      padding:0 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      font-size:10px;
+      font-weight:900;
+      letter-spacing:.02em;
+    }
+    .status-pill.success{background:var(--success-soft);color:#bbf7d0;border-color:rgba(34,197,94,.26)}
+    .status-pill.warn{background:var(--warn-soft);color:#fde68a;border-color:rgba(245,158,11,.26)}
+    .status-pill.danger{background:var(--danger-soft);color:#fecaca;border-color:rgba(239,68,68,.24)}
+    body[data-theme="light"] .status-pill.success{color:#1d7a4b}
+    body[data-theme="light"] .status-pill.warn{color:#b66f04}
+    body[data-theme="light"] .status-pill.danger{color:#c43b4e}
+
+    @media (max-width: 430px){
+      .collector-shell{padding:0 10px}
+      .collector-topbar-inner{padding:9px 10px}
+      .tool-card{padding:9px}
+      .tool-search{padding:7px 9px}
+      .tool-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .summary-strip{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:7px;
+        padding:8px;
+      }
+      .summary-pill{padding:9px}
+      .summary-pill strong{font-size:16px}
+      .section-head{padding:11px 12px 9px}
+      .section-body{padding:10px}
+      .sheet-grid,.sheet-actions{grid-template-columns:1fr}
+      .sheet-submit-row{grid-template-columns:1fr}
+    }
+
+    @media (min-width: 700px){
+      .tool-card{
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+      }
+      .tool-card > *:first-child{grid-column:1 / -1}
+      .tool-meta{grid-template-columns:repeat(3,130px)}
+      .summary-strip{grid-template-columns:repeat(4,minmax(0,1fr))}
+    }
   </style>
 </head>
 <body>
-  <div class="container" style="max-width:980px;padding-top:14px;padding-bottom:96px">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+<%
+  const qsBase = { month: String(month), year: String(year), search: String(search || ''), status: String(status || 'unpaid') };
+  const chipAll = new URLSearchParams({ ...qsBase, scope: '' }).toString();
+  const chipToday = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'today' }).toString();
+  const chipUnpaid = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'unpaid' }).toString();
+  const chipIsolir = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'isolir' }).toString();
+  const chipMulti = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'multi' }).toString();
+  const currentScope = String(scope || '');
+  const historyCount = Array.isArray(myReqs) ? myReqs.length : 0;
+  const collectorDisplayName = typeof collectorName !== 'undefined' && collectorName ? collectorName : 'Kolektor';
+%>
+
+<header class="collector-topbar">
+  <div class="collector-topbar-inner">
+    <div class="collector-brand">
+      <div class="collector-brand-badge"><i class="bi bi-person-lines-fill"></i></div>
+      <div style="min-width:0">
+        <div class="collector-brand-title">Portal Kolektor</div>
+        <div class="collector-brand-sub"><%= collectorDisplayName %> - <%= company %></div>
+      </div>
+    </div>
+    <div class="collector-topbar-actions">
+      <button class="icon-btn" type="button" data-theme-toggle aria-label="Ganti tema">
+        <i class="bi bi-sun"></i>
+      </button>
+      <a class="icon-btn" href="/collector/logout" aria-label="Logout">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="collector-shell">
+  <% if (msg) { %>
+    <div class="section-card" style="margin-top:12px;border-color:<%= msg.type === 'error' ? 'rgba(239,68,68,.28)' : 'rgba(34,197,94,.28)' %>;">
+      <div class="section-body" style="padding:11px 12px;font-size:12px;line-height:1.5;color:<%= msg.type === 'error' ? 'var(--danger)' : 'var(--success)' %>;">
+        <%= msg.text %>
+      </div>
+    </div>
+  <% } %>
+
+  <div class="sticky-tools">
+    <%- include('partials/search_bar', { month, year, status, scope, search }) %>
+    <%- include('partials/filter_chips', { chipAll, chipToday, chipUnpaid, chipIsolir, chipMulti, currentScope }) %>
+  </div>
+
+  <section class="summary-strip" aria-label="Ringkasan koleksi">
+    <a class="summary-pill" href="/collector?<%= chipToday %>#collector-list">
+      <span>Hari ini</span>
+      <strong><%= Number(summary?.today_count || 0) %></strong>
+      <small>Rp <%= Number(summary?.today_total || 0).toLocaleString('id-ID') %></small>
+    </a>
+    <a class="summary-pill" href="/collector?<%= chipUnpaid %>#collector-list">
+      <span>Belum bayar</span>
+      <strong><%= Number(summary?.unpaid_count || 0) %></strong>
+      <small>Rp <%= Number(summary?.unpaid_total || 0).toLocaleString('id-ID') %></small>
+    </a>
+    <a class="summary-pill" href="/collector?<%= chipIsolir %>#collector-list">
+      <span>Isolir</span>
+      <strong><%= Number(summary?.isolir_count || 0) %></strong>
+      <small>Rp <%= Number(summary?.isolir_total || 0).toLocaleString('id-ID') %></small>
+    </a>
+    <a class="summary-pill" href="/collector?<%= chipMulti %>#collector-list">
+      <span>&gt; 1 bulan</span>
+      <strong><%= Number(summary?.multi_customer_count || 0) %></strong>
+      <small>Rp <%= Number(summary?.multi_total || 0).toLocaleString('id-ID') %></small>
+    </a>
+  </section>
+
+  <section class="section-card" id="collector-list">
+    <div class="section-head">
       <div>
-        <div style="font-weight:900;letter-spacing:-.02em">Kolektor</div>
-        <div class="muted" style="font-size:12px"><%= company %></div>
+        <div class="section-title"><i class="bi bi-receipt-cutoff"></i> Daftar Tagihan</div>
+        <div class="section-note">Kartu dipadatkan untuk layar 360px-430px. Detail lengkap dan catatan dipindah ke action sheet.</div>
       </div>
-      <a class="btn btn-outline-light btn-sm" href="/collector/logout"><i class="bi bi-box-arrow-left"></i></a>
+      <div class="section-note"><strong><%= (invoices || []).length %></strong> data</div>
     </div>
-
-    <% if (msg) { %>
-      <div class="alert alert-<%= msg.type==='error'?'danger':'success' %>"><%= msg.text %></div>
-    <% } %>
-
-    <div class="row g-2 mb-3">
-      <div class="col-6 col-md-3">
-        <a class="cardx p-3 d-block text-decoration-none" href="/collector?<%= new URLSearchParams({ month: String(month), year: String(year), status: 'unpaid', scope: 'today', search: String(search||''), jump: 'data' }).toString() %>#data-tagihan">
-          <div class="muted" style="font-size:12px">Tagihan Hari Ini (tgl <%= todayDay %>)</div>
-          <div style="font-weight:900;font-size:20px"><%= Number(summary?.today_count || 0) %></div>
-          <div class="muted" style="font-size:12px">Rp <%= Number(summary?.today_total || 0).toLocaleString('id-ID') %></div>
-        </a>
-      </div>
-      <div class="col-6 col-md-3">
-        <a class="cardx p-3 d-block text-decoration-none" href="/collector?<%= new URLSearchParams({ month: String(month), year: String(year), status: 'unpaid', scope: 'unpaid', search: String(search||''), jump: 'data' }).toString() %>#data-tagihan">
-          <div class="muted" style="font-size:12px">Tagihan Belum Bayar</div>
-          <div style="font-weight:900;font-size:20px"><%= Number(summary?.unpaid_count || 0) %></div>
-          <div class="muted" style="font-size:12px">Rp <%= Number(summary?.unpaid_total || 0).toLocaleString('id-ID') %></div>
-        </a>
-      </div>
-      <div class="col-6 col-md-3">
-        <a class="cardx p-3 d-block text-decoration-none" href="/collector?<%= new URLSearchParams({ month: String(month), year: String(year), status: 'unpaid', scope: 'isolir', search: String(search||''), jump: 'data' }).toString() %>#data-tagihan">
-          <div class="muted" style="font-size:12px">Tagihan Isolir</div>
-          <div style="font-weight:900;font-size:20px"><%= Number(summary?.isolir_count || 0) %></div>
-          <div class="muted" style="font-size:12px">Rp <%= Number(summary?.isolir_total || 0).toLocaleString('id-ID') %></div>
-        </a>
-      </div>
-      <div class="col-6 col-md-3">
-        <a class="cardx p-3 d-block text-decoration-none" href="/collector?<%= new URLSearchParams({ month: String(month), year: String(year), status: 'unpaid', scope: 'multi', search: String(search||''), jump: 'data' }).toString() %>#data-tagihan">
-          <div class="muted" style="font-size:12px">Menunggak &gt; 1 Bulan</div>
-          <div style="font-weight:900;font-size:20px"><%= Number(summary?.multi_customer_count || 0) %></div>
-          <div class="muted" style="font-size:12px">Rp <%= Number(summary?.multi_total || 0).toLocaleString('id-ID') %></div>
-        </a>
-      </div>
-    </div>
-
-    <div class="cardx p-3 mb-3">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <div style="font-weight:800"><i class="bi bi-receipt"></i> Daftar Tagihan</div>
-        <span class="badgey"><i class="bi bi-shield-check"></i>Read Only</span>
-      </div>
-      <form method="GET" action="/collector" class="d-flex gap-2 flex-wrap">
-        <select class="form-control" name="month" style="max-width:110px">
-          <% for (let m=1; m<=12; m++) { %>
-            <option value="<%= m %>" <%= Number(month)===m ? 'selected' : '' %>><%= String(m).padStart(2,'0') %></option>
-          <% } %>
-        </select>
-        <select class="form-control" name="year" style="max-width:120px">
-          <% const baseY = Number(year) || new Date().getFullYear(); %>
-          <% for (let y=baseY-2; y<=baseY+1; y++) { %>
-            <option value="<%= y %>" <%= Number(year)===y ? 'selected' : '' %>><%= y %></option>
-          <% } %>
-        </select>
-        <select class="form-control" name="status" style="max-width:170px">
-          <option value="unpaid" <%= String(status)==='unpaid' ? 'selected' : '' %>>Belum Bayar</option>
-          <option value="paid" <%= String(status)==='paid' ? 'selected' : '' %>>Lunas</option>
-          <option value="all" <%= String(status)==='all' ? 'selected' : '' %>>Semua</option>
-        </select>
-        <select class="form-control" name="scope" style="max-width:200px">
-          <option value="" <%= !scope ? 'selected' : '' %>>Semua Pelanggan</option>
-          <option value="today" <%= String(scope)==='today' ? 'selected' : '' %>>Tagihan Hari Ini</option>
-          <option value="unpaid" <%= String(scope)==='unpaid' ? 'selected' : '' %>>Belum Bayar (Filter)</option>
-          <option value="isolir" <%= String(scope)==='isolir' ? 'selected' : '' %>>Isolir</option>
-          <option value="multi" <%= String(scope)==='multi' ? 'selected' : '' %>>Menunggak &gt; 1 Bulan</option>
-        </select>
-        <input class="form-control" name="search" value="<%= search || '' %>" placeholder="Cari (opsional): nama / HP / PPPoE / TAG">
-        <button class="btn btn-primary" type="submit" style="min-width:90px"><i class="bi bi-funnel"></i></button>
-      </form>
-      <div class="muted mt-2" style="font-size:12px">
-        Menampilkan maks 500 tagihan periode <span style="font-weight:900"><%= String(month).padStart(2,'0') %>/<%= year %></span>.
-      </div>
-    </div>
-
-    <div class="cardx p-3 mb-3" id="data-tagihan">
-      <div style="font-weight:800" class="mb-2"><i class="bi bi-list-ul"></i> Data Tagihan (<%= (invoices || []).length %>)</div>
+    <div class="section-body">
       <% if (!invoices || invoices.length === 0) { %>
-        <div class="muted" style="font-size:12px">Tidak ada data tagihan untuk filter ini.</div>
+        <div class="empty-state">Tidak ada tagihan untuk filter ini. Coba ubah periode, status, atau pencarian.</div>
       <% } else { %>
-        <div class="d-flex flex-column gap-2">
-          <% invoices.forEach(inv => { 
-               const isPaid = String(inv.status||'').toLowerCase()==='paid';
-               const reqRow = pendingMap && pendingMap.get ? pendingMap.get(Number(inv.id)) : null;
-               const reqStatus = reqRow ? String(reqRow.status||'') : '';
-               const isPending = reqStatus === 'pending';
-          %>
-            <div style="background:var(--panel2);border:1px solid rgba(148,163,184,.14);border-radius:14px;padding:12px">
-              <div class="d-flex justify-content-between align-items-start gap-2">
-                <div style="min-width:0">
-                  <div style="font-weight:900"><%= inv.customer_name || '-' %> <span class="muted" style="font-size:12px"><%= inv.customer_phone ? '('+inv.customer_phone+')' : '' %></span></div>
-                  <div class="muted" style="font-size:12px"><%= inv.package_name || 'Internet' %> • Invoice #<%= inv.id %></div>
-                </div>
-                <div class="text-end">
-                  <div style="font-weight:900">Rp <%= Number(inv.amount||0).toLocaleString('id-ID') %></div>
-                  <% if (isPaid) { %>
-                    <span class="badgey s"><i class="bi bi-check-circle"></i> LUNAS</span>
-                  <% } else if (isPending) { %>
-                    <span class="badgey w"><i class="bi bi-hourglass"></i> MENUNGGU APPROVAL</span>
-                  <% } else { %>
-                    <span class="badgey d"><i class="bi bi-exclamation-circle"></i> BELUM BAYAR</span>
-                  <% } %>
-                </div>
-              </div>
-
-              <table class="tbl mt-2" style="width:100%;border-collapse:collapse">
-                <tr><td>Periode</td><td><%= inv.period_month %>/<%= inv.period_year %></td></tr>
-                <tr><td>Jatuh Tempo</td><td><%= inv.isolate_day ? ('Tgl ' + inv.isolate_day) : '-' %></td></tr>
-                <tr><td>ID Pelanggan</td><td>#<%= inv.customer_id %></td></tr>
-                <tr><td>PPPoE</td><td><%= inv.pppoe_username ? inv.pppoe_username : '-' %></td></tr>
-                <tr><td>Tag</td><td><%= inv.genieacs_tag ? inv.genieacs_tag : '-' %></td></tr>
-                <tr><td>Alamat</td><td><%= inv.customer_address ? inv.customer_address : '-' %></td></tr>
-              </table>
-
-              <div class="d-flex flex-wrap gap-2 mt-2">
-                <% if (inv.lat && inv.lng) { %>
-                  <a class="btn btn-outline-light btn-sm" target="_blank" href="https://www.google.com/maps?q=<%= encodeURIComponent(inv.lat + ',' + inv.lng) %>"><i class="bi bi-geo-alt"></i> Map</a>
-                <% } %>
-                <% if (!isPaid && !isPending) { %>
-                  <form method="POST" action="/collector/payment-request" class="d-flex gap-2" style="flex:1;min-width:260px">
-                    <input type="hidden" name="invoice_id" value="<%= inv.id %>">
-                    <input type="hidden" name="month" value="<%= month %>">
-                    <input type="hidden" name="year" value="<%= year %>">
-                    <input type="hidden" name="status" value="<%= status %>">
-                    <input type="hidden" name="search" value="<%= search || '' %>">
-                    <input class="form-control form-control-sm" name="note" placeholder="Catatan (opsional)">
-                    <button class="btn btn-warning btn-sm" type="submit"><i class="bi bi-send-check"></i> Ajukan</button>
-                  </form>
-                <% } %>
-              </div>
-            </div>
+        <div class="collector-list">
+          <% invoices.forEach((inv) => { %>
+            <%- include('partials/customer_card', { inv, pendingMap, month, year, status, search, scope }) %>
           <% }) %>
         </div>
       <% } %>
     </div>
+  </section>
 
-    <div class="cardx p-3">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <div style="font-weight:800"><i class="bi bi-list-ul"></i> Riwayat Pengajuan Saya</div>
-        <span class="badgey"><%= (myReqs || []).length %></span>
+  <section class="history-card" style="margin-top:12px;">
+    <details <%= historyCount > 0 ? '' : 'open' %>>
+      <summary>
+        <span><i class="bi bi-clock-history"></i> Riwayat Pengajuan Saya</span>
+        <small><%= historyCount %> data</small>
+      </summary>
+      <div class="history-list">
+        <% if (!myReqs || myReqs.length === 0) { %>
+          <div class="empty-state">Belum ada pengajuan pembayaran dari kolektor ini.</div>
+        <% } else { %>
+          <% myReqs.slice(0, 24).forEach((r) => { 
+            const st = String(r.status || '').toLowerCase();
+          %>
+            <div class="history-row">
+              <div class="history-top">
+                <div>
+                  <div class="history-name"><%= r.customer_name || '-' %></div>
+                  <div class="history-sub">Invoice #<%= r.invoice_id %> - <%= r.period_month %>/<%= r.period_year %></div>
+                </div>
+                <span class="status-pill <%= st === 'approved' ? 'success' : (st === 'rejected' ? 'danger' : 'warn') %>">
+                  <%= st === 'approved' ? 'APPROVED' : (st === 'rejected' ? 'REJECTED' : 'PENDING') %>
+                </span>
+              </div>
+              <div class="history-sub">
+                Rp <%= Number(r.amount || 0).toLocaleString('id-ID') %>
+                <% if (r.customer_phone) { %> - <%= r.customer_phone %><% } %>
+                <% if (r.created_at) { %> - <%= new Date(r.created_at).toLocaleString('id-ID') %><% } %>
+              </div>
+            </div>
+          <% }) %>
+        <% } %>
       </div>
-      <% if (!myReqs || myReqs.length === 0) { %>
-        <div class="muted" style="font-size:12px">Belum ada pengajuan.</div>
-      <% } else { %>
-        <div class="table-responsive">
-          <table class="table table-dark table-sm align-middle" style="margin:0">
-            <thead>
-              <tr>
-                <th>Waktu</th>
-                <th>Pelanggan</th>
-                <th>Periode</th>
-                <th class="text-end">Nominal</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% myReqs.forEach(r => { %>
-                <% const st = String(r.status||''); %>
-                <tr>
-                  <td style="font-size:12px"><%= r.created_at ? new Date(r.created_at).toLocaleString('id-ID') : '-' %></td>
-                  <td style="font-size:12px"><%= r.customer_name || '-' %> <span class="muted"><%= r.customer_phone ? '('+r.customer_phone+')' : '' %></span></td>
-                  <td style="font-size:12px"><%= r.period_month %>/<%= r.period_year %></td>
-                  <td class="text-end" style="font-size:12px">Rp <%= Number(r.amount||0).toLocaleString('id-ID') %></td>
-                  <td style="font-size:12px">
-                    <% if (st === 'approved') { %>
-                      <span class="badgey s">APPROVED</span>
-                    <% } else if (st === 'rejected') { %>
-                      <span class="badgey d">REJECTED</span>
-                    <% } else { %>
-                      <span class="badgey w">PENDING</span>
-                    <% } %>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-    </div>
-  </div>
+    </details>
+  </section>
+</main>
 
-  <%
-    const qsBase = { month: String(month), year: String(year), search: String(search || '') };
-    const qsAll = new URLSearchParams({ ...qsBase, status: String(status || 'all'), scope: '' }).toString();
-    const qsToday = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'today' }).toString();
-    const qsUnpaid = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'unpaid' }).toString();
-    const qsIsolir = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'isolir' }).toString();
-    const qsMulti = new URLSearchParams({ ...qsBase, status: 'unpaid', scope: 'multi' }).toString();
-    const activeScope = String(scope || '');
-    const activeStatus = String(status || '');
-  %>
-  <div class="bn">
-    <div class="bnw">
-      <a class="bni <%= (!activeScope && (activeStatus === 'all' || activeStatus === 'paid' || activeStatus === 'unpaid')) ? 'active' : '' %>" href="/collector?<%= qsAll %>#data-tagihan">
-        <i class="bi bi-grid-3x3-gap"></i><span>Semua</span>
-      </a>
-      <a class="bni <%= activeScope === 'today' ? 'active' : '' %>" href="/collector?<%= qsToday %>#data-tagihan">
-        <i class="bi bi-calendar-check"></i><span>Hari Ini</span>
-      </a>
-      <a class="bni <%= activeScope === 'unpaid' ? 'active' : '' %>" href="/collector?<%= qsUnpaid %>#data-tagihan">
-        <i class="bi bi-exclamation-circle"></i><span>Belum</span>
-      </a>
-      <a class="bni <%= activeScope === 'isolir' ? 'active' : '' %>" href="/collector?<%= qsIsolir %>#data-tagihan">
-        <i class="bi bi-shield-exclamation"></i><span>Isolir</span>
-      </a>
-      <a class="bni <%= activeScope === 'multi' ? 'active' : '' %>" href="/collector?<%= qsMulti %>#data-tagihan">
-        <i class="bi bi-layers"></i><span>&gt;1 Bln</span>
-      </a>
-    </div>
-  </div>
+<%- include('partials/customer_action_sheet', { month, year, status, search, scope }) %>
 
-  <script>
-    (function () {
-      try {
-        const u = new URL(window.location.href);
-        if (u.hash === '#data-tagihan') {
-          const el = document.getElementById('data-tagihan');
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      } catch (e) {}
-    })();
-  </script>
+<script>
+  (function() {
+    const savedTheme = localStorage.getItem('admin-theme')
+      || document.documentElement.dataset.adminTheme
+      || 'dark';
+
+    function syncThemeButtons(theme) {
+      document.documentElement.dataset.adminTheme = theme;
+      document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+      if (document.body) document.body.dataset.theme = theme;
+      document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+        const icon = button.querySelector('i');
+        if (icon) icon.className = theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun';
+      });
+    }
+
+    syncThemeButtons(savedTheme);
+    document.addEventListener('click', (event) => {
+      const toggle = event.target.closest('[data-theme-toggle]');
+      if (!toggle) return;
+      event.preventDefault();
+      const currentTheme = document.body?.dataset.theme || document.documentElement.dataset.adminTheme || 'dark';
+      const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('admin-theme', nextTheme);
+      syncThemeButtons(nextTheme);
+    });
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'admin-theme') syncThemeButtons(event.newValue || 'dark');
+    });
+  })();
+
+  (function() {
+    const sheet = document.getElementById('collectorActionSheet');
+    const backdrop = document.getElementById('collectorSheetBackdrop');
+    if (!sheet || !backdrop) return;
+
+    const titleEl = document.getElementById('sheetCustomerName');
+    const subEl = document.getElementById('sheetCustomerSub');
+    const statusWrap = document.getElementById('sheetStatusWrap');
+    const detailFields = {
+      amount: document.getElementById('sheetAmount'),
+      package: document.getElementById('sheetPackage'),
+      due: document.getElementById('sheetDue'),
+      invoice: document.getElementById('sheetInvoice'),
+      period: document.getElementById('sheetPeriod'),
+      customerId: document.getElementById('sheetCustomerId'),
+      pppoe: document.getElementById('sheetPppoe'),
+      tag: document.getElementById('sheetTag'),
+      address: document.getElementById('sheetAddress')
+    };
+    const waBtn = document.getElementById('sheetWaBtn');
+    const mapBtn = document.getElementById('sheetMapBtn');
+    const noteWrap = document.getElementById('sheetNoteWrap');
+    const noteField = document.getElementById('sheetNote');
+    const submitBtn = document.getElementById('sheetSubmitBtn');
+    const modeLabel = document.getElementById('sheetModeHelp');
+    const hiddenInvoice = document.getElementById('sheetInvoiceId');
+
+    function closeSheet() {
+      sheet.classList.remove('is-open');
+      backdrop.classList.remove('is-open');
+      document.body.style.overflow = '';
+    }
+
+    function createStatusPill(tone, iconClass, text) {
+      const pill = document.createElement('span');
+      pill.className = `status-pill ${tone || 'warn'}`;
+      const icon = document.createElement('i');
+      icon.className = `bi ${iconClass || 'bi-info-circle'}`;
+      const label = document.createElement('span');
+      label.textContent = text || '-';
+      pill.append(icon, label);
+      return pill;
+    }
+
+    function openSheet(trigger, mode) {
+      const data = trigger.dataset || {};
+      titleEl.textContent = data.customerName || 'Pelanggan';
+      subEl.textContent = data.subtitle || '';
+      detailFields.amount.textContent = data.amount || '-';
+      detailFields.package.textContent = data.package || '-';
+      detailFields.due.textContent = data.due || '-';
+      detailFields.invoice.textContent = data.invoice || '-';
+      detailFields.period.textContent = data.period || '-';
+      detailFields.customerId.textContent = data.customerId || '-';
+      detailFields.pppoe.textContent = data.pppoe || '-';
+      detailFields.tag.textContent = data.tag || '-';
+      detailFields.address.textContent = data.address || '-';
+      hiddenInvoice.value = data.invoiceId || '';
+      noteField.value = '';
+
+      statusWrap.replaceChildren();
+      statusWrap.appendChild(createStatusPill(data.statusTone || 'warn', data.statusIcon || 'bi-info-circle', data.statusText || '-'));
+
+      if (data.pendingText) {
+        statusWrap.appendChild(createStatusPill('warn', 'bi-hourglass-split', data.pendingText));
+      }
+
+      if (data.waHref) {
+        waBtn.href = data.waHref;
+        waBtn.style.display = '';
+      } else {
+        waBtn.removeAttribute('href');
+        waBtn.style.display = 'none';
+      }
+
+      if (data.mapHref) {
+        mapBtn.href = data.mapHref;
+        mapBtn.style.display = '';
+      } else {
+        mapBtn.removeAttribute('href');
+        mapBtn.style.display = 'none';
+      }
+
+      const allowSubmit = data.allowSubmit === 'true';
+      if (mode === 'payment' && allowSubmit) {
+        noteWrap.classList.add('is-visible');
+        submitBtn.disabled = false;
+        submitBtn.style.display = '';
+        modeLabel.textContent = 'Tambahkan catatan bila perlu, lalu kirim pengajuan pembayaran ke admin/kasir.';
+      } else {
+        noteWrap.classList.remove('is-visible');
+        submitBtn.disabled = true;
+        submitBtn.style.display = 'none';
+        modeLabel.textContent = allowSubmit
+          ? 'Buka aksi "Tandai Bayar" untuk mengirim catatan dan pengajuan pembayaran.'
+          : (data.pendingText || 'Invoice ini tidak bisa diajukan lagi dari kartu ini.');
+      }
+
+      sheet.classList.add('is-open');
+      backdrop.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    document.addEventListener('click', (event) => {
+      const openDetail = event.target.closest('[data-open-sheet="detail"]');
+      if (openDetail) {
+        event.preventDefault();
+        openSheet(openDetail, 'detail');
+        return;
+      }
+      const openPayment = event.target.closest('[data-open-sheet="payment"]');
+      if (openPayment) {
+        event.preventDefault();
+        openSheet(openPayment, 'payment');
+        return;
+      }
+      if (event.target.closest('[data-close-sheet]') || event.target === backdrop) {
+        event.preventDefault();
+        closeSheet();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeSheet();
+    });
+  })();
+</script>
 </body>
 </html>

@@ -59,11 +59,15 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding-top: 60px;
-      padding-bottom: 80px;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding-top: 56px;
+      padding-bottom: 76px;
       -webkit-tap-highlight-color: transparent;
       transition: background-color .2s ease, color .2s ease;
+      background:
+        radial-gradient(840px 340px at 0% 0%, rgba(59, 130, 246, .10) 0%, rgba(15, 23, 42, 0) 56%),
+        radial-gradient(760px 320px at 100% 0%, rgba(91, 109, 251, .10) 0%, rgba(15, 23, 42, 0) 55%),
+        var(--tech-bg);
     }
 
     a {
@@ -75,22 +79,23 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 60px;
+      height: 56px;
       background: var(--tech-nav-bg);
       backdrop-filter: blur(10px);
       border-bottom: 1px solid var(--tech-border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
+      padding: 0 12px;
       z-index: 1000;
     }
 
     .top-nav-title {
-      font-weight: 700;
-      font-size: 18px;
+      font-weight: 900;
+      font-size: 16px;
+      letter-spacing: -.02em;
       margin: 0;
-      max-width: 46vw;
+      max-width: 42vw;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -98,16 +103,17 @@
 
     .top-nav-actions {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
     }
 
     .top-nav-btn {
-      background: transparent;
-      border: none;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--tech-border);
+      border-radius: 12px;
       color: var(--tech-text);
-      font-size: 20px;
-      padding: 5px;
+      font-size: 18px;
+      padding: 7px 9px;
       text-decoration: none;
       position: relative;
       display: inline-flex;
@@ -118,8 +124,8 @@
     .theme-switch-btn {
       border: 1px solid var(--tech-border);
       border-radius: 999px;
-      padding: 7px 11px;
-      font-size: 12px;
+      padding: 7px 10px;
+      font-size: 11px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -155,49 +161,65 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 65px;
+      min-height: 64px;
       background: var(--tech-nav-bg);
       backdrop-filter: blur(10px);
       border-top: 1px solid var(--tech-border);
       display: flex;
-      justify-content: space-around;
+      justify-content: flex-start;
       align-items: center;
       z-index: 1000;
-      padding-bottom: env(safe-area-inset-bottom);
+      padding: 0 8px env(safe-area-inset-bottom);
+      gap: 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .bottom-nav::-webkit-scrollbar {
+      display: none;
     }
 
     .nav-item {
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       color: var(--tech-muted);
       text-decoration: none;
-      font-size: 11px;
-      font-weight: 500;
+      font-size: 10px;
+      font-weight: 800;
       transition: all .2s;
       position: relative;
-      min-width: 56px;
+      min-width: 60px;
+      padding: 8px 10px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.025);
+      flex: 0 0 auto;
+      letter-spacing: .01em;
     }
 
     .nav-item i {
-      font-size: 22px;
-      margin-bottom: 2px;
+      font-size: 18px;
+      margin-bottom: 3px;
     }
 
     .nav-item.active {
       color: var(--tech-primary);
+      border-color: rgba(59, 130, 246, .24);
+      background: rgba(59, 130, 246, .10);
     }
 
     .nav-count {
-      top: -2px;
-      right: 7px;
+      top: 2px;
+      right: 4px;
     }
 
     .t-card {
       background: var(--tech-bg-soft);
       border-radius: 18px;
-      padding: 15px;
-      margin-bottom: 15px;
+      padding: 12px;
+      margin-bottom: 10px;
       border: 1px solid var(--tech-border);
       box-shadow: var(--tech-shadow);
     }
@@ -230,29 +252,30 @@
     .btn-action {
       width: 100%;
       border-radius: 12px;
-      padding: 10px;
-      font-weight: 600;
-      margin-top: 10px;
+      padding: 9px 10px;
+      font-weight: 700;
+      margin-top: 8px;
+      font-size: 13px;
     }
 
     .stat-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin-bottom: 20px;
+      gap: 10px;
+      margin-bottom: 14px;
     }
 
     .stat-box {
       background: var(--tech-bg-soft);
       border-radius: 16px;
-      padding: 15px;
+      padding: 12px;
       border: 1px solid var(--tech-border);
       text-align: center;
       box-shadow: var(--tech-shadow);
     }
 
     .stat-box .val {
-      font-size: 24px;
+      font-size: 21px;
       font-weight: 700;
       margin: 5px 0 0 0;
     }
@@ -293,16 +316,35 @@
 
     @media (max-width: 576px) {
       .top-nav {
-        padding: 0 12px;
+        padding: 0 10px;
       }
 
       .top-nav-title {
-        font-size: 16px;
-        max-width: 36vw;
+        font-size: 15px;
+        max-width: 32vw;
       }
 
       .theme-switch-btn span {
         display: none;
+      }
+
+      .top-nav-btn {
+        padding: 6px 8px;
+        font-size: 16px;
+      }
+
+      .t-card {
+        border-radius: 16px;
+        padding: 11px;
+      }
+
+      .stat-box {
+        border-radius: 15px;
+        padding: 11px 10px;
+      }
+
+      .stat-box .val {
+        font-size: 19px;
       }
     }
   </style>
@@ -310,7 +352,7 @@
 
 <body>
 
-  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 }; %>
+  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 }; %>
 
   <div class="top-nav">
     <h1 class="top-nav-title">

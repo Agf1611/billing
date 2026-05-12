@@ -337,7 +337,18 @@ function deletePackage(id) {
   return db.prepare('DELETE FROM packages WHERE id=?').run(id);
 }
 
-function applyPortalPackageChange(customerId, targetPackageId) {
+function resolvePackageNormalProfile(targetPackage) {
+  const packageProfile = String(targetPackage?.pppoe_profile || targetPackage?.name || '').trim();
+  return packageProfile || 'default';
+}
+
+function normalizeInvoiceAdjustmentMode(mode) {
+  const raw = String(mode || 'all_unpaid').trim().toLowerCase();
+  if (['all_unpaid', 'from_effective_period', 'none'].includes(raw)) return raw;
+  return 'all_unpaid';
+}
+
+async function applyCustomerPackageChange(customerId, targetPackageId, options = {}) {
   const cid = Number(customerId || 0);
   const pid = Number(targetPackageId || 0);
   if (!Number.isFinite(cid) || cid <= 0) throw new Error('Pelanggan tidak valid');
@@ -350,7 +361,7 @@ function applyPortalPackageChange(customerId, targetPackageId) {
   if (!targetPackage || Number(targetPackage.is_active || 0) !== 1) {
     throw new Error('Paket tujuan tidak tersedia');
   }
-  if (Number(targetPackage.show_in_portal || 0) !== 1) {
+  if (options.requirePortalVisibility !== false && Number(targetPackage.show_in_portal || 0) !== 1) {
     throw new Error('Paket ini belum dibuka untuk pelanggan');
   }
   if (Number(customer.package_id || 0) === pid) {
@@ -358,9 +369,30 @@ function applyPortalPackageChange(customerId, targetPackageId) {
   }
 
   const currentPackage = customer.package_id ? getPackageById(customer.package_id) : null;
-  const note = `Paket diubah via portal pelanggan dari ${currentPackage?.name || '-'} ke ${targetPackage.name}`;
-  const run = db.transaction(() => {
-    db.prepare('UPDATE customers SET package_id = ?, promo_cycles_used = 0 WHERE id = ?').run(pid, cid);
+  const targetProfile = resolvePackageNormalProfile(targetPackage);
+  const note = String(options.changeNote || `Paket diubah dari ${currentPackage?.name || '-'} ke ${targetPackage.name}`).trim();
+  const invoiceAdjustmentMode = normalizeInvoiceAdjustmentMode(options.invoiceAdjustmentMode);
+  const effectiveMonth = Number(options.effectiveMonth || 0) || null;
+  const effectiveYear = Number(options.effectiveYear || 0) || null;
+  const updatePendingInvoices = db.transaction(() => {
+    db.prepare('UPDATE customers SET package_id = ?, normal_pppoe_profile = ?, promo_cycles_used = 0 WHERE id = ?').run(pid, targetProfile, cid);
+    if (invoiceAdjustmentMode === 'none') return 0;
+
+    if (invoiceAdjustmentMode === 'from_effective_period' && effectiveMonth && effectiveYear) {
+      const updated = db.prepare(`
+        UPDATE invoices
+        SET amount = ?,
+            notes = TRIM(COALESCE(notes, '') || CASE WHEN COALESCE(notes, '') = '' THEN '' ELSE ' | ' END || ?)
+        WHERE customer_id = ?
+          AND status = 'unpaid'
+          AND (
+            period_year > ?
+            OR (period_year = ? AND period_month >= ?)
+          )
+      `).run(Number(targetPackage.price || 0), note, cid, effectiveYear, effectiveYear, effectiveMonth);
+      return updated.changes || 0;
+    }
+
     const updated = db.prepare(`
       UPDATE invoices
       SET amount = ?,
@@ -370,12 +402,60 @@ function applyPortalPackageChange(customerId, targetPackageId) {
     return updated.changes || 0;
   });
 
+  const updatedInvoiceCount = updatePendingInvoices();
+  const refreshedCustomer = getCustomerById(cid);
+  let mikrotikProfileSynced = false;
+  let mikrotikSyncSkipped = false;
+  let mikrotikSyncMessage = '';
+  let mikrotikSessionReset = false;
+  let mikrotikSessionResetMessage = '';
+
+  if (refreshedCustomer?.pppoe_username && refreshedCustomer?.router_id) {
+    if (String(refreshedCustomer.status || '').toLowerCase() === 'active') {
+      try {
+        const mikrotikSvc = require('./mikrotikService');
+        await mikrotikSvc.setPppoeProfile(refreshedCustomer.pppoe_username, targetProfile, refreshedCustomer.router_id);
+        mikrotikProfileSynced = true;
+        if (options.resetActiveSession !== false) {
+          const kicked = await mikrotikSvc.kickPppoeUser(refreshedCustomer.pppoe_username, refreshedCustomer.router_id);
+          mikrotikSessionReset = Boolean(kicked);
+          mikrotikSessionResetMessage = kicked
+            ? 'Koneksi aktif PPPoE diputus agar pelanggan reconnect dengan profil paket terbaru.'
+            : 'Tidak ada sesi PPPoE aktif yang perlu diputus saat perubahan paket diterapkan.';
+        }
+      } catch (error) {
+        mikrotikSyncMessage = error.message || 'Sinkron profil MikroTik gagal';
+        logger.warn(`[customerService] Gagal sinkron profil PPPoE saat pindah paket customer ${cid}: ${mikrotikSyncMessage}`);
+      }
+    } else {
+      mikrotikSyncSkipped = true;
+      mikrotikSyncMessage = 'Pelanggan sedang tidak aktif/suspend, profil normal disimpan dan akan dipakai saat layanan aktif kembali.';
+    }
+  } else if (refreshedCustomer?.pppoe_username) {
+    mikrotikSyncSkipped = true;
+    mikrotikSyncMessage = 'Router pelanggan belum terhubung, jadi profil normal hanya diperbarui di database.';
+  }
+
   return {
-    customer: getCustomerById(cid),
+    customer: refreshedCustomer,
     currentPackage,
     targetPackage,
-    updatedInvoiceCount: run()
+    targetProfile,
+    updatedInvoiceCount,
+    mikrotikProfileSynced,
+    mikrotikSyncSkipped,
+    mikrotikSyncMessage,
+    mikrotikSessionReset,
+    mikrotikSessionResetMessage
   };
+}
+
+async function applyPortalPackageChange(customerId, targetPackageId) {
+  return applyCustomerPackageChange(customerId, targetPackageId, {
+    requirePortalVisibility: true,
+    invoiceAdjustmentMode: 'all_unpaid',
+    changeNote: undefined
+  });
 }
 
 function findCustomerByAny(val) {
@@ -479,7 +559,7 @@ async function activateCustomer(id) {
 
 module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
-  getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyPortalPackageChange,
+  getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
   suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath,
   resetPromoCyclesUsed, markPortalNotificationsSeen, getCustomerSearchSuggestions
 };

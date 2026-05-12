@@ -51,8 +51,8 @@
     (customerData.productClass && customerData.productClass !== '-') ||
     (Array.isArray(connectedUsers) && connectedUsers.length > 0)
   );
-  const supportPhone = String(settings?.whatsapp_admin || settings?.admin_phone || settings?.company_phone || '').replace(/\D/g, '');
-  const supportUrl = supportPhone ? `https://wa.me/${supportPhone}` : '/customer/contact';
+  const supportPhone = String(settings?.whatsapp_admin || settings?.admin_phone || settings?.company_phone || '').trim();
+  const supportUrl = supportPhone ? buildWhatsAppLink(supportPhone) : '/customer/contact';
   const appNotif = (typeof notif !== 'undefined' ? notif : null) || null;
   const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
   const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
@@ -2715,6 +2715,100 @@
       white-space: nowrap;
     }
 
+    .package-request-state {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(47, 107, 255, 0.06) 0%, rgba(255, 255, 255, 0.98) 100%);
+      border: 1px solid rgba(47, 107, 255, 0.12);
+    }
+
+    .package-request-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .package-request-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .package-request-copy strong {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--app-text);
+    }
+
+    .package-request-copy span {
+      color: var(--app-text-soft);
+      font-size: 12px;
+      line-height: 1.55;
+      font-weight: 700;
+    }
+
+    .package-request-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .package-request-cell {
+      display: grid;
+      gap: 5px;
+      padding: 11px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(104, 129, 182, 0.14);
+    }
+
+    .package-request-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--app-text-soft);
+    }
+
+    .package-request-value {
+      color: var(--app-text);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .package-request-note {
+      color: var(--app-text-soft);
+      font-size: 11px;
+      line-height: 1.55;
+      font-weight: 700;
+    }
+
+    .package-request-note strong {
+      color: var(--app-blue-deep);
+    }
+
+    .portal-package-item.is-disabled {
+      opacity: 0.86;
+    }
+
+    .portal-package-action-note {
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .portal-package-form .settings-submit[disabled] {
+      cursor: not-allowed;
+      opacity: 0.7;
+      filter: saturate(0.7);
+    }
+
     .android-nav-wrap {
       position: fixed;
       left: 50%;
@@ -3362,16 +3456,103 @@
       </section>
 
       <section class="app-screen" data-tab="packages">
+        <% 
+          const packageRequestState = packageChangeState || {};
+          const activePackageRequest = packageRequestState.activeRequest || null;
+          const latestPackageRequest = packageRequestState.latestRequest || null;
+          const canRequestPackageNow = Boolean(packageRequestState.canRequestNow);
+          const nextPackageEligibleText = packageRequestState.nextEligibleAtText || '';
+          const packageRequestReason = String(packageRequestState.reason || '').trim();
+          const currentPortalPackageId = Number((packageRequestState.customer && packageRequestState.customer.package_id) || profileData.package_id || customerData.package_id || 0);
+          const packageRequestStatusMap = {
+            pending: 'Menunggu review admin',
+            approved: 'Disetujui admin',
+            scheduled: 'Terjadwal siklus berikutnya',
+            processing: 'Sedang diproses sistem',
+            completed: 'Selesai diterapkan',
+            rejected: 'Ditolak admin',
+            cancelled: 'Dibatalkan'
+          };
+          const packageRequestBadgeClass = (status) => {
+            if (status === 'completed' || status === 'approved') return 'success';
+            if (status === 'scheduled' || status === 'processing' || status === 'pending') return 'info';
+            if (status === 'rejected' || status === 'cancelled') return 'danger';
+            return 'warning';
+          };
+          const statusSourceRequest = activePackageRequest || latestPackageRequest || null;
+          const statusTitle = activePackageRequest
+            ? 'Pengajuan perubahan paket sedang berjalan'
+            : latestPackageRequest
+              ? 'Status pengajuan paket terakhir'
+              : 'Belum ada pengajuan aktif';
+          const statusCopy = activePackageRequest
+            ? `Pengajuan ke ${activePackageRequest.target_package_name || 'paket tujuan'} sedang diproses. Anda belum bisa membuat request baru sampai pengajuan ini selesai.`
+            : latestPackageRequest
+              ? (canRequestPackageNow
+                  ? 'Pengajuan sebelumnya sudah selesai. Anda bisa membuat request baru jika memang perlu.'
+                  : `Permintaan paket berikutnya baru bisa dibuat lagi setelah ${nextPackageEligibleText || 'masa tunggu selesai'}.`)
+              : 'Anda hanya bisa memiliki 1 pengajuan aktif. Upgrade akan diproses setelah disetujui admin, sedangkan downgrade berlaku pada siklus tagihan berikutnya.';
+        %>
         <div class="package-upgrade-card" style="margin-top:0;">
           <div class="package-upgrade-head">
             <div>
               <h4>Pilihan Paket WiFi</h4>
-              <p>Pilih paket yang tersedia untuk pelanggan. Perubahan paket langsung diproses sistem dan tagihan aktif yang belum lunas ikut menyesuaikan.</p>
+              <p>Ajukan perubahan paket dari portal pelanggan. Sistem akan menolak request ganda, membatasi 1 perubahan per masa tunggu, dan menyesuaikan proses upgrade atau downgrade sesuai aturan billing.</p>
             </div>
             <div class="current-package-chip">
               <i class="bi bi-check2-circle"></i>
               Paket sekarang: <%= packageName %>
             </div>
+          </div>
+
+          <div class="package-request-state">
+            <div class="package-request-top">
+              <div class="package-request-copy">
+                <strong><%= statusTitle %></strong>
+                <span><%= statusCopy %></span>
+              </div>
+              <% if (statusSourceRequest) { %>
+                <span class="status-detail <%= packageRequestBadgeClass(String(statusSourceRequest.status || '').toLowerCase()) %>">
+                  <i class="bi bi-arrow-repeat"></i>
+                  <%= packageRequestStatusMap[String(statusSourceRequest.status || '').toLowerCase()] || String(statusSourceRequest.status || '').toUpperCase() %>
+                </span>
+              <% } else if (canRequestPackageNow) { %>
+                <span class="status-detail success">
+                  <i class="bi bi-check2-circle"></i>
+                  Siap request
+                </span>
+              <% } else { %>
+                <span class="status-detail warning">
+                  <i class="bi bi-clock-history"></i>
+                  Masa tunggu aktif
+                </span>
+              <% } %>
+            </div>
+
+            <div class="package-request-grid">
+              <div class="package-request-cell">
+                <span class="package-request-label">Paket Saat Ini</span>
+                <span class="package-request-value"><%= packageName || '-' %></span>
+              </div>
+              <div class="package-request-cell">
+                <span class="package-request-label">Bisa Request Lagi</span>
+                <span class="package-request-value"><%= nextPackageEligibleText || (canRequestPackageNow ? 'Sekarang' : '-') %></span>
+              </div>
+              <div class="package-request-cell">
+                <span class="package-request-label">Target Aktif / Terakhir</span>
+                <span class="package-request-value"><%= statusSourceRequest?.target_package_name || '-' %></span>
+              </div>
+              <div class="package-request-cell">
+                <span class="package-request-label">Mulai Berlaku</span>
+                <span class="package-request-value"><%= statusSourceRequest?.effective_at ? new Date(statusSourceRequest.effective_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : (activePackageRequest ? 'Menunggu penjadwalan' : '-') %></span>
+              </div>
+            </div>
+
+            <% if (packageRequestReason) { %>
+              <div class="package-request-note">
+                <strong>Catatan:</strong> <%= packageRequestReason %>
+              </div>
+            <% } %>
           </div>
 
           <% if (!portalPackages || portalPackages.length === 0) { %>
@@ -3383,7 +3564,20 @@
           <% } else { %>
             <div class="portal-package-list">
               <% portalPackages.forEach((pkg) => { %>
-                <div class="portal-package-item">
+                <% 
+                  const pkgId = Number(pkg.id || 0);
+                  const isCurrentPackage = pkgId === currentPortalPackageId;
+                  const isRequestedTarget = activePackageRequest && Number(activePackageRequest.target_package_id || 0) === pkgId;
+                  const disableRequestButton = isCurrentPackage || isRequestedTarget || !canRequestPackageNow;
+                  const buttonLabel = isCurrentPackage
+                    ? 'Paket Aktif Saat Ini'
+                    : isRequestedTarget
+                      ? 'Sedang Diajukan'
+                      : canRequestPackageNow
+                        ? 'Ajukan Perubahan Paket'
+                        : (nextPackageEligibleText ? `Bisa Lagi ${nextPackageEligibleText}` : 'Belum Bisa Diajukan');
+                %>
+                <div class="portal-package-item <%= disableRequestButton ? 'is-disabled' : '' %>">
                   <div class="portal-package-top">
                     <div>
                       <strong><%= pkg.name %></strong>
@@ -3408,12 +3602,17 @@
                       </span>
                     <% } %>
                   </div>
-                  <form class="portal-package-form" method="POST" action="/customer/packages/change" onsubmit="return confirm('Ganti paket ini? Tagihan aktif yang belum lunas akan ikut diperbarui.');">
-                    <input type="hidden" name="package_id" value="<%= pkg.id %>">
-                    <button class="settings-submit" type="submit">
-                      <i class="bi bi-arrow-up-circle"></i> Pilih Paket Ini
+                  <form class="portal-package-form" method="POST" action="/customer/packages/change" onsubmit="return confirm('Kirim pengajuan perubahan ke paket ini? Admin akan meninjau request Anda, dan request ganda akan ditolak otomatis.');">
+                    <input type="hidden" name="package_id" value="<%= pkgId %>">
+                    <button class="settings-submit" type="submit" <%= disableRequestButton ? 'disabled' : '' %>>
+                      <i class="bi bi-arrow-repeat"></i> <%= buttonLabel %>
                     </button>
                   </form>
+                  <% if (disableRequestButton && !isCurrentPackage) { %>
+                    <div class="portal-package-action-note">
+                      <%= isRequestedTarget ? 'Request ke paket ini masih aktif.' : (packageRequestReason || 'Anda belum bisa membuat request baru saat ini.') %>
+                    </div>
+                  <% } %>
                 </div>
               <% }) %>
             </div>

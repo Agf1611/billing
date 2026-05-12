@@ -76,7 +76,7 @@
       <div class="text-secondary mb-2" style="font-size:12px;">
         <i class="bi bi-tags me-1"></i><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskPriorityMap[task.priority] || task.priority %><br>
         <i class="bi bi-person me-1"></i><%= task.customer_name || task.linked_customer_name || 'Pelanggan umum' %><br>
-        <% if (task.customer_phone || task.linked_customer_phone) { %><i class="bi bi-telephone-fill me-1"></i><%= task.customer_phone || task.linked_customer_phone %><br><% } %>
+        <% if (task.customer_phone || task.linked_customer_phone) { %><i class="bi bi-telephone-fill me-1"></i><a href="<%= buildWhatsAppLink(task.customer_phone || task.linked_customer_phone) %>" class="text-decoration-none text-info"><%= task.customer_phone || task.linked_customer_phone %></a><br><% } %>
         <i class="bi bi-geo-alt-fill me-1"></i><%= task.customer_address || task.location_note || 'Lokasi menyusul' %>
       </div>
 

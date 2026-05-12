@@ -10,6 +10,20 @@ if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 const dbPath = path.join(dbDir, 'billing.db');
 
+function normalizePhoneStorage(input, defaultCountryCode = '62') {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+
+  let digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith(defaultCountryCode)) return digits;
+  if (digits.startsWith('0')) return defaultCountryCode + digits.slice(1);
+  if (digits.startsWith('8')) return defaultCountryCode + digits;
+  return defaultCountryCode + digits;
+}
+
 let db;
 try {
   db = new Database(dbPath);
@@ -120,6 +134,45 @@ db.exec(`
     technician_id INTEGER REFERENCES technicians(id) ON DELETE SET NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS customer_package_change_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    current_package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL,
+    target_package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+    request_note TEXT DEFAULT '',
+    review_note TEXT DEFAULT '',
+    reviewed_by_name TEXT DEFAULT '',
+    applied_at DATETIME,
+    reviewed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS package_change_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    current_package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL,
+    target_package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
+    change_kind TEXT NOT NULL DEFAULT 'upgrade', -- upgrade, downgrade, lateral
+    request_source TEXT NOT NULL DEFAULT 'portal',
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, scheduled, processing, completed, rejected, cancelled
+    request_note TEXT DEFAULT '',
+    review_note TEXT DEFAULT '',
+    reviewed_by_name TEXT DEFAULT '',
+    eligibility_after DATETIME,
+    effective_at DATETIME,
+    requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    approved_at DATETIME,
+    scheduled_at DATETIME,
+    processing_at DATETIME,
+    completed_at DATETIME,
+    rejected_at DATETIME,
+    cancelled_at DATETIME,
+    applied_at DATETIME,
+    reviewed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS routers (
@@ -310,6 +363,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_invoice ON collector_payment_requests(invoice_id);
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_collector ON collector_payment_requests(collector_id);
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_created ON collector_payment_requests(created_at);
+
+  CREATE INDEX IF NOT EXISTS idx_pkg_change_req_customer ON customer_package_change_requests(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_pkg_change_req_status ON customer_package_change_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_pkg_change_req_created ON customer_package_change_requests(created_at);
+  CREATE INDEX IF NOT EXISTS idx_package_change_requests_customer ON package_change_requests(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at);
+  CREATE INDEX IF NOT EXISTS idx_package_change_requests_effective ON package_change_requests(effective_at);
 
   CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_created ON webhook_payment_notifs(created_at);
   CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_service ON webhook_payment_notifs(service);
@@ -654,5 +715,113 @@ try { db.exec("ALTER TABLE technicians ADD COLUMN password_hash TEXT DEFAULT ''"
 try { db.exec("ALTER TABLE cashiers ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE collectors ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE agents ADD COLUMN password_hash TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN change_kind TEXT NOT NULL DEFAULT 'upgrade'"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN request_source TEXT NOT NULL DEFAULT 'portal'"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN eligibility_after DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN effective_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN requested_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN approved_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN scheduled_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN processing_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN completed_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN rejected_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN cancelled_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN applied_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE package_change_requests ADD COLUMN reviewed_at DATETIME"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_customer ON package_change_requests(customer_id)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_effective ON package_change_requests(effective_at)"); } catch (e) {}
+
+try {
+  const hasLegacyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='customer_package_change_requests'").get();
+  const hasNewRows = Number(db.prepare("SELECT COUNT(1) AS c FROM package_change_requests").get()?.c || 0);
+  if (hasLegacyTable && hasNewRows === 0) {
+    db.exec(`
+      INSERT INTO package_change_requests (
+        id,
+        customer_id,
+        current_package_id,
+        target_package_id,
+        change_kind,
+        request_source,
+        status,
+        request_note,
+        review_note,
+        reviewed_by_name,
+        eligibility_after,
+        effective_at,
+        requested_at,
+        approved_at,
+        scheduled_at,
+        processing_at,
+        completed_at,
+        rejected_at,
+        cancelled_at,
+        applied_at,
+        reviewed_at,
+        created_at
+      )
+      SELECT
+        id,
+        customer_id,
+        current_package_id,
+        target_package_id,
+        'upgrade',
+        'portal',
+        CASE
+          WHEN status = 'approved' THEN 'completed'
+          WHEN status = 'rejected' THEN 'rejected'
+          ELSE status
+        END,
+        request_note,
+        review_note,
+        reviewed_by_name,
+        DATETIME(created_at, '+30 days'),
+        applied_at,
+        COALESCE(created_at, CURRENT_TIMESTAMP),
+        CASE WHEN status = 'approved' THEN COALESCE(reviewed_at, applied_at, created_at) END,
+        NULL,
+        NULL,
+        CASE WHEN status = 'approved' THEN COALESCE(applied_at, reviewed_at, created_at) END,
+        CASE WHEN status = 'rejected' THEN COALESCE(reviewed_at, created_at) END,
+        NULL,
+        applied_at,
+        reviewed_at,
+        created_at
+      FROM customer_package_change_requests
+    `);
+  }
+} catch (e) {}
+
+function normalizePhoneColumnValues(tableName, columnName) {
+  const selectStmt = db.prepare(`SELECT id, ${columnName} AS phone_value FROM ${tableName} WHERE COALESCE(TRIM(${columnName}), '') <> ''`);
+  const updateStmt = db.prepare(`UPDATE ${tableName} SET ${columnName} = ? WHERE id = ?`);
+  const rows = selectStmt.all();
+  for (const row of rows) {
+    const current = String(row.phone_value || '').trim();
+    const normalized = normalizePhoneStorage(current);
+    if (!normalized || normalized === current) continue;
+    updateStmt.run(normalized, row.id);
+  }
+}
+
+[
+  ['customers', 'phone'],
+  ['technicians', 'phone'],
+  ['cashiers', 'phone'],
+  ['collectors', 'phone'],
+  ['agents', 'phone'],
+  ['public_voucher_orders', 'buyer_phone'],
+  ['digiflazz_staff_transactions', 'actor_phone'],
+  ['technician_customer_requests', 'customer_phone'],
+  ['technician_tasks', 'customer_phone']
+].forEach(([tableName, columnName]) => {
+  try {
+    normalizePhoneColumnValues(tableName, columnName);
+  } catch (e) {
+    /* ignore normalization bootstrap issues */
+  }
+});
 
 module.exports = db;

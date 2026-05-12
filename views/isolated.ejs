@@ -194,7 +194,7 @@
     </div>
 
     <% if (adminPhone) { %>
-    <a href="https://wa.me/<%= adminPhone.replace(/\D/g, '') %>?text=Halo%20Admin%20<%= encodeURIComponent(company) %>,%20layanan%20internet%20saya%20terisolir.%20Mohon%20bantuannya." class="btn-wa">
+    <a href="<%= buildWhatsAppLink(adminPhone, `Halo Admin ${company}, layanan internet saya terisolir. Mohon bantuannya.`) %>" class="btn-wa">
       <i class="bi bi-whatsapp"></i> Konfirmasi Pembayaran
     </a>
     <% } %>

@@ -5,6 +5,7 @@ const { getSettingsWithCache } = require('../config/settingsManager');
 const billingSvc = require('../services/billingService');
 const paymentSvc = require('../services/paymentService');
 const customerSvc = require('../services/customerService');
+const packageChangeSvc = require('../services/packageChangeService');
 const mikrotikService = require('../services/mikrotikService');
 const { logger } = require('../config/logger');
 const ticketSvc = require('../services/ticketService');
@@ -47,6 +48,9 @@ let customerPaymentChannelsCache = {
   expiresAt: 0,
   value: []
 };
+const packageChangeAttemptStore = new Map();
+const PACKAGE_CHANGE_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const PACKAGE_CHANGE_RATE_LIMIT_MAX_ATTEMPTS = 6;
 
 router.use((req, res, next) => {
   res.set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
@@ -339,6 +343,56 @@ function setCachedCustomerPaymentChannels(settings = {}, channels = []) {
     key: getCustomerPaymentChannelsCacheKey(settings),
     expiresAt: Date.now() + CUSTOMER_PAYMENT_CHANNELS_CACHE_TTL_MS,
     value: Array.isArray(channels) ? channels.map((channel) => ({ ...channel })) : []
+  };
+}
+
+function prunePackageChangeAttemptStore(now = Date.now()) {
+  for (const [key, entry] of packageChangeAttemptStore.entries()) {
+    const resetAt = Number(entry?.resetAt || 0);
+    if (!resetAt || resetAt <= now) packageChangeAttemptStore.delete(key);
+  }
+}
+
+function checkPackageChangeRateLimit(req, customerId) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) return { allowed: false, retryAt: new Date(Date.now() + PACKAGE_CHANGE_RATE_LIMIT_WINDOW_MS) };
+
+  const now = Date.now();
+  prunePackageChangeAttemptStore(now);
+  const key = `${cid}:${String(req.ip || '').trim()}`;
+  const existing = packageChangeAttemptStore.get(key);
+  if (!existing || Number(existing.resetAt || 0) <= now) {
+    const fresh = { count: 1, resetAt: now + PACKAGE_CHANGE_RATE_LIMIT_WINDOW_MS };
+    packageChangeAttemptStore.set(key, fresh);
+    return { allowed: true, retryAt: new Date(fresh.resetAt), remaining: PACKAGE_CHANGE_RATE_LIMIT_MAX_ATTEMPTS - 1 };
+  }
+  if (Number(existing.count || 0) >= PACKAGE_CHANGE_RATE_LIMIT_MAX_ATTEMPTS) {
+    return { allowed: false, retryAt: new Date(existing.resetAt), remaining: 0 };
+  }
+  existing.count += 1;
+  packageChangeAttemptStore.set(key, existing);
+  return { allowed: true, retryAt: new Date(existing.resetAt), remaining: Math.max(0, PACKAGE_CHANGE_RATE_LIMIT_MAX_ATTEMPTS - existing.count) };
+}
+
+function buildPortalPackageChangeViewState(profile) {
+  if (!profile?.id) {
+    return {
+      activeRequest: null,
+      latestRequest: null,
+      nextEligibleAtText: '',
+      canRequestNow: false,
+      reason: 'Data pelanggan belum siap.',
+      canRequestNowByDate: false
+    };
+  }
+
+  const state = packageChangeSvc.getPortalPackageChangeState(profile.id);
+  return {
+    ...state,
+    nextEligibleAtText: state.nextEligibleAt
+      ? state.nextEligibleAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '',
+    canRequestNowByDate: !state.nextEligibleAt || state.nextEligibleAt.getTime() <= Date.now()
   };
 }
 
@@ -1294,6 +1348,7 @@ router.get('/dashboard', async (req, res) => {
   const portalPackages = refreshedProfile
     ? customerSvc.getPortalPackages(refreshedProfile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(refreshedProfile.package_id || 0))
     : [];
+  const packageChangeState = refreshedProfile ? buildPortalPackageChangeViewState(refreshedProfile) : buildPortalPackageChangeViewState(null);
 
   res.render('dashboard', {
     customer: dashboardCustomer,
@@ -1309,7 +1364,8 @@ router.get('/dashboard', async (req, res) => {
     notif: baseNotif,
     notifications: notificationSummary.items,
     notificationUnreadCount: notificationSummary.unreadCount,
-    portalPackages
+    portalPackages,
+    packageChangeState
   });
 });
 
@@ -1583,7 +1639,8 @@ router.post('/change-tag', async (req, res) => {
       paymentChannels: [],
       connectedUsers: data ? data.connectedUsers : [],
       notif: dashboardNotif('ID/Tag baru tidak boleh kosong atau sama dengan yang lama.', 'warning'),
-      portalPackages: []
+      portalPackages: [],
+      packageChangeState: buildPortalPackageChangeViewState(null)
     });
   }
   const tagResult = await updateCustomerTag(oldTag, newTag);
@@ -1638,7 +1695,8 @@ router.post('/change-tag', async (req, res) => {
     paymentChannels: [],
     connectedUsers: deviceData ? deviceData.connectedUsers : [],
     notif,
-    portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : []
+    portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : [],
+    packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null)
   });
 });
 
@@ -1646,20 +1704,25 @@ router.post('/packages/change', async (req, res) => {
   try {
     const profile = getSessionCustomer(req);
     if (!profile || !profile.id) throw new Error('Sesi pelanggan tidak ditemukan');
+    const rateLimit = checkPackageChangeRateLimit(req, profile.id);
+    if (!rateLimit.allowed) {
+      throw new Error(`Terlalu sering mencoba mengajukan perubahan paket. Silakan coba lagi setelah ${rateLimit.retryAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}.`);
+    }
+
     const targetPackageId = Number(req.body.package_id || 0);
-    const result = customerSvc.applyPortalPackageChange(profile.id, targetPackageId);
-    const targetName = result?.targetPackage?.name || 'paket baru';
-    const previousName = result?.currentPackage?.name || 'paket lama';
-    try {
-      ticketSvc.createTicket(
-        profile.id,
-        `Upgrade paket ke ${targetName}`,
-        `Perubahan paket via portal pelanggan dari ${previousName} ke ${targetName} telah diproses otomatis. Tagihan belum lunas yang terkait ikut diperbarui.`
-      );
-    } catch {}
+    const createdRequest = packageChangeSvc.createRequest(profile.id, targetPackageId, {
+      requestSource: 'portal',
+      requestNote: ''
+    });
+    const isDowngrade = String(createdRequest.change_kind || '') === 'downgrade';
+    const targetName = createdRequest.target_package_name || 'paket baru';
+    const nextStep = isDowngrade
+      ? `Jika disetujui, paket baru akan mulai berlaku pada siklus tagihan berikutnya (${createdRequest.effective_at ? new Date(createdRequest.effective_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'jadwal berikutnya'}).`
+      : 'Jika disetujui admin, paket baru bisa langsung diproses dan profil internet Anda ikut menyesuaikan.';
+
     req.session._msg = {
       type: 'success',
-      text: `Paket berhasil diubah ke ${targetName}. ${Number(result.updatedInvoiceCount || 0) > 0 ? `Tagihan aktif ikut diperbarui (${result.updatedInvoiceCount} tagihan).` : 'Tagihan berikutnya akan mengikuti paket baru.'}`
+      text: `Pengajuan perubahan paket ke ${targetName} sudah dikirim. ${nextStep}`
     };
   } catch (error) {
     req.session._msg = { type: 'danger', text: 'Gagal mengubah paket: ' + (error.message || 'Terjadi kesalahan') };

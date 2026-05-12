@@ -89,6 +89,9 @@
       </a>
       <a href="/admin/customer-requests" class="sb-item <%= activePage==='customer_requests' ? 'active' : '' %>">
         <i class="bi bi-person-check"></i><span>Approval Pelanggan</span>
+        <% if (Number(adminPendingCustomerRequests || 0) > 0) { %>
+          <span class="sb-badge"><%= Number(adminPendingCustomerRequests || 0) > 99 ? '99+' : Number(adminPendingCustomerRequests || 0) %></span>
+        <% } %>
       </a>
       <a href="/admin/cashiers" class="sb-item <%= activePage==='cashiers' ? 'active' : '' %>">
         <i class="bi bi-person-vcard"></i><span><%= t('admin.nav.cashiers', 'Kasir') %></span>

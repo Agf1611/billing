@@ -151,6 +151,7 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       const { invoice_ids, paid_by_name, notes } = req.body;
       const ids = Array.isArray(invoice_ids) ? invoice_ids : [invoice_ids];
       const paidBy = resolvePaidByName(req, paid_by_name);
+      let whatsappWarning = '';
 
       if (!ids || ids.length === 0) throw new Error('Tidak ada tagihan yang dipilih');
 
@@ -183,15 +184,19 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       if (customerId && paidInvoices.length > 0) {
         const customer = customerSvc.getCustomerById(customerId);
         if (customer && customer.phone) {
-          await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
-            baseUrl: resolveRequestBaseUrl(req),
-            paidBy,
-            paidAt: new Date().toLocaleString('id-ID')
-          });
+          try {
+            await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
+              baseUrl: resolveRequestBaseUrl(req),
+              paidBy,
+              paidAt: new Date().toLocaleString('id-ID')
+            });
+          } catch (notifyError) {
+            whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+          }
         }
       }
 
-      req.session._msg = { type: 'success', text: `${ids.length} tagihan berhasil dilunasi.` };
+      req.session._msg = { type: 'success', text: `${ids.length} tagihan berhasil dilunasi.${whatsappWarning}` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal bayar massal: ' + e.message };
     }
@@ -205,15 +210,20 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
       const paidBy = resolvePaidByName(req, req.body.paid_by_name);
       const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
+      let whatsappWarning = '';
       billingSvc.markAsPaid(req.params.id, paidBy, req.body.notes);
 
       const customer = customerSvc.getCustomerById(inv.customer_id);
       if (!wasPaid && customer && customer.phone) {
-        await sendPaidWhatsappNotification(customer, [inv], inv, {
-          baseUrl: resolveRequestBaseUrl(req),
-          paidBy,
-          paidAt: new Date().toLocaleString('id-ID')
-        });
+        try {
+          await sendPaidWhatsappNotification(customer, [inv], inv, {
+            baseUrl: resolveRequestBaseUrl(req),
+            paidBy,
+            paidAt: new Date().toLocaleString('id-ID')
+          });
+        } catch (notifyError) {
+          whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+        }
       }
       if (customer && customer.status === 'suspended') {
         const freshCustomer = customerSvc.getAllCustomers().find((c) => c.id === inv.customer_id);
@@ -222,7 +232,7 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
         }
       }
 
-      req.session._msg = { type: 'success', text: 'Tagihan berhasil ditandai lunas.' };
+      req.session._msg = { type: 'success', text: `Tagihan berhasil ditandai lunas.${whatsappWarning}` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
     }

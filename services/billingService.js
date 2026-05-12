@@ -696,6 +696,8 @@ module.exports = {
   getInvoiceSummary, getMonthlyRevenue,
   getDashboardStats, getRecentPayments, getTopUnpaid,
   getTodayRevenue,
+  getInvoiceDueDate,
+  resolveInvoiceDueDay,
   getEffectiveBillingDay,
   normalizeBillingAnchorDay,
   updatePaymentInfo

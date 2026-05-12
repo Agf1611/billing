@@ -426,6 +426,43 @@
             </div>
           </div>
 
+          <div class="settings-subcard" style="margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--panel-2)">
+            <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Default Bootstrap TR-069</div>
+            <div class="fg">
+              <label class="fl">ACS URL untuk modem</label>
+              <input class="fc" name="tr069_acs_url" value="<%= settings.tr069_acs_url || '' %>" placeholder="http://domain-acs-anda:7547">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Isi URL CWMP/TR-069 modem. Ini bisa berbeda dari GenieACS API URL.</div>
+            </div>
+            <div class="form-row">
+              <div class="fg">
+                <label class="fl">ACS Username modem</label>
+                <input class="fc" name="tr069_acs_username" value="<%= settings.tr069_acs_username || '' %>" placeholder="opsional">
+              </div>
+              <div class="fg">
+                <label class="fl">ACS Password modem</label>
+                <div class="secret-field">
+                  <input class="fc" type="password" name="tr069_acs_password" value="<%= settings.tr069_acs_password || '' %>">
+                  <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat password ACS">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg">
+                <label class="fl">Periodic Inform</label>
+                <select class="fs" name="tr069_periodic_enable">
+                  <option value="true" <%= settings.tr069_periodic_enable !== false ? 'selected' : '' %>>Aktif</option>
+                  <option value="false" <%= settings.tr069_periodic_enable === false ? 'selected' : '' %>>Nonaktif</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Interval Inform (detik)</label>
+                <input class="fc" type="number" min="30" name="tr069_periodic_interval" value="<%= settings.tr069_periodic_interval || 300 %>">
+              </div>
+            </div>
+          </div>
+
           <div class="form-row" style="margin-top:20px">
             <div class="fg">
               <label class="fl">MikroTik IP / Host</label>

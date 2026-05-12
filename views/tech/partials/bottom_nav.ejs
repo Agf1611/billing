@@ -1,6 +1,6 @@
   </div> <!-- End container -->
 
-  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, inProgress: 0, resolved: 0 }; %>
+  <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 }; %>
 
   <nav class="bottom-nav">
     <a href="/tech" class="nav-item <%= activePage === 'dashboard' ? 'active' : '' %>">
@@ -15,7 +15,7 @@
     <a href="/tech/pool" class="nav-item <%= activePage === 'pool' ? 'active' : '' %>">
       <i class="bi bi-inbox-fill"></i>
       <% if (safeTechNav.openTickets > 0) { %><span class="nav-count"><%= safeTechNav.openTickets > 99 ? '99+' : safeTechNav.openTickets %></span><% } %>
-      <span><%= t('tech.nav.new_tickets', 'Tiket Baru') %></span>
+      <span><%= t('tech.nav.new_tickets', 'Tiket') %></span>
     </a>
     <a href="/tech/map" class="nav-item <%= activePage === 'map' ? 'active' : '' %>">
       <i class="bi bi-map-fill"></i>

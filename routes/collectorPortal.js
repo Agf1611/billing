@@ -102,9 +102,16 @@ router.get('/', requireCollectorSession, (req, res) => {
     params.push(status);
   }
   if (search) {
-    q += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ?)';
+    q += ` AND (
+      c.name LIKE ?
+      OR c.phone LIKE ?
+      OR c.genieacs_tag LIKE ?
+      OR c.pppoe_username LIKE ?
+      OR c.address LIKE ?
+      OR CAST(i.id AS TEXT) LIKE ?
+    )`;
     const like = `%${search}%`;
-    params.push(like, like, like, like);
+    params.push(like, like, like, like, like, like);
   }
   q += ' ORDER BY c.name ASC, i.id DESC LIMIT 500';
   const list = db.prepare(q).all(...params);
@@ -168,6 +175,7 @@ router.get('/', requireCollectorSession, (req, res) => {
   res.render('collector/dashboard', {
     title: 'Dashboard Kolektor',
     company: company(),
+    collectorName: String(req.session.collectorName || req.session.collectorUsername || 'Kolektor').trim(),
     month,
     year,
     status,
@@ -217,6 +225,7 @@ router.post('/payment-request', requireCollectorSession, express.urlencoded({ ex
   if (req.body.year) qs.set('year', String(req.body.year));
   if (req.body.status) qs.set('status', String(req.body.status));
   if (req.body.search) qs.set('search', String(req.body.search));
+  if (req.body.scope) qs.set('scope', String(req.body.scope));
   const suffix = qs.toString() ? ('?' + qs.toString()) : '';
   res.redirect('/collector' + suffix);
 });

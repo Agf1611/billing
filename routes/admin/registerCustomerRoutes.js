@@ -316,33 +316,116 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     res.redirect('/admin/customers');
   });
 
+  function buildCustomerImportTemplateWorkbook() {
+    const templateHeaders = [
+      'Nama',
+      'Telepon',
+      'Email',
+      'Alamat',
+      'Paket',
+      'Tag ONU',
+      'PPPoE Username',
+      'PPPoE Profile',
+      'Isolir Profile',
+      'Status',
+      'Tanggal Pasang',
+      'Auto Isolir',
+      'Tgl Isolir',
+      'ODP',
+      'Latitude',
+      'Longitude',
+      'Catatan'
+    ];
+
+    const wsTemplate = XLSX.utils.aoa_to_sheet([
+      templateHeaders,
+      ['', '', '', '', '', '', '', '', 'BEATISOLIR', 'active', '', 'YA', '10', '', '', '', '']
+    ]);
+    wsTemplate['!cols'] = templateHeaders.map((header) => ({
+      wch: Math.max(String(header).length + 4, 14)
+    }));
+
+    const wsGuide = XLSX.utils.aoa_to_sheet([
+      ['Panduan Import Pelanggan'],
+      ['1. Isi data mulai baris ke-2.'],
+      ['2. Kolom wajib minimal: Nama.'],
+      ['3. Kolom Paket harus sama persis dengan nama paket di aplikasi.'],
+      ['4. Kolom ODP harus sama persis dengan nama ODP di aplikasi jika dipakai.'],
+      ['5. Status yang disarankan: active, suspended, inactive.'],
+      ['6. Auto Isolir isi YA atau TIDAK.'],
+      ['7. Format tanggal pasang disarankan YYYY-MM-DD.'],
+      ['8. Isolir Profile default yang dipakai sistem saat ini: BEATISOLIR.'],
+      ['9. Hapus contoh kosong pada baris ke-2 jika tidak dipakai.']
+    ]);
+    wsGuide['!cols'] = [{ wch: 88 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsTemplate, 'Template Import');
+    XLSX.utils.book_append_sheet(wb, wsGuide, 'Panduan');
+    return wb;
+  }
+
+  router.get('/customers/import-template', requireAdminSession, (req, res) => {
+    try {
+      const wb = buildCustomerImportTemplateWorkbook();
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Disposition', 'attachment; filename=template_import_pelanggan.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(buf);
+    } catch (e) {
+      logger.error('Import template error:', e);
+      res.status(500).send('Gagal membuat template import.');
+    }
+  });
+
   router.get('/customers/export', requireAdminSession, (req, res) => {
     try {
       const customers = customerSvc.getAllCustomers();
-      const data = customers.map((customer) => ({
-        ID: customer.id,
-        Nama: customer.name,
-        Telepon: customer.phone,
-        Email: customer.email || '',
-        Alamat: customer.address,
-        Paket: customer.package_name || '-',
-        'Tag ONU': customer.genieacs_tag,
-        'PPPoE Username': customer.pppoe_username,
-        'PPPoE Profile': customer.normal_pppoe_profile || customer.package_pppoe_profile || customer.package_name || '',
-        'Isolir Profile': customer.isolir_profile,
-        Status: customer.status,
-        'Tanggal Pasang': customer.install_date,
-        'Auto Isolir': customer.auto_isolate === 1 ? 'YA' : 'TIDAK',
-        'Tgl Isolir': customer.isolate_day,
-        ODP: customer.odp_name || '-',
-        Latitude: customer.lat || '',
-        Longitude: customer.lng || '',
-        Catatan: customer.notes
-      }));
+      const headers = [
+        'ID',
+        'Nama',
+        'Telepon',
+        'Email',
+        'Alamat',
+        'Paket',
+        'Tag ONU',
+        'PPPoE Username',
+        'PPPoE Profile',
+        'Isolir Profile',
+        'Status',
+        'Tanggal Pasang',
+        'Auto Isolir',
+        'Tgl Isolir',
+        'ODP',
+        'Latitude',
+        'Longitude',
+        'Catatan'
+      ];
+      const rows = customers.map((customer) => ([
+        customer.id,
+        customer.name,
+        customer.phone,
+        customer.email || '',
+        customer.address,
+        customer.package_name || '-',
+        customer.genieacs_tag,
+        customer.pppoe_username,
+        customer.normal_pppoe_profile || customer.package_pppoe_profile || customer.package_name || '',
+        customer.isolir_profile,
+        customer.status,
+        customer.install_date,
+        customer.auto_isolate === 1 ? 'YA' : 'TIDAK',
+        customer.isolate_day,
+        customer.odp_name || '-',
+        customer.lat || '',
+        customer.lng || '',
+        customer.notes
+      ]));
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Pelanggan');
+      const wsData = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      wsData['!cols'] = headers.map((header) => ({ wch: Math.max(String(header).length + 4, 14) }));
+      const wb = buildCustomerImportTemplateWorkbook();
+      XLSX.utils.book_append_sheet(wb, wsData, 'Data Pelanggan');
 
       const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
       res.setHeader('Content-Disposition', 'attachment; filename=daftar_pelanggan.xlsx');

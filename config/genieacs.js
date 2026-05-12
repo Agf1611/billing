@@ -86,15 +86,15 @@ const genieacsApi = {
             // Format parameter values untuk GenieACS
             const parameterValues = [];
             for (const [path, value] of Object.entries(parameters)) {
-                // Handle SSID update
-                if (path.includes('SSID')) {
+                // Handle alias SSID update
+                if (path === 'SSID') {
                     parameterValues.push(
                         ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", value],
                         ["Device.WiFi.SSID.1.SSID", value]
                     );
                 }
-                // Handle WiFi password update
-                else if (path.includes('Password') || path.includes('KeyPassphrase')) {
+                // Handle alias WiFi password update
+                else if (path === 'Password' || path === 'KeyPassphrase' || path === 'PreSharedKey') {
                     parameterValues.push(
                         ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", value],
                         ["InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", value],
@@ -122,18 +122,23 @@ const genieacsApi = {
 
             logger.debug('[GenieACS] Parameter update task queued');
 
-            // Kirim refresh task
-            const refreshTask = {
-                name: "refreshObject",
-                objectName: "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1"
-            };
+            // Alias WiFi update butuh refresh object agar perubahan cepat terlihat.
+            if (Object.prototype.hasOwnProperty.call(parameters, 'SSID')
+              || Object.prototype.hasOwnProperty.call(parameters, 'Password')
+              || Object.prototype.hasOwnProperty.call(parameters, 'KeyPassphrase')
+              || Object.prototype.hasOwnProperty.call(parameters, 'PreSharedKey')) {
+                const refreshTask = {
+                    name: "refreshObject",
+                    objectName: "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1"
+                };
 
-            const refreshResponse = await axiosInstance.post(
-                `/devices/${encodeURIComponent(deviceId)}/tasks`,
-                refreshTask
-            );
+                await axiosInstance.post(
+                    `/devices/${encodeURIComponent(deviceId)}/tasks`,
+                    refreshTask
+                );
 
-            logger.debug('[GenieACS] Refresh task queued');
+                logger.debug('[GenieACS] Refresh task queued');
+            }
 
             return response.data;
         } catch (error) {

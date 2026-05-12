@@ -1,0 +1,40 @@
+<div class="tool-card">
+  <form method="GET" action="/collector" style="display:grid;gap:10px;">
+    <input type="hidden" name="scope" value="<%= scope || '' %>">
+    <div class="tool-search">
+      <i class="bi bi-search"></i>
+      <input
+        type="search"
+        name="search"
+        value="<%= search || '' %>"
+        placeholder="Cari nama, PPPoE, invoice, atau alamat"
+        autocomplete="off"
+      >
+      <button class="tool-submit" type="submit">
+        <i class="bi bi-arrow-right-circle"></i>
+        <span>Cari</span>
+      </button>
+    </div>
+
+    <div class="tool-meta">
+      <select class="tool-select" name="month" aria-label="Bulan">
+        <% for (let m = 1; m <= 12; m += 1) { %>
+          <option value="<%= m %>" <%= Number(month) === m ? 'selected' : '' %>><%= String(m).padStart(2, '0') %></option>
+        <% } %>
+      </select>
+
+      <select class="tool-select" name="year" aria-label="Tahun">
+        <% const baseYear = Number(year) || new Date().getFullYear(); %>
+        <% for (let y = baseYear - 2; y <= baseYear + 1; y += 1) { %>
+          <option value="<%= y %>" <%= Number(year) === y ? 'selected' : '' %>><%= y %></option>
+        <% } %>
+      </select>
+
+      <select class="tool-select" name="status" aria-label="Status">
+        <option value="unpaid" <%= String(status) === 'unpaid' ? 'selected' : '' %>>Belum</option>
+        <option value="paid" <%= String(status) === 'paid' ? 'selected' : '' %>>Lunas</option>
+        <option value="all" <%= String(status) === 'all' ? 'selected' : '' %>>Semua</option>
+      </select>
+    </div>
+  </form>
+</div>

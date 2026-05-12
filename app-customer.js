@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { logger } = require('./config/logger');
 const db = require('./config/database');
 const customerSvc = require('./services/customerService');
+const { normalizePhoneDigits, formatPhoneDisplay, buildWhatsAppLink } = require('./services/phoneService');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { scheduleAutoBackup } = require('./services/backupService');
 const { assertCriticalSecuritySettings } = require('./config/security');
@@ -99,6 +100,9 @@ app.use((req, res, next) => {
   const settings = getSettingsWithCache();
   res.locals.runtimeWarnings = getRuntimeConfigurationWarnings(settings, process.env);
   res.locals.selfUpdateEnabled = isSelfUpdateEnabled(settings, process.env);
+  res.locals.normalizePhoneDigits = normalizePhoneDigits;
+  res.locals.formatPhoneDisplay = formatPhoneDisplay;
+  res.locals.buildWhatsAppLink = buildWhatsAppLink;
   next();
 });
 

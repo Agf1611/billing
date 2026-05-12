@@ -1,0 +1,148 @@
+<%
+  const isPaid = String(inv.status || '').toLowerCase() === 'paid';
+  const reqRow = pendingMap && pendingMap.get ? pendingMap.get(Number(inv.id)) : null;
+  const reqStatus = reqRow ? String(reqRow.status || '').toLowerCase() : '';
+  const isPending = reqStatus === 'pending';
+  const dueText = inv.isolate_day ? `Tgl ${inv.isolate_day}` : '-';
+  const rawPhone = String(inv.customer_phone || '').trim();
+  let waDigits = rawPhone.replace(/\D/g, '');
+  if (waDigits.startsWith('0')) waDigits = '62' + waDigits.slice(1);
+  const waHref = waDigits ? `https://wa.me/${waDigits}` : '';
+  const addressFull = String(inv.customer_address || '').trim();
+  const addressShort = addressFull.length > 44 ? `${addressFull.slice(0, 44)}...` : (addressFull || '-');
+  const packageName = String(inv.package_name || 'Internet').trim() || 'Internet';
+  const subtitle = `${packageName} • Invoice #${inv.id}`;
+  const statusText = isPaid ? 'Lunas' : (isPending ? 'Menunggu approval' : (String(inv.customer_status || '').toLowerCase() === 'suspended' ? 'Belum bayar - isolir' : 'Belum bayar'));
+  const statusTone = isPaid ? 'success' : (isPending ? 'warn' : (String(inv.customer_status || '').toLowerCase() === 'suspended' ? 'danger' : 'warn'));
+  const statusIcon = isPaid ? 'bi-check-circle' : (isPending ? 'bi-hourglass-split' : 'bi-exclamation-circle');
+  const pendingText = isPending ? 'Sudah diajukan' : '';
+  const allowSubmit = !isPaid && !isPending;
+  const mapHref = (inv.lat && inv.lng) ? `https://www.google.com/maps?q=${encodeURIComponent(`${inv.lat},${inv.lng}`)}` : '';
+%>
+
+<article
+  class="collector-card"
+  style="padding:12px;border-radius:18px;border:1px solid var(--border);background:var(--surface-soft);display:grid;gap:10px;"
+>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+    <div style="min-width:0;">
+      <h3 style="margin:0;font-size:15px;font-weight:900;letter-spacing:-.03em;line-height:1.12;"><%= inv.customer_name || '-' %></h3>
+      <div style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.4;"><%= subtitle %></div>
+    </div>
+    <div style="text-align:right;white-space:nowrap;">
+      <div style="font-size:18px;font-weight:900;letter-spacing:-.04em;">Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %></div>
+      <span class="status-pill <%= statusTone %>" style="margin-top:6px;">
+        <i class="bi <%= statusIcon %>"></i>
+        <span><%= isPaid ? 'LUNAS' : (isPending ? 'PENDING' : 'BELUM') %></span>
+      </span>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:7px;">
+    <span class="status-pill" style="background:var(--primary-soft);color:var(--text);border-color:rgba(91,109,251,.24);">
+      <i class="bi bi-box-seam"></i><span><%= packageName %></span>
+    </span>
+    <span class="status-pill" style="background:rgba(255,255,255,.03);color:var(--text);">
+      <i class="bi bi-receipt-cutoff"></i><span>#<%= inv.id %></span>
+    </span>
+    <span class="status-pill" style="background:rgba(255,255,255,.03);color:var(--text);">
+      <i class="bi bi-calendar2-week"></i><span><%= dueText %></span>
+    </span>
+  </div>
+
+  <div style="display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--muted);line-height:1.45;">
+    <i class="bi bi-geo-alt" style="font-size:13px;margin-top:1px;"></i>
+    <span style="min-width:0;"><%= addressShort %></span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">
+    <button
+      type="button"
+      class="sheet-btn"
+      data-open-sheet="detail"
+      data-customer-name="<%= inv.customer_name || '-' %>"
+      data-subtitle="<%= subtitle %>"
+      data-amount="Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %>"
+      data-package="<%= packageName %>"
+      data-due="<%= dueText %>"
+      data-invoice="#<%= inv.id %>"
+      data-period="<%= inv.period_month %>/<%= inv.period_year %>"
+      data-customer-id="#<%= inv.customer_id %>"
+      data-pppoe="<%= inv.pppoe_username || '-' %>"
+      data-tag="<%= inv.genieacs_tag || '-' %>"
+      data-address="<%= addressFull || '-' %>"
+      data-status-text="<%= statusText %>"
+      data-status-tone="<%= statusTone %>"
+      data-status-icon="<%= statusIcon %>"
+      data-pending-text="<%= pendingText %>"
+      data-wa-href="<%= waHref %>"
+      data-map-href="<%= mapHref %>"
+      data-invoice-id="<%= inv.id %>"
+      data-allow-submit="<%= allowSubmit ? 'true' : 'false' %>"
+      style="padding:0 8px;"
+    >
+      <i class="bi bi-three-dots"></i>
+      <span>Detail</span>
+    </button>
+
+    <% if (waHref) { %>
+      <a class="sheet-btn" href="<%= waHref %>" target="_blank" rel="noreferrer" style="padding:0 8px;">
+        <i class="bi bi-whatsapp"></i>
+        <span>WA</span>
+      </a>
+    <% } else { %>
+      <span class="sheet-btn" style="opacity:.55;padding:0 8px;">
+        <i class="bi bi-whatsapp"></i>
+        <span>WA</span>
+      </span>
+    <% } %>
+
+    <% if (mapHref) { %>
+      <a class="sheet-btn" href="<%= mapHref %>" target="_blank" rel="noreferrer" style="padding:0 8px;">
+        <i class="bi bi-geo-alt"></i>
+        <span>Map</span>
+      </a>
+    <% } else { %>
+      <span class="sheet-btn" style="opacity:.55;padding:0 8px;">
+        <i class="bi bi-geo-alt"></i>
+        <span>Map</span>
+      </span>
+    <% } %>
+
+    <% if (allowSubmit) { %>
+      <button
+        type="button"
+        class="sheet-btn primary"
+        data-open-sheet="payment"
+        data-customer-name="<%= inv.customer_name || '-' %>"
+        data-subtitle="<%= subtitle %>"
+        data-amount="Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %>"
+        data-package="<%= packageName %>"
+        data-due="<%= dueText %>"
+        data-invoice="#<%= inv.id %>"
+        data-period="<%= inv.period_month %>/<%= inv.period_year %>"
+        data-customer-id="#<%= inv.customer_id %>"
+        data-pppoe="<%= inv.pppoe_username || '-' %>"
+        data-tag="<%= inv.genieacs_tag || '-' %>"
+        data-address="<%= addressFull || '-' %>"
+        data-status-text="<%= statusText %>"
+        data-status-tone="<%= statusTone %>"
+        data-status-icon="<%= statusIcon %>"
+        data-pending-text="<%= pendingText %>"
+        data-wa-href="<%= waHref %>"
+        data-map-href="<%= mapHref %>"
+        data-invoice-id="<%= inv.id %>"
+        data-allow-submit="true"
+        style="padding:0 8px;"
+      >
+        <i class="bi bi-send-check"></i>
+        <span>Tandai</span>
+      </button>
+    <% } else { %>
+      <span class="sheet-btn" style="opacity:.72;padding:0 8px;">
+        <i class="bi <%= isPaid ? 'bi-check2-circle' : 'bi-hourglass-split' %>"></i>
+        <span><%= isPaid ? 'Lunas' : 'Pending' %></span>
+      </span>
+    <% } %>
+  </div>
+</article>

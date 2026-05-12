@@ -1,0 +1,22 @@
+<div class="filter-strip" aria-label="Filter cepat tagihan">
+  <a class="filter-chip <%= !currentScope ? 'active' : '' %>" href="/collector?<%= chipAll %>#collector-list">
+    <i class="bi bi-grid-3x3-gap"></i>
+    <span>Semua</span>
+  </a>
+  <a class="filter-chip <%= currentScope === 'today' ? 'active' : '' %>" href="/collector?<%= chipToday %>#collector-list">
+    <i class="bi bi-calendar2-check"></i>
+    <span>Hari Ini</span>
+  </a>
+  <a class="filter-chip <%= currentScope === 'unpaid' ? 'active' : '' %>" href="/collector?<%= chipUnpaid %>#collector-list">
+    <i class="bi bi-exclamation-circle"></i>
+    <span>Belum</span>
+  </a>
+  <a class="filter-chip <%= currentScope === 'isolir' ? 'active' : '' %>" href="/collector?<%= chipIsolir %>#collector-list">
+    <i class="bi bi-shield-slash"></i>
+    <span>Isolir</span>
+  </a>
+  <a class="filter-chip <%= currentScope === 'multi' ? 'active' : '' %>" href="/collector?<%= chipMulti %>#collector-list">
+    <i class="bi bi-layers"></i>
+    <span>&gt;1 Bln</span>
+  </a>
+</div>

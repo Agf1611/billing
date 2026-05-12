@@ -52,6 +52,23 @@
           </div>
         </div>
 
+        <div class="form-row" style="margin-top:12px;align-items:flex-start">
+          <div class="fg">
+            <label class="fl">Commit Server</label>
+            <div class="fc" style="display:flex;align-items:center;gap:8px">
+              <i class="bi bi-diagram-3"></i>
+              <span style="font-weight:800"><%= info?.localCommit || '-' %></span>
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Commit GitHub</label>
+            <div class="fc" style="display:flex;align-items:center;gap:8px">
+              <i class="bi bi-cloud-check"></i>
+              <span style="font-weight:800"><%= info?.remoteCommit || '-' %></span>
+            </div>
+          </div>
+        </div>
+
         <div class="form-row" style="margin-top:12px">
           <div class="fg">
             <label class="fl">Repo Update Default</label>
@@ -61,6 +78,25 @@
                 <a href="<%= info.originUrl %>" target="_blank" rel="noopener" style="font-weight:700"><%= info.originUrl %></a>
               <% } else { %>
                 <span style="font-weight:700">Origin belum diatur</span>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:12px;align-items:flex-start">
+          <div class="fg">
+            <label class="fl">Folder Instance Aktif</label>
+            <div class="fc" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;word-break:break-all">
+              <%= info?.repoPath || '-' %>
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Proses PM2 Target</label>
+            <div class="fc" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <i class="bi bi-cpu"></i>
+              <span style="font-weight:800"><%= info?.pm2ProcessName || '-' %></span>
+              <% if (info?.pm2ProcessId !== '' && info?.pm2ProcessId !== undefined && info?.pm2ProcessId !== null) { %>
+                <span class="badge badge-g">pm2 id <%= info.pm2ProcessId %></span>
               <% } %>
             </div>
           </div>
@@ -76,7 +112,7 @@
         </div>
 
         <div style="margin-top:12px;color:var(--muted);font-size:12px;line-height:1.5">
-          File yang tetap aman saat update: <strong>settings.json</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, <strong>uploads</strong>, dan <strong>backups</strong>.
+          Update hanya berlaku untuk <strong>instance/folder aktif</strong> ini. Data yang tetap dijaga saat update: <strong>settings.json</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, dan <strong>uploads</strong>. Setelah source diambil, sistem akan menjalankan validasi dan rollback commit sebelumnya jika update gagal.
         </div>
       </div>
     </div>
@@ -94,7 +130,7 @@
 
 <script>
   function confirmUpdate() {
-    return confirm("<%= t('admin.update.confirm', 'Jalankan update dari GitHub sekarang? Pastikan koneksi internet aman dan aplikasi akan direstart setelah selesai.') %>");
+    return confirm("<%= t('admin.update.confirm', 'Jalankan update dari GitHub sekarang? Sistem akan menarik source terbaru, menjalankan validasi, lalu menjadwalkan restart proses instance ini.') %>");
   }
 </script>
 </body>

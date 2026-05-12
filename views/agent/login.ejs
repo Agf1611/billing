@@ -7,84 +7,81 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-    body {
-      background-color: #0f172a;
-      color: #f8fafc;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      padding: 16px;
+    :root{
+      --bg:#eef4ff;
+      --ink:#13233f;
+      --muted:#617594;
+      --card:#ffffff;
+      --line:rgba(91,109,251,.14);
+      --primary:#5b6dfb;
+      --primary-2:#3b82f6;
     }
-
-    .login-card {
-      background: #1e293b;
-      border-radius: 20px;
-      padding: 28px;
-      width: 100%;
-      max-width: 420px;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
-      border: 1px solid rgba(148, 163, 184, 0.14);
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px;
+      background:
+        radial-gradient(720px 340px at 0% 0%, rgba(91,109,251,.16), rgba(238,244,255,0) 55%),
+        radial-gradient(820px 380px at 100% 0%, rgba(59,130,246,.14), rgba(238,244,255,0) 58%),
+        linear-gradient(180deg, #f6f9ff 0%, var(--bg) 100%);
+      color:var(--ink);font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-
-    .form-control {
-      background: #0f172a;
-      border: 1px solid #334155;
-      color: white;
-      padding: 12px;
-      border-radius: 12px;
+    .login-shell{width:100%;max-width:390px}
+    .login-card{
+      background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:28px;
+      padding:24px 20px 20px;box-shadow:0 28px 64px rgba(44,72,122,.14);backdrop-filter:blur(10px);
     }
-
-    .form-control:focus {
-      background: #0f172a;
-      color: white;
-      border-color: #6366f1;
-      box-shadow: none;
+    .brand{
+      width:58px;height:58px;border-radius:20px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg, rgba(91,109,251,.15), rgba(59,130,246,.16));color:var(--primary);font-size:24px;
+      border:1px solid rgba(91,109,251,.20);
     }
-
-    .btn-login {
-      background: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
-      color: white;
-      border: none;
-      padding: 12px;
-      border-radius: 12px;
-      width: 100%;
-      font-weight: 700;
-      margin-top: 10px;
-      box-shadow: 0 14px 28px rgba(99, 102, 241, 0.22);
+    .title{font-size:24px;font-weight:900;letter-spacing:-.03em;text-align:center}
+    .subtitle{font-size:12px;color:var(--muted);text-align:center;margin:6px 0 18px}
+    .field{margin-bottom:12px}
+    .label{font-size:12px;font-weight:800;color:#48617f;margin-bottom:7px}
+    .fc{
+      width:100%;border-radius:16px;border:1px solid rgba(148,163,184,.24);background:#f7faff;color:var(--ink);
+      padding:12px 13px;font-size:14px;outline:none;box-shadow:none;
     }
-
-    .brand-icon {
-      font-size: 42px;
-      color: #6366f1;
-      margin-bottom: 10px;
+    .fc:focus{border-color:rgba(91,109,251,.48);background:#fff}
+    .btn-login{
+      width:100%;border:none;border-radius:16px;padding:12px 14px;margin-top:6px;color:#fff;font-size:14px;font-weight:900;
+      background:linear-gradient(135deg, var(--primary), var(--primary-2));box-shadow:0 18px 34px rgba(59,130,246,.22);
+    }
+    .helper{
+      margin-top:14px;text-align:center;font-size:11px;color:var(--muted);line-height:1.5
+    }
+    .alert-box{
+      border-radius:16px;padding:11px 12px;margin-bottom:12px;font-size:13px;
+      background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.20);color:#b91c1c
     }
   </style>
 </head>
 <body>
-  <div class="login-card text-center">
-    <div class="brand-icon"><i class="bi bi-person-badge"></i></div>
-    <h3 class="mb-1 fw-bold"><%= t('agent.portal_title', 'Portal Agent') %></h3>
-    <p class="text-secondary mb-4 small"><%= company %></p>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="brand"><i class="bi bi-person-badge"></i></div>
+      <div class="title"><%= t('agent.portal_title', 'Portal Agent') %></div>
+      <div class="subtitle"><%= company %></div>
 
-    <% if (error) { %>
-      <div class="alert alert-danger py-2 small rounded-3">
-        <%= error %>
-      </div>
-    <% } %>
+      <% if (error) { %>
+        <div class="alert-box"><%= error %></div>
+      <% } %>
 
-    <form method="POST" action="/agent/login">
-      <div class="mb-3 text-start">
-        <label class="form-label text-secondary small mb-1"><%= t('agent.username', 'Username') %></label>
-        <input type="text" name="username" class="form-control" required placeholder="<%= t('agent.username_placeholder', 'Masukkan username') %>">
-      </div>
-      <div class="mb-4 text-start">
-        <label class="form-label text-secondary small mb-1"><%= t('agent.password', 'Password') %></label>
-        <input type="password" name="password" class="form-control" required placeholder="<%= t('agent.password_placeholder', 'Masukkan password') %>">
-      </div>
-      <button type="submit" class="btn btn-login"><i class="bi bi-box-arrow-in-right me-2"></i> <%= t('agent.sign_in', 'Masuk') %></button>
-    </form>
+      <form method="POST" action="/agent/login">
+        <div class="field">
+          <div class="label"><%= t('agent.username', 'Username') %></div>
+          <input type="text" name="username" class="fc" required placeholder="<%= t('agent.username_placeholder', 'Masukkan username') %>">
+        </div>
+        <div class="field">
+          <div class="label"><%= t('agent.password', 'Password') %></div>
+          <input type="password" name="password" class="fc" required placeholder="<%= t('agent.password_placeholder', 'Masukkan password') %>">
+        </div>
+        <button type="submit" class="btn-login"><i class="bi bi-box-arrow-in-right me-2"></i><%= t('agent.sign_in', 'Masuk') %></button>
+      </form>
+
+      <div class="helper">Login dibuat selaras dengan portal lain dan tetap hemat ruang untuk layar mobile.</div>
+    </div>
   </div>
 </body>
 </html>

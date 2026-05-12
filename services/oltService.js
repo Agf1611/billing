@@ -5,6 +5,7 @@ const path = require('path');
 const winston = require('winston');
 const axios = require('axios');
 const genieacs = require('../config/genieacs');
+const { getSettingsWithCache } = require('../config/settingsManager');
 
 // Logger configuration
 const logger = winston.createLogger({
@@ -460,6 +461,46 @@ const hiosoOnuIdFromIndex = (index) => {
   const onu = intIdx & 0xff;
   if (port === 0) return null;
   return `0/${port}:${onu}`;
+};
+
+const normalizeOnuName = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/[_\s-]+/g, '');
+
+const expandHiosoOnuIdCandidates = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const set = new Set([raw]);
+  const match = raw.match(/^(\d+)\/(\d+)(?:\/(\d+))?:(\d+)$/);
+  if (match) {
+    const rack = match[1];
+    const slotOrPort = match[2];
+    const maybePort = match[3];
+    const onu = match[4];
+    if (maybePort) {
+      set.add(`0/${maybePort}:${onu}`);
+      set.add(`${rack}/${maybePort}:${onu}`);
+    } else {
+      set.add(`${rack}/1/${slotOrPort}:${onu}`);
+      set.add(`0/1/${slotOrPort}:${onu}`);
+    }
+  }
+  return Array.from(set);
+};
+
+const buildHiosoTelnetLookup = (rows) => {
+  const byId = new Map();
+  const byName = new Map();
+  for (const row of rows || []) {
+    const rawId = String(row?.id || '').trim();
+    for (const candidate of expandHiosoOnuIdCandidates(rawId)) {
+      if (candidate) byId.set(candidate, row);
+    }
+    const normalizedName = normalizeOnuName(row?.name || '');
+    if (normalizedName) byName.set(normalizedName, row);
+  }
+  return { byId, byName };
 };
 
 const telnetReadUntil = (socket, matcher, timeoutMs) => {
@@ -1403,6 +1444,7 @@ async function getOltStats(id, full = false) {
         let fwMap = {};
         let upMap = {};
 
+        let telnetDetailLookup = { byId: new Map(), byName: new Map() };
         if (full) {
           const snPick = await pickSnTable(session, activeProfile);
           snMap = snPick.map || {};
@@ -1411,6 +1453,12 @@ async function getOltStats(id, full = false) {
           if (activeProfile.distance_table) distMap = await slowWalk(session, activeProfile.distance_table);
           if (activeProfile.firmware_table) fwMap = await slowWalk(session, activeProfile.firmware_table);
           if (activeProfile.uptime_table)   upMap = await slowWalk(session, activeProfile.uptime_table);
+          if (detectedBrandKey === 'hioso' || detectedBrandKey === 'hsgq') {
+            const telnetRows = await fetchHiosoOnuDetailViaTelnet(olt);
+            if (Array.isArray(telnetRows) && telnetRows.length) {
+              telnetDetailLookup = buildHiosoTelnetLookup(telnetRows);
+            }
+          }
         }
 
         const allIndices = new Set([...Object.keys(statusMap), ...Object.keys(nameMap)]);
@@ -1449,6 +1497,11 @@ async function getOltStats(id, full = false) {
           const firmware = safeToString(fwVal) || '-';
           const onuUptime = upVal ? decodeUptime(bufferToInt(upVal)) : '-';
           const onuId = hiosoOnuIdFromIndex(idx);
+          const telnetDetail =
+            telnetDetailLookup.byId.get(String(onuId || '').trim()) ||
+            telnetDetailLookup.byName.get(normalizeOnuName(name)) ||
+            null;
+          const onuMac = telnetDetail?.mac ? String(telnetDetail.mac).trim() : '-';
           
           if (isUp) stats.onus_online++;
           else stats.onus_offline++;
@@ -1466,6 +1519,7 @@ async function getOltStats(id, full = false) {
               index: idx,
               id: onuId || '-',
               name,
+              mac: onuMac,
               sn,
               status: isUp ? 'Online' : 'Offline',
               tx: txShown,
@@ -1768,8 +1822,24 @@ async function configureWanViaAcs(sn, data) {
   
   if (!acsDev) throw new Error(`Perangkat dengan SN ${sn} tidak ditemukan di ACS.`);
 
+  const settings = getSettingsWithCache();
   const { mode, vlan, username, password, lans, ssids } = data;
   const params = {};
+  const isTruthy = (value) => [true, 1, '1', 'true', 'on', 'yes', 'YA'].includes(value);
+  const normalizeText = (value) => String(value == null ? '' : value).trim();
+  const acsBootstrapEnabled = isTruthy(data.bootstrap_acs);
+  const acsUrl = normalizeText(data.acs_url || settings.tr069_acs_url || '');
+  const acsUsername = normalizeText(data.acs_username || settings.tr069_acs_username || '');
+  const acsPassword = normalizeText(data.acs_password || settings.tr069_acs_password || '');
+  const periodicEnabled = isTruthy(
+    data.periodic_enable != null ? data.periodic_enable : settings.tr069_periodic_enable
+  );
+  const periodicIntervalInput = parseInt(
+    String(data.periodic_interval != null && data.periodic_interval !== '' ? data.periodic_interval : (settings.tr069_periodic_interval || 300)),
+    10
+  );
+  const periodicInterval = Number.isFinite(periodicIntervalInput) && periodicIntervalInput > 0 ? periodicIntervalInput : 300;
+  const rebootAfterApply = isTruthy(data.reboot_after_apply);
 
   // Helper to build binding strings
   // Typical formats: "LAN1,LAN2" or "WLAN1,WLAN2"
@@ -1802,7 +1872,38 @@ async function configureWanViaAcs(sn, data) {
     if (ssidBind) params[`${basePath}X_BROADCOM_COM_WLANBind`] = ssidBind;
   }
 
-  return await genieacs.setParameterValues(acsDev._id, params);
+  if (acsBootstrapEnabled) {
+    if (!acsUrl) {
+      throw new Error('ACS URL belum diisi. Isi default di Pengaturan atau isi langsung di form TR069.');
+    }
+    const mgmtRoots = [
+      'InternetGatewayDevice.ManagementServer.',
+      'Device.ManagementServer.'
+    ];
+    mgmtRoots.forEach((root) => {
+      params[`${root}URL`] = acsUrl;
+      if (acsUsername) params[`${root}Username`] = acsUsername;
+      if (acsPassword) params[`${root}Password`] = acsPassword;
+      params[`${root}PeriodicInformEnable`] = periodicEnabled;
+      params[`${root}PeriodicInformInterval`] = periodicInterval;
+    });
+  }
+
+  const output = await genieacs.setParameterValues(acsDev._id, params);
+  if (rebootAfterApply) {
+    try {
+      await genieacs.reboot(acsDev._id);
+    } catch (rebootError) {
+      return {
+        ok: true,
+        warning: `Parameter berhasil dikirim, tetapi reboot gagal diantrekan: ${rebootError.message}`,
+        output
+      };
+    }
+    return { ok: true, rebootQueued: true, output };
+  }
+
+  return { ok: true, output };
 }
 
 /**

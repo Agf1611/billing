@@ -8,6 +8,7 @@ const { logger } = require('../config/logger');
 const db = require('../config/database');
 const customerDevice = require('../services/customerDeviceService');
 const customerSvc = require('../services/customerService');
+const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
 const mikrotikService = require('../services/mikrotikService');
 const adminSvc = require('../services/adminService');
@@ -18,10 +19,14 @@ const odpSvc = require('../services/odpService');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawnSync } = require('child_process');
+const { spawnSync, spawn } = require('child_process');
 const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const backupUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }
+});
 const backupSvc = require('../services/backupService');
 const monitoringSvc = require('../services/monitoringService');
 const inventorySvc = require('../services/inventoryService');
@@ -671,6 +676,12 @@ function shouldForceMonitoringRefresh(req) {
   return String(req.query.force || '').trim() === '1';
 }
 
+function getPendingCustomerRequestCount() {
+  const technicianRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM technician_customer_requests WHERE status = 'pending'").get()?.c || 0);
+  const packageChangeRequests = packageChangeSvc.countPendingRequests();
+  return technicianRequests + packageChangeRequests;
+}
+
 function getAdminHomeSummary({ billing = null, custStats = null } = {}) {
   const safeCount = (sql) => Number(db.prepare(sql).get()?.c || 0);
   return {
@@ -684,7 +695,7 @@ function getAdminHomeSummary({ billing = null, custStats = null } = {}) {
     activeTechnicians: safeCount("SELECT COUNT(1) AS c FROM technicians WHERE is_active = 1"),
     totalRouters: Array.isArray(mikrotikService.getAllRouters()) ? mikrotikService.getAllRouters().length : 0,
     pendingCollectorApprovals: safeCount("SELECT COUNT(1) AS c FROM collector_payment_requests WHERE status = 'pending'"),
-    pendingCustomerRequests: safeCount("SELECT COUNT(1) AS c FROM technician_customer_requests WHERE status = 'pending'"),
+    pendingCustomerRequests: getPendingCustomerRequestCount(),
     totalVoucherBatches: safeCount("SELECT COUNT(1) AS c FROM voucher_batches"),
     whatsappEnabled: Boolean(getSetting('whatsapp_enabled', false))
   };
@@ -806,7 +817,7 @@ function buildAdminHomeShortcuts(req, summary = {}) {
     shortcuts.splice(8, 0, {
       label: 'Approval Pelanggan',
       shortLabel: 'Approve',
-      desc: 'Pengajuan pelanggan baru dari teknisi',
+      desc: 'Pengajuan pelanggan baru dan pindah paket',
       href: '/admin/customer-requests',
       icon: 'bi-person-check',
       tone: 'violet',
@@ -945,6 +956,12 @@ function copyDirSync(srcDir, destDir) {
   }
 }
 
+function replaceDirSync(srcDir, destDir) {
+  if (!fs.existsSync(srcDir)) return;
+  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+  copyDirSync(srcDir, destDir);
+}
+
 function getGitDefaultBranch(repoRoot) {
   const r = runCmd('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], repoRoot);
   if (r.ok) {
@@ -961,9 +978,100 @@ function getGitOriginUrl(repoRoot) {
   return String(r.stdout || '').trim();
 }
 
+function getGitCommit(repoRoot, ref = 'HEAD', short = false) {
+  const args = ['rev-parse'];
+  if (short) args.push('--short');
+  args.push(ref);
+  const r = runCmd('git', args, repoRoot);
+  if (!r.ok) return '';
+  return String(r.stdout || '').trim();
+}
+
+function detectPm2Process(repoRoot) {
+  const result = runCmd('pm2', ['jlist'], repoRoot);
+  if (!result.ok) return null;
+
+  try {
+    const repoAbs = path.resolve(repoRoot);
+    const appEntry = path.resolve(repoRoot, 'app-customer.js');
+    const processes = JSON.parse(String(result.stdout || '[]'));
+    const hit = processes.find((proc) => {
+      const env = proc && proc.pm2_env ? proc.pm2_env : {};
+      const cwd = env.pm_cwd ? path.resolve(String(env.pm_cwd)) : '';
+      const execPath = env.pm_exec_path ? path.resolve(String(env.pm_exec_path)) : '';
+      return cwd === repoAbs || execPath === appEntry;
+    });
+    if (!hit) return null;
+    return {
+      name: String(hit.name || '').trim(),
+      pmId: hit.pm_id,
+      cwd: hit.pm2_env?.pm_cwd || '',
+      execPath: hit.pm2_env?.pm_exec_path || ''
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function getDefaultPm2ProcessName(repoRoot) {
+  const base = path.basename(path.resolve(repoRoot));
+  return base || 'billing-rtrw';
+}
+
+function queuePm2Restart(processName, repoRoot) {
+  const safeName = String(processName || '').trim();
+  if (!safeName) return false;
+  try {
+    if (process.platform === 'win32') {
+      const child = spawn('cmd.exe', ['/c', `ping 127.0.0.1 -n 3 >nul && pm2 restart "${safeName}" --update-env`], {
+        cwd: repoRoot,
+        detached: true,
+        stdio: 'ignore'
+      });
+      child.unref();
+      return true;
+    }
+
+    const shellQuote = `'${safeName.replace(/'/g, `'\\''`)}'`;
+    const child = spawn('sh', ['-lc', `sleep 2; pm2 restart ${shellQuote} --update-env >/tmp/codex-update-restart.log 2>&1`], {
+      cwd: repoRoot,
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function runProjectValidation(repoRoot) {
+  const checks = [
+    { label: 'node scripts/check-syntax.js', cmd: 'node', args: ['scripts/check-syntax.js'] },
+    { label: 'node scripts/smoke-render.js', cmd: 'node', args: ['scripts/smoke-render.js'] }
+  ];
+  return checks.map((check) => ({
+    ...check,
+    result: runCmd(check.cmd, check.args, repoRoot)
+  }));
+}
+
 function getUpdateInfo(repoRoot) {
   const localVersion = readTextFileSafe(path.join(repoRoot, 'version.txt')) || '-';
-  const info = { localVersion, remoteVersion: '-', branch: '-', needsUpdate: false, error: '', originUrl: '' };
+  const localCommit = getGitCommit(repoRoot, 'HEAD', true) || '-';
+  const info = {
+    localVersion,
+    remoteVersion: '-',
+    localCommit,
+    remoteCommit: '-',
+    branch: '-',
+    needsUpdate: false,
+    error: '',
+    originUrl: '',
+    repoPath: repoRoot,
+    pm2ProcessName: '',
+    pm2ProcessId: ''
+  };
 
   const inside = runCmd('git', ['rev-parse', '--is-inside-work-tree'], repoRoot);
   if (!inside.ok) {
@@ -974,6 +1082,9 @@ function getUpdateInfo(repoRoot) {
   const branch = getGitDefaultBranch(repoRoot);
   info.branch = branch;
   info.originUrl = getGitOriginUrl(repoRoot);
+  const pm2Process = detectPm2Process(repoRoot);
+  info.pm2ProcessName = pm2Process?.name || getDefaultPm2ProcessName(repoRoot);
+  info.pm2ProcessId = pm2Process?.pmId ?? '';
 
   const fetch = runCmd('git', ['fetch', '--prune'], repoRoot);
   if (!fetch.ok) {
@@ -981,15 +1092,17 @@ function getUpdateInfo(repoRoot) {
     return info;
   }
 
-  const remote = runCmd('git', ['show', `origin/${branch}:version.txt`], repoRoot);
-  if (!remote.ok) {
-    info.error = `Tidak bisa membaca version.txt dari GitHub (origin/${branch}).`;
+  const remoteCommit = getGitCommit(repoRoot, `origin/${branch}`, true);
+  if (!remoteCommit) {
+    info.error = `Tidak bisa membaca commit origin/${branch} dari GitHub.`;
     return info;
   }
+  info.remoteCommit = remoteCommit;
 
-  const remoteVersion = String(remote.stdout || '').trim() || '-';
+  const remote = runCmd('git', ['show', `origin/${branch}:version.txt`], repoRoot);
+  const remoteVersion = remote.ok ? (String(remote.stdout || '').trim() || '-') : '-';
   info.remoteVersion = remoteVersion;
-  info.needsUpdate = Boolean(remoteVersion && remoteVersion !== '-' && remoteVersion !== localVersion);
+  info.needsUpdate = remoteCommit !== localCommit || (remoteVersion !== '-' && remoteVersion !== localVersion);
   return info;
 }
 
@@ -1164,6 +1277,7 @@ async function createVoucherBatchAsync(batchId) {
 // Global locals middleware
 router.use((req, res, next) => {
   res.locals.session = req.session;
+  res.locals.adminPendingCustomerRequests = (req.session?.isAdmin || req.session?.isCashier) ? getPendingCustomerRequestCount() : 0;
   next();
 });
 
@@ -1220,7 +1334,8 @@ router.get('/olts', requireAdminSession, async (req, res) => {
     company: company(), 
     activePage: 'olts', 
     olts, 
-    msg: flashMsg(req) 
+    msg: flashMsg(req),
+    settings: getSettings()
   });
 });
 
@@ -1669,8 +1784,9 @@ router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin
 
 router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res) => {
   const status = String(req.query.status || 'pending').trim() || 'pending';
-  const rows = db.prepare(`
+  const technicianRows = db.prepare(`
     SELECT r.*,
+           'new_customer' as request_type,
            t.name as technician_name,
            t.username as technician_username,
            p.name as package_name,
@@ -1686,6 +1802,21 @@ router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res
     LIMIT 300
   `).all(status);
 
+  const packageChangeRows = packageChangeSvc.listRequestsByStatus(status, 300).map((row) => ({
+    ...row,
+    request_type: 'package_change',
+    technician_name: '',
+    technician_username: 'portal-pelanggan',
+    package_name: row.target_package_name || '',
+    router_name: '',
+    approved_customer_name: row.customer_name,
+    payload_json: ''
+  }));
+
+  const rows = [...technicianRows, ...packageChangeRows]
+    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+    .slice(0, 300);
+
   res.render('admin/customer_requests', {
     title: 'Approval Pelanggan Teknisi',
     company: company(),
@@ -1694,6 +1825,84 @@ router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res
     rows,
     msg: flashMsg(req)
   });
+});
+
+router.post('/package-change-requests/:id/approve', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    const reviewNote = String(req.body.review_note || '').trim();
+    const row = packageChangeSvc.getRequestById(id);
+    if (!row) throw new Error('Request pindah paket tidak ditemukan');
+    if (String(row.status || '') !== 'pending') throw new Error('Request sudah diproses');
+
+    const result = await packageChangeSvc.approveRequest(id, {
+      actorName: resolvePaidByName(req, 'Admin'),
+      reviewNote
+    });
+
+    req.session._msg = {
+      type: 'success',
+      text: result.stage === 'scheduled'
+        ? `Pengajuan perubahan paket ${row.customer_name} ke ${row.target_package_name || 'paket baru'} disetujui dan dijadwalkan untuk siklus tagihan berikutnya${result.effectiveAt ? ` pada ${new Date(result.effectiveAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.`
+        : `Pengajuan perubahan paket ${row.customer_name} ke ${row.target_package_name || 'paket baru'} disetujui.${Number(result.updatedInvoiceCount || 0) > 0 ? ` Tagihan aktif ikut diperbarui (${result.updatedInvoiceCount} tagihan).` : ''}${result.mikrotikProfileSynced ? ` Profil PPPoE otomatis dipindah ke ${result.targetProfile}.` : ''}${result.mikrotikSessionResetMessage ? ` ${result.mikrotikSessionResetMessage}` : ''}${result.mikrotikSyncMessage ? ` Catatan: ${result.mikrotikSyncMessage}` : ''}`
+    };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal approve pindah paket: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
+});
+
+router.post('/package-change-requests/:id/reject', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    const reviewNote = String(req.body.review_note || '').trim();
+    const row = packageChangeSvc.getRequestById(id);
+    if (!row) throw new Error('Request pindah paket tidak ditemukan');
+    if (String(row.status || '') !== 'pending') throw new Error('Request sudah diproses');
+    packageChangeSvc.rejectRequest(id, {
+      actorName: resolvePaidByName(req, 'Admin'),
+      reviewNote
+    });
+    req.session._msg = { type: 'success', text: 'Pengajuan pindah paket berhasil ditolak.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal reject pindah paket: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
+});
+
+router.post('/package-change-requests/:id/cancel', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    packageChangeSvc.cancelRequest(id, {
+      actorName: resolvePaidByName(req, 'Admin'),
+      reviewNote: String(req.body.review_note || '').trim() || 'Dibatalkan oleh admin.'
+    });
+    req.session._msg = { type: 'success', text: 'Request perubahan paket berhasil dibatalkan.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal membatalkan request: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
+});
+
+router.post('/package-change-requests/:id/complete', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    const result = await packageChangeSvc.completeRequest(id, {
+      actorName: resolvePaidByName(req, 'Admin'),
+      reviewNote: String(req.body.review_note || '').trim() || 'Ditandai selesai oleh admin.'
+    });
+    req.session._msg = {
+      type: 'success',
+      text: `Request perubahan paket berhasil diselesaikan.${result.mikrotikProfileSynced ? ` Profil PPPoE aktif ikut dipindah ke ${result.targetProfile}.` : ''}${result.mikrotikSessionResetMessage ? ` ${result.mikrotikSessionResetMessage}` : ''}${result.mikrotikSyncMessage ? ` Catatan: ${result.mikrotikSyncMessage}` : ''}`
+    };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal menyelesaikan request: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
 });
 
 router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
@@ -1930,7 +2139,9 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
     `).run(req.session.isCashier ? 'cashier' : 'admin', approver, decidedNote, id);
 
     const customer = customerSvc.getCustomerById(inv.customer_id);
+    let whatsappWarning = '';
     if (customer && customer.phone) {
+      try {
       const msg =
         `✅ *PEMBAYARAN BERHASIL*\n\n` +
         `👤 *Pelanggan:* ${customer.name}\n` +
@@ -1944,6 +2155,9 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
         paidBy: collectorLabel,
         paidAt: new Date().toLocaleString('id-ID')
       });
+      } catch (notifyError) {
+        whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+      }
     }
 
     const freshCustomer = customerSvc.getAllCustomers().find(c => Number(c.id) === Number(inv.customer_id));
@@ -1951,7 +2165,7 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
       await customerSvc.activateCustomer(inv.customer_id);
     }
 
-    req.session._msg = { type: 'success', text: 'Request disetujui dan invoice dilunasi.' };
+    req.session._msg = { type: 'success', text: `Request disetujui dan invoice dilunasi.${whatsappWarning}` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + (e.message || String(e)) };
   }
@@ -2558,34 +2772,127 @@ router.post('/customers/:id/delete', requireAdminSession, async (req, res) => {
 });
 
 // ─── EXPORT/IMPORT CUSTOMERS ──────────────────────────────────────
+function buildCustomerImportTemplateWorkbook() {
+  const headers = [
+    'Nama',
+    'Telepon',
+    'Email',
+    'Alamat',
+    'Paket',
+    'Tag ONU',
+    'PPPoE Username',
+    'PPPoE Profile',
+    'Isolir Profile',
+    'Status',
+    'Tanggal Pasang',
+    'Auto Isolir',
+    'Tgl Isolir',
+    'ODP',
+    'Latitude',
+    'Longitude',
+    'Catatan'
+  ];
+  const exampleRow = [
+    'Budi Setiawan',
+    '6281234567890',
+    'budi@example.com',
+    'Jl. Raya Contoh No. 10',
+    'Paket Lite',
+    'ONU-RuangTamu',
+    'budi@sikluk',
+    'paket-5mb',
+    'BEATISOLIR',
+    'active',
+    '2026-05-12',
+    'YA',
+    '10',
+    'ODP-01',
+    '-6.200000',
+    '106.816666',
+    'Isi catatan bila perlu'
+  ];
+  const guideRows = [
+    ['Panduan Import Pelanggan'],
+    ['1. Isi minimal kolom Nama, Telepon, Alamat, dan Paket.'],
+    ['2. Gunakan format nomor HP 628xxxxxxxxxx agar sinkron ke WhatsApp.'],
+    ['3. Nama paket harus sama persis dengan nama paket di aplikasi.'],
+    ['4. Status boleh: active, suspended, atau inactive.'],
+    ['5. Tanggal Pasang gunakan format YYYY-MM-DD, contoh 2026-05-12.'],
+    ['6. Auto Isolir isi YA atau TIDAK.'],
+    ['7. Tgl Isolir isi angka 1 sampai 31.'],
+    ['8. PPPoE Profile boleh dikosongkan bila ingin mengikuti profil default paket.'],
+    ['9. Simpan file tetap dalam format .xlsx sebelum diunggah kembali.']
+  ];
+
+  const wb = XLSX.utils.book_new();
+  const wsTemplate = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+  const wsGuide = XLSX.utils.aoa_to_sheet(guideRows);
+  XLSX.utils.book_append_sheet(wb, wsTemplate, 'Template Import');
+  XLSX.utils.book_append_sheet(wb, wsGuide, 'Panduan');
+  return wb;
+}
+
+router.get('/customers/import-template', requireAdminSession, (req, res) => {
+  try {
+    const wb = buildCustomerImportTemplateWorkbook();
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename=template_import_pelanggan.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (e) {
+    logger.error('Download customer import template error:', e);
+    res.status(500).send('Gagal menyiapkan template import pelanggan.');
+  }
+});
+
 router.get('/customers/export', requireAdminSession, (req, res) => {
   try {
     const customers = customerSvc.getAllCustomers();
-    const data = customers.map(c => ({
-      'ID': c.id,
-      'Nama': c.name,
-      'Telepon': c.phone,
-      'Email': c.email || '',
-      'Alamat': c.address,
-      'Paket': c.package_name || '-',
-      'Tag ONU': c.genieacs_tag,
-      'PPPoE Username': c.pppoe_username,
-      'PPPoE Profile': c.normal_pppoe_profile || c.package_pppoe_profile || c.package_name || '',
-      'Isolir Profile': c.isolir_profile,
-      'Status': c.status,
-      'Tanggal Pasang': c.install_date,
-      'Auto Isolir': c.auto_isolate === 1 ? 'YA' : 'TIDAK',
-      'Tgl Isolir': c.isolate_day,
-      'ODP': c.odp_name || '-',
-      'Latitude': c.lat || '',
-      'Longitude': c.lng || '',
-      'Catatan': c.notes
-    }));
+    const headers = [
+      'ID',
+      'Nama',
+      'Telepon',
+      'Email',
+      'Alamat',
+      'Paket',
+      'Tag ONU',
+      'PPPoE Username',
+      'PPPoE Profile',
+      'Isolir Profile',
+      'Status',
+      'Tanggal Pasang',
+      'Auto Isolir',
+      'Tgl Isolir',
+      'ODP',
+      'Latitude',
+      'Longitude',
+      'Catatan'
+    ];
+    const rows = customers.map(c => ([
+      c.id,
+      c.name,
+      c.phone,
+      c.email || '',
+      c.address,
+      c.package_name || '-',
+      c.genieacs_tag,
+      c.pppoe_username,
+      c.normal_pppoe_profile || c.package_pppoe_profile || c.package_name || '',
+      c.isolir_profile,
+      c.status,
+      c.install_date,
+      c.auto_isolate === 1 ? 'YA' : 'TIDAK',
+      c.isolate_day,
+      c.odp_name || '-',
+      c.lat || '',
+      c.lng || '',
+      c.notes
+    ]));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Pelanggan');
-    
+    const wb = buildCustomerImportTemplateWorkbook();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, 'Data Pelanggan');
+
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     res.setHeader('Content-Disposition', 'attachment; filename=daftar_pelanggan.xlsx');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -2765,6 +3072,7 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
     const paidBy = resolvePaidByName(req, paid_by_name);
     const customer = customerSvc.getCustomerById(req.params.id);
 
+    let whatsappWarning = '';
     if (months != null) {
       const sum = billingSvc.payInvoicesForCustomerMonths(req.params.id, y, months, paidBy, notes);
       const done = sum.paidMonths.length;
@@ -2791,11 +3099,15 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
             ) || null;
           })
           .filter(Boolean);
-        await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
-          baseUrl: resolveRequestBaseUrl(req),
-          paidBy,
-          paidAt: new Date().toLocaleString('id-ID')
-        });
+        try {
+          await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
+            baseUrl: resolveRequestBaseUrl(req),
+            paidBy,
+            paidAt: new Date().toLocaleString('id-ID')
+          });
+        } catch (notifyError) {
+          whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+        }
       }
     } else {
       const m = parseInt(month);
@@ -2818,11 +3130,15 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
             `💰 *Nominal Tagihan:* Rp ${amount.toLocaleString('id-ID')}\n` +
             `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
             `Terima kasih.`;
-          await sendPaidWhatsappNotification(customer, inv ? [inv] : [], inv, {
-            baseUrl: resolveRequestBaseUrl(req),
-            paidBy,
-            paidAt: new Date().toLocaleString('id-ID')
-          });
+          try {
+            await sendPaidWhatsappNotification(customer, inv ? [inv] : [], inv, {
+              baseUrl: resolveRequestBaseUrl(req),
+              paidBy,
+              paidAt: new Date().toLocaleString('id-ID')
+            });
+          } catch (notifyError) {
+            whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+          }
         }
       }
     }
@@ -2830,6 +3146,9 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
     const freshCustomer = customerSvc.getAllCustomers().find(c => String(c.id) === String(req.params.id));
     if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
       await customerSvc.activateCustomer(req.params.id);
+    }
+    if (req.session._msg && req.session._msg.type === 'success' && whatsappWarning) {
+      req.session._msg.text += whatsappWarning;
     }
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal bayar: ' + e.message };
@@ -3042,6 +3361,7 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
     const { invoice_ids, paid_by_name, notes } = req.body;
     const ids = Array.isArray(invoice_ids) ? invoice_ids : [invoice_ids];
     const paidBy = resolvePaidByName(req, paid_by_name);
+    let whatsappWarning = '';
     
     if (!ids || ids.length === 0) throw new Error('Tidak ada tagihan yang dipilih');
 
@@ -3088,15 +3408,19 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
           `💰 *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
           `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
           `Terima kasih.`;
-        await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
-          baseUrl: resolveRequestBaseUrl(req),
-          paidBy,
-          paidAt: new Date().toLocaleString('id-ID')
-        });
+        try {
+          await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
+            baseUrl: resolveRequestBaseUrl(req),
+            paidBy,
+            paidAt: new Date().toLocaleString('id-ID')
+          });
+        } catch (notifyError) {
+          whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+        }
       }
     }
 
-    req.session._msg = { type: 'success', text: `${ids.length} tagihan berhasil dilunasi.` };
+    req.session._msg = { type: 'success', text: `${ids.length} tagihan berhasil dilunasi.${whatsappWarning}` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal bayar massal: ' + e.message };
   }
@@ -3110,6 +3434,7 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
 
     const paidBy = resolvePaidByName(req, req.body.paid_by_name);
     const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
+    let whatsappWarning = '';
     billingSvc.markAsPaid(req.params.id, paidBy, req.body.notes);
     
     // Check if customer is currently suspended and has no more unpaid invoices
@@ -3123,11 +3448,15 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
         `💰 *Nominal Tagihan:* Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}\n` +
         `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
         `Terima kasih.`;
-      await sendPaidWhatsappNotification(customer, [inv], inv, {
-        baseUrl: resolveRequestBaseUrl(req),
-        paidBy,
-        paidAt: new Date().toLocaleString('id-ID')
-      });
+      try {
+        await sendPaidWhatsappNotification(customer, [inv], inv, {
+          baseUrl: resolveRequestBaseUrl(req),
+          paidBy,
+          paidAt: new Date().toLocaleString('id-ID')
+        });
+      } catch (notifyError) {
+        whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
+      }
     }
     if (customer && customer.status === 'suspended') {
       const freshCustomer = customerSvc.getAllCustomers().find(c => c.id === inv.customer_id);
@@ -3136,7 +3465,7 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
       }
     }
 
-    req.session._msg = { type: 'success', text: 'Tagihan berhasil ditandai lunas.' };
+    req.session._msg = { type: 'success', text: `Tagihan berhasil ditandai lunas.${whatsappWarning}` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
@@ -3939,7 +4268,10 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
 
   const versionPath = path.join(repoRoot, 'version.txt');
   const localBefore = readTextFileSafe(versionPath) || '-';
+  const localCommitBefore = getGitCommit(repoRoot, 'HEAD', true) || '-';
   const branch = getGitDefaultBranch(repoRoot);
+  const pm2Process = detectPm2Process(repoRoot);
+  const restartProcessName = pm2Process?.name || getDefaultPm2ProcessName(repoRoot);
   const backupRoot = path.join(os.tmpdir(), `billing-update-backup-${Date.now()}`);
   const backupSettings = path.join(backupRoot, 'settings.json');
   const backupDb = path.join(backupRoot, 'database');
@@ -3952,6 +4284,15 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   const authPath = path.join(repoRoot, authFolder);
   const logsPath = path.join(repoRoot, 'logs');
   const uploadsPath = path.join(repoRoot, 'public', 'uploads');
+  let pulledNewCode = false;
+
+  const restorePreservedData = () => {
+    if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, settingsPath);
+    if (fs.existsSync(backupDb)) replaceDirSync(backupDb, dbDir);
+    if (fs.existsSync(backupAuth)) replaceDirSync(backupAuth, authPath);
+    if (fs.existsSync(backupLogs)) replaceDirSync(backupLogs, logsPath);
+    if (fs.existsSync(backupUploads)) replaceDirSync(backupUploads, uploadsPath);
+  };
 
   try {
     const inside = runCmd('git', ['rev-parse', '--is-inside-work-tree'], repoRoot);
@@ -3962,13 +4303,20 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     pushCmd('git fetch --prune', fetch);
     if (!fetch.ok) throw new Error('Gagal git fetch.');
 
+    const remoteHead = getGitCommit(repoRoot, `origin/${branch}`, true);
+    if (!remoteHead) throw new Error(`Tidak bisa membaca commit origin/${branch} dari GitHub.`);
+    log.push(`$ git rev-parse --short origin/${branch}`);
+    log.push(remoteHead);
+
     const remote = runCmd('git', ['show', `origin/${branch}:version.txt`], repoRoot);
     pushCmd(`git show origin/${branch}:version.txt`, remote);
-    if (!remote.ok) throw new Error('Tidak bisa membaca version.txt dari GitHub.');
-    const remoteVersion = String(remote.stdout || '').trim() || '-';
+    const remoteVersion = remote.ok ? (String(remote.stdout || '').trim() || '-') : '-';
 
-    if (remoteVersion !== '-' && remoteVersion === localBefore) {
-      req.session._msg = { type: 'success', text: 'Versi sudah terbaru: ' + localBefore };
+    if (remoteHead === localCommitBefore) {
+      req.session._msg = {
+        type: 'success',
+        text: `Versi sudah terbaru: ${localBefore} (${localCommitBefore})`
+      };
       req.session._updateLog = log.join('\n');
       return res.redirect('/admin/settings');
     }
@@ -3991,6 +4339,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     const pull = runCmd('git', ['pull', '--ff-only', 'origin', branch], repoRoot);
     pushCmd(`git pull --ff-only origin ${branch}`, pull);
     if (!pull.ok) throw new Error('Gagal mengambil update terbaru secara fast-forward.');
+    pulledNewCode = true;
 
     if (remoteVersion && remoteVersion !== '-') {
       try {
@@ -4001,51 +4350,46 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
       }
     }
 
-    const clean = runCmd(
-      'git',
-      [
-        'clean',
-        '-fd',
-        '-e', 'settings.json',
-        '-e', 'database',
-        '-e', 'node_modules',
-        '-e', authFolder,
-        '-e', 'data',
-        '-e', 'logs',
-        '-e', 'public/uploads',
-        '-e', 'backups'
-      ],
-      repoRoot
-    );
-    pushCmd(`git clean -fd -e settings.json -e database -e node_modules -e ${authFolder} -e data -e logs -e public/uploads -e backups`, clean);
+    restorePreservedData();
 
-    if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, settingsPath);
-    if (fs.existsSync(backupDb)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-      copyDirSync(backupDb, dbDir);
-    }
-    if (fs.existsSync(backupAuth)) {
-      fs.mkdirSync(authPath, { recursive: true });
-      copyDirSync(backupAuth, authPath);
-    }
-    if (fs.existsSync(backupLogs)) {
-      fs.mkdirSync(logsPath, { recursive: true });
-      copyDirSync(backupLogs, logsPath);
-    }
-    if (fs.existsSync(backupUploads)) {
-      fs.mkdirSync(uploadsPath, { recursive: true });
-      copyDirSync(backupUploads, uploadsPath);
-    }
-
-    const npm = runCmd('npm', ['install'], repoRoot);
-    pushCmd('npm install', npm);
+    const npm = runCmd('npm', ['install', '--no-audit', '--no-fund'], repoRoot);
+    pushCmd('npm install --no-audit --no-fund', npm);
     if (!npm.ok) throw new Error('Update berhasil, tetapi npm install gagal.');
 
+    const validations = runProjectValidation(repoRoot);
+    for (const validation of validations) {
+      pushCmd(validation.label, validation.result);
+      if (!validation.result.ok) {
+        throw new Error(`Validasi update gagal pada langkah: ${validation.label}`);
+      }
+    }
+
     const localAfter = readTextFileSafe(versionPath) || '-';
-    req.session._msg = { type: 'success', text: `Update selesai. Versi: ${localBefore} → ${localAfter}. Database, settings, auth WhatsApp, log, dan upload tetap aman.` };
+    const localCommitAfter = getGitCommit(repoRoot, 'HEAD', true) || '-';
+    const restartQueued = queuePm2Restart(restartProcessName, repoRoot);
+    const restartMessage = restartQueued
+      ? ` Proses ${restartProcessName} dijadwalkan restart otomatis.`
+      : ` Restart proses ${restartProcessName} perlu dilakukan manual.`;
+    req.session._msg = {
+      type: 'success',
+      text: `Update selesai. Versi: ${localBefore} → ${localAfter}. Commit: ${localCommitBefore} → ${localCommitAfter}.${restartMessage}`
+    };
     req.session._updateLog = log.join('\n');
   } catch (e) {
-    req.session._msg = { type: 'error', text: 'Gagal update: ' + (e?.message || e) };
+    let rollbackNote = '';
+    if (pulledNewCode && localCommitBefore && localCommitBefore !== '-') {
+      const reset = runCmd('git', ['reset', '--hard', localCommitBefore], repoRoot);
+      pushCmd(`git reset ${'--hard'} ${localCommitBefore}`, reset);
+      if (reset.ok) {
+        restorePreservedData();
+        const npmRollback = runCmd('npm', ['install', '--no-audit', '--no-fund'], repoRoot);
+        pushCmd('npm install --no-audit --no-fund (rollback)', npmRollback);
+        rollbackNote = ' Source code dikembalikan ke commit sebelumnya.';
+      } else {
+        rollbackNote = ' Rollback source gagal, perlu dicek manual.';
+      }
+    }
+    req.session._msg = { type: 'error', text: 'Gagal update: ' + (e?.message || e) + rollbackNote };
     req.session._updateLog = log.join('\n');
   } finally {
     try {
@@ -4124,6 +4468,11 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'genieacs_url',
       'genieacs_username',
       'genieacs_password',
+      'tr069_acs_url',
+      'tr069_acs_username',
+      'tr069_acs_password',
+      'tr069_periodic_enable',
+      'tr069_periodic_interval',
       'mikrotik_host',
       'mikrotik_port',
       'mikrotik_user',
@@ -4178,6 +4527,8 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     else if (newSettings.onesignal_push_invoice_enabled === 'false') newSettings.onesignal_push_invoice_enabled = false;
     if (newSettings.onesignal_push_announcement_enabled === 'true') newSettings.onesignal_push_announcement_enabled = true;
     else if (newSettings.onesignal_push_announcement_enabled === 'false') newSettings.onesignal_push_announcement_enabled = false;
+    if (newSettings.tr069_periodic_enable === 'true') newSettings.tr069_periodic_enable = true;
+    else if (newSettings.tr069_periodic_enable === 'false') newSettings.tr069_periodic_enable = false;
     
     if (newSettings.tripay_enabled === 'true') newSettings.tripay_enabled = true;
     else if (newSettings.tripay_enabled === 'false') newSettings.tripay_enabled = false;
@@ -4202,6 +4553,9 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     if (newSettings.mikrotik_port !== undefined && newSettings.mikrotik_port !== '') newSettings.mikrotik_port = parseInt(newSettings.mikrotik_port);
     if (newSettings.whatsapp_broadcast_delay !== undefined && newSettings.whatsapp_broadcast_delay !== '') newSettings.whatsapp_broadcast_delay = parseInt(newSettings.whatsapp_broadcast_delay);
     if (newSettings.digiflazz_markup !== undefined && newSettings.digiflazz_markup !== '') newSettings.digiflazz_markup = parseInt(newSettings.digiflazz_markup) || 0;
+    if (newSettings.tr069_periodic_interval !== undefined && newSettings.tr069_periodic_interval !== '') {
+      newSettings.tr069_periodic_interval = parseInt(newSettings.tr069_periodic_interval, 10) || 300;
+    }
 
     [
       'company_header',
@@ -4228,6 +4582,9 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'genieacs_url',
       'genieacs_username',
       'genieacs_password',
+      'tr069_acs_url',
+      'tr069_acs_username',
+      'tr069_acs_password',
       'mikrotik_host',
       'mikrotik_user',
       'mikrotik_password',
@@ -4375,19 +4732,20 @@ router.get('/backup', requireAdminSession, (req, res) => {
     msg: flashMsg(req),
     backups: result.backups || [],
     total: result.total || 0,
+    backupDir: backupSvc.getBackupDirectory(),
     getSetting
   });
 });
 
-router.post('/backup/create', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/backup/create', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const { type } = req.body;
     let result;
 
     if (type === 'all') {
-      result = backupSvc.backupAll();
+      result = await backupSvc.backupAll();
     } else if (type === 'database') {
-      result = backupSvc.backupDatabase();
+      result = await backupSvc.backupDatabase();
     } else if (type === 'settings') {
       result = backupSvc.backupSettings();
     } else {
@@ -4396,9 +4754,17 @@ router.post('/backup/create', requireAdminSession, express.urlencoded({ extended
     }
 
     if (result.success) {
-      req.session._msg = { type: 'success', text: `Backup berhasil dibuat: ${result.fileName}` };
+      if (type === 'all') {
+        req.session._msg = {
+          type: 'success',
+          text: `Backup lengkap berhasil dibuat: ${result.database.fileName} dan ${result.settings.fileName}`
+        };
+      } else {
+        req.session._msg = { type: 'success', text: `Backup berhasil dibuat: ${result.fileName}` };
+      }
     } else {
-      req.session._msg = { type: 'error', text: `Gagal backup: ${result.error}` };
+      const errorText = result.error || result.database?.error || result.settings?.error || 'Terjadi kesalahan saat membuat backup.';
+      req.session._msg = { type: 'error', text: `Gagal backup: ${errorText}` };
     }
   } catch (e) {
     req.session._msg = { type: 'error', text: `Gagal: ${e.message}` };
@@ -4406,13 +4772,28 @@ router.post('/backup/create', requireAdminSession, express.urlencoded({ extended
   res.redirect('/admin/backup');
 });
 
-router.post('/backup/restore', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+router.get('/backup/download/:fileName', requireAdminSession, (req, res) => {
+  try {
+    const fileName = req.params.fileName;
+    const filePath = backupSvc.getBackupFilePath(fileName);
+    if (!fs.existsSync(filePath)) {
+      req.session._msg = { type: 'error', text: 'File backup tidak ditemukan.' };
+      return res.redirect('/admin/backup');
+    }
+    return res.download(filePath, path.basename(filePath));
+  } catch (e) {
+    req.session._msg = { type: 'error', text: `Gagal download backup: ${e.message}` };
+    return res.redirect('/admin/backup');
+  }
+});
+
+router.post('/backup/restore', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const { fileName, type } = req.body;
     let result;
 
     if (type === 'database') {
-      result = backupSvc.restoreDatabase(fileName);
+      result = await backupSvc.restoreDatabase(fileName);
     } else if (type === 'settings') {
       result = backupSvc.restoreSettings(fileName);
     } else {
@@ -4421,7 +4802,8 @@ router.post('/backup/restore', requireAdminSession, express.urlencoded({ extende
     }
 
     if (result.success) {
-      req.session._msg = { type: 'success', text: `Restore berhasil: ${fileName}` };
+      const extra = result.preRestoreBackup ? ` Backup sebelum restore: ${result.preRestoreBackup}.` : '';
+      req.session._msg = { type: 'success', text: `Restore berhasil: ${fileName}.${extra}` };
     } else {
       req.session._msg = { type: 'error', text: `Gagal restore: ${result.error}` };
     }
@@ -4431,22 +4813,43 @@ router.post('/backup/restore', requireAdminSession, express.urlencoded({ extende
   res.redirect('/admin/backup');
 });
 
-router.post('/backup/delete', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+router.post('/backup/upload-restore', requireAdminSession, backupUpload.single('restoreFile'), async (req, res) => {
   try {
-    const { fileName } = req.body;
-    const fs = require('fs');
-    const path = require('path');
-    const backupDir = path.join(__dirname, '../backups');
-    const backupFilePath = path.join(backupDir, fileName);
-
-    if (!fs.existsSync(backupFilePath)) {
-      req.session._msg = { type: 'error', text: 'File backup tidak ditemukan' };
+    const restoreType = String(req.body.restoreType || '').trim();
+    if (!req.file) {
+      req.session._msg = { type: 'error', text: 'Pilih file backup dari laptop terlebih dahulu.' };
+      return res.redirect('/admin/backup');
+    }
+    if (restoreType !== 'database' && restoreType !== 'settings') {
+      req.session._msg = { type: 'error', text: 'Tipe restore upload tidak valid.' };
       return res.redirect('/admin/backup');
     }
 
-    fs.unlinkSync(backupFilePath);
-    logger.info(`[Backup] Backup deleted: ${fileName}`);
-    req.session._msg = { type: 'success', text: `Backup berhasil dihapus: ${fileName}` };
+    const result = await backupSvc.importAndRestore(req.file, restoreType);
+    if (result.success) {
+      const extra = result.preRestoreBackup ? ` Backup sebelum restore: ${result.preRestoreBackup}.` : '';
+      req.session._msg = {
+        type: 'success',
+        text: `Restore dari file lokal berhasil: ${result.uploadedFileName || req.file.originalname}.${extra}`
+      };
+    } else {
+      req.session._msg = { type: 'error', text: `Gagal restore file lokal: ${result.error}` };
+    }
+  } catch (e) {
+    req.session._msg = { type: 'error', text: `Gagal upload restore: ${e.message}` };
+  }
+  res.redirect('/admin/backup');
+});
+
+router.post('/backup/delete', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const { fileName } = req.body;
+    const result = backupSvc.deleteBackup(fileName);
+    if (!result.success) {
+      req.session._msg = { type: 'error', text: result.error };
+      return res.redirect('/admin/backup');
+    }
+    req.session._msg = { type: 'success', text: `Backup berhasil dihapus: ${result.fileName}` };
   } catch (e) {
     req.session._msg = { type: 'error', text: `Gagal menghapus: ${e.message}` };
   }

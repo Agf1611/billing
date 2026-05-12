@@ -6,6 +6,7 @@ const billingSvc = require('./billingService');
 const { logger } = require('../config/logger');
 
 const customerSvc = require('./customerService');
+const packageChangeSvc = require('./packageChangeService');
 const mikrotikService = require('./mikrotikService');
 const usageSvc = require('./usageService');
 const { getSetting } = require('../config/settingsManager');
@@ -112,6 +113,17 @@ function addMessageVariation(message, index) {
 }
 
 function startCronJobs() {
+  cron.schedule('10,40 * * * *', async () => {
+    try {
+      const processed = await packageChangeSvc.processDueScheduledRequests(50);
+      if (processed > 0) {
+        logger.info(`[CRON] Berhasil memproses ${processed} request perubahan paket terjadwal.`);
+      }
+    } catch (error) {
+      logger.error(`[CRON] Gagal memproses request perubahan paket terjadwal: ${error.message}`);
+    }
+  });
+
   // 1. Generate Tagihan Otomatis setiap tanggal 1 jam 07:00
   cron.schedule('0 7 1 * *', () => {
     const now = new Date();

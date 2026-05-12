@@ -1,0 +1,69 @@
+<div class="sheet-backdrop" id="collectorSheetBackdrop"></div>
+
+<div class="action-sheet" id="collectorActionSheet" aria-hidden="true">
+  <div class="action-sheet-inner">
+    <div class="sheet-handle"></div>
+
+    <div class="sheet-head">
+      <div style="min-width:0;">
+        <div class="sheet-title" id="sheetCustomerName">Pelanggan</div>
+        <div class="sheet-sub" id="sheetCustomerSub">Detail tagihan pelanggan</div>
+      </div>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="Tutup">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <div class="sheet-status" id="sheetStatusWrap"></div>
+
+    <div class="sheet-grid">
+      <div class="sheet-cell"><span>Nominal</span><strong id="sheetAmount">-</strong></div>
+      <div class="sheet-cell"><span>Paket</span><strong id="sheetPackage">-</strong></div>
+      <div class="sheet-cell"><span>Jatuh Tempo</span><strong id="sheetDue">-</strong></div>
+      <div class="sheet-cell"><span>Invoice</span><strong id="sheetInvoice">-</strong></div>
+      <div class="sheet-cell"><span>Periode</span><strong id="sheetPeriod">-</strong></div>
+      <div class="sheet-cell"><span>ID Pelanggan</span><strong id="sheetCustomerId">-</strong></div>
+      <div class="sheet-cell"><span>PPPoE</span><strong id="sheetPppoe">-</strong></div>
+      <div class="sheet-cell"><span>Tag</span><strong id="sheetTag">-</strong></div>
+      <div class="sheet-cell" style="grid-column:1 / -1;"><span>Alamat Lengkap</span><strong id="sheetAddress">-</strong></div>
+    </div>
+
+    <div class="sheet-actions">
+      <a class="sheet-btn" id="sheetWaBtn" href="#" target="_blank" rel="noreferrer">
+        <i class="bi bi-whatsapp"></i>
+        <span>Hubungi WA</span>
+      </a>
+      <a class="sheet-btn" id="sheetMapBtn" href="#" target="_blank" rel="noreferrer">
+        <i class="bi bi-geo-alt"></i>
+        <span>Buka Map</span>
+      </a>
+    </div>
+
+    <div class="sheet-help" id="sheetModeHelp" style="margin-top:12px;">
+      Buka aksi "Tandai Bayar" untuk menambahkan catatan dan mengirim pengajuan pembayaran.
+    </div>
+
+    <form method="POST" action="/collector/payment-request" class="sheet-note-wrap" id="sheetNoteWrap">
+      <input type="hidden" name="invoice_id" id="sheetInvoiceId">
+      <input type="hidden" name="month" value="<%= month %>">
+      <input type="hidden" name="year" value="<%= year %>">
+      <input type="hidden" name="status" value="<%= status %>">
+      <input type="hidden" name="search" value="<%= search || '' %>">
+      <input type="hidden" name="scope" value="<%= scope || '' %>">
+
+      <textarea
+        class="sheet-textarea"
+        id="sheetNote"
+        name="note"
+        placeholder="Catatan kunjungan atau konfirmasi pembayaran (opsional)"
+      ></textarea>
+
+      <div class="sheet-submit-row">
+        <button class="sheet-btn primary" id="sheetSubmitBtn" type="submit">
+          <i class="bi bi-send-check"></i>
+          <span>Tandai Bayar</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

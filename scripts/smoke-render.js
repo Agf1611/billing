@@ -9,9 +9,14 @@ const views = [
   'views/static_qris_payment.ejs',
   'views/public_check_billing.ejs',
   'views/admin/customer_requests.ejs',
+  'views/admin/backup.ejs',
+  'views/admin/olts.ejs',
   'views/admin/settings.ejs',
   'views/admin/update.ejs',
-  'views/admin/technician_tasks.ejs'
+  'views/admin/technician_tasks.ejs',
+  'views/collector/login.ejs',
+  'views/agent/login.ejs',
+  'views/tech/login.ejs'
 ];
 
 for (const rel of views) {
@@ -54,3 +59,32 @@ ejs.render(techTasksSrc, {
   t: (_key, fallback) => fallback || ''
 }, { filename: techTasksFile });
 console.log('OK views/tech/tasks.ejs');
+
+const collectorDashboardFile = path.join(root, 'views/collector/dashboard.ejs');
+const collectorDashboardSrc = fs.readFileSync(collectorDashboardFile, 'utf8');
+ejs.render(collectorDashboardSrc, {
+  title: 'Dashboard Kolektor',
+  company: 'ISP',
+  month: 5,
+  year: 2026,
+  status: 'unpaid',
+  search: '',
+  scope: '',
+  todayDay: 10,
+  summary: {
+    today_count: 1,
+    today_total: 150000,
+    unpaid_count: 4,
+    unpaid_total: 600000,
+    isolir_count: 2,
+    isolir_total: 300000,
+    multi_customer_count: 1,
+    multi_total: 450000
+  },
+  invoices: [],
+  pendingMap: new Map(),
+  myReqs: [],
+  msg: null,
+  lang: 'id'
+}, { filename: collectorDashboardFile });
+console.log('OK views/collector/dashboard.ejs');
