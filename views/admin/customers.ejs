@@ -59,20 +59,20 @@
     .mobile-add-customer{display:none}
     .page-tools{display:flex;gap:8px;flex-wrap:wrap}
     .mobile-stack{display:none}
-    .customer-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:11px;display:grid;gap:8px}
+    .customer-card{background:var(--bg2);border:1px solid var(--border);border-radius:15px;padding:9px;display:grid;gap:6px}
     .customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-    .customer-head strong{display:block;font-size:14px;line-height:1.15}
-    .customer-sub{margin-top:2px;font-size:11px;color:var(--muted);line-height:1.35}
+    .customer-head strong{display:block;font-size:13px;line-height:1.12}
+    .customer-sub{margin-top:2px;font-size:10px;color:var(--muted);line-height:1.3}
     .customer-chip-row{display:flex;gap:6px;flex-wrap:wrap}
     .customer-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-    .customer-meta{padding:8px 9px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
-    .customer-meta small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-    .customer-meta strong,.customer-meta span{display:block;font-size:11px;line-height:1.35}
-    .customer-address-line{display:flex;align-items:flex-start;gap:6px;font-size:11px;color:var(--muted);line-height:1.35}
+    .customer-meta{padding:7px 8px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+    .customer-meta small{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+    .customer-meta strong,.customer-meta span{display:block;font-size:10.5px;line-height:1.28}
+    .customer-address-line{display:flex;align-items:flex-start;gap:6px;font-size:10.5px;color:var(--muted);line-height:1.28}
     .customer-address-line i{margin-top:1px;color:var(--primary)}
-    .customer-address-line span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    .customer-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-    .customer-actions .btn,.customer-actions form .btn{justify-content:center;padding:0;height:34px;min-height:34px;border-radius:11px}
+    .customer-address-line span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+    .customer-actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+    .customer-actions .btn,.customer-actions form .btn{justify-content:center;padding:0;height:32px;min-height:32px;border-radius:10px}
     .customer-actions form{margin:0}
     .action-mini{display:inline-flex;align-items:center;justify-content:center;gap:6px}
     .action-mini i{
@@ -157,22 +157,22 @@
     }
     @media(max-width:576px){
       .customer-filter-panel{grid-template-columns:1fr}
-      .customer-card{padding:10px;gap:7px}
+      .customer-card{padding:8px;gap:6px}
       .customer-head strong{font-size:13px}
       .customer-sub{font-size:10px}
-      .customer-meta{padding:7px 8px}
-      .customer-meta small{font-size:9px;margin-bottom:3px}
-      .customer-meta strong,.customer-meta span{font-size:10.5px}
-      .customer-actions{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
-      .customer-actions .btn,.customer-actions form .btn{height:44px;min-height:44px;border-radius:12px}
-      .customer-actions .action-mini{flex-direction:column;gap:2px;line-height:1}
+      .customer-meta{padding:6px 7px}
+      .customer-meta small{font-size:8.5px;margin-bottom:2px}
+      .customer-meta strong,.customer-meta span{font-size:10px}
+      .customer-actions{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+      .customer-actions .btn,.customer-actions form .btn{height:36px;min-height:36px;border-radius:11px}
+      .customer-actions .action-mini{flex-direction:row;gap:0;line-height:1}
       .customer-actions .action-mini i{
-        width:18px;
-        height:18px;
-        font-size:15px;
-        flex-basis:18px;
+        width:16px;
+        height:16px;
+        font-size:14px;
+        flex-basis:16px;
       }
-      .customer-actions .action-mini .action-label{display:block;font-size:9px;font-weight:700;letter-spacing:.01em}
+      .customer-actions .action-mini .action-label{display:none}
       .page-tools .btn{flex:1 1 100%}
     }
     body[data-theme="light"] .customer-overview-shell{
@@ -508,6 +508,7 @@
                 <% } else { %><span class="text-muted" style="font-size:12px"><%= t('admin.customers.paid_label', 'Lunas') %></span><% } %>
               </td>
               <td>
+                <button class="btn btn-g btn-icon btn-sm" title="Detail Pelanggan" data-id="<%= c.id %>" onclick="openCustomerDetail(+this.dataset.id)"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-s btn-icon btn-sm" title="<%= t('admin.customers.actions.generate_invoice', 'Generate Tagihan') %>" data-idx="<%= i %>" onclick="openGenInvoice(+this.dataset.idx)"><i class="bi bi-lightning-charge"></i></button>
                 <button class="btn btn-p btn-icon btn-sm" title="<%= t('admin.customers.actions.pay_invoice', 'Bayar Tagihan') %>" data-idx="<%= i %>" onclick="openPayInvoice(+this.dataset.idx)"><i class="bi bi-cash-coin"></i></button>
                 <% if (typeof session !== 'undefined' && !session.isCashier) { %>
@@ -583,6 +584,9 @@
             </div>
 
             <div class="customer-actions">
+              <button class="btn btn-g btn-sm" type="button" title="Detail Pelanggan" data-id="<%= c.id %>" onclick="openCustomerDetail(+this.dataset.id)">
+                <span class="action-mini"><i class="bi bi-eye"></i><span class="action-label">Detail</span></span>
+              </button>
               <button class="btn btn-s btn-sm" type="button" title="Generate Tagihan" data-idx="<%= i %>" onclick="openGenInvoice(+this.dataset.idx)">
                 <span class="action-mini"><i class="bi bi-lightning-charge"></i><span class="action-label">Tagih</span></span>
               </button>
@@ -618,7 +622,7 @@
 <div class="mo" id="addModal">
   <div class="mb">
     <div class="mh"><span class="mt"><i class="bi bi-person-plus"></i> Tambah Pelanggan</span><button class="mc" onclick="closeModal('addModal')">&times;</button></div>
-    <form method="POST" action="/admin/customers">
+    <form method="POST" action="/admin/customers" enctype="multipart/form-data">
       <div class="mbody">
         <div class="form-row">
           <div class="fg"><label class="fl">Nama Lengkap *</label><input class="fc" name="name" required placeholder="John Doe"></div>
@@ -626,6 +630,14 @@
         </div>
         <div class="fg"><label class="fl">Email (Untuk Notifikasi Payment)</label><input class="fc" name="email" type="email" placeholder="customer@example.com"></div>
         <div class="fg"><label class="fl">Alamat</label><textarea class="fc" name="address" placeholder="Jl. Example..."></textarea></div>
+        <div class="form-row">
+          <div class="fg"><label class="fl">NIK</label><input class="fc" name="nik" placeholder="Opsional"></div>
+          <div class="fg"><label class="fl">NPWP</label><input class="fc" name="npwp" placeholder="Opsional"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label class="fl">Upload KTP</label><input class="fc" type="file" name="ktp_photo_file" accept="image/*"></div>
+          <div class="fg"><label class="fl">Foto Rumah</label><input class="fc" type="file" name="house_photo_file" accept="image/*"></div>
+        </div>
         <div class="form-row">
           <div class="fg" id="add_normal_pppoe_profile_field">
             <label class="fl">Paket Internet</label>
@@ -803,7 +815,7 @@
 <div class="mo" id="editModal">
   <div class="mb">
     <div class="mh"><span class="mt"><i class="bi bi-pencil"></i> Edit Pelanggan</span><button class="mc" onclick="closeModal('editModal')">&times;</button></div>
-    <form method="POST" id="editForm">
+    <form method="POST" id="editForm" enctype="multipart/form-data">
       <div class="mbody">
         <div class="form-row">
           <div class="fg"><label class="fl">Nama Lengkap *</label><input class="fc" name="name" id="e_name" required></div>
@@ -811,6 +823,22 @@
         </div>
         <div class="fg"><label class="fl">Email (Untuk Notifikasi Payment)</label><input class="fc" name="email" id="e_email" type="email"></div>
         <div class="fg"><label class="fl">Alamat</label><textarea class="fc" name="address" id="e_address"></textarea></div>
+        <div class="form-row">
+          <div class="fg"><label class="fl">NIK</label><input class="fc" name="nik" id="e_nik" placeholder="Opsional"></div>
+          <div class="fg"><label class="fl">NPWP</label><input class="fc" name="npwp" id="e_npwp" placeholder="Opsional"></div>
+        </div>
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Upload KTP Baru</label>
+            <input class="fc" type="file" name="ktp_photo_file" accept="image/*">
+            <div class="hint">Kosongkan jika tidak ingin mengganti file lama.</div>
+          </div>
+          <div class="fg">
+            <label class="fl">Foto Rumah Baru</label>
+            <input class="fc" type="file" name="house_photo_file" accept="image/*">
+            <div class="hint">Kosongkan jika tidak ingin mengganti file lama.</div>
+          </div>
+        </div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">Paket Internet</label>
@@ -1061,6 +1089,15 @@
   </div>
 </div>
 
+<%- include('../partials/customer_detail_modal', {
+  scope: 'admin',
+  allowPayment: false,
+  allowDeviceActions: !(typeof session !== 'undefined' && session.isCashier && !session.isAdmin),
+  detailApiBase: '/admin/api/customers',
+  deviceApiBase: '/admin/api/device',
+  paymentApiBase: '/admin/api/customers'
+}) %>
+
 <script id="customers-data" type="application/json"><%- JSON.stringify(customers) %></script>
 <script id="settings-data" type="application/json"><%- JSON.stringify(settings) %></script>
 <script id="pay-months-data" type="application/json"><%- JSON.stringify((lang === 'en')
@@ -1251,6 +1288,8 @@ function editCust(idx) {
   document.getElementById('e_phone').value=c.phone||'';
   document.getElementById('e_email').value=c.email||'';
   document.getElementById('e_address').value=c.address||'';
+  document.getElementById('e_nik').value=c.nik||'';
+  document.getElementById('e_npwp').value=c.npwp||'';
   document.getElementById('e_package').value=c.package_id||'';
   document.getElementById('e_router_id').value=c.router_id||'';
   document.getElementById('e_connection_type').value=c.connection_type||'pppoe';

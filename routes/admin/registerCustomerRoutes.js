@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 module.exports = function registerCustomerRoutes(router, deps = {}) {
   const {
     express,
@@ -8,6 +11,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     flashMsg,
     getSettings,
     customerSvc,
+    customerDetailSvc,
     mikrotikService,
     oltSvc,
     odpSvc,
@@ -27,6 +31,37 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     resolvePaidByName,
     sendPaidWhatsappNotification
   } = deps;
+
+  const CUSTOMER_IMAGE_FIELDS = [
+    { name: 'house_photo_file', maxCount: 1 },
+    { name: 'ktp_photo_file', maxCount: 1 }
+  ];
+
+  function toUploadImageExt(file) {
+    const extFromMime = String(file?.mimetype || '').split('/').pop().toLowerCase();
+    const extFromName = path.extname(String(file?.originalname || '')).toLowerCase().replace('.', '');
+    if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromName)) return extFromName;
+    if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromMime)) return extFromMime;
+    return 'jpg';
+  }
+
+  function persistCustomerImageUpload(file, prefix) {
+    if (!file || !file.buffer || Number(file.size || 0) <= 0) return '';
+    const uploadDir = path.join(__dirname, '..', '..', 'public', 'uploads');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    const ext = toUploadImageExt(file);
+    const filename = `${prefix}-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+    return `/uploads/${filename}`;
+  }
+
+  function getUploadedFile(req, fieldName) {
+    const files = req?.files;
+    if (!files || !fieldName) return null;
+    const bucket = files[fieldName];
+    if (Array.isArray(bucket) && bucket[0] && bucket[0].buffer && Number(bucket[0].size || 0) > 0) return bucket[0];
+    return null;
+  }
 
   router.get('/customers', requireAdminSession, (req, res) => {
     const {
@@ -157,8 +192,24 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     });
   });
 
-  router.post('/customers', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
+  router.get('/api/customers/:id/detail', requireAdminSession, async (req, res) => {
     try {
+      const year = parseInt(req.query.year || new Date().getFullYear(), 10);
+      const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year });
+      res.json(detail);
+    } catch (e) {
+      res.status(500).json({ error: e.message || String(e) });
+    }
+  });
+
+  router.post('/customers', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
+    try {
+      const housePhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'house_photo_file'), 'admin-house-photo');
+      const ktpPhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'ktp_photo_file'), 'admin-ktp-photo');
+      req.body.nik = String(req.body.nik || '').trim();
+      req.body.npwp = String(req.body.npwp || '').trim();
+      req.body.house_photo_url = housePhotoUrl;
+      req.body.ktp_photo_url = ktpPhotoUrl;
       const syncWarnings = [];
       if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;
@@ -252,8 +303,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     res.redirect('/admin/customers');
   });
 
-  router.post('/customers/:id/update', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
+  router.post('/customers/:id/update', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
     try {
+      const housePhotoFile = getUploadedFile(req, 'house_photo_file');
+      const ktpPhotoFile = getUploadedFile(req, 'ktp_photo_file');
+      req.body.nik = String(req.body.nik || '').trim();
+      req.body.npwp = String(req.body.npwp || '').trim();
+      if (housePhotoFile) req.body.house_photo_url = persistCustomerImageUpload(housePhotoFile, 'admin-house-photo');
+      if (ktpPhotoFile) req.body.ktp_photo_url = persistCustomerImageUpload(ktpPhotoFile, 'admin-ktp-photo');
       if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
         const customerId = Number(req.params.id);
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;

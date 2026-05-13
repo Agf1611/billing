@@ -60,6 +60,24 @@ ejs.render(techTasksSrc, {
 }, { filename: techTasksFile });
 console.log('OK views/tech/tasks.ejs');
 
+const techCustomersFile = path.join(root, 'views/tech/customers.ejs');
+const techCustomersSrc = fs.readFileSync(techCustomersFile, 'utf8');
+ejs.render(techCustomersSrc, {
+  title: 'Pelanggan',
+  company: 'ISP',
+  activePage: 'customers',
+  techName: 'Teknisi',
+  techNav: { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 },
+  operationalTasks: [],
+  customers: [],
+  search: '',
+  filterStatus: '',
+  msg: null,
+  lang: 'id',
+  t: (_key, fallback) => fallback || ''
+}, { filename: techCustomersFile });
+console.log('OK views/tech/customers.ejs');
+
 const collectorDashboardFile = path.join(root, 'views/collector/dashboard.ejs');
 const collectorDashboardSrc = fs.readFileSync(collectorDashboardFile, 'utf8');
 ejs.render(collectorDashboardSrc, {

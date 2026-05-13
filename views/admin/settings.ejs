@@ -488,6 +488,17 @@
               </div>
             </div>
           </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="fl">Mode OS MikroTik</label>
+              <select class="fs" name="mikrotik_os_mode">
+                <option value="auto" <%= String(settings.mikrotik_os_mode || 'auto') === 'auto' ? 'selected' : '' %>>Auto Detect</option>
+                <option value="routeros_v6" <%= String(settings.mikrotik_os_mode || '') === 'routeros_v6' ? 'selected' : '' %>>RouterOS v6</option>
+                <option value="routeros_v7" <%= String(settings.mikrotik_os_mode || '') === 'routeros_v7' ? 'selected' : '' %>>RouterOS v7</option>
+              </select>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Dipakai untuk referensi mode koneksi/script MikroTik bila nanti perlu dibedakan.</div>
+            </div>
+          </div>
 
         </div>
 

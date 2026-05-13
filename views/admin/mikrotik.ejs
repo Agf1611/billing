@@ -12,6 +12,7 @@
     .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
     .monitor-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .monitor-toolbar .fc-sm { min-width: 200px; }
+    .monitor-toolbar .fs-sm { min-width: 150px; }
     .monitor-sync { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:18px; padding:13px 16px; border:1px solid var(--border); border-radius:16px; }
     .monitor-sync-meta { display:flex; flex-direction:column; gap:5px; }
     .monitor-sync-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -87,6 +88,7 @@
       .monitor-toolbar { width:100%; }
       .monitor-toolbar .btn { width:100%; justify-content:center; }
       .monitor-toolbar .fc-sm { min-width: 0; width:100%; }
+      .monitor-toolbar .fs-sm { min-width: 0; width:100%; }
       .monitor-sync-row { align-items:flex-start; flex-direction:column; gap:8px; }
       .monitor-sync-time { font-size:13px; }
       .monitor-mobile-actions .btn { min-height:38px; height:38px; border-radius:12px; }
@@ -174,16 +176,22 @@
           <h6><i class="bi bi-ethernet"></i> <%= t('admin.mikrotik.pppoe.title', 'Daftar PPPoE Secrets') %></h6>
           <div class="monitor-toolbar">
             <input type="text" class="fc fc-sm" id="pppoe-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setSecretsSearch(this.value)">
+            <select class="fs fs-sm" id="pppoe-status-filter" onchange="setSecretsStatusFilter(this.value)">
+              <option value="all">Semua Status</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="disabled">Disabled</option>
+            </select>
             <button class="btn btn-p btn-sm" onclick="openAddSecret()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_secret', 'Tambah Secret') %></button>
           </div>
         </div>
         <div class="tbl-wrap">
           <table class="dtbl">
             <thead>
-              <tr><th>Name</th><th>Profile</th><th>Local Address</th><th>Remote Address</th><th>Uptime</th><th>Status</th><th><%= t('common.actions', 'Aksi') %></th></tr>
+              <tr><th>Name</th><th>Profile</th><th>Last Online</th><th>Offline</th><th>Remote Address</th><th>Uptime</th><th>Status</th><th><%= t('common.actions', 'Aksi') %></th></tr>
             </thead>
             <tbody id="pppoe-list">
-              <tr><td colspan="7" class="text-center text-muted"><%= t('common.loading', 'Memuat data...') %></td></tr>
+              <tr><td colspan="8" class="text-center text-muted"><%= t('common.loading', 'Memuat data...') %></td></tr>
             </tbody>
           </table>
         </div>
@@ -446,6 +454,9 @@
     statusOnline: "<%= t('admin.mikrotik.status.online', 'Online') %>",
     statusOffline: "<%= t('admin.mikrotik.status.offline', 'Offline') %>",
     statusDisabled: "<%= t('admin.mikrotik.status.disabled', 'Disabled') %>",
+    onlineNow: "Online sekarang",
+    noLastOnline: "Belum pernah online",
+    noOfflineDuration: "-",
     editLabel: "<%= t('common.edit', 'Edit') %>",
     deleteLabel: "<%= t('common.delete', 'Hapus') %>"
   };
@@ -475,7 +486,7 @@
     detail: 'Saat pertama kali dibuka, data router dimuat lalu disimpan ke cache. Saat dibuka lagi, sistem menampilkan cache dulu agar lebih cepat. Gunakan refresh manual untuk update terbaru.'
   };
   const tableState = {
-    pppoe: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
+    pppoe: { page: 1, limit: 25, q: '', status: 'all', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
     hotspot: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
     pppoeProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 },
     hotspotProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 }
@@ -494,6 +505,8 @@
     totalSecrets: 0,
     totalHotspot: 0
   };
+
+  tableState.pppoe.status = tableState.pppoe.status || 'all';
 
   function getMonitoringRouterCacheKey() {
     return String(getRouterId() || 'default');
@@ -624,13 +637,54 @@
 
   function applySearchInputs() {
     const pppoeSearch = document.getElementById('pppoe-search');
+    const pppoeStatusFilter = document.getElementById('pppoe-status-filter');
     const hotspotSearch = document.getElementById('hotspot-search');
     const pppoeProfilesSearch = document.getElementById('pppoe-profiles-search');
     const hotspotProfilesSearch = document.getElementById('hotspot-profiles-search');
     if (pppoeSearch) pppoeSearch.value = tableState.pppoe.q || '';
+    if (pppoeStatusFilter) pppoeStatusFilter.value = tableState.pppoe.status || 'all';
     if (hotspotSearch) hotspotSearch.value = tableState.hotspot.q || '';
     if (pppoeProfilesSearch) pppoeProfilesSearch.value = tableState.pppoeProfiles.q || '';
     if (hotspotProfilesSearch) hotspotProfilesSearch.value = tableState.hotspotProfiles.q || '';
+  }
+
+  function parseIsoDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function formatDateTimeShort(value) {
+    const date = parseIsoDate(value);
+    if (!date) return '-';
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  function formatDurationCompact(totalSeconds) {
+    const safeSeconds = Number(totalSeconds);
+    if (!Number.isFinite(safeSeconds) || safeSeconds < 0) return I18N.noOfflineDuration;
+    const days = Math.floor(safeSeconds / 86400);
+    const hours = Math.floor((safeSeconds % 86400) / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+    if (days > 0) return `${days}h ${hours}j`;
+    if (hours > 0) return `${hours}j ${minutes}m`;
+    return `${Math.max(1, minutes)}m`;
+  }
+
+  function getPppoeLastOnlineText(secret) {
+    if (secret?.displayStatus === 'online') return I18N.onlineNow;
+    if (secret?.lastOnlineAt) return formatDateTimeShort(secret.lastOnlineAt);
+    return I18N.noLastOnline;
+  }
+
+  function getPppoeOfflineDurationText(secret) {
+    if (secret?.displayStatus !== 'offline') return I18N.noOfflineDuration;
+    return formatDurationCompact(secret?.offlineSeconds);
   }
 
   function applySummaryData(data = {}, options = {}) {
@@ -659,7 +713,7 @@
 
     const tbody = document.getElementById('pppoe-list');
     if (!pppoeData.length) {
-      setTableMessage('pppoe-list', 7, I18N.emptySecrets);
+      setTableMessage('pppoe-list', 8, I18N.emptySecrets);
       setMobileListMessage('pppoe-mobile-list', I18N.emptySecrets);
       if (!options.skipPersist) persistMonitoringCache();
       return;
@@ -676,7 +730,8 @@
         <tr>
           <td class="fw6">${s.name}</td>
           <td><span class="badge bp">${s.profile}</span></td>
-          <td>${s.localAddress || s['local-address'] || '-'}</td>
+          <td>${getPppoeLastOnlineText(s)}</td>
+          <td>${getPppoeOfflineDurationText(s)}</td>
           <td>${s.remoteAddress || s['remote-address'] || s.sessionRemoteAddress || '-'}</td>
           <td>${s.sessionUptime || '-'}</td>
           <td>${statusHtml}</td>
@@ -704,8 +759,12 @@
           </div>
           <div class="monitor-mobile-grid">
             <div class="monitor-mobile-cell">
-              <div class="monitor-mobile-label">IP Lokal</div>
-              <div class="monitor-mobile-value">${safeText(s.localAddress || s['local-address'])}</div>
+              <div class="monitor-mobile-label">Last Online</div>
+              <div class="monitor-mobile-value">${safeText(getPppoeLastOnlineText(s))}</div>
+            </div>
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">Offline</div>
+              <div class="monitor-mobile-value">${safeText(getPppoeOfflineDurationText(s))}</div>
             </div>
             <div class="monitor-mobile-cell">
               <div class="monitor-mobile-label">IP Remote</div>
@@ -1067,7 +1126,7 @@
     document.getElementById('hotspot-online-count').innerText = '0';
     document.getElementById('total-secrets-count').innerText = '0';
     document.getElementById('total-hotspot-count').innerText = '0';
-    setTableMessage('pppoe-list', 7, message);
+    setTableMessage('pppoe-list', 8, message);
     setTableMessage('hotspot-list', 8, message);
     setTableMessage('pppoe-profiles-list', 5, message);
     setTableMessage('hotspot-profiles-list', 7, message);
@@ -1112,6 +1171,12 @@
 
   function setSecretsSearch(value) {
     scheduleTableSearch('pppoe', value);
+  }
+
+  function setSecretsStatusFilter(value) {
+    tableState.pppoe.status = String(value || 'all').trim() || 'all';
+    tableState.pppoe.page = 1;
+    loadSecrets();
   }
 
   function setHotspotSearch(value) {
@@ -1174,6 +1239,7 @@
     profileOptionsPromise = null;
     tableState.pppoe.page = 1;
     tableState.pppoe.q = '';
+    tableState.pppoe.status = 'all';
     tableState.hotspot.page = 1;
     tableState.hotspot.q = '';
     tableState.pppoeProfiles.page = 1;
@@ -1259,7 +1325,7 @@
   async function loadSecrets(force = false) {
     if (loadState.pppoe) return;
     loadState.pppoe = true;
-    setTableMessage('pppoe-list', 7, 'Memuat data...');
+    setTableMessage('pppoe-list', 8, 'Memuat data...');
     setMobileListMessage('pppoe-mobile-list', 'Memuat data...');
     try {
       const routerId = encodeURIComponent(getRouterId() || '');
@@ -1269,11 +1335,12 @@
         limit: String(tableState.pppoe.limit)
       });
       if (tableState.pppoe.q) params.set('q', tableState.pppoe.q);
+      if (tableState.pppoe.status && tableState.pppoe.status !== 'all') params.set('status', tableState.pppoe.status);
       const sRes = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/secrets', Object.fromEntries(params), force), 25000);
       applyPppoeResponse(sRes);
     } catch (err) {
       console.error('Error loadSecrets:', err);
-      setTableMessage('pppoe-list', 7, I18N.loadFailed, 'danger');
+      setTableMessage('pppoe-list', 8, I18N.loadFailed, 'danger');
       setMobileListMessage('pppoe-mobile-list', I18N.loadFailed, 'danger');
     } finally {
       loadState.pppoe = false;

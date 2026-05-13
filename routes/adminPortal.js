@@ -8,6 +8,7 @@ const { logger } = require('../config/logger');
 const db = require('../config/database');
 const customerDevice = require('../services/customerDeviceService');
 const customerSvc = require('../services/customerService');
+const customerDetailSvc = require('../services/customerDetailService');
 const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
 const mikrotikService = require('../services/mikrotikService');
@@ -416,7 +417,31 @@ function restrictToAdmin(req, res, next) {
   return res.redirect('/admin');
 }
 
+function restrictCashierInfrastructureAccess(req, res, next) {
+  if (!req.session?.isCashier || req.session?.isAdmin) return next();
+  const isApiRequest = String(req.path || '').startsWith('/api/');
+  if (isApiRequest) {
+    return res.status(403).json({ error: 'Akun kasir tidak memiliki akses ke menu jaringan, MikroTik, atau ONU.' });
+  }
+  req.session._msg = { type: 'error', text: 'Akun kasir hanya difokuskan untuk pembayaran dan pembukuan.' };
+  return res.redirect('/admin');
+}
+
 function company() { return getSetting('company_header', 'ISP Admin'); }
+
+router.use([
+  /^\/olts(?:\/.*)?$/,
+  '/map',
+  '/devices',
+  '/bulk',
+  /^\/mikrotik(?:\/.*)?$/,
+  /^\/vouchers(?:\/.*)?$/,
+  /^\/routers(?:\/.*)?$/,
+  /^\/api\/mikrotik(?:\/.*)?$/,
+  /^\/api\/devices(?:\/.*)?$/,
+  /^\/api\/device(?:\/.*)?$/,
+  /^\/api\/bulk(?:\/.*)?$/
+], requireAdminSession, restrictCashierInfrastructureAccess);
 
 function buildManualPaymentMessage(settings = getSettings()) {
   const bank = String(settings?.manual_payment_bank || '').trim();
@@ -546,8 +571,12 @@ function buildPaidWhatsappMessage(customer, invoices = [], fallbackInvoice = nul
     defaultPaidWhatsappTemplate(getSetting('company_header', 'ISP'))
   ).trim();
   const payload = buildWhatsappCustomerPayload(customer, invoices, fallbackInvoice, options);
+  const paymentProofLink = payload.receipt_link || payload.invoice_link || payload.link || '';
+  const billingLink = buildCustomerCheckBillingLink(customer, options);
   return ensureDueDateLine(fillWhatsappTemplate(template, {
     ...payload,
+    link: paymentProofLink || payload.link,
+    billing_link: billingLink,
     company: getSetting('company_header', 'ISP'),
     paid_by: String(options.paidBy || '-').trim() || '-',
     paid_at: String(options.paidAt || new Date().toLocaleString('id-ID')).trim()
@@ -860,8 +889,9 @@ function parseMonitoringListQuery(req, defaultLimit = 25) {
     ? Math.min(rawLimit, 100)
     : defaultLimit;
   const q = typeof req.query.q === 'string' ? req.query.q.trim().toLowerCase() : '';
-  const wantsMeta = q.length > 0 || 'page' in req.query || 'limit' in req.query;
-  return { page, limit, q, wantsMeta };
+  const status = typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : 'all';
+  const wantsMeta = q.length > 0 || 'page' in req.query || 'limit' in req.query || ('status' in req.query && status !== 'all');
+  return { page, limit, q, status, wantsMeta };
 }
 
 function matchesMonitoringSearch(row, q, fields = []) {
@@ -2459,7 +2489,7 @@ router.get('/', requireAdminSession, async (req, res) => {
 
 // ─── DEVICE ROUTES (existing) ───────────────────────────────────────────────
 router.get('/devices', requireAdminSession, (req, res) => {
-  res.render('admin/dashboard', { title: 'Monitoring ONU', company: company(), version: '2.0.0', activePage: 'devices', billing: null, custStats: null });
+  res.redirect('/admin/monitoring');
 });
 
 router.get('/bulk', requireAdminSession, (req, res) => {
@@ -3205,6 +3235,7 @@ registerCustomerRoutes(router, {
   flashMsg,
   getSettings,
   customerSvc,
+  customerDetailSvc,
   mikrotikService,
   oltSvc,
   odpSvc,
@@ -3956,6 +3987,28 @@ router.get('/reports', requireAdminSession, (req, res) => {
 });
 
 // ─── SETTINGS ──────────────────────────────────────────────────────────────
+function renderBookkeepingFormPage(req, res, formData = {}, msg = null) {
+  const now = new Date();
+  return res.render('admin/bookkeeping_form', {
+    title: 'Tambah Pembukuan',
+    company: company(),
+    activePage: 'bookkeeping',
+    categories: bookkeepingSvc.getCategories(),
+    formData: {
+      type: String(formData.type || 'expense').trim().toLowerCase() === 'income' ? 'income' : 'expense',
+      entry_date: String(formData.entry_date || new Date().toISOString().slice(0, 10)).trim(),
+      amount: String(formData.amount || '').trim(),
+      category: String(formData.category || '').trim(),
+      custom_category: String(formData.custom_category || '').trim(),
+      description: String(formData.description || '').trim(),
+      month: String(formData.month || (now.getMonth() + 1)).trim(),
+      year: String(formData.year || now.getFullYear()).trim(),
+      source_type: String(formData.source_type || '').trim()
+    },
+    msg: msg || flashMsg(req)
+  });
+}
+
 router.get('/bookkeeping', requireAdminSession, (req, res) => {
   const now = new Date();
   const filterMonth = Math.max(0, Math.min(12, parseInt(req.query.month || (now.getMonth() + 1), 10) || (now.getMonth() + 1)));
@@ -3970,6 +4023,7 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
     console.warn('[BOOKKEEPING] Sync paid invoice income failed:', syncError.message);
   }
   const summary = bookkeepingSvc.getSummary({ month: filterMonth, year: filterYear });
+  const dashboard = bookkeepingSvc.getDashboardDetails({ month: filterMonth, year: filterYear });
   const entries = bookkeepingSvc.listEntries({
     type,
     category,
@@ -3989,9 +4043,33 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
     search,
     categories,
     summary,
+    dashboard,
     entries,
     msg: flashMsg(req)
   });
+});
+
+router.get('/bookkeeping/new', requireAdminSession, (req, res) => {
+  renderBookkeepingFormPage(req, res);
+});
+
+router.post('/bookkeeping/new', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const createdByRole = req.session?.isCashier ? 'cashier' : 'admin';
+    const createdByName = resolvePaidByName(req, 'Admin');
+    bookkeepingSvc.createEntry({
+      ...req.body,
+      created_by_role: createdByRole,
+      created_by_name: createdByName
+    });
+    req.session._msg = { type: 'success', text: 'Pembukuan berhasil ditambahkan.' };
+    return res.redirect('/admin/bookkeeping');
+  } catch (e) {
+    return renderBookkeepingFormPage(req, res, req.body, {
+      type: 'error',
+      text: 'Gagal menambah pembukuan: ' + (e.message || String(e))
+    });
+  }
 });
 
 router.post('/bookkeeping', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
@@ -4477,6 +4555,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'mikrotik_port',
       'mikrotik_user',
       'mikrotik_password',
+      'mikrotik_os_mode',
       'digiflazz_username',
       'digiflazz_api_key',
       'digiflazz_webhook_secret',
@@ -4588,6 +4667,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'mikrotik_host',
       'mikrotik_user',
       'mikrotik_password',
+      'mikrotik_os_mode',
       'digiflazz_username',
       'digiflazz_api_key',
       'digiflazz_webhook_secret',
@@ -4966,7 +5046,7 @@ router.get('/monitoring', requireAdminSession, restrictToAdmin, async (req, res)
   const recentErrors = diagnosticsSvc.getRecentErrors(10);
 
   res.render('admin/monitoring', {
-      title: 'Monitoring Sistem',
+      title: 'Monitoring ONU',
       company: company(),
       activePage: 'monitoring',
       healthStatus,
@@ -5717,29 +5797,54 @@ router.get('/api/mikrotik/secrets', requireAdmin, async (req, res) => {
     const data = Array.isArray(secretsResult.data) ? secretsResult.data : [];
     const activeSessions = Array.isArray(activeResult.data) ? activeResult.data : [];
     const activeByName = new Map(activeSessions.map((session) => [String(session?.name || ''), session]));
+    const trackingState = mikrotikService.syncPppoeMonitoringState(routerId, data, activeSessions);
+    const nowMs = Date.now();
     const enriched = data.map((secret) => {
-      const active = activeByName.get(String(secret?.name || '')) || null;
+      const username = String(secret?.name || '').trim();
+      const active = activeByName.get(username) || null;
+      const state = trackingState.get(username) || null;
+      const isDisabled = secret?.disabled === true || secret?.disabled === 'true';
+      const displayStatus = active
+        ? 'online'
+        : (isDisabled ? 'disabled' : 'offline');
+      const lastOnlineAt = state?.last_online_at || null;
+      const offlineSince = displayStatus === 'offline'
+        ? (state?.offline_since || null)
+        : null;
+      let offlineSeconds = null;
+      if (offlineSince) {
+        const parsedOfflineSince = Date.parse(offlineSince);
+        if (Number.isFinite(parsedOfflineSince)) {
+          offlineSeconds = Math.max(0, Math.floor((nowMs - parsedOfflineSince) / 1000));
+        }
+      }
       return {
         ...secret,
         session: active,
         sessionUptime: active?.uptime || null,
         sessionRemoteAddress: active?.address || null,
         isOnline: Boolean(active),
-        displayStatus: active
-          ? 'online'
-          : (secret?.disabled === true || secret?.disabled === 'true' ? 'disabled' : 'offline')
+        displayStatus,
+        lastOnlineAt,
+        offlineSince,
+        offlineSeconds
       };
     });
     res.set('X-Mikrotik-Cache', `${secretsResult.cacheStatus}/${activeResult.cacheStatus}`);
     if (!listQuery.wantsMeta) {
       return res.json(enriched);
     }
-    const filtered = listQuery.q
-      ? enriched.filter((row) => matchesMonitoringSearch(row, listQuery.q, [
-          'name', 'profile', 'service', 'local-address', 'remote-address',
-          'localAddress', 'remoteAddress', 'comment', 'caller-id', 'sessionRemoteAddress'
-        ]))
-      : enriched;
+    let filtered = enriched;
+    if (listQuery.status === 'online' || listQuery.status === 'offline' || listQuery.status === 'disabled') {
+      filtered = filtered.filter((row) => row.displayStatus === listQuery.status);
+    }
+    if (listQuery.q) {
+      filtered = filtered.filter((row) => matchesMonitoringSearch(row, listQuery.q, [
+        'name', 'profile', 'service', 'local-address', 'remote-address',
+        'localAddress', 'remoteAddress', 'comment', 'caller-id', 'sessionRemoteAddress',
+        'lastOnlineAt', 'offlineSince'
+      ]));
+    }
     const pageData = paginateMonitoringRows(filtered, listQuery.page, listQuery.limit);
     res.json({
       items: pageData.items,

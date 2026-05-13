@@ -52,7 +52,7 @@ function getAllCustomers(search = '') {
   `;
   if (search) {
     const s = `%${search}%`;
-    return db.prepare(base + ` WHERE c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s);
+    return db.prepare(base + ` WHERE c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s, s);
   }
   return db.prepare(base + ` ORDER BY c.name ASC`).all();
 }
@@ -123,10 +123,11 @@ function getCustomerById(id) {
 function createCustomer(data) {
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
   return db.prepare(`
-    INSERT INTO customers (name, phone, email, address, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO customers (name, phone, email, address, nik, npwp, house_photo_url, ktp_photo_url, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     data.name, normalizedPhone || '', data.email || '', data.address || '',
+    data.nik || '', data.npwp || '', data.house_photo_url || '', data.ktp_photo_url || '',
     data.package_id ? parseInt(data.package_id) : null,
     data.router_id ? parseInt(data.router_id) : null,
     data.olt_id ? parseInt(data.olt_id) : null,
@@ -148,16 +149,21 @@ function createCustomer(data) {
 }
 
 function updateCustomer(id, data) {
+  const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url FROM customers WHERE id=?').get(id) || {};
   const prev = db.prepare('SELECT package_id FROM customers WHERE id=?').get(id);
   const newPkgId = data.package_id ? parseInt(data.package_id, 10) : null;
   const pkgChanged = prev && Number(prev.package_id || 0) !== Number(newPkgId || 0);
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
 
   const result = db.prepare(`
-    UPDATE customers SET name=?, phone=?, email=?, address=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?
+    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?
     WHERE id=?
   `).run(
     data.name, normalizedPhone || '', data.email || '', data.address || '',
+    data.nik !== undefined ? (data.nik || '') : (current.nik || ''),
+    data.npwp !== undefined ? (data.npwp || '') : (current.npwp || ''),
+    data.house_photo_url !== undefined ? (data.house_photo_url || '') : (current.house_photo_url || ''),
+    data.ktp_photo_url !== undefined ? (data.ktp_photo_url || '') : (current.ktp_photo_url || ''),
     data.package_id ? parseInt(data.package_id) : null,
     data.router_id ? parseInt(data.router_id) : null,
     data.olt_id ? parseInt(data.olt_id) : null,

@@ -116,8 +116,10 @@ function buildPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl)
     settings?.whatsapp_paid_message ||
     defaultPaidWhatsappTemplate(settings?.company_header || 'ISP')
   ).trim();
+  const billingLink = buildCustomerCheckBillingLink(customer, { baseUrl });
   const invoiceLink = buildPublicInvoicePrintLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
   const receiptLink = buildPublicInvoiceReceiptLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
+  const paymentProofLink = receiptLink || invoiceLink || billingLink;
   const dueDateText = formatInvoiceDueDate(invoice, customer);
   return ensureDueDateLine(fillWhatsappTemplate(template, {
     nama: customer?.name || 'Pelanggan',
@@ -125,10 +127,11 @@ function buildPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl)
     tagihan: Number(invoice?.amount || 0).toLocaleString('id-ID'),
     rincian: `${invoice?.period_month || '-'}/${invoice?.period_year || '-'}`,
     jatuh_tempo: dueDateText,
-    link: buildCustomerCheckBillingLink(customer, { baseUrl }),
+    link: paymentProofLink,
+    billing_link: billingLink,
     portal_link: buildCustomerPortalLoginLink({ baseUrl }),
-    invoice_link: invoiceLink || buildCustomerCheckBillingLink(customer, { baseUrl }),
-    receipt_link: receiptLink || invoiceLink || buildCustomerCheckBillingLink(customer, { baseUrl }),
+    invoice_link: invoiceLink || billingLink,
+    receipt_link: receiptLink || invoiceLink || billingLink,
     invoice_no: invoice?.id ? `INV-${invoice.id}` : '-',
     login_id: String(customer?.pppoe_username || customer?.genieacs_tag || customer?.phone || customer?.id || '').trim(),
     group_link: String(settings?.whatsapp_group_invite_link || '').trim(),

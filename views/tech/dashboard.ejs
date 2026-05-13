@@ -2,6 +2,254 @@
 
 <% const operationalTasksList = typeof operationalTasks !== 'undefined' && Array.isArray(operationalTasks) ? operationalTasks : []; %>
 
+<%
+  const taskTypeMap = {
+    install: 'Pemasangan Baru',
+    repair: 'Perbaikan',
+    survey: 'Survey',
+    maintenance: 'Maintenance',
+    collection: 'Penagihan',
+    relocation: 'Relokasi',
+    other: 'Lainnya'
+  };
+  const taskStatusMap = {
+    assigned: 'Ditugaskan',
+    in_progress: 'Dikerjakan',
+    done: 'Selesai',
+    cancelled: 'Dibatalkan'
+  };
+  const taskPriorityMap = {
+    low: 'Rendah',
+    medium: 'Sedang',
+    high: 'Tinggi',
+    urgent: 'Urgent'
+  };
+%>
+
+<style>
+  .dash-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .dash-section-title {
+    margin: 0;
+    color: var(--tech-muted);
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  .dash-section-link {
+    color: var(--tech-primary);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .dash-task-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .dash-task-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 11px 12px;
+  }
+
+  .dash-task-main {
+    min-width: 0;
+  }
+
+  .dash-task-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+
+  .dash-task-title {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin-bottom: 4px;
+  }
+
+  .dash-task-customer {
+    font-size: 12.5px;
+    color: var(--tech-text);
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dash-task-subline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    color: var(--tech-muted);
+    font-size: 11px;
+  }
+
+  .dash-task-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    max-width: 100%;
+  }
+
+  .dash-task-address {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    color: var(--tech-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dash-task-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .dash-task-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    color: var(--tech-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 15px;
+  }
+
+  .dash-task-btn {
+    min-height: 36px;
+    border-radius: 12px;
+    padding: 7px 11px;
+    font-size: 12px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .dash-task-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+
+  .dash-task-detail-cell {
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    border-radius: 14px;
+    padding: 10px 11px;
+  }
+
+  .dash-task-detail-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--tech-muted);
+    margin-bottom: 4px;
+    font-weight: 800;
+  }
+
+  .dash-task-detail-value {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--tech-text);
+    word-break: break-word;
+  }
+
+  .dash-task-block {
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    border-radius: 14px;
+    padding: 11px 12px;
+    margin-bottom: 10px;
+  }
+
+  .dash-task-block-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--tech-primary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  @media (max-width: 768px) {
+    .dash-task-card {
+      grid-template-columns: 1fr;
+    }
+
+    .dash-task-actions {
+      justify-content: stretch;
+    }
+
+    .dash-task-actions form,
+    .dash-task-actions a,
+    .dash-task-actions button {
+      flex: 1 1 auto;
+    }
+
+    .dash-task-icon {
+      flex: 0 0 38px !important;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .dash-task-card {
+      padding: 10px 11px;
+    }
+
+    .dash-task-title {
+      font-size: 13px;
+    }
+
+    .dash-task-customer,
+    .dash-task-subline,
+    .dash-task-address {
+      font-size: 11px;
+    }
+
+    .dash-task-detail-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+  }
+</style>
+
 <div class="mb-4">
   <div class="text-secondary small"><%= t('tech.dashboard.greeting', 'Halo, Selamat Bekerja!') %></div>
   <div class="fs-5 fw-bold"><i class="bi bi-person-badge text-primary me-2"></i><%= techName %></div>
@@ -26,9 +274,12 @@
   </div>
 </div>
 
-<h6 class="mb-3 text-secondary fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 1px;">
-  <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= operationalTasksList.length %>)
-</h6>
+<div class="dash-section-head">
+  <h6 class="dash-section-title">
+    <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= operationalTasksList.length %>)
+  </h6>
+  <a href="/tech/tasks" class="dash-section-link">Lihat semua</a>
+</div>
 
 <% if (operationalTasksList.length === 0) { %>
   <div class="text-center py-4">
@@ -36,36 +287,167 @@
     <p class="text-secondary mt-2 small">Belum ada job operasional yang ditugaskan. Jika admin membuat pemasangan baru, survey, atau perbaikan lapangan, job-nya akan muncul di sini.</p>
   </div>
 <% } else { %>
-  <% operationalTasksList.forEach((task) => { %>
-    <div class="t-card">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="badge-status badge-<%= task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open' %>">
-          <%= task.status === 'in_progress' ? 'Dikerjakan' : task.status === 'done' ? 'Selesai' : 'Ditugaskan' %>
-        </span>
-        <span class="text-secondary" style="font-size:11px;"><%= task.due_date || task.scheduled_date || '-' %></span>
+  <div class="dash-task-list">
+    <% operationalTasksList.forEach((task) => { %>
+      <% const taskStatusKey = task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open'; %>
+      <% const customerName = task.customer_name || task.linked_customer_name || 'Pelanggan umum'; %>
+      <% const customerPhone = task.customer_phone || task.linked_customer_phone || ''; %>
+      <% const shortLocation = task.customer_address || task.location_note || 'Lokasi menyusul'; %>
+      <div class="t-card dash-task-card">
+        <div class="dash-task-main">
+          <div class="dash-task-row">
+            <span class="badge-status badge-<%= taskStatusKey %>"><%= taskStatusMap[task.status] || task.status %></span>
+            <span class="dash-task-pill"><i class="bi bi-tags"></i><%= taskTypeMap[task.task_type] || task.task_type %></span>
+            <span class="dash-task-pill"><i class="bi bi-flag"></i><%= taskPriorityMap[task.priority] || task.priority %></span>
+          </div>
+          <div class="dash-task-title"><%= task.title %></div>
+          <div class="dash-task-customer"><%= customerName %></div>
+          <div class="dash-task-subline">
+            <span class="dash-task-pill"><i class="bi bi-calendar-event"></i> Deadline <strong><%= task.due_date || '-' %></strong></span>
+            <span class="dash-task-pill"><i class="bi bi-clock-history"></i> Jadwal <strong><%= task.scheduled_date || '-' %></strong></span>
+          </div>
+          <div class="dash-task-address"><i class="bi bi-geo-alt"></i><span><%= shortLocation %></span></div>
+        </div>
+
+        <div class="dash-task-actions">
+          <button type="button" class="dash-task-icon" data-bs-toggle="modal" data-bs-target="#dashTaskDetailModal<%= task.id %>" title="Lihat detail">
+            <i class="bi bi-eye"></i>
+          </button>
+          <% if (customerPhone) { %>
+            <a href="<%= buildWhatsAppLink(customerPhone) %>" class="dash-task-icon" title="Chat WhatsApp">
+              <i class="bi bi-whatsapp"></i>
+            </a>
+          <% } %>
+          <% if (task.status === 'assigned') { %>
+            <form method="POST" action="/tech/tasks/<%= task.id %>/start">
+              <button type="submit" class="btn btn-primary dash-task-btn"><i class="bi bi-play-circle"></i> Mulai</button>
+            </form>
+          <% } else if (task.status === 'in_progress') { %>
+            <button type="button" class="btn btn-success dash-task-btn" data-bs-toggle="modal" data-bs-target="#dashCompleteTaskModal<%= task.id %>">
+              <i class="bi bi-check-circle"></i> Selesai
+            </button>
+          <% } else { %>
+            <a href="/tech/tasks" class="btn btn-outline-success dash-task-btn"><i class="bi bi-list-check"></i> Riwayat</a>
+          <% } %>
+        </div>
       </div>
-      <div class="fw-bold mb-1" style="font-size:15px;"><%= task.title %></div>
-      <div class="text-secondary mb-2" style="font-size:12px;">
-        <i class="bi bi-person me-1"></i><%= task.customer_name || task.linked_customer_name || 'Pelanggan umum' %><br>
-        <i class="bi bi-geo-alt-fill me-1"></i><%= task.customer_address || task.location_note || 'Lokasi menyusul' %>
+
+      <div class="modal fade" id="dashTaskDetailModal<%= task.id %>" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-content surface-soft">
+            <div class="modal-header" style="border-color:var(--tech-border)">
+              <div>
+                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskStatusMap[task.status] || task.status %></div>
+                <h6 class="modal-title mb-0"><%= task.title %></h6>
+              </div>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="dash-task-detail-grid">
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">Pelanggan</span>
+                  <div class="dash-task-detail-value"><%= customerName %></div>
+                </div>
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">No. HP</span>
+                  <div class="dash-task-detail-value"><%= customerPhone || '-' %></div>
+                </div>
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">Prioritas</span>
+                  <div class="dash-task-detail-value"><%= taskPriorityMap[task.priority] || task.priority %></div>
+                </div>
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">Deadline</span>
+                  <div class="dash-task-detail-value"><%= task.due_date || '-' %></div>
+                </div>
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">Jadwal</span>
+                  <div class="dash-task-detail-value"><%= task.scheduled_date || '-' %></div>
+                </div>
+                <div class="dash-task-detail-cell">
+                  <span class="dash-task-detail-label">Status</span>
+                  <div class="dash-task-detail-value"><%= taskStatusMap[task.status] || task.status %></div>
+                </div>
+              </div>
+
+              <div class="dash-task-block">
+                <div class="dash-task-block-title">Alamat / Lokasi</div>
+                <div class="dash-task-detail-value"><%= task.customer_address || '-' %></div>
+                <% if (task.location_note) { %>
+                  <div class="dash-task-detail-value" style="margin-top:8px;color:var(--tech-muted)"><strong style="color:var(--tech-text)">Patokan:</strong> <%= task.location_note %></div>
+                <% } %>
+              </div>
+
+              <div class="dash-task-block">
+                <div class="dash-task-block-title">Detail Pekerjaan</div>
+                <div class="dash-task-detail-value"><%= task.description || 'Tidak ada detail tambahan.' %></div>
+              </div>
+
+              <% if (task.task_type === 'install' && (Number(task.create_pppoe_secret || 0) || task.pppoe_username || task.normal_pppoe_profile)) { %>
+                <div class="dash-task-block">
+                  <div class="dash-task-block-title">Akun Internet</div>
+                  <div class="dash-task-detail-grid" style="margin-bottom:0">
+                    <div class="dash-task-detail-cell">
+                      <span class="dash-task-detail-label">Mode Secret Baru</span>
+                      <div class="dash-task-detail-value"><%= Number(task.create_pppoe_secret || 0) ? 'Ya' : 'Tidak' %></div>
+                    </div>
+                    <div class="dash-task-detail-cell">
+                      <span class="dash-task-detail-label">PPPoE Username</span>
+                      <div class="dash-task-detail-value"><%= task.pppoe_username || '-' %></div>
+                    </div>
+                    <div class="dash-task-detail-cell">
+                      <span class="dash-task-detail-label">PPPoE Password</span>
+                      <div class="dash-task-detail-value"><%= task.pppoe_password || '-' %></div>
+                    </div>
+                    <div class="dash-task-detail-cell">
+                      <span class="dash-task-detail-label">Profile Normal</span>
+                      <div class="dash-task-detail-value"><%= task.normal_pppoe_profile || '-' %></div>
+                    </div>
+                  </div>
+                </div>
+              <% } %>
+
+              <% if (task.completion_note) { %>
+                <div class="dash-task-block" style="margin-bottom:0">
+                  <div class="dash-task-block-title" style="color:var(--tech-success)">Catatan Selesai</div>
+                  <div class="dash-task-detail-value"><%= task.completion_note %></div>
+                </div>
+              <% } %>
+            </div>
+            <div class="modal-footer" style="border-color:var(--tech-border)">
+              <% if (customerPhone) { %>
+                <a href="<%= buildWhatsAppLink(customerPhone) %>" class="btn btn-outline-success btn-sm"><i class="bi bi-whatsapp me-1"></i> Hubungi</a>
+              <% } %>
+              <a href="/tech/tasks" class="btn btn-primary btn-sm"><i class="bi bi-list-check me-1"></i> Buka Halaman Job</a>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size: 13px;">
-        <div class="fw-semibold text-primary"><%= task.task_type === 'install' ? 'Pemasangan Baru' : task.task_type === 'repair' ? 'Perbaikan' : task.task_type === 'survey' ? 'Survey' : task.task_type === 'maintenance' ? 'Maintenance' : task.task_type === 'collection' ? 'Penagihan Lapangan' : task.task_type === 'relocation' ? 'Relokasi' : 'Lainnya' %></div>
-        <div><%= task.description || 'Tidak ada detail tambahan.' %></div>
-      </div>
-      <div class="d-flex gap-2">
-        <% if (task.status === 'assigned') { %>
-          <form method="POST" action="/tech/tasks/<%= task.id %>/start" class="flex-fill">
-            <button type="submit" class="btn btn-primary btn-action" style="margin-top:0"><i class="bi bi-play-circle me-2"></i>Mulai Kerjakan</button>
-          </form>
-        <% } else if (task.status === 'in_progress') { %>
-          <a href="/tech/tasks" class="btn btn-warning btn-action flex-fill" style="margin-top:0"><i class="bi bi-card-checklist me-2"></i>Buka Detail Job</a>
-        <% } else { %>
-          <a href="/tech/tasks" class="btn btn-outline-success btn-action flex-fill" style="margin-top:0"><i class="bi bi-journal-check me-2"></i>Lihat Riwayat Job</a>
-        <% } %>
-      </div>
-    </div>
-  <% }) %>
+
+      <% if (task.status === 'in_progress') { %>
+        <div class="modal fade" id="dashCompleteTaskModal<%= task.id %>" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content surface-soft">
+              <div class="modal-header" style="border-color:var(--tech-border)">
+                <h6 class="modal-title mb-0">Selesaikan Job</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <form method="POST" action="/tech/tasks/<%= task.id %>/complete">
+                <div class="modal-body">
+                  <label class="form-label text-secondary small">Catatan Penyelesaian</label>
+                  <textarea class="form-control tech-textarea" name="completion_note" rows="3" placeholder="Contoh: pemasangan selesai, ONU normal, pelanggan sudah online"></textarea>
+                </div>
+                <div class="modal-footer" style="border-color:var(--tech-border)">
+                  <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                  <button type="submit" class="btn btn-success btn-sm">Simpan Selesai</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    <% }) %>
+  </div>
 <% } %>
 
 <h6 class="mb-3 text-secondary fw-bold text-uppercase" style="font-size: 13px; letter-spacing: 1px;">

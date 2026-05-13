@@ -34,6 +34,11 @@
     <a href="/admin/mikrotik" class="sb-item <%= activePage==='mikrotik' ? 'active' : '' %>">
       <i class="bi bi-router"></i><span><%= t('admin.nav.mikrotik', 'MikroTik') %></span>
     </a>
+    <% if (typeof session !== 'undefined' && session.isAdmin) { %>
+    <a href="/admin/monitoring" class="sb-item <%= activePage==='monitoring' ? 'active' : '' %>">
+      <i class="bi bi-broadcast-pin"></i><span>Monitoring ONU</span>
+    </a>
+    <% } %>
     <a href="/admin/olts" class="sb-item <%= activePage==='olts' ? 'active' : '' %>">
       <i class="bi bi-hdd-rack"></i><span><%= t('admin.nav.olt_management', 'Manajemen OLT') %></span>
     </a>
@@ -117,9 +122,6 @@
           </a>
           <a href="/admin/backup" class="sb-item <%= activePage==='backup' ? 'active' : '' %>">
             <i class="bi bi-hdd-stack"></i><span>Backup & Recovery</span>
-          </a>
-          <a href="/admin/monitoring" class="sb-item <%= activePage==='monitoring' ? 'active' : '' %>">
-            <i class="bi bi-activity"></i><span>Monitoring Sistem</span>
           </a>
           <% if (typeof selfUpdateEnabled === 'undefined' || selfUpdateEnabled) { %>
             <a href="/admin/update" class="sb-item <%= activePage==='update' ? 'active' : '' %>">
@@ -260,6 +262,7 @@
 
 <!-- Bottom Navigation (Mobile Only) -->
 <nav class="bottom-nav" id="bottomNav">
+  <% const cashierBottomNavOnly = typeof session !== 'undefined' && session.isCashier && !session.isAdmin; %>
   <a href="/admin" class="bn-item <%= (!activePage || activePage==='dashboard') ? 'active' : '' %>">
     <i class="bi bi-speedometer2"></i>
     <span><%= t('common.home', 'Beranda') %></span>
@@ -272,10 +275,17 @@
     <i class="bi bi-receipt"></i>
     <span><%= t('admin.nav.invoices', 'Tagihan') %></span>
   </a>
-  <a href="/admin/mikrotik" class="bn-item <%= activePage==='mikrotik' ? 'active' : '' %>">
-    <i class="bi bi-router"></i>
-    <span>MikroTik</span>
-  </a>
+  <% if (cashierBottomNavOnly) { %>
+    <a href="/admin/bookkeeping" class="bn-item <%= activePage==='bookkeeping' ? 'active' : '' %>">
+      <i class="bi bi-cash-coin"></i>
+      <span>Pembukuan</span>
+    </a>
+  <% } else { %>
+    <a href="/admin/mikrotik" class="bn-item <%= activePage==='mikrotik' ? 'active' : '' %>">
+      <i class="bi bi-router"></i>
+      <span>MikroTik</span>
+    </a>
+  <% } %>
   <button class="bn-item" onclick="toggleSidebar()">
     <i class="bi bi-grid-3x3-gap"></i>
     <span><%= t('common.menu', 'Menu') %></span>

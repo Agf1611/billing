@@ -6,7 +6,7 @@
     repair: 'Perbaikan',
     survey: 'Survey',
     maintenance: 'Maintenance',
-    collection: 'Penagihan Lapangan',
+    collection: 'Penagihan',
     relocation: 'Relokasi',
     other: 'Lainnya'
   };
@@ -16,14 +16,331 @@
     high: 'Tinggi',
     urgent: 'Urgent'
   };
+  const taskStatusMap = {
+    assigned: 'Ditugaskan',
+    in_progress: 'Dikerjakan',
+    done: 'Selesai',
+    cancelled: 'Dibatalkan'
+  };
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
 %>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<style>
+  .task-toolbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .task-toolbar h5 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  .task-toolbar-note {
+    color: var(--tech-muted);
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 4px;
+    max-width: 560px;
+  }
+
+  .task-summary-badge {
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, .24);
+    background: rgba(59, 130, 246, .10);
+    color: var(--tech-primary);
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .task-filter-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .task-filter-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--tech-muted);
+    min-width: 62px;
+  }
+
+  .task-filter-card .tech-select {
+    min-height: 42px;
+    font-size: 13px;
+    border-radius: 14px !important;
+  }
+
+  .task-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .task-compact-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 13px;
+  }
+
+  .task-main {
+    min-width: 0;
+  }
+
+  .task-topline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+  }
+
+  .task-title {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .task-customer {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tech-text);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-meta-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    color: var(--tech-muted);
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .task-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    max-width: 100%;
+  }
+
+  .task-meta-pill strong {
+    color: var(--tech-text);
+    font-weight: 700;
+  }
+
+  .task-address {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--tech-muted);
+    font-size: 11px;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .task-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .task-icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    color: var(--tech-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 16px;
+  }
+
+  .task-cta-btn {
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 800;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .task-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .task-detail-cell {
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    border-radius: 14px;
+    padding: 10px 11px;
+  }
+
+  .task-detail-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--tech-muted);
+    margin-bottom: 5px;
+    font-weight: 800;
+  }
+
+  .task-detail-value {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--tech-text);
+    word-break: break-word;
+  }
+
+  .task-detail-block {
+    border: 1px solid var(--tech-border);
+    background: var(--tech-bg-soft-2);
+    border-radius: 14px;
+    padding: 11px 12px;
+    margin-bottom: 10px;
+  }
+
+  .task-detail-block-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--tech-primary);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  .task-empty {
+    text-align: center;
+    padding: 42px 18px;
+  }
+
+  .task-empty i {
+    font-size: 36px;
+    color: var(--tech-primary);
+  }
+
+  .task-empty p {
+    margin: 10px 0 0;
+    color: var(--tech-muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 768px) {
+    .task-compact-card {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
+
+    .task-actions {
+      justify-content: stretch;
+    }
+
+    .task-actions form,
+    .task-actions a,
+    .task-actions button {
+      flex: 1 1 auto;
+    }
+
+    .task-icon-btn {
+      flex: 0 0 42px !important;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .task-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .task-toolbar h5 {
+      font-size: 17px;
+    }
+
+    .task-toolbar-note {
+      font-size: 11px;
+    }
+
+    .task-summary-badge {
+      align-self: flex-start;
+      padding: 6px 10px;
+    }
+
+    .task-filter-card {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .task-filter-label {
+      min-width: 0;
+    }
+
+    .task-compact-card {
+      padding: 11px;
+      gap: 10px;
+    }
+
+    .task-title {
+      font-size: 13px;
+    }
+
+    .task-customer {
+      font-size: 12px;
+    }
+
+    .task-meta-line,
+    .task-address {
+      font-size: 10.5px;
+    }
+
+    .task-detail-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+  }
+</style>
+
+<div class="task-toolbar">
   <div>
-    <h5 class="mb-0 fw-bold">Job Lapangan</h5>
-    <div class="text-secondary" style="font-size:12px;">Daftar pekerjaan teknisi yang dibuat admin untuk operasional harian.</div>
+    <h5>Job Lapangan</h5>
+    <div class="task-toolbar-note">Daftar tugas dibuat lebih ringkas supaya status pengerjaan tetap terlihat jelas, sementara detail lengkap dibuka saat diperlukan.</div>
   </div>
-  <span class="badge-status badge-open"><%= (tasks || []).length %> job</span>
+  <span class="task-summary-badge"><%= safeTasks.length %> tugas</span>
 </div>
 
 <div class="stat-grid">
@@ -45,10 +362,10 @@
   </div>
 </div>
 
-<div class="t-card">
-  <form method="GET" action="/tech/tasks" class="d-grid gap-2">
-    <label class="text-secondary small">Filter Status</label>
-    <select class="form-select rounded-4 tech-select" name="status" onchange="this.form.submit()">
+<div class="t-card task-filter-card">
+  <div class="task-filter-label">Status</div>
+  <form method="GET" action="/tech/tasks" class="flex-fill">
+    <select class="form-select tech-select" name="status" onchange="this.form.submit()">
       <option value="all" <%= filterStatus === 'all' ? 'selected' : '' %>>Semua Job</option>
       <option value="assigned" <%= filterStatus === 'assigned' ? 'selected' : '' %>>Ditugaskan</option>
       <option value="in_progress" <%= filterStatus === 'in_progress' ? 'selected' : '' %>>Dikerjakan</option>
@@ -58,54 +375,157 @@
   </form>
 </div>
 
-<% if (!tasks || tasks.length === 0) { %>
-  <div class="text-center py-5">
-    <i class="bi bi-clipboard-check text-primary" style="font-size:40px;"></i>
-    <p class="text-secondary mt-2 small">Belum ada job untuk filter ini.</p>
+<% if (safeTasks.length === 0) { %>
+  <div class="t-card task-empty">
+    <i class="bi bi-clipboard-check"></i>
+    <p>Belum ada job untuk filter ini.</p>
   </div>
 <% } else { %>
-  <% tasks.forEach((task) => { %>
-    <div class="t-card">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="badge-status badge-<%= task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open' %>">
-          <%= task.status === 'in_progress' ? 'Dikerjakan' : task.status === 'done' ? 'Selesai' : task.status === 'cancelled' ? 'Dibatalkan' : 'Ditugaskan' %>
-        </span>
-        <span class="text-secondary" style="font-size:11px;">Deadline: <%= task.due_date || '-' %></span>
-      </div>
-      <div class="fw-bold mb-1" style="font-size:15px;"><%= task.title %></div>
-      <div class="text-secondary mb-2" style="font-size:12px;">
-        <i class="bi bi-tags me-1"></i><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskPriorityMap[task.priority] || task.priority %><br>
-        <i class="bi bi-person me-1"></i><%= task.customer_name || task.linked_customer_name || 'Pelanggan umum' %><br>
-        <% if (task.customer_phone || task.linked_customer_phone) { %><i class="bi bi-telephone-fill me-1"></i><a href="<%= buildWhatsAppLink(task.customer_phone || task.linked_customer_phone) %>" class="text-decoration-none text-info"><%= task.customer_phone || task.linked_customer_phone %></a><br><% } %>
-        <i class="bi bi-geo-alt-fill me-1"></i><%= task.customer_address || task.location_note || 'Lokasi menyusul' %>
-      </div>
-
-      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size:13px;">
-        <div class="fw-semibold text-primary">Detail Pekerjaan</div>
-        <div><%= task.description || 'Tidak ada catatan tambahan.' %></div>
-      </div>
-
-      <% if (task.completion_note) { %>
-        <div class="surface-soft p-2 rounded-3 mb-3" style="font-size:13px;">
-          <div class="fw-semibold text-success">Catatan Selesai</div>
-          <div><%= task.completion_note %></div>
+  <div class="task-list">
+    <% safeTasks.forEach((task) => { %>
+      <% const taskStatusKey = task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open'; %>
+      <% const customerName = task.customer_name || task.linked_customer_name || 'Pelanggan umum'; %>
+      <% const customerPhone = task.customer_phone || task.linked_customer_phone || ''; %>
+      <% const shortLocation = task.customer_address || task.location_note || 'Lokasi menyusul'; %>
+      <div class="t-card task-compact-card">
+        <div class="task-main">
+          <div class="task-topline">
+            <span class="badge-status badge-<%= taskStatusKey %>"><%= taskStatusMap[task.status] || task.status %></span>
+            <span class="task-meta-pill"><i class="bi bi-tags"></i><strong><%= taskTypeMap[task.task_type] || task.task_type %></strong></span>
+            <span class="task-meta-pill"><i class="bi bi-flag"></i><%= taskPriorityMap[task.priority] || task.priority %></span>
+          </div>
+          <div class="task-title"><%= task.title %></div>
+          <div class="task-customer"><%= customerName %></div>
+          <div class="task-meta-line">
+            <span class="task-meta-pill"><i class="bi bi-calendar-event"></i> Deadline <strong><%= task.due_date || '-' %></strong></span>
+            <span class="task-meta-pill"><i class="bi bi-clock-history"></i> Jadwal <strong><%= task.scheduled_date || '-' %></strong></span>
+          </div>
+          <div class="task-address"><i class="bi bi-geo-alt"></i><span><%= shortLocation %></span></div>
         </div>
-      <% } %>
 
-      <% if (task.status === 'assigned') { %>
-        <form method="POST" action="/tech/tasks/<%= task.id %>/start">
-          <button type="submit" class="btn btn-primary btn-action" style="margin-top:0"><i class="bi bi-play-circle me-2"></i>Mulai Kerjakan</button>
-        </form>
-      <% } else if (task.status === 'in_progress') { %>
-        <button type="button" class="btn btn-success btn-action" style="margin-top:0" data-bs-toggle="modal" data-bs-target="#completeTaskModal<%= task.id %>">
-          <i class="bi bi-check-circle me-2"></i>Tandai Selesai
-        </button>
+        <div class="task-actions">
+          <button type="button" class="task-icon-btn" data-bs-toggle="modal" data-bs-target="#taskDetailModal<%= task.id %>" title="Lihat detail">
+            <i class="bi bi-eye"></i>
+          </button>
 
-        <div class="modal fade" id="completeTaskModal<%= task.id %>" tabindex="-1">
+          <% if (customerPhone) { %>
+            <a href="<%= buildWhatsAppLink(customerPhone) %>" class="task-icon-btn" title="Chat WhatsApp">
+              <i class="bi bi-whatsapp"></i>
+            </a>
+          <% } %>
+
+          <% if (task.status === 'assigned') { %>
+            <form method="POST" action="/tech/tasks/<%= task.id %>/start">
+              <button type="submit" class="btn btn-primary task-cta-btn"><i class="bi bi-play-circle"></i> Mulai</button>
+            </form>
+          <% } else if (task.status === 'in_progress') { %>
+            <button type="button" class="btn btn-success task-cta-btn" data-bs-toggle="modal" data-bs-target="#completeTaskModal<%= task.id %>">
+              <i class="bi bi-check-circle"></i> Selesai
+            </button>
+          <% } else { %>
+            <span class="task-meta-pill"><i class="bi bi-check2-circle"></i><%= task.status === 'cancelled' ? 'Ditutup' : 'Selesai' %></span>
+          <% } %>
+        </div>
+      </div>
+
+      <div class="modal fade" id="taskDetailModal<%= task.id %>" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-content surface-soft">
+            <div class="modal-header" style="border-color:var(--tech-border)">
+              <div>
+                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskStatusMap[task.status] || task.status %></div>
+                <h6 class="modal-title mb-0"><%= task.title %></h6>
+              </div>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="task-detail-grid">
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">Pelanggan</span>
+                  <div class="task-detail-value"><%= customerName %></div>
+                </div>
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">No. HP</span>
+                  <div class="task-detail-value"><%= customerPhone || '-' %></div>
+                </div>
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">Prioritas</span>
+                  <div class="task-detail-value"><%= taskPriorityMap[task.priority] || task.priority %></div>
+                </div>
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">Deadline</span>
+                  <div class="task-detail-value"><%= task.due_date || '-' %></div>
+                </div>
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">Jadwal</span>
+                  <div class="task-detail-value"><%= task.scheduled_date || '-' %></div>
+                </div>
+                <div class="task-detail-cell">
+                  <span class="task-detail-label">Status</span>
+                  <div class="task-detail-value"><%= taskStatusMap[task.status] || task.status %></div>
+                </div>
+              </div>
+
+              <div class="task-detail-block">
+                <div class="task-detail-block-title">Alamat / Lokasi</div>
+                <div class="task-detail-value"><%= task.customer_address || '-' %></div>
+                <% if (task.location_note) { %>
+                  <div class="task-detail-value" style="margin-top:8px;color:var(--tech-muted)"><strong style="color:var(--tech-text)">Patokan:</strong> <%= task.location_note %></div>
+                <% } %>
+              </div>
+
+              <div class="task-detail-block">
+                <div class="task-detail-block-title">Detail Pekerjaan</div>
+                <div class="task-detail-value"><%= task.description || 'Tidak ada catatan tambahan.' %></div>
+              </div>
+
+              <% if (task.task_type === 'install' && (Number(task.create_pppoe_secret || 0) || task.pppoe_username || task.normal_pppoe_profile)) { %>
+                <div class="task-detail-block">
+                  <div class="task-detail-block-title">Akun Internet</div>
+                  <div class="task-detail-grid" style="margin-bottom:0">
+                    <div class="task-detail-cell">
+                      <span class="task-detail-label">Mode Secret Baru</span>
+                      <div class="task-detail-value"><%= Number(task.create_pppoe_secret || 0) ? 'Ya' : 'Tidak' %></div>
+                    </div>
+                    <div class="task-detail-cell">
+                      <span class="task-detail-label">PPPoE Username</span>
+                      <div class="task-detail-value"><%= task.pppoe_username || '-' %></div>
+                    </div>
+                    <div class="task-detail-cell">
+                      <span class="task-detail-label">PPPoE Password</span>
+                      <div class="task-detail-value"><%= task.pppoe_password || '-' %></div>
+                    </div>
+                    <div class="task-detail-cell">
+                      <span class="task-detail-label">Profile Normal</span>
+                      <div class="task-detail-value"><%= task.normal_pppoe_profile || '-' %></div>
+                    </div>
+                  </div>
+                </div>
+              <% } %>
+
+              <% if (task.completion_note) { %>
+                <div class="task-detail-block" style="margin-bottom:0">
+                  <div class="task-detail-block-title" style="color:var(--tech-success)">Catatan Selesai</div>
+                  <div class="task-detail-value"><%= task.completion_note %></div>
+                </div>
+              <% } %>
+            </div>
+            <div class="modal-footer" style="border-color:var(--tech-border)">
+              <% if (customerPhone) { %>
+                <a href="<%= buildWhatsAppLink(customerPhone) %>" class="btn btn-outline-success btn-sm"><i class="bi bi-whatsapp me-1"></i> Hubungi</a>
+              <% } %>
+              <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <% if (task.status === 'in_progress') { %>
+        <div class="modal fade" id="completeTaskModal<%= task.id %>" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content surface-soft">
               <div class="modal-header" style="border-color:var(--tech-border)">
-                <h6 class="modal-title">Selesaikan Job</h6>
+                <h6 class="modal-title mb-0">Selesaikan Job</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
               </div>
               <form method="POST" action="/tech/tasks/<%= task.id %>/complete">
@@ -122,8 +542,8 @@
           </div>
         </div>
       <% } %>
-    </div>
-  <% }) %>
+    <% }) %>
+  </div>
 <% } %>
 
 <%- include('partials/bottom_nav') %>

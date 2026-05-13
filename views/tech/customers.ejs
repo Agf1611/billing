@@ -1,0 +1,128 @@
+<%- include('partials/header') %>
+
+<style>
+  .tech-customer-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .tech-customer-toolbar .form-control,
+  .tech-customer-toolbar .form-select{background:var(--tech-input-bg);color:var(--tech-text);border-color:var(--tech-border)}
+  .tech-customer-list{display:grid;gap:8px}
+  .tech-customer-card{display:grid;gap:7px;padding:9px}
+  .tech-customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .tech-customer-name{font-size:14px;font-weight:900;line-height:1.12}
+  .tech-customer-sub{font-size:10px;color:var(--tech-muted);margin-top:3px;line-height:1.3}
+  .tech-customer-chip-row{display:flex;gap:6px;flex-wrap:wrap}
+  .tech-customer-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tech-customer-cell{padding:7px 8px;border-radius:12px;background:var(--tech-bg-soft-2);border:1px solid var(--tech-border);min-height:58px}
+  .tech-customer-cell .label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--tech-muted);margin-bottom:3px}
+  .tech-customer-cell .value{font-size:11px;font-weight:800;line-height:1.28;word-break:break-word}
+  .tech-customer-address{display:flex;align-items:flex-start;gap:6px;font-size:10px;color:var(--tech-muted);line-height:1.28}
+  .tech-customer-address span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .tech-customer-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .tech-customer-actions .btn{border-radius:12px;min-height:46px;font-weight:800;padding:6px 4px}
+  .tech-action-mini{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1}
+  .tech-action-mini i{font-size:14px}
+  .tech-action-mini small{font-size:9px;font-weight:800;letter-spacing:.02em}
+  @media (max-width: 576px){
+    .tech-customer-meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+    .tech-customer-card{padding:8px;gap:6px}
+    .tech-customer-cell{padding:6px 7px;min-height:54px}
+    .tech-customer-cell .value{font-size:10.5px}
+    .tech-customer-actions .btn{min-height:44px}
+    .tech-customer-name{font-size:13px}
+  }
+</style>
+
+<div class="t-card">
+  <form class="tech-customer-toolbar" method="GET" action="/tech/customers">
+    <input type="text" class="form-control rounded-4" name="search" value="<%= search || '' %>" placeholder="Cari nama, nomor, PPPoE, alamat">
+    <select class="form-select rounded-4" name="status">
+      <option value="" <%= !filterStatus ? 'selected' : '' %>>Semua Status</option>
+      <option value="active" <%= filterStatus === 'active' ? 'selected' : '' %>>Aktif</option>
+      <option value="suspended" <%= filterStatus === 'suspended' ? 'selected' : '' %>>Suspend</option>
+      <option value="inactive" <%= filterStatus === 'inactive' ? 'selected' : '' %>>Nonaktif</option>
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i></button>
+    <% if (search || filterStatus) { %>
+      <a href="/tech/customers" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i></a>
+    <% } %>
+  </form>
+</div>
+
+<div class="tech-customer-list">
+  <% if (!customers || customers.length === 0) { %>
+    <div class="t-card text-center text-secondary">Belum ada pelanggan yang cocok.</div>
+  <% } %>
+  <% (customers || []).forEach((c) => { %>
+    <div class="t-card tech-customer-card">
+      <div class="tech-customer-head">
+        <div>
+          <div class="tech-customer-name"><%= c.name %></div>
+          <div class="tech-customer-sub"><%= c.phone || '-' %> &bull; <%= c.pppoe_username || c.genieacs_tag || '-' %></div>
+        </div>
+        <span class="badge-status <%= c.status === 'active' ? 'badge-resolved' : (c.status === 'suspended' ? 'badge-open' : 'badge-in_progress') %>">
+          <%= c.status === 'active' ? 'Aktif' : (c.status === 'suspended' ? 'Suspend' : 'Nonaktif') %>
+        </span>
+      </div>
+
+      <div class="tech-customer-chip-row">
+        <span class="badge-status <%= c.unpaid_count > 0 ? 'badge-open' : 'badge-resolved' %>"><%= c.unpaid_count > 0 ? `${c.unpaid_count} tagihan` : 'Lunas' %></span>
+        <span class="badge-status badge-in_progress">Traffic <%= (((Number(c.bytes_in || 0) || 0) + (Number(c.bytes_out || 0) || 0)) / (1024 * 1024 * 1024)).toFixed(2) %> GB</span>
+      </div>
+
+      <div class="tech-customer-meta">
+        <div class="tech-customer-cell">
+          <div class="label">Paket</div>
+          <div class="value"><%= c.package_name || '-' %><% if (c.package_name) { %><br><span style="font-size:10px;color:var(--tech-muted);font-weight:700"><%= (Number(c.speed_down || 0) / 1000).toFixed(0) %>/<%= (Number(c.speed_up || 0) / 1000).toFixed(0) %> Mbps</span><% } %></div>
+        </div>
+        <div class="tech-customer-cell">
+          <div class="label">Tagihan</div>
+          <div class="value"><%= c.unpaid_count > 0 ? `${c.unpaid_count} belum lunas` : 'Lunas' %></div>
+        </div>
+        <div class="tech-customer-cell">
+          <div class="label">Status Bayar</div>
+          <div class="value"><%= c.unpaid_count > 0 ? 'Belum lunas' : 'Sudah lunas' %></div>
+        </div>
+        <div class="tech-customer-cell">
+          <div class="label">Tag ONU</div>
+          <div class="value"><%= c.genieacs_tag || '-' %></div>
+        </div>
+      </div>
+
+      <div class="tech-customer-address">
+        <i class="bi bi-geo-alt"></i>
+        <span><%= c.address || '-' %></span>
+      </div>
+
+      <div class="tech-customer-actions">
+        <button type="button" class="btn btn-primary" onclick="openCustomerDetail(<%= c.id %>)" title="Detail">
+          <span class="tech-action-mini"><i class="bi bi-eye"></i><small>Detail</small></span>
+        </button>
+        <% if (c.unpaid_count > 0) { %>
+          <button type="button" class="btn btn-success" onclick="openCustomerDetail(<%= c.id %>)" title="Lunas">
+            <span class="tech-action-mini"><i class="bi bi-cash-coin"></i><small>Lunas</small></span>
+          </button>
+        <% } else { %>
+          <button type="button" class="btn btn-outline-secondary" disabled title="Lunas">
+            <span class="tech-action-mini"><i class="bi bi-check2-circle"></i><small>Lunas</small></span>
+          </button>
+        <% } %>
+        <% if (c.phone) { %>
+          <a class="btn btn-outline-success" href="https://wa.me/<%= encodeURIComponent(String(c.phone || '').replace(/\D/g, '')) %>" target="_blank" rel="noopener" title="WhatsApp"><span class="tech-action-mini"><i class="bi bi-whatsapp"></i><small>WA</small></span></a>
+        <% } else { %>
+          <button type="button" class="btn btn-outline-secondary" disabled title="WhatsApp"><span class="tech-action-mini"><i class="bi bi-whatsapp"></i><small>WA</small></span></button>
+        <% } %>
+        <a class="btn btn-outline-info" href="/tech/map" title="Peta"><span class="tech-action-mini"><i class="bi bi-geo-alt"></i><small>Peta</small></span></a>
+      </div>
+    </div>
+  <% }) %>
+</div>
+
+<%- include('../partials/customer_detail_modal', {
+  scope: 'tech',
+  allowPayment: true,
+  allowDeviceActions: true,
+  detailApiBase: '/tech/api/customers',
+  deviceApiBase: '/tech/api/device',
+  paymentApiBase: '/tech/api/customers'
+}) %>
+
+<%- include('partials/bottom_nav') %>

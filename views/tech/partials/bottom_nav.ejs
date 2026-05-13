@@ -7,6 +7,10 @@
       <i class="bi bi-briefcase-fill"></i>
       <span>Beranda</span>
     </a>
+    <a href="/tech/customers" class="nav-item <%= activePage === 'customers' ? 'active' : '' %>">
+      <i class="bi bi-people-fill"></i>
+      <span>Pelanggan</span>
+    </a>
     <a href="/tech/tasks" class="nav-item <%= activePage === 'tasks' ? 'active' : '' %>">
       <i class="bi bi-clipboard-check-fill"></i>
       <% if (safeTechNav.assignedTasks > 0) { %><span class="nav-count"><%= safeTechNav.assignedTasks > 99 ? '99+' : safeTechNav.assignedTasks %></span><% } %>

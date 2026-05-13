@@ -4,6 +4,12 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   'Listrik',
   'Bandwidth',
   'Gaji',
+  'Pemasangan Baru',
+  'Perbaikan Alat',
+  'Tukang Tagih',
+  'PDAM',
+  'Pulsa',
+  'Marketing',
   'Teknisi',
   'Transport',
   'Maintenance',
@@ -13,11 +19,34 @@ const DEFAULT_EXPENSE_CATEGORIES = [
 
 const DEFAULT_INCOME_CATEGORIES = [
   'Pembayaran Tagihan',
+  'Tripay / QRIS',
+  'Pendapatan Mitra',
   'Pemasangan Baru',
   'Penjualan Perangkat',
   'Deposit',
   'Pendapatan Lainnya'
 ];
+
+const ONLINE_PAYMENT_ACTORS = ['tripay', 'midtrans', 'xendit', 'duitku', 'qris static', 'qris', 'online'];
+const ONLINE_PAYMENT_NAME_SQL = `LOWER(TRIM(COALESCE(i.paid_by_name, ''))) IN (${ONLINE_PAYMENT_ACTORS.map((item) => `'${item}'`).join(', ')})`;
+const ONLINE_PAYMENT_SQL = `(${ONLINE_PAYMENT_NAME_SQL} OR LOWER(COALESCE(i.notes, '')) LIKE '%webhook%')`;
+const PARTNER_PAYMENT_SQL = `(COALESCE(i.paid_by_name, '') LIKE 'Agent %')`;
+const CASH_PAYMENT_SQL = `(NOT ${ONLINE_PAYMENT_SQL} AND NOT ${PARTNER_PAYMENT_SQL})`;
+
+function buildPeriodWhere(dateExpr, month = '', year = '', params = []) {
+  const monthNum = parseInt(month, 10);
+  const yearNum = parseInt(year, 10);
+  let where = 'WHERE 1=1';
+  if (Number.isFinite(yearNum) && yearNum > 2000) {
+    where += ` AND CAST(strftime('%Y', ${dateExpr}) AS INTEGER) = ?`;
+    params.push(yearNum);
+  }
+  if (Number.isFinite(monthNum) && monthNum >= 1 && monthNum <= 12) {
+    where += ` AND CAST(strftime('%m', ${dateExpr}) AS INTEGER) = ?`;
+    params.push(monthNum);
+  }
+  return where;
+}
 
 function normalizeDateInput(dateInput) {
   const raw = String(dateInput || '').trim();
@@ -116,18 +145,8 @@ function listEntries({ type = '', month = '', year = '', search = '', category =
 }
 
 function getSummary({ month = '', year = '' } = {}) {
-  const monthNum = parseInt(month, 10);
-  const yearNum = parseInt(year, 10);
-  let where = 'WHERE 1=1';
   const params = [];
-  if (Number.isFinite(yearNum) && yearNum > 2000) {
-    where += " AND CAST(strftime('%Y', entry_date) AS INTEGER) = ?";
-    params.push(yearNum);
-  }
-  if (Number.isFinite(monthNum) && monthNum >= 1 && monthNum <= 12) {
-    where += " AND CAST(strftime('%m', entry_date) AS INTEGER) = ?";
-    params.push(monthNum);
-  }
+  const where = buildPeriodWhere('entry_date', month, year, params);
   return db.prepare(`
     SELECT
       SUM(CASE WHEN type='income' THEN amount ELSE 0 END) as total_income,
@@ -137,6 +156,247 @@ function getSummary({ month = '', year = '' } = {}) {
     FROM bookkeeping_entries
     ${where}
   `).get(...params) || { total_income: 0, total_expense: 0, income_count: 0, expense_count: 0 };
+}
+
+function resolveExpenseBucketName(entry = {}) {
+  const haystack = `${entry.category || ''} ${entry.description || ''}`.toLowerCase();
+  if (/(gaji|karyawan|salary|insentif)/.test(haystack)) return 'salary';
+  if (/(pasang|pemasangan|install)/.test(haystack)) return 'installation';
+  if (/(perbaikan|alat|maintenance|sparepart|repair|teknisi)/.test(haystack)) return 'repair_tools';
+  if (/(bandwidth|internet upstream|ppoe upstream)/.test(haystack)) return 'bandwidth';
+  if (/(tagih|kolektor|collector)/.test(haystack)) return 'collection';
+  if (/(listrik|pdam|pulsa|token|air)/.test(haystack)) return 'utilities';
+  if (/(marketing|promosi|iklan|ads)/.test(haystack)) return 'marketing';
+  return 'other';
+}
+
+function normalizePaymentActor(name = '') {
+  const raw = String(name || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return { role: 'system', label: 'Sistem' };
+  if (lower.startsWith('kasir')) return { role: 'cashier', label: raw };
+  if (lower.startsWith('kolektor')) return { role: 'collector', label: raw };
+  if (lower.startsWith('teknisi')) return { role: 'technician', label: raw };
+  if (lower.startsWith('agent')) return { role: 'agent', label: raw };
+  if (lower.startsWith('admin')) return { role: 'admin', label: raw };
+  return { role: 'other', label: raw };
+}
+
+function isInvoiceOnlinePayment(row = {}) {
+  const paidBy = String(row.paid_by_name || row.paidByName || '').trim().toLowerCase();
+  const notes = String(row.notes || '').trim().toLowerCase();
+  return ONLINE_PAYMENT_ACTORS.includes(paidBy) || notes.includes('webhook');
+}
+
+function isInvoicePartnerPayment(row = {}) {
+  return String(row.paid_by_name || row.paidByName || '').trim().startsWith('Agent ');
+}
+
+function resolveInvoicePaymentChannelLabel(row = {}) {
+  if (isInvoicePartnerPayment(row)) return 'Mitra / Agent';
+  if (isInvoiceOnlinePayment(row)) {
+    const gateway = String(row.payment_gateway || row.gateway || '').trim();
+    return gateway || String(row.paid_by_name || row.paidByName || '').trim() || 'Online / QRIS';
+  }
+  return 'Cash / Manual';
+}
+
+function getDashboardDetails({ month = '', year = '' } = {}) {
+  const summary = getSummary({ month, year });
+
+  const invoiceParams = [];
+  const invoiceWhere = buildPeriodWhere('i.paid_at', month, year, invoiceParams);
+  const invoiceChannelSummary = db.prepare(`
+    SELECT
+      SUM(CASE
+        WHEN ${CASH_PAYMENT_SQL}
+        THEN i.amount ELSE 0 END) AS cash_amount,
+      COUNT(CASE
+        WHEN ${CASH_PAYMENT_SQL}
+        THEN 1 END) AS cash_count,
+      SUM(CASE
+        WHEN ${ONLINE_PAYMENT_SQL}
+        THEN i.amount ELSE 0 END) AS online_amount,
+      COUNT(CASE
+        WHEN ${ONLINE_PAYMENT_SQL}
+        THEN 1 END) AS online_count,
+      SUM(CASE
+        WHEN ${PARTNER_PAYMENT_SQL}
+        THEN i.amount ELSE 0 END) AS partner_amount,
+      COUNT(CASE
+        WHEN ${PARTNER_PAYMENT_SQL}
+        THEN 1 END) AS partner_count
+    FROM invoices i
+    WHERE LOWER(COALESCE(i.status, '')) = 'paid'
+      ${invoiceWhere.slice('WHERE 1=1'.length)}
+  `).get(...invoiceParams) || {};
+
+  const otherIncomeParams = [];
+  const otherIncomeWhere = buildPeriodWhere('entry_date', month, year, otherIncomeParams);
+  const otherIncomeSummary = db.prepare(`
+    SELECT
+      SUM(amount) AS total_amount,
+      COUNT(*) AS total_count
+    FROM bookkeeping_entries
+    ${otherIncomeWhere}
+      AND type = 'income'
+      AND COALESCE(source_type, '') != 'invoice'
+  `).get(...otherIncomeParams) || {};
+
+  const incomeBreakdown = {
+    total: Number(summary.total_income || 0),
+    cash: {
+      amount: Number(invoiceChannelSummary.cash_amount || 0),
+      count: Number(invoiceChannelSummary.cash_count || 0)
+    },
+    online: {
+      amount: Number(invoiceChannelSummary.online_amount || 0),
+      count: Number(invoiceChannelSummary.online_count || 0)
+    },
+    other: {
+      amount: Number(otherIncomeSummary.total_amount || 0),
+      count: Number(otherIncomeSummary.total_count || 0)
+    },
+    partner: {
+      amount: Number(invoiceChannelSummary.partner_amount || 0),
+      count: Number(invoiceChannelSummary.partner_count || 0)
+    }
+  };
+
+  const expenseParams = [];
+  const expenseWhere = buildPeriodWhere('entry_date', month, year, expenseParams);
+  const expenseRows = db.prepare(`
+    SELECT category, description, amount
+    FROM bookkeeping_entries
+    ${expenseWhere}
+      AND type = 'expense'
+  `).all(...expenseParams);
+
+  const expenseBreakdown = {
+    total: Number(summary.total_expense || 0),
+    salary: { amount: 0, count: 0, label: 'Gaji Karyawan' },
+    installation: { amount: 0, count: 0, label: 'Pasang Baru' },
+    repair_tools: { amount: 0, count: 0, label: 'Perbaikan / Alat' },
+    bandwidth: { amount: 0, count: 0, label: 'Bayar Bandwidth' },
+    collection: { amount: 0, count: 0, label: 'Tukang Tagih' },
+    utilities: { amount: 0, count: 0, label: 'Listrik / PDAM / Pulsa' },
+    marketing: { amount: 0, count: 0, label: 'Marketing' },
+    other: { amount: 0, count: 0, label: 'Lainnya' }
+  };
+
+  for (const row of expenseRows) {
+    const bucket = resolveExpenseBucketName(row);
+    expenseBreakdown[bucket].amount += Number(row.amount || 0);
+    expenseBreakdown[bucket].count += 1;
+  }
+
+  const actorRows = db.prepare(`
+    SELECT
+      COALESCE(i.paid_by_name, '') AS paid_by_name,
+      SUM(i.amount) AS total_amount,
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN ${ONLINE_PAYMENT_SQL} THEN i.amount ELSE 0 END) AS online_amount,
+      SUM(CASE WHEN ${CASH_PAYMENT_SQL} THEN i.amount ELSE 0 END) AS cash_amount,
+      MAX(i.paid_at) AS last_paid_at
+    FROM invoices i
+    WHERE LOWER(COALESCE(i.status, '')) = 'paid'
+      ${invoiceWhere.slice('WHERE 1=1'.length)}
+    GROUP BY COALESCE(i.paid_by_name, '')
+    ORDER BY total_amount DESC, total_count DESC, paid_by_name ASC
+  `).all(...invoiceParams).map((row) => {
+    const actor = normalizePaymentActor(row.paid_by_name);
+    return {
+      role: actor.role,
+      label: actor.label,
+      amount: Number(row.total_amount || 0),
+      count: Number(row.total_count || 0),
+      cashAmount: Number(row.cash_amount || 0),
+      onlineAmount: Number(row.online_amount || 0),
+      lastPaidAt: row.last_paid_at || ''
+    };
+  });
+
+  const recentPayments = db.prepare(`
+    SELECT
+      i.id,
+      i.customer_id,
+      i.amount,
+      i.period_month,
+      i.period_year,
+      i.paid_at,
+      i.paid_by_name,
+      i.payment_gateway,
+      i.notes,
+      c.name AS customer_name
+    FROM invoices i
+    LEFT JOIN customers c ON c.id = i.customer_id
+    WHERE LOWER(COALESCE(i.status, '')) = 'paid'
+      ${invoiceWhere.slice('WHERE 1=1'.length)}
+    ORDER BY datetime(i.paid_at) DESC, i.id DESC
+    LIMIT 16
+  `).all(...invoiceParams).map((row) => {
+    const actor = normalizePaymentActor(row.paid_by_name);
+    return {
+      id: Number(row.id || 0),
+      customerName: row.customer_name || 'Pelanggan',
+      amount: Number(row.amount || 0),
+      periodMonth: Number(row.period_month || 0),
+      periodYear: Number(row.period_year || 0),
+      paidAt: row.paid_at || '',
+      actorLabel: actor.label,
+      actorRole: actor.role,
+      gateway: resolveInvoicePaymentChannelLabel(row)
+    };
+  });
+
+  const approvalParams = [];
+  const approvalWhere = buildPeriodWhere('decided_at', month, year, approvalParams);
+  const approvalRows = db.prepare(`
+    SELECT
+      cpr.id,
+      cpr.amount,
+      cpr.decided_by_name,
+      cpr.decided_at,
+      col.name AS collector_name,
+      c.name AS customer_name
+    FROM collector_payment_requests cpr
+    LEFT JOIN collectors col ON col.id = cpr.collector_id
+    LEFT JOIN customers c ON c.id = cpr.customer_id
+    ${approvalWhere}
+      AND LOWER(COALESCE(cpr.status, '')) = 'approved'
+    ORDER BY datetime(cpr.decided_at) DESC, cpr.id DESC
+    LIMIT 12
+  `).all(...approvalParams).map((row) => ({
+    id: Number(row.id || 0),
+    amount: Number(row.amount || 0),
+    approvedBy: String(row.decided_by_name || '').trim() || 'Admin',
+    collectorName: row.collector_name || '-',
+    customerName: row.customer_name || 'Pelanggan',
+    decidedAt: row.decided_at || ''
+  }));
+
+  const netAmount = Number(summary.total_income || 0) - Number(summary.total_expense || 0);
+  const expenseVsIncomePercent = Number(summary.total_income || 0) > 0
+    ? Math.min(999, Math.round((Number(summary.total_expense || 0) / Number(summary.total_income || 0)) * 100))
+    : 0;
+  const profitMarginPercent = Number(summary.total_income || 0) > 0
+    ? Math.round((netAmount / Number(summary.total_income || 0)) * 100)
+    : 0;
+
+  return {
+    income: incomeBreakdown,
+    expense: expenseBreakdown,
+    comparison: {
+      incomeAmount: Number(summary.total_income || 0),
+      expenseAmount: Number(summary.total_expense || 0),
+      netAmount,
+      expenseVsIncomePercent,
+      profitMarginPercent
+    },
+    actors: actorRows,
+    recentPayments,
+    approvals: approvalRows
+  };
 }
 
 function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
@@ -250,6 +510,7 @@ module.exports = {
   deleteEntry,
   listEntries,
   getSummary,
+  getDashboardDetails,
   upsertInvoiceIncomeEntry,
   removeInvoiceIncomeEntry,
   syncPaidInvoiceIncomeEntries,

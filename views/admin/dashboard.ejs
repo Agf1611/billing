@@ -354,7 +354,7 @@
 
   <div class="page">
     <!-- TAB NAVIGATION -->
-    <div class="tab-bar">
+    <div class="tab-bar" style="display:none">
       <button class="tab-btn active" id="tab-dash" onclick="showTab('dashboard')">
         <i class="bi bi-speedometer2"></i><%= t('admin.nav.dashboard', 'Dashboard') %>
       </button>
@@ -551,13 +551,13 @@
             <div class="card-hd"><h6><i class="bi bi-sliders"></i> Kontrol Cepat</h6></div>
             <div class="card-bd">
               <div class="ops-mini-grid">
-                <button class="ops-mini-card" type="button" onclick="showTab('monitoring')">
+                <a href="/admin/monitoring" class="ops-mini-card">
                   <i class="bi bi-router"></i>
                   <div>
                     <strong>Monitoring ONU</strong>
                     <span>Cek status perangkat realtime</span>
                   </div>
-                </button>
+                </a>
                 <a href="/admin/mikrotik" class="ops-mini-card">
                   <i class="bi bi-hdd-network"></i>
                   <div>
@@ -587,7 +587,7 @@
           <div class="card" style="flex:1">
             <div class="card-hd">
               <h6><i class="bi bi-exclamation-circle"></i> <%= t('admin.dashboard.latest_offline', 'ONU Offline Terbaru') %></h6>
-              <button class="btn btn-g btn-sm" onclick="showTab('monitoring')"><i class="bi bi-arrow-right"></i> <%= t('common.view_all', 'Lihat Semua') %></button>
+              <a href="/admin/monitoring" class="btn btn-g btn-sm"><i class="bi bi-arrow-right"></i> <%= t('common.view_all', 'Lihat Semua') %></a>
             </div>
             <div id="offline-list" style="padding:0">
               <div class="text-center text-muted" style="padding:24px;font-size:13px"><%= t('common.loading', 'Memuat data...') %></div>

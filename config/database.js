@@ -55,6 +55,10 @@ db.exec(`
     name TEXT NOT NULL,
     phone TEXT DEFAULT '',
     address TEXT DEFAULT '',
+    nik TEXT DEFAULT '',
+    npwp TEXT DEFAULT '',
+    house_photo_url TEXT DEFAULT '',
+    ktp_photo_url TEXT DEFAULT '',
     package_id INTEGER REFERENCES packages(id) ON DELETE SET NULL,
     genieacs_tag TEXT DEFAULT '',
     pppoe_username TEXT DEFAULT '',
@@ -175,6 +179,19 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS pppoe_monitoring_state (
+    router_key TEXT NOT NULL,
+    router_id INTEGER REFERENCES routers(id) ON DELETE CASCADE,
+    username TEXT NOT NULL,
+    is_online INTEGER NOT NULL DEFAULT 0,
+    last_online_at DATETIME,
+    offline_since DATETIME,
+    last_logout_at DATETIME,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (router_key, username)
+  );
+
   CREATE TABLE IF NOT EXISTS routers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -182,6 +199,7 @@ db.exec(`
     port INTEGER DEFAULT 8728,
     user TEXT NOT NULL,
     password TEXT NOT NULL,
+    os_mode TEXT DEFAULT 'auto',
     description TEXT DEFAULT '',
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -468,6 +486,18 @@ try {
   db.exec("ALTER TABLE customers ADD COLUMN mac_address TEXT");
 } catch (e) { /* ignore if already exists */ }
 try {
+  db.exec("ALTER TABLE customers ADD COLUMN nik TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN npwp TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN house_photo_url TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN ktp_photo_url TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
   db.exec("ALTER TABLE odps ADD COLUMN port_capacity INTEGER NOT NULL DEFAULT 16");
 } catch (e) { /* ignore if already exists */ }
 
@@ -511,6 +541,7 @@ try { db.exec("ALTER TABLE olts ADD COLUMN web_password TEXT DEFAULT 'admin'"); 
 try { db.exec("ALTER TABLE olts ADD COLUMN api_base_url TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE olts ADD COLUMN telnet_port INTEGER DEFAULT 23"); } catch (e) {}
 try { db.exec("ALTER TABLE olts ADD COLUMN enable_password TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE routers ADD COLUMN os_mode TEXT DEFAULT 'auto'"); } catch (e) {}
 
 try { db.exec("ALTER TABLE voucher_batches ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 try { db.exec("ALTER TABLE vouchers ADD COLUMN last_seen_comment TEXT DEFAULT ''"); } catch (e) {}
@@ -728,6 +759,7 @@ try { db.exec("ALTER TABLE package_change_requests ADD COLUMN rejected_at DATETI
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN cancelled_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN applied_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN reviewed_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN last_logout_at DATETIME"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_customer ON package_change_requests(customer_id)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at)"); } catch (e) {}

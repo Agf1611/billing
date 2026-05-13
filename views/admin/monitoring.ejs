@@ -1,596 +1,854 @@
 <!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <%- include('partials/theme_init') %>
   <title><%= title %> | <%= company %></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <style>
-    /* Health Status Badge */
-    .health-badge {
-      font-size: 20px;
-      padding: 12px 24px;
-      border-radius: 10px;
-      font-weight: 600;
-      display: inline-block;
-      margin: 10px 0;
+    .onu-shell{display:grid;gap:14px}
+    .onu-hero{
+      display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+      padding:14px 16px;border-radius:22px;background:var(--surface-strong);border:1px solid var(--border);box-shadow:var(--shadow-soft)
     }
-    .health-healthy {
-      background: var(--sdim);
-      color: var(--success);
-      border: 1px solid rgba(63, 185, 80, 0.3);
+    .onu-hero h2{margin:0;font-size:22px;line-height:1.05;letter-spacing:-0.04em}
+    .onu-hero p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
+    .onu-hero-badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+    .onu-pill{
+      display:inline-flex;align-items:center;gap:7px;padding:8px 11px;border-radius:999px;
+      background:var(--surface);border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text)
     }
-    .health-warning {
-      background: var(--wdim);
-      color: var(--warning);
-      border: 1px solid rgba(210, 153, 34, 0.3);
+    .onu-pill i{font-size:12px}
+    .onu-pill.good{background:rgba(63,185,80,.12);color:var(--success);border-color:rgba(63,185,80,.2)}
+    .onu-pill.warn{background:rgba(245,158,11,.12);color:var(--warning);border-color:rgba(245,158,11,.2)}
+    .onu-pill.bad{background:rgba(239,68,68,.12);color:var(--danger);border-color:rgba(239,68,68,.2)}
+
+    .onu-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    .onu-stat{
+      position:relative;padding:14px 14px 12px;border-radius:18px;background:var(--surface-strong);
+      border:1px solid var(--border);box-shadow:var(--shadow-soft);overflow:hidden
     }
-    .health-critical {
-      background: var(--ddim);
-      color: var(--danger);
-      border: 1px solid rgba(248, 81, 73, 0.3);
+    .onu-stat::after{
+      content:'';position:absolute;inset:auto -26px -32px auto;width:88px;height:88px;border-radius:50%;
+      background:var(--tone-soft, rgba(99,102,241,.16))
+    }
+    .onu-stat .icon{
+      position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;
+      width:34px;height:34px;border-radius:12px;background:var(--icon-soft, rgba(99,102,241,.12));color:var(--icon-color, var(--primary));font-size:16px
+    }
+    .onu-stat small{position:relative;z-index:1;display:block;margin-top:10px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+    .onu-stat strong{position:relative;z-index:1;display:block;margin-top:4px;font-size:24px;line-height:1;font-weight:900;letter-spacing:-.05em}
+    .onu-stat span{position:relative;z-index:1;display:block;margin-top:4px;font-size:11px;color:var(--muted)}
+    .tone-total{--tone-soft:rgba(99,102,241,.18);--icon-soft:rgba(99,102,241,.14);--icon-color:#8b95ff}
+    .tone-on{--tone-soft:rgba(34,197,94,.18);--icon-soft:rgba(34,197,94,.14);--icon-color:#49d17d}
+    .tone-off{--tone-soft:rgba(239,68,68,.18);--icon-soft:rgba(239,68,68,.14);--icon-color:#ff6f7d}
+    .tone-rate{--tone-soft:rgba(6,182,212,.18);--icon-soft:rgba(6,182,212,.14);--icon-color:#4ad8eb}
+
+    .onu-tools{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:20px;
+      background:var(--surface-strong);border:1px solid var(--border);box-shadow:var(--shadow-soft)
+    }
+    .onu-tools .sinput{flex:1 1 260px}
+    .onu-tools .fs{min-width:140px}
+    .onu-tools-meta{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    .onu-list-card,
+    .onu-summary-card{
+      background:var(--surface-strong);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow-soft)
+    }
+    .onu-list-head,
+    .onu-summary-head{
+      display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)
+    }
+    .onu-list-head h3,
+    .onu-summary-head h3{margin:0;font-size:15px;font-weight:800;letter-spacing:-.03em}
+    .onu-list-head p,
+    .onu-summary-head p{margin:2px 0 0;font-size:11px;color:var(--muted)}
+    .onu-count{
+      display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 12px;border-radius:999px;
+      background:var(--surface);border:1px solid var(--border);font-size:12px;font-weight:800;color:var(--text)
+    }
+    .onu-table-wrap{padding:0 12px 12px}
+    .onu-table{width:100%;border-collapse:collapse}
+    .onu-table th{padding:12px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;border-bottom:1px solid var(--border)}
+    .onu-table td{padding:12px 10px;vertical-align:top;border-bottom:1px solid var(--border);font-size:13px}
+    .onu-table tbody tr:last-child td{border-bottom:none}
+    .onu-device-name{font-weight:800;font-size:13px;line-height:1.2}
+    .onu-sub{font-size:11px;color:var(--muted);margin-top:3px}
+    .onu-chip{
+      display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800
+    }
+    .onu-chip.online{background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.22)}
+    .onu-chip.offline{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.22)}
+    .onu-chip i{font-size:9px}
+    .onu-metrics{display:grid;gap:4px}
+    .onu-actions{display:flex;flex-wrap:wrap;gap:6px}
+    .onu-actions .btn{min-width:auto}
+    .onu-loading{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
+    .onu-mobile-list{display:none;padding:0 12px 12px;gap:10px}
+    .onu-mobile-card{
+      padding:12px;border-radius:18px;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-soft)
+    }
+    .onu-mobile-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .onu-mobile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+    .onu-mobile-item{
+      padding:9px 10px;border-radius:14px;background:var(--panel-soft);border:1px solid var(--panel-border)
+    }
+    .onu-mobile-item small{display:block;font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+    .onu-mobile-item strong{display:block;margin-top:4px;font-size:12px;line-height:1.25;word-break:break-word}
+    .onu-mobile-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+    .onu-mobile-actions .btn{width:100%;justify-content:center;padding:10px 0}
+
+    .onu-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px}
+    .onu-summary-body{padding:0 14px 14px}
+    .onu-inline-list{display:grid;gap:8px}
+    .onu-inline-row{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:14px;
+      background:var(--surface);border:1px solid var(--border)
+    }
+    .onu-inline-row strong{font-size:12px}
+    .onu-inline-row span{font-size:11px;color:var(--muted)}
+    .onu-tiny-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .onu-tiny-card{
+      padding:11px 12px;border-radius:16px;background:var(--surface);border:1px solid var(--border)
+    }
+    .onu-tiny-card small{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800}
+    .onu-tiny-card strong{display:block;margin-top:5px;font-size:14px;line-height:1.15;font-weight:900}
+    .onu-tiny-card span{display:block;margin-top:3px;font-size:11px;color:var(--muted)}
+
+    .onu-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+    .onu-detail-table{width:100%;border-collapse:collapse}
+    .onu-detail-table td{padding:7px 0;vertical-align:top;font-size:13px;border-bottom:1px solid rgba(148,163,184,.12)}
+    .onu-detail-table tr:last-child td{border-bottom:none}
+    .onu-detail-table td:first-child{width:42%;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+
+    body[data-theme="light"] .onu-hero,
+    body[data-theme="light"] .onu-stat,
+    body[data-theme="light"] .onu-tools,
+    body[data-theme="light"] .onu-list-card,
+    body[data-theme="light"] .onu-summary-card{
+      box-shadow:0 18px 36px rgba(168,176,210,.14)
+    }
+    body[data-theme="light"] .onu-mobile-card,
+    body[data-theme="light"] .onu-inline-row,
+    body[data-theme="light"] .onu-tiny-card,
+    body[data-theme="light"] .onu-mobile-item{
+      background:rgba(255,255,255,.92)
     }
 
-    /* Progress Bar */
-    .progress {
-      height: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      background: var(--bg3);
-      border-radius: 6px;
-      overflow: hidden;
-      display: flex;
+    @media (max-width: 960px){
+      .onu-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .onu-summary-grid{grid-template-columns:1fr}
+      .onu-table-wrap{display:none}
+      .onu-mobile-list{display:grid}
     }
-    .progress-bar {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      transition: width .6s ease;
+    @media (max-width: 640px){
+      .onu-hero{padding:12px 12px 13px;border-radius:18px;flex-direction:column}
+      .onu-hero h2{font-size:18px}
+      .onu-hero p{font-size:11px}
+      .onu-hero-badges{justify-content:flex-start}
+      .onu-stat-grid{gap:8px}
+      .onu-stat{padding:12px 12px 11px;border-radius:16px}
+      .onu-stat strong{font-size:21px}
+      .onu-tools{padding:10px 11px;border-radius:18px}
+      .onu-tools .sinput{flex-basis:100%}
+      .onu-tools .fs,.onu-tools .btn{width:100%}
+      .onu-tools-meta{width:100%;justify-content:flex-start;margin-left:0}
+      .onu-list-head,.onu-summary-head{padding:12px 12px}
+      .onu-list-head h3,.onu-summary-head h3{font-size:14px}
+      .onu-mobile-grid{grid-template-columns:1fr 1fr}
+      .onu-mobile-actions{gap:6px}
+      .onu-mobile-actions .btn{padding:9px 0}
+      .onu-tiny-grid{grid-template-columns:1fr 1fr}
+      .onu-detail-grid{grid-template-columns:1fr}
+      .mo .mb{max-width:100%!important;width:calc(100% - 18px)!important;margin:9px}
+      .mbody{padding:12px!important}
+      .mh,.mf{padding:11px 12px!important}
     }
-    .bg-success { background-color: var(--success); }
-    .bg-warning { background-color: var(--warning); }
-    .bg-danger { background-color: var(--danger); }
-
-    /* Issue/Warning Items */
-    .issue-item, .warning-item {
-      padding: 12px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border-left: 4px solid;
-      font-size: 13px;
-    }
-    .issue-item {
-      background: var(--ddim);
-      border-left-color: var(--danger);
-    }
-    .warning-item {
-      background: var(--wdim);
-      border-left-color: var(--warning);
-    }
-
-    /* Metric Card Customization */
-    .metric-card {
-      text-align: center;
-      padding: 20px;
-      background: var(--bg3);
-      border-radius: 12px;
-      border: 1px solid var(--border);
-    }
-    .metric-card h3 {
-      font-size: 28px;
-      font-weight: 700;
-      margin: 0;
-      color: var(--text);
-    }
-    .metric-card p {
-      color: var(--muted);
-      margin: 4px 0 8px 0;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Chart Container */
-    .chart-container {
-      position: relative;
-      height: 250px;
-    }
-
-    /* Grid layout fixes */
-    .mon-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 18px;
-      margin-bottom: 18px;
-    }
-    @media (max-width: 768px) {
-      .mon-grid { grid-template-columns: 1fr; }
-    }
-    .chd-d { background: var(--ddim); color: var(--danger); border-bottom: 1px solid var(--danger); }
-    .chd-w { background: var(--wdim); color: var(--warning); border-bottom: 1px solid var(--warning); }
-    .stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
-    .mb0 { margin-bottom: 0; }
-    .wb-all { word-break: break-all; }
-    .fs11 { font-size: 11px; }
-    .mh250 { max-height: 250px; }
-    .mh300 { max-height: 300px; }
-    .err-log-box { overflow-y: auto; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; }
-    .fs12 { font-size: 12px; }
-    .fs10 { font-size: 10px; }
-    .db { display: block; }
-    .m10-0 { margin: 10px 0; }
   </style>
 </head>
 <body>
 <%- include('partials/sidebar', { activePage: activePage || 'monitoring', company }) %>
-
+<%
+  const routerDeps = Array.isArray(dependencies?.mikrotik) ? dependencies.mikrotik : [];
+  const routerOnline = routerDeps.filter((item) => item && item.status === 'online').length;
+  const systemStatusClass =
+    healthStatus.status === 'healthy' ? 'good' :
+    healthStatus.status === 'warning' ? 'warn' : 'bad';
+%>
 <div class="mw">
-  <!-- TOPBAR -->
   <div class="topbar">
     <div class="tb-title">
       <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
-      <i class="bi bi-activity"></i>
-      <span id="page-title">Monitoring Sistem</span>
+      <i class="bi bi-broadcast-pin"></i>
+      <span id="page-title">Monitoring ONU</span>
     </div>
     <div class="tb-right">
-      <button onclick="location.reload()" class="btn btn-g btn-sm">
+      <button class="btn btn-g btn-sm" type="button" onclick="refreshAll()">
         <i class="bi bi-arrow-clockwise"></i> Refresh
       </button>
       <span class="adm-badge">
-        <i class="bi bi-person-fill"></i> 
+        <i class="bi bi-person-fill"></i>
         <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %>
       </span>
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
 
-  <!-- CONTENT -->
   <div class="page">
+    <div class="onu-shell">
+      <section class="onu-hero">
+        <div>
+          <h2>Monitoring ONU</h2>
+          <p>Pantau status perangkat, cari pelanggan, dan ambil tindakan cepat tanpa pindah ke dashboard.</p>
+        </div>
+        <div class="onu-hero-badges">
+          <span class="onu-pill <%= systemStatusClass %>">
+            <i class="bi bi-heart-pulse"></i> Sistem <%= String(healthStatus.status || '').toUpperCase() %>
+          </span>
+          <span class="onu-pill <%= dependencies.genieacs.status === 'online' ? 'good' : 'bad' %>">
+            <i class="bi bi-router"></i> GenieACS <%= String(dependencies.genieacs.status || '-').toUpperCase() %>
+          </span>
+          <span class="onu-pill <%= routerOnline > 0 ? 'good' : 'warn' %>">
+            <i class="bi bi-hdd-network"></i> MikroTik <%= routerOnline %>/<%= routerDeps.length %>
+          </span>
+        </div>
+      </section>
 
-    <!-- Health Status -->
-    <div class="card mb16">
-      <div class="card-bd text-center">
-        <h6 class="mb16"><%= t('admin.monitoring.system_health', 'Status Kesehatan Sistem') %></h6>
-        <div class="health-badge health-<%= healthStatus.status %>">
-          <i class="bi bi-<%= healthStatus.status === 'healthy' ? 'check-circle' : healthStatus.status === 'warning' ? 'exclamation-triangle' : 'x-circle' %>"></i>
-          <%= healthStatus.status.toUpperCase() %>
+      <section class="onu-stat-grid">
+        <div class="onu-stat tone-total">
+          <div class="icon"><i class="bi bi-router"></i></div>
+          <small>Total ONU</small>
+          <strong id="onu-total">-</strong>
+          <span>Perangkat terdaftar</span>
         </div>
-        <p class="text-muted mt-2 fs12">Update terakhir: <%= new Date(healthStatus.timestamp).toLocaleString('id-ID') %></p>
-      </div>
-    </div>
+        <div class="onu-stat tone-on">
+          <div class="icon"><i class="bi bi-wifi"></i></div>
+          <small>Online</small>
+          <strong id="onu-online">-</strong>
+          <span>Masih aktif</span>
+        </div>
+        <div class="onu-stat tone-off">
+          <div class="icon"><i class="bi bi-wifi-off"></i></div>
+          <small>Offline</small>
+          <strong id="onu-offline">-</strong>
+          <span>Perlu dicek</span>
+        </div>
+        <div class="onu-stat tone-rate">
+          <div class="icon"><i class="bi bi-activity"></i></div>
+          <small>Rasio Online</small>
+          <strong id="onu-ratio">-%</strong>
+          <span id="live-time">Update: -</span>
+        </div>
+      </section>
 
-    <!-- Issues and Warnings -->
-    <% if (healthStatus.issues.length > 0 || healthStatus.warnings.length > 0) { %>
-    <div class="mon-grid">
-      <% if (healthStatus.issues.length > 0) { %>
-      <div class="card">
-        <div class="card-hd chd-d">
-          <h6><i class="bi bi-exclamation-triangle-fill"></i> Issues (<%= healthStatus.issues.length %>)</h6>
+      <section class="onu-tools">
+        <div class="sinput">
+          <i class="bi bi-search"></i>
+          <input class="fc" id="search-device" placeholder="Cari tag, serial number, IP, atau username PPPoE">
         </div>
-        <div class="card-bd">
-          <% healthStatus.issues.forEach(issue => {
-            if (issue) { %>
-          <div class="issue-item">
-            <i class="bi bi-x-circle-fill"></i> <%= issue %>
-          </div>
-          <% } }) %>
+        <select class="fs" id="filter-status">
+          <option value="all">Semua Status</option>
+          <option value="online">Online</option>
+          <option value="offline">Offline</option>
+        </select>
+        <button class="btn btn-p btn-sm" type="button" onclick="refreshAll()">
+          <i class="bi bi-arrow-repeat"></i> Muat Ulang
+        </button>
+        <div class="onu-tools-meta">
+          <span class="live-dot"></span>
+          <span>Realtime GenieACS</span>
         </div>
-      </div>
-      <% } %>
-      
-      <% if (healthStatus.warnings.length > 0) { %>
-      <div class="card">
-        <div class="card-hd chd-w">
-          <h6><i class="bi bi-exclamation-triangle"></i> Warnings (<%= healthStatus.warnings.length %>)</h6>
-        </div>
-        <div class="card-bd">
-          <% healthStatus.warnings.forEach(warning => {
-            if (warning) { %>
-          <div class="warning-item">
-            <i class="bi bi-exclamation-circle"></i> <%= warning %>
-          </div>
-          <% } }) %>
-        </div>
-      </div>
-      <% } %>
-    </div>
-    <% } %>
+      </section>
 
-    <!-- System Metrics -->
-    <div class="card mb16">
-      <div class="card-hd">
-        <h6><i class="bi bi-cpu"></i> Metrik Sistem</h6>
-      </div>
-      <div class="card-bd">
-        <div class="stat-grid mb0">
-          <!-- CPU -->
-          <div class="metric-card">
-            <p>CPU Usage</p>
-            <h3><%= healthStatus.metrics.system.cpu.usage %>%</h3>
-            <div class="progress mt-2 m10-0">
-              <div class="progress-bar <%= parseFloat(healthStatus.metrics.system.cpu.usage) > 80 ? 'bg-danger' : parseFloat(healthStatus.metrics.system.cpu.usage) > 60 ? 'bg-warning' : 'bg-success' %>"
-                   id="cpuProgressBar">
-              </div>
-            </div>
-            <small class="text-muted fs10 db">
-              <%= healthStatus.metrics.system.cpu.cores %> cores &bull; <%= healthStatus.metrics.system.cpu.model %>
-            </small>
-          </div>
-          <!-- Memory -->
-          <div class="metric-card">
-            <p>Memory Usage</p>
-            <h3><%= healthStatus.metrics.system.memory.percentage %>%</h3>
-            <div class="progress mt-2 m10-0">
-              <div class="progress-bar <%= parseFloat(healthStatus.metrics.system.memory.percentage) > 80 ? 'bg-danger' : parseFloat(healthStatus.metrics.system.memory.percentage) > 60 ? 'bg-warning' : 'bg-success' %>"
-                   id="memoryProgressBar">
-              </div>
-            </div>
-            <small class="text-muted fs10 db">
-              <%= healthStatus.metrics.system.memory.used %> / <%= healthStatus.metrics.system.memory.total %>
-            </small>
-          </div>
-          <!-- Load Average -->
-          <div class="metric-card">
-            <p>Load Average (1 min)</p>
-            <h3><%= healthStatus.metrics.system.loadAverage['1min'] %></h3>
-            <div class="progress mt-2 m10-0">
-              <div class="progress-bar <%= parseFloat(healthStatus.metrics.system.loadAverage['1min']) > healthStatus.metrics.system.cpu.cores * 2 ? 'bg-danger' : parseFloat(healthStatus.metrics.system.loadAverage['1min']) > healthStatus.metrics.system.cpu.cores ? 'bg-warning' : 'bg-success' %>"
-                   id="loadProgressBar">
-              </div>
-            </div>
-            <small class="text-muted fs10 db">
-              5m: <%= healthStatus.metrics.system.loadAverage['5min'] %> &bull; 15m: <%= healthStatus.metrics.system.loadAverage['15min'] %>
-            </small>
-          </div>
-          <!-- Disk Usage -->
-          <div class="metric-card">
-            <p>Disk Usage</p>
-            <h3><%= healthStatus.metrics.disk.percentage %></h3>
-            <div class="progress mt-2 m10-0">
-              <div class="progress-bar <%= healthStatus.metrics.disk.percentage !== 'N/A' && parseFloat(healthStatus.metrics.disk.percentage.replace('%', '')) > 80 ? 'bg-danger' : healthStatus.metrics.disk.percentage !== 'N/A' && parseFloat(healthStatus.metrics.disk.percentage.replace('%', '')) > 60 ? 'bg-warning' : 'bg-success' %>"
-                   id="diskProgressBar">
-              </div>
-            </div>
-            <small class="text-muted fs10 db">
-              Used: <%= healthStatus.metrics.disk.used %> / <%= healthStatus.metrics.disk.total %>
-            </small>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Performance Charts -->
-    <div class="mon-grid">
-      <div class="card">
-        <div class="card-hd">
-          <h6><i class="bi bi-graph-up"></i> CPU Usage History</h6>
-        </div>
-        <div class="card-bd">
-          <div class="chart-container">
-            <canvas id="cpuChart"></canvas>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-hd">
-          <h6><i class="bi bi-graph-up"></i> Memory Usage History</h6>
-        </div>
-        <div class="card-bd">
-          <div class="chart-container">
-            <canvas id="memoryChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Database Info -->
-    <div class="card mb16">
-      <div class="card-hd">
-        <h6><i class="bi bi-database"></i> Database Info</h6>
-      </div>
-      <div class="card-bd">
-        <div class="mon-grid mb0">
+      <section class="onu-list-card">
+        <div class="onu-list-head">
           <div>
-            <table class="dtbl">
-              <tr>
-                <td class="text-muted">Size</td>
-                <td class="fw6"><%= healthStatus.metrics.database.size %></td>
-              </tr>
-              <tr>
-                <td class="text-muted">Tables</td>
-                <td class="fw6"><%= healthStatus.metrics.database.totalTables %></td>
-              </tr>
-              <tr>
-                <td class="text-muted">Path</td>
-                <td class="fw6 wb-all fs11"><%= healthStatus.metrics.database.path %></td>
-              </tr>
-            </table>
+            <h3>Daftar ONU</h3>
+            <p>Versi mobile dibuat lebih padat supaya cepat discan dari HP.</p>
           </div>
-          <div class="tbl-wrap mh250">
-            <table class="dtbl">
-              <thead>
-                <tr>
-                  <th>Table</th>
-                  <th class="num">Records</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% if (healthStatus.metrics.database.tables && typeof healthStatus.metrics.database.tables === 'object' && healthStatus.metrics.database.tables !== null) {
-                   Object.keys(healthStatus.metrics.database.tables).forEach(tableName => { %>
-                  <tr>
-                    <td><%= tableName %></td>
-                    <td class="num"><%= healthStatus.metrics.database.tables[tableName] %></td>
-                  </tr>
-                  <% }) } else { %>
-                <tr>
-                  <td colspan="2" class="text-center text-muted">No table data available</td>
-                </tr>
-                <% } %>
-              </tbody>
-            </table>
-          </div>
+          <span class="onu-count" id="device-count">-</span>
         </div>
-      </div>
-    </div>
-
-    <!-- Performance Summary -->
-    <div class="card mb16">
-      <div class="card-hd">
-        <h6><i class="bi bi-journal-text"></i> Ringkasan Performa (10 Sample Terakhir)</h6>
-      </div>
-      <div class="card-bd">
-        <div class="stat-grid stat-grid-3 mb0">
-          <div>
-            <p class="sc-label">Rata-rata</p>
-            <table class="dtbl">
+        <div id="loading-devices" class="onu-loading">Memuat data ONU...</div>
+        <div class="onu-table-wrap">
+          <table class="onu-table">
+            <thead>
               <tr>
-                <td class="text-muted">CPU</td>
-                <td class="fw6"><%= performanceSummary.averages.cpu %>%</td>
+                <th>Pelanggan</th>
+                <th>Perangkat</th>
+                <th>Jaringan</th>
+                <th>Status</th>
+                <th>Aksi</th>
               </tr>
-              <tr>
-                <td class="text-muted">Memory</td>
-                <td class="fw6"><%= performanceSummary.averages.memory %>%</td>
-              </tr>
-              <tr>
-                <td class="text-muted">Load (1m)</td>
-                <td class="fw6"><%= performanceSummary.averages.load1 %></td>
-              </tr>
-            </table>
-          </div>
-          <div>
-            <p class="sc-label">Maximum</p>
-            <table class="dtbl">
-              <tr>
-                <td class="text-muted">CPU</td>
-                <td class="fw6 text-danger"><%= performanceSummary.maximums.cpu %>%</td>
-              </tr>
-              <tr>
-                <td class="text-muted">Memory</td>
-                <td class="fw6 text-danger"><%= performanceSummary.maximums.memory %>%</td>
-              </tr>
-              <tr>
-                <td class="text-muted">Load (1m)</td>
-                <td class="fw6 text-danger"><%= performanceSummary.maximums.load1 %></td>
-              </tr>
-            </table>
-          </div>
-          <div>
-            <p class="sc-label">Periode</p>
-            <table class="dtbl">
-              <tr>
-                <td class="text-muted">Start</td>
-                <td class="fw6" style="font-size: 11px;"><%= new Date(performanceSummary.period.start).toLocaleString('id-ID') %></td>
-              </tr>
-              <tr>
-                <td class="text-muted">End</td>
-                <td class="fw6" style="font-size: 11px;"><%= new Date(performanceSummary.period.end).toLocaleString('id-ID') %></td>
-              </tr>
-              <tr>
-                <td class="text-muted">Samples</td>
-                <td class="fw6"><%= performanceSummary.period.samples %></td>
-              </tr>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- System Diagnostics -->
-    <div class="mon-grid">
-      <div class="card">
-        <div class="card-hd">
-          <h6><i class="bi bi-patch-check"></i> Diagnosa Konektivitas</h6>
-        </div>
-        <div class="card-bd">
-          <p class="sc-label mb8">Dependensi Eksternal</p>
-          <table class="dtbl">
-            <tr>
-              <td>GenieACS</td>
-              <td class="text-right">
-                <span class="badge <%= dependencies.genieacs.status === 'online' ? 'bs' : 'bd' %>">
-                  <%= dependencies.genieacs.status.toUpperCase() %>
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td>WhatsApp Bot</td>
-              <td class="text-right">
-                <span class="badge <%= dependencies.whatsapp.status === 'online' ? 'bs' : 'bd' %>">
-                  <%= dependencies.whatsapp.status.toUpperCase() %>
-                </span>
-              </td>
-            </tr>
-          </table>
-          
-          <p class="sc-label mt16 mb8">Router MikroTik</p>
-          <table class="dtbl">
-            <% dependencies.mikrotik.forEach(r => { %>
-            <tr>
-              <td><%= r.name %> (<%= r.host %>)</td>
-              <td class="text-right">
-                <span class="badge <%= r.status === 'online' ? 'bs' : 'bd' %>">
-                  <%= r.status.toUpperCase() %>
-                </span>
-              </td>
-            </tr>
-            <% }) %>
+            </thead>
+            <tbody id="devices-tbody">
+              <tr><td colspan="5" class="onu-loading">Memuat perangkat...</td></tr>
+            </tbody>
           </table>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="card-hd">
-          <h6><i class="bi bi-bug"></i> Log Error Terbaru</h6>
+        <div class="onu-mobile-list" id="devices-mobile">
+          <div class="onu-loading">Memuat perangkat...</div>
         </div>
-        <div class="card-bd err-log-box mh300">
-          <% if (recentErrors.length === 0) { %>
-            <p class="text-muted text-center py-5">Tidak ada log error terbaru</p>
-          <% } else { %>
-            <% recentErrors.forEach(err => { %>
-              <div style="font-family: monospace; font-size: 11px; color: var(--danger); border-bottom: 1px solid rgba(255,255,255,0.05); padding: 4px 0; white-space: pre-wrap;">
-                <%= err %>
+      </section>
+
+      <section class="onu-summary-grid">
+        <div class="onu-summary-card">
+          <div class="onu-summary-head">
+            <div>
+              <h3>Status Integrasi</h3>
+              <p>Ringkas dan gampang dibaca.</p>
+            </div>
+          </div>
+          <div class="onu-summary-body">
+            <div class="onu-inline-list">
+              <div class="onu-inline-row">
+                <div>
+                  <strong>GenieACS</strong>
+                  <span>Koneksi ke perangkat</span>
+                </div>
+                <span class="onu-chip <%= dependencies.genieacs.status === 'online' ? 'online' : 'offline' %>">
+                  <i class="bi bi-circle-fill"></i><%= String(dependencies.genieacs.status || '-').toUpperCase() %>
+                </span>
               </div>
-            <% }) %>
-          <% } %>
+              <div class="onu-inline-row">
+                <div>
+                  <strong>WhatsApp Bot</strong>
+                  <span>Status notifikasi</span>
+                </div>
+                <span class="onu-chip <%= dependencies.whatsapp.status === 'online' ? 'online' : 'offline' %>">
+                  <i class="bi bi-circle-fill"></i><%= String(dependencies.whatsapp.status || '-').toUpperCase() %>
+                </span>
+              </div>
+              <div class="onu-inline-row">
+                <div>
+                  <strong>MikroTik Online</strong>
+                  <span>Router terbaca</span>
+                </div>
+                <span class="onu-chip <%= routerOnline > 0 ? 'online' : 'offline' %>">
+                  <i class="bi bi-circle-fill"></i><%= routerOnline %>/<%= routerDeps.length %>
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Bottom Actions -->
-    <div class="text-center mb16">
-      <button onclick="location.reload()" class="btn btn-p">
-        <i class="bi bi-arrow-clockwise"></i> Refresh Data
-      </button>
+        <div class="onu-summary-card">
+          <div class="onu-summary-head">
+            <div>
+              <h3>Ringkas Server</h3>
+              <p>Tetap ada, tapi tidak terlalu berat.</p>
+            </div>
+          </div>
+          <div class="onu-summary-body">
+            <div class="onu-tiny-grid">
+              <div class="onu-tiny-card">
+                <small>CPU</small>
+                <strong><%= healthStatus.metrics.system.cpu.usage %>%</strong>
+                <span><%= healthStatus.metrics.system.cpu.cores %> core</span>
+              </div>
+              <div class="onu-tiny-card">
+                <small>Memory</small>
+                <strong><%= healthStatus.metrics.system.memory.percentage %>%</strong>
+                <span><%= healthStatus.metrics.system.memory.used %></span>
+              </div>
+              <div class="onu-tiny-card">
+                <small>Disk</small>
+                <strong><%= healthStatus.metrics.disk.percentage %></strong>
+                <span><%= healthStatus.metrics.disk.used %></span>
+              </div>
+              <div class="onu-tiny-card">
+                <small>Database</small>
+                <strong><%= healthStatus.metrics.database.size %></strong>
+                <span><%= healthStatus.metrics.database.totalTables %> tabel</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
-
   </div>
 </div>
 
-<!-- Scripts -->
+<div class="mo" id="deviceModal">
+  <div class="mb" style="max-width:760px">
+    <div class="mh">
+      <span class="mt"><i class="bi bi-router"></i> Detail ONU</span>
+      <button class="mc" onclick="closeModal('deviceModal')">&times;</button>
+    </div>
+    <div class="mbody" id="device-detail">
+      <div class="onu-loading">Memuat detail...</div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('deviceModal')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="ssidModal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt"><i class="bi bi-wifi"></i> Ubah SSID</span>
+      <button class="mc" onclick="closeModal('ssidModal')">&times;</button>
+    </div>
+    <div class="mbody">
+      <input type="hidden" id="edit-tag">
+      <div class="fg">
+        <label class="fl">SSID Baru</label>
+        <input class="fc" id="new-ssid" placeholder="Nama WiFi baru">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('ssidModal')">Batal</button>
+      <button class="btn btn-p" id="btn-save-ssid">
+        <span class="btn-text"><i class="bi bi-check-lg"></i> Simpan</span>
+        <span class="btn-loader" style="display:none"><i class="bi bi-arrow-clockwise spin"></i> Memproses...</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="passwordModal">
+  <div class="mb">
+    <div class="mh">
+      <span class="mt"><i class="bi bi-key"></i> Ubah Password WiFi</span>
+      <button class="mc" onclick="closeModal('passwordModal')">&times;</button>
+    </div>
+    <div class="mbody">
+      <input type="hidden" id="edit-pass-tag">
+      <div class="fg">
+        <label class="fl">Password Baru</label>
+        <input class="fc" id="new-password" type="text" placeholder="Minimal 8 karakter">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('passwordModal')">Batal</button>
+      <button class="btn btn-s" id="btn-save-password">
+        <span class="btn-text"><i class="bi bi-check-lg"></i> Simpan</span>
+        <span class="btn-loader" style="display:none"><i class="bi bi-arrow-clockwise spin"></i> Memproses...</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
-  // Set progress bar widths dynamically
-  document.addEventListener('DOMContentLoaded', function() {
-    // CPU Progress Bar
-    const cpuProgressBar = document.getElementById('cpuProgressBar');
-    if (cpuProgressBar) {
-      const cpuUsage = parseFloat('<%= healthStatus.metrics.system.cpu.usage %>');
-      cpuProgressBar.style.width = cpuUsage + '%';
-    }
+const I18N = {
+  online: 'Online',
+  offline: 'Offline',
+  loading: 'Memuat...',
+  noDevices: 'Tidak ada perangkat ditemukan',
+  loadFailed: 'Gagal memuat data',
+  detailLoadFailed: 'Gagal memuat detail',
+  noIp: 'Belum ada IP',
+  noConnectedDevices: 'Tidak ada perangkat terhubung',
+  rebootConfirm: 'Yakin reboot perangkat ini?',
+  success: 'Berhasil',
+  failed: 'Gagal'
+};
 
-    // Memory Progress Bar
-    const memoryProgressBar = document.getElementById('memoryProgressBar');
-    if (memoryProgressBar) {
-      const memoryUsage = parseFloat('<%= healthStatus.metrics.system.memory.percentage %>');
-      memoryProgressBar.style.width = memoryUsage + '%';
-    }
+let devicesData = [];
 
-    // Load Progress Bar
-    const loadProgressBar = document.getElementById('loadProgressBar');
-    if (loadProgressBar) {
-      const load1 = parseFloat('<%= healthStatus.metrics.system.loadAverage["1min"] %>');
-      const cores = parseInt('<%= healthStatus.metrics.system.cpu.cores %>');
-      const loadPercent = Math.min((load1 / cores) * 100, 100);
-      loadProgressBar.style.width = loadPercent + '%';
-    }
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-    // Disk Progress Bar
-    const diskProgressBar = document.getElementById('diskProgressBar');
-    if (diskProgressBar) {
-      const diskPercentage = '<%= healthStatus.metrics.disk.percentage %>';
-      if (diskPercentage !== 'N/A') {
-        diskProgressBar.style.width = diskPercentage;
-      } else {
-        diskProgressBar.style.width = '0%';
-      }
-    }
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('show');
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+}
+
+document.querySelectorAll('.mo').forEach((modal) => {
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) modal.classList.remove('show');
   });
+});
 
-  // CPU Chart
-  const cpuCtx = document.getElementById('cpuChart').getContext('2d');
-  const cpuChart = new Chart(cpuCtx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'CPU Usage (%)',
-        data: [],
-        borderColor: 'rgb(102, 126, 234)',
-        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100
-        }
-      }
-    }
-  });
+function updateLiveLabel() {
+  const label = document.getElementById('live-time');
+  if (label) label.textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+}
 
-  // Memory Chart
-  const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-  const memoryChart = new Chart(memoryCtx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Memory Usage (%)',
-        data: [],
-        borderColor: 'rgb(118, 75, 162)',
-        backgroundColor: 'rgba(118, 75, 162, 0.1)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100
-        }
-      }
-    }
-  });
+async function loadStats() {
+  try {
+    const response = await fetch('/admin/api/stats');
+    const data = await response.json();
+    const total = Number(data.total || 0);
+    const online = Number(data.online || 0);
+    const offline = Number(data.offline || 0);
+    const ratio = total > 0 ? Math.round((online / total) * 100) : 0;
 
-  // Load metrics history
-  async function loadMetricsHistory() {
-    try {
-      const response = await fetch('/admin/api/metrics/history?limit=10');
-      const history = await response.json();
+    const map = {
+      'onu-total': total,
+      'onu-online': online,
+      'onu-offline': offline,
+      'onu-ratio': ratio + '%'
+    };
 
-      const labels = history.map(m => new Date(m.timestamp).toLocaleTimeString('id-ID'));
-      const cpuData = history.map(m => parseFloat(m.system.cpu.usage));
-      const memoryData = history.map(m => parseFloat(m.system.memory.percentage));
+    Object.entries(map).forEach(([id, value]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    });
 
-      cpuChart.data.labels = labels;
-      cpuChart.data.datasets[0].data = cpuData;
-      cpuChart.update();
+    updateLiveLabel();
+  } catch (error) {
+    console.error('loadStats failed', error);
+  }
+}
 
-      memoryChart.data.labels = labels;
-      memoryChart.data.datasets[0].data = memoryData;
-      memoryChart.update();
-    } catch (error) {
-      console.error('Failed to load metrics history:', error);
-    }
+function statusChip(status) {
+  const isOnline = String(status || '').toLowerCase() === 'online';
+  return `<span class="onu-chip ${isOnline ? 'online' : 'offline'}"><i class="bi bi-circle-fill"></i>${isOnline ? I18N.online : I18N.offline}</span>`;
+}
+
+function deviceLastInform(value) {
+  if (!value) return 'Belum ada inform';
+  try {
+    return new Date(value).toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (_error) {
+    return value;
+  }
+}
+
+function renderDesktopRows(devices) {
+  const tbody = document.getElementById('devices-tbody');
+  if (!tbody) return;
+  if (!devices.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="onu-loading">${I18N.noDevices}</td></tr>`;
+    return;
   }
 
-  // Load initial data
-  loadMetricsHistory();
+  tbody.innerHTML = devices.map((device) => {
+    const tag = escapeHtml((device.tags && device.tags[0]) || device.id || '-');
+    const safeSsid = escapeHtml(device.ssid || '-');
+    const safePppoe = escapeHtml(device.pppoeUsername && device.pppoeUsername !== 'N/A' ? device.pppoeUsername : '-');
+    const safeIp = escapeHtml(device.pppoeIP && device.pppoeIP !== '-' ? device.pppoeIP : I18N.noIp);
+    const safeModel = escapeHtml(device.model && device.model !== '-' ? device.model : 'ONU Device');
+    const safeSn = escapeHtml(device.serialNumber || '-');
+    const safeRx = escapeHtml(device.rxPower || '-');
+    const safeUptime = escapeHtml(device.uptime || '-');
+    return `
+      <tr>
+        <td>
+          <div class="onu-device-name">${tag}</div>
+          <div class="onu-sub">${deviceLastInform(device.lastInform)}</div>
+        </td>
+        <td>
+          <div class="onu-device-name">${safeModel}</div>
+          <div class="onu-sub">SN: ${safeSn}</div>
+        </td>
+        <td>
+          <div class="onu-metrics">
+            <div>${safePppoe}</div>
+            <div class="onu-sub">${safeIp}</div>
+            <div class="onu-sub">${safeSsid}</div>
+          </div>
+        </td>
+        <td>
+          ${statusChip(device.status)}
+          <div class="onu-sub">RX ${safeRx}</div>
+          <div class="onu-sub">${safeUptime}</div>
+        </td>
+        <td>
+          <div class="onu-actions">
+            <button class="btn btn-g btn-icon btn-sm" type="button" title="Detail" onclick="showDetail('${tag}')"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-p btn-icon btn-sm" type="button" title="SSID" onclick="editSsid('${tag}', ${JSON.stringify(device.ssid || '')})"><i class="bi bi-wifi"></i></button>
+            <button class="btn btn-g btn-icon btn-sm" type="button" title="Password" onclick="editPassword('${tag}')"><i class="bi bi-key"></i></button>
+            <button class="btn btn-d btn-icon btn-sm" type="button" title="Reboot" onclick="rebootDevice('${tag}')"><i class="bi bi-power"></i></button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
 
-  // Auto refresh every 30 seconds
-  setInterval(() => {
-    loadMetricsHistory();
-  }, 30000);
+function renderMobileCards(devices) {
+  const wrap = document.getElementById('devices-mobile');
+  if (!wrap) return;
+  if (!devices.length) {
+    wrap.innerHTML = `<div class="onu-loading">${I18N.noDevices}</div>`;
+    return;
+  }
+
+  wrap.innerHTML = devices.map((device) => {
+    const tag = escapeHtml((device.tags && device.tags[0]) || device.id || '-');
+    const safeModel = escapeHtml(device.model && device.model !== '-' ? device.model : 'ONU Device');
+    const safePppoe = escapeHtml(device.pppoeUsername && device.pppoeUsername !== 'N/A' ? device.pppoeUsername : '-');
+    const safeIp = escapeHtml(device.pppoeIP && device.pppoeIP !== '-' ? device.pppoeIP : I18N.noIp);
+    const safeSn = escapeHtml(device.serialNumber || '-');
+    const safeRx = escapeHtml(device.rxPower || '-');
+    return `
+      <article class="onu-mobile-card">
+        <div class="onu-mobile-top">
+          <div>
+            <div class="onu-device-name">${tag}</div>
+            <div class="onu-sub">${deviceLastInform(device.lastInform)}</div>
+          </div>
+          ${statusChip(device.status)}
+        </div>
+        <div class="onu-mobile-grid">
+          <div class="onu-mobile-item">
+            <small>Perangkat</small>
+            <strong>${safeModel}</strong>
+          </div>
+          <div class="onu-mobile-item">
+            <small>Serial</small>
+            <strong>${safeSn}</strong>
+          </div>
+          <div class="onu-mobile-item">
+            <small>PPPoE</small>
+            <strong>${safePppoe}</strong>
+          </div>
+          <div class="onu-mobile-item">
+            <small>IP</small>
+            <strong>${safeIp}</strong>
+          </div>
+          <div class="onu-mobile-item">
+            <small>RX Power</small>
+            <strong>${safeRx}</strong>
+          </div>
+          <div class="onu-mobile-item">
+            <small>WiFi</small>
+            <strong>${escapeHtml(device.ssid || '-')}</strong>
+          </div>
+        </div>
+        <div class="onu-mobile-actions">
+          <button class="btn btn-g btn-icon btn-sm" type="button" title="Detail" onclick="showDetail('${tag}')"><i class="bi bi-eye"></i></button>
+          <button class="btn btn-p btn-icon btn-sm" type="button" title="SSID" onclick="editSsid('${tag}', ${JSON.stringify(device.ssid || '')})"><i class="bi bi-wifi"></i></button>
+          <button class="btn btn-g btn-icon btn-sm" type="button" title="Password" onclick="editPassword('${tag}')"><i class="bi bi-key"></i></button>
+          <button class="btn btn-d btn-icon btn-sm" type="button" title="Reboot" onclick="rebootDevice('${tag}')"><i class="bi bi-power"></i></button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function loadDevices() {
+  const loadingEl = document.getElementById('loading-devices');
+  const search = document.getElementById('search-device')?.value || '';
+  const status = document.getElementById('filter-status')?.value || 'all';
+  if (loadingEl) loadingEl.style.display = 'block';
+  try {
+    let url = '/admin/api/devices?limit=200';
+    if (search) url += '&search=' + encodeURIComponent(search);
+    if (status && status !== 'all') url += '&status=' + encodeURIComponent(status);
+    const response = await fetch(url);
+    const data = await response.json();
+    devicesData = Array.isArray(data.devices) ? data.devices : [];
+
+    const countEl = document.getElementById('device-count');
+    if (countEl) countEl.textContent = String(devicesData.length);
+
+    renderDesktopRows(devicesData);
+    renderMobileCards(devicesData);
+  } catch (error) {
+    console.error('loadDevices failed', error);
+    const tbody = document.getElementById('devices-tbody');
+    const wrap = document.getElementById('devices-mobile');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="onu-loading" style="color:var(--danger)">${I18N.loadFailed}</td></tr>`;
+    if (wrap) wrap.innerHTML = `<div class="onu-loading" style="color:var(--danger)">${I18N.loadFailed}</div>`;
+  } finally {
+    if (loadingEl) loadingEl.style.display = 'none';
+  }
+}
+
+function detailRow(label, value) {
+  return `<tr><td>${escapeHtml(label)}</td><td>${value || '-'}</td></tr>`;
+}
+
+async function showDetail(tag) {
+  openModal('deviceModal');
+  const detailEl = document.getElementById('device-detail');
+  if (detailEl) detailEl.innerHTML = `<div class="onu-loading">${I18N.loading}</div>`;
+  try {
+    const response = await fetch('/admin/api/device/' + encodeURIComponent(tag));
+    const data = await response.json();
+    const detailHtml = `
+      <div class="onu-detail-grid">
+        <div>
+          <table class="onu-detail-table">
+            ${detailRow('Tag', escapeHtml(data.phone || tag))}
+            ${detailRow('Status', statusChip(data.status))}
+            ${detailRow('SSID', escapeHtml(data.ssid || '-'))}
+            ${detailRow('Serial', '<code>' + escapeHtml(data.serialNumber || '-') + '</code>')}
+            ${detailRow('Model', escapeHtml(data.model || '-'))}
+            ${detailRow('Software', escapeHtml(data.softwareVersion || '-'))}
+          </table>
+        </div>
+        <div>
+          <table class="onu-detail-table">
+            ${detailRow('PPPoE', escapeHtml(data.pppoeUsername || '-'))}
+            ${detailRow('IP', escapeHtml(data.pppoeIP || '-'))}
+            ${detailRow('RX Power', escapeHtml(data.rxPower || '-'))}
+            ${detailRow('Uptime', escapeHtml(data.uptime || '-'))}
+            ${detailRow('Last Inform', escapeHtml(data.lastInform || '-'))}
+            ${detailRow('Tersambung', escapeHtml(String(data.totalAssociations || '0')))}
+          </table>
+        </div>
+      </div>
+      <div style="margin-top:14px">
+        <h6 style="margin:0 0 10px;font-size:13px;font-weight:800">Perangkat Terhubung</h6>
+        ${
+          Array.isArray(data.connectedUsers) && data.connectedUsers.length
+            ? `<div class="onu-inline-list">${data.connectedUsers.map((user) => `
+                <div class="onu-inline-row">
+                  <div>
+                    <strong>${escapeHtml(user.hostname || 'Unknown')}</strong>
+                    <span>${escapeHtml(user.ip || '-')} · ${escapeHtml(user.mac || '-')}</span>
+                  </div>
+                  <span class="onu-chip ${String(user.status || '').toLowerCase() === 'online' ? 'online' : 'offline'}">
+                    <i class="bi bi-circle-fill"></i>${escapeHtml(user.status || '-')}
+                  </span>
+                </div>`).join('')}</div>`
+            : `<div class="onu-loading" style="padding:12px 0">${I18N.noConnectedDevices}</div>`
+        }
+      </div>
+    `;
+    if (detailEl) detailEl.innerHTML = detailHtml;
+  } catch (error) {
+    console.error('showDetail failed', error);
+    if (detailEl) detailEl.innerHTML = `<div class="onu-loading" style="color:var(--danger)">${I18N.detailLoadFailed}</div>`;
+  }
+}
+
+function editSsid(tag, currentSsid) {
+  const tagEl = document.getElementById('edit-tag');
+  const ssidEl = document.getElementById('new-ssid');
+  if (tagEl) tagEl.value = tag;
+  if (ssidEl) ssidEl.value = currentSsid && currentSsid !== '-' ? currentSsid : '';
+  openModal('ssidModal');
+}
+
+function editPassword(tag) {
+  const tagEl = document.getElementById('edit-pass-tag');
+  const passEl = document.getElementById('new-password');
+  if (tagEl) tagEl.value = tag;
+  if (passEl) passEl.value = '';
+  openModal('passwordModal');
+}
+
+function showToast(message, type = 's') {
+  const old = document.querySelector('.toast-notif');
+  if (old) old.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast-notif';
+  toast.style.cssText = 'position:fixed;bottom:24px;right:18px;z-index:10000;background:var(--surface-strong);border:1px solid var(--border);border-left:4px solid ' + (type === 's' ? 'var(--success)' : 'var(--danger)') + ';border-radius:14px;padding:12px 14px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-soft);max-width:320px';
+  toast.innerHTML = '<i class="bi bi-' + (type === 's' ? 'check-circle-fill' : 'exclamation-circle-fill') + '" style="color:' + (type === 's' ? 'var(--success)' : 'var(--danger)') + ';font-size:18px"></i><div style="flex:1">' + escapeHtml(message) + '</div>';
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.remove(); }, 3200);
+}
+
+async function rebootDevice(tag) {
+  if (!confirm(I18N.rebootConfirm)) return;
+  try {
+    const response = await fetch('/admin/api/device/' + encodeURIComponent(tag) + '/reboot', { method: 'POST' });
+    const data = await response.json();
+    showToast(data.message || (data.ok ? 'Perintah reboot terkirim' : I18N.failed), data.ok ? 's' : 'd');
+  } catch (error) {
+    showToast(error.message || I18N.failed, 'd');
+  }
+}
+
+document.getElementById('btn-save-ssid')?.addEventListener('click', async function () {
+  const button = this;
+  const text = button.querySelector('.btn-text');
+  const loader = button.querySelector('.btn-loader');
+  const tag = document.getElementById('edit-tag')?.value || '';
+  const ssid = (document.getElementById('new-ssid')?.value || '').trim();
+  if (!ssid) return showToast('SSID tidak boleh kosong', 'd');
+  button.disabled = true;
+  if (text) text.style.display = 'none';
+  if (loader) loader.style.display = 'inline-block';
+  try {
+    const response = await fetch('/admin/api/device/' + encodeURIComponent(tag) + '/ssid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid })
+    });
+    const data = await response.json();
+    if (data.success) {
+      closeModal('ssidModal');
+      showToast('SSID berhasil dikirim', 's');
+      setTimeout(loadDevices, 1200);
+    } else {
+      showToast(data.message || 'Gagal mengubah SSID', 'd');
+    }
+  } catch (error) {
+    showToast(error.message || 'Gagal mengubah SSID', 'd');
+  } finally {
+    button.disabled = false;
+    if (text) text.style.display = 'inline-block';
+    if (loader) loader.style.display = 'none';
+  }
+});
+
+document.getElementById('btn-save-password')?.addEventListener('click', async function () {
+  const button = this;
+  const text = button.querySelector('.btn-text');
+  const loader = button.querySelector('.btn-loader');
+  const tag = document.getElementById('edit-pass-tag')?.value || '';
+  const password = document.getElementById('new-password')?.value || '';
+  if (password.length < 8) return showToast('Password minimal 8 karakter', 'd');
+  button.disabled = true;
+  if (text) text.style.display = 'none';
+  if (loader) loader.style.display = 'inline-block';
+  try {
+    const response = await fetch('/admin/api/device/' + encodeURIComponent(tag) + '/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const data = await response.json();
+    if (data.success) {
+      closeModal('passwordModal');
+      showToast('Password WiFi berhasil dikirim', 's');
+    } else {
+      showToast(data.message || 'Gagal mengubah password', 'd');
+    }
+  } catch (error) {
+    showToast(error.message || 'Gagal mengubah password', 'd');
+  } finally {
+    button.disabled = false;
+    if (text) text.style.display = 'inline-block';
+    if (loader) loader.style.display = 'none';
+  }
+});
+
+document.getElementById('filter-status')?.addEventListener('change', loadDevices);
+const searchEl = document.getElementById('search-device');
+if (searchEl) {
+  let searchTimer;
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadDevices, 350);
+  });
+}
+
+function refreshAll() {
+  loadStats();
+  loadDevices();
+}
+
+refreshAll();
+setInterval(refreshAll, 40000);
 </script>
 </body>
 </html>

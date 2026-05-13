@@ -1,0 +1,202 @@
+<%
+  const pageLang = (typeof lang !== 'undefined' && lang) ? lang : 'id';
+  const pageSession = (typeof session !== 'undefined' && session) ? session : {};
+  const pageMsg = (typeof msg !== 'undefined' && msg) ? msg : null;
+  const pageCategories = categories || { income: [], expense: [] };
+  const entryForm = formData || {};
+%>
+<!DOCTYPE html>
+<html lang="<%= pageLang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <%- include('partials/theme_init') %>
+  <title><%= title %> | <%= company %></title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    .bk-form-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+    .bk-form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+    .bk-form-head {
+      padding: 18px 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .bk-form-head h3 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      color: var(--text);
+    }
+    .bk-form-head p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .bk-form-body {
+      padding: 20px;
+    }
+    .bk-form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .bk-form-grid .full {
+      grid-column: 1 / -1;
+    }
+    .bk-form-note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .bk-form-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    body[data-theme="light"] .bk-form-card {
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 16px 36px rgba(165, 162, 211, 0.12);
+    }
+    @media (max-width: 768px) {
+      .bk-form-head,
+      .bk-form-body {
+        padding: 16px;
+      }
+      .bk-form-grid {
+        grid-template-columns: 1fr;
+      }
+      .bk-form-actions .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+<%- include('partials/sidebar', { activePage: 'bookkeeping', company }) %>
+<div class="mw">
+  <div class="topbar">
+    <div class="tb-title">
+      <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+      <i class="bi bi-cash-coin"></i>
+      <span>Tambah Pembukuan</span>
+    </div>
+    <div class="tb-right">
+      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+        <i class="bi bi-sun"></i>
+        <span>Terang</span>
+      </button>
+      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= pageSession.isCashier ? 'Kasir' : 'Admin' %></span>
+      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+    </div>
+  </div>
+
+  <div class="page">
+    <% if (pageMsg && pageMsg.text) { %>
+      <div class="alert alert-<%= pageMsg.type === 'error' ? 'd' : 's' %>" style="margin-bottom:16px"><%= pageMsg.text %></div>
+    <% } %>
+
+    <div class="bk-form-wrap">
+      <section class="bk-form-card">
+        <div class="bk-form-head">
+          <div>
+            <h3>Input Pemasukan / Pengeluaran</h3>
+            <p>Halaman ini khusus untuk tambah data pembukuan, jadi halaman daftar tetap lebih ringan saat dibuka dari handphone.</p>
+          </div>
+          <a href="/admin/bookkeeping" class="btn btn-g btn-sm"><i class="bi bi-arrow-left"></i> Kembali</a>
+        </div>
+        <div class="bk-form-body">
+          <form method="POST" action="/admin/bookkeeping/new">
+            <input type="hidden" name="month" value="<%= entryForm.month || '' %>">
+            <input type="hidden" name="year" value="<%= entryForm.year || '' %>">
+
+            <div class="bk-form-grid">
+              <div>
+                <label class="fl">Jenis</label>
+                <select class="fc" name="type" id="entryType" onchange="syncCategoryOptions()">
+                  <option value="expense" <%= entryForm.type === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
+                  <option value="income" <%= entryForm.type === 'income' ? 'selected' : '' %>>Pemasukan</option>
+                </select>
+              </div>
+              <div>
+                <label class="fl">Tanggal</label>
+                <input class="fc" type="date" name="entry_date" value="<%= entryForm.entry_date || '' %>">
+              </div>
+              <div>
+                <label class="fl">Nominal</label>
+                <input class="fc" type="number" min="0" name="amount" required placeholder="Contoh: 250000" value="<%= entryForm.amount || '' %>">
+              </div>
+              <div>
+                <label class="fl">Kategori</label>
+                <select class="fc" name="category" id="entryCategory" data-selected="<%= entryForm.category || '' %>"></select>
+              </div>
+              <div class="full">
+                <label class="fl">Kategori Lainnya</label>
+                <input class="fc" name="custom_category" placeholder="Isi jika kategori belum tersedia" value="<%= entryForm.custom_category || '' %>">
+              </div>
+              <div class="full">
+                <label class="fl">Keterangan</label>
+                <textarea class="fc" rows="5" name="description" placeholder="Contoh: pembayaran pelanggan, listrik kantor, gaji teknisi"><%= entryForm.description || '' %></textarea>
+              </div>
+            </div>
+
+            <div class="bk-form-note">
+              Pemasukan manual dipakai untuk kas masuk non otomatis. Jika pembayaran berasal dari Tripay atau QRIS webhook, data itu akan masuk sendiri dari sistem dan tidak perlu diinput ulang di sini.
+            </div>
+
+            <div class="bk-form-actions">
+              <a href="/admin/bookkeeping" class="btn btn-g"><i class="bi bi-arrow-left"></i> Batal</a>
+              <button class="btn btn-p" type="submit"><i class="bi bi-save2"></i> Simpan Pembukuan</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CATEGORY_OPTIONS = <%- JSON.stringify(pageCategories) %>;
+  function syncCategoryOptions() {
+    const type = document.getElementById('entryType').value === 'income' ? 'income' : 'expense';
+    const select = document.getElementById('entryCategory');
+    const selected = select.dataset.selected || '';
+    const options = Array.isArray(CATEGORY_OPTIONS[type]) ? CATEGORY_OPTIONS[type] : [];
+    select.replaceChildren();
+    options.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = String(item);
+      option.textContent = String(item);
+      if (String(item) === selected) option.selected = true;
+      select.appendChild(option);
+    });
+    if (!select.value && options.length) {
+      select.value = String(selected || options[0]);
+    }
+  }
+  syncCategoryOptions();
+</script>
+</body>
+</html>

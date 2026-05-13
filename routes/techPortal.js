@@ -2,11 +2,17 @@ const express = require('express');
 const router = express.Router();
 const techSvc = require('../services/techService');
 const customerSvc = require('../services/customerService');
+const customerDetailSvc = require('../services/customerDetailService');
 const odpSvc = require('../services/odpService');
 const { getSetting } = require('../config/settingsManager');
 const mikrotikService = require('../services/mikrotikService');
+const billingSvc = require('../services/billingService');
 const db = require('../config/database');
 const oltSvc = require('../services/oltService');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const techUpload = multer({ storage: multer.memoryStorage() });
 
 function requireTechSession(req, res, next) {
   if (req.session && req.session.isTechnician && req.session.techId) {
@@ -47,6 +53,24 @@ function renderTechPage(req, res, view, payload = {}) {
     operationalTasks: [],
     ...payload
   });
+}
+
+function toUploadImageExt(file) {
+  const extFromMime = String(file?.mimetype || '').split('/').pop().toLowerCase();
+  const extFromName = path.extname(String(file?.originalname || '')).toLowerCase().replace('.', '');
+  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromName)) return extFromName;
+  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromMime)) return extFromMime;
+  return 'jpg';
+}
+
+function persistTechUpload(file, prefix) {
+  if (!file || !file.buffer || Number(file.size || 0) <= 0) return '';
+  const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+  fs.mkdirSync(uploadDir, { recursive: true });
+  const ext = toUploadImageExt(file);
+  const filename = `${prefix}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+  return `/uploads/${filename}`;
 }
 
 // --- AUTH ---
@@ -139,6 +163,21 @@ router.get('/map', requireTechSession, (req, res) => {
     odps,
     msg: flashMsg(req),
     settings: getSetting('office_lat') ? { office_lat: getSetting('office_lat'), office_lng: getSetting('office_lng') } : {}
+  });
+});
+
+router.get('/customers', requireTechSession, (req, res) => {
+  const search = String(req.query.search || '').trim();
+  const status = String(req.query.status || '').trim();
+  let customers = customerSvc.getAllCustomers(search);
+  if (status) customers = customers.filter((row) => String(row.status || '').trim() === status);
+  renderTechPage(req, res, 'tech/customers', {
+    title: 'Pelanggan',
+    activePage: 'customers',
+    customers,
+    search,
+    filterStatus: status,
+    msg: flashMsg(req)
   });
 });
 
@@ -273,16 +312,26 @@ router.get('/customers/new', requireTechSession, (req, res) => {
   });
 });
 
-router.post('/customers', requireTechSession, express.urlencoded({ extended: true }), async (req, res) => {
+router.post('/customers', requireTechSession, techUpload.fields([
+  { name: 'house_photo_file', maxCount: 1 },
+  { name: 'ktp_photo_file', maxCount: 1 }
+]), async (req, res) => {
   try {
     const name = String(req.body.name || '').trim();
     if (!name) throw new Error('Nama pelanggan wajib diisi');
+
+    const housePhotoUrl = persistTechUpload(req.files?.house_photo_file?.[0], 'tech-house-photo');
+    const ktpPhotoUrl = persistTechUpload(req.files?.ktp_photo_file?.[0], 'tech-ktp-photo');
 
     const customerData = {
       name,
       phone: String(req.body.phone || '').trim(),
       email: String(req.body.email || '').trim(),
       address: String(req.body.address || '').trim(),
+      nik: String(req.body.nik || '').trim(),
+      npwp: String(req.body.npwp || '').trim(),
+      house_photo_url: housePhotoUrl,
+      ktp_photo_url: ktpPhotoUrl,
       package_id: req.body.package_id ? Number(req.body.package_id) : null,
       create_pppoe_secret: isTruthyFormValue(req.body.create_pppoe_secret) ? 1 : 0,
       pppoe_username: String(req.body.pppoe_username || '').trim(),
@@ -386,6 +435,54 @@ router.get('/api/odps/:id/ports', requireTechSession, (req, res) => {
     res.json(usage);
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/customers/:id/detail', requireTechSession, async (req, res) => {
+  try {
+    const year = Number(req.query.year || new Date().getFullYear()) || new Date().getFullYear();
+    const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year });
+    res.json(detail);
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+router.post('/api/customers/:id/invoices/:invoiceId/pay', requireTechSession, express.json(), async (req, res) => {
+  try {
+    const customerId = Number(req.params.id || 0);
+    const invoiceId = Number(req.params.invoiceId || 0);
+    if (!Number.isFinite(customerId) || customerId <= 0) throw new Error('ID pelanggan tidak valid');
+    if (!Number.isFinite(invoiceId) || invoiceId <= 0) throw new Error('ID tagihan tidak valid');
+
+    const customer = customerSvc.getCustomerById(customerId);
+    if (!customer) throw new Error('Pelanggan tidak ditemukan');
+    const invoice = billingSvc.getInvoiceById(invoiceId);
+    if (!invoice || Number(invoice.customer_id || 0) !== customerId) throw new Error('Tagihan tidak ditemukan untuk pelanggan ini');
+
+    const techName = String(req.session.techName || '').trim() || 'Teknisi';
+    const paidBy = `Teknisi ${techName}`;
+    const rawNotes = String(req.body?.notes || '').trim();
+    const notes = rawNotes || `Lunas oleh teknisi ${techName}`;
+    billingSvc.markAsPaid(invoiceId, paidBy, notes, {
+      type: 'technician',
+      id: req.session.techId,
+      name: req.session.techName,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    });
+
+    const freshCustomer = customerSvc.getCustomerById(customerId);
+    if (freshCustomer && freshCustomer.status === 'suspended') {
+      const stillUnpaid = billingSvc.getUnpaidInvoicesByCustomerId(customerId);
+      if (!stillUnpaid.length) {
+        await customerSvc.activateCustomer(customerId);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e) });
   }
 });
 

@@ -3,7 +3,6 @@
   const pageSession = (typeof session !== 'undefined' && session) ? session : {};
   const pageMsg = (typeof msg !== 'undefined' && msg) ? msg : null;
   const pageEntries = Array.isArray(entries) ? entries : [];
-  const pageCategories = categories || { income: [], expense: [] };
   const now = new Date();
   const selectedMonth = Number(filterMonth || (now.getMonth() + 1));
   const selectedYear = Number(filterYear || now.getFullYear());
@@ -18,6 +17,25 @@
   const balance = totalIncome - totalExpense;
   const incomeCount = Number(summary?.income_count || 0);
   const expenseCount = Number(summary?.expense_count || 0);
+  const dashboardData = dashboard || {};
+  const incomeBreakdown = dashboardData.income || {};
+  const expenseBreakdown = dashboardData.expense || {};
+  const comparison = dashboardData.comparison || {};
+  const actorBreakdown = Array.isArray(dashboardData.actors) ? dashboardData.actors : [];
+  const recentPayments = Array.isArray(dashboardData.recentPayments) ? dashboardData.recentPayments : [];
+  const approvalBreakdown = Array.isArray(dashboardData.approvals) ? dashboardData.approvals : [];
+  const incomeCards = [
+    { label: 'Pembayaran Tunai', amount: Number(incomeBreakdown.cash?.amount || 0), count: Number(incomeBreakdown.cash?.count || 0), icon: 'bi-cash-stack', tone: 'cash' },
+    { label: 'Pembayaran Online', amount: Number(incomeBreakdown.online?.amount || 0), count: Number(incomeBreakdown.online?.count || 0), icon: 'bi-qr-code-scan', tone: 'online' },
+    { label: 'Pemasukan Lain', amount: Number(incomeBreakdown.other?.amount || 0), count: Number(incomeBreakdown.other?.count || 0), icon: 'bi-piggy-bank', tone: 'other' },
+    { label: 'Pendapatan Mitra', amount: Number(incomeBreakdown.partner?.amount || 0), count: Number(incomeBreakdown.partner?.count || 0), icon: 'bi-people-fill', tone: 'partner' }
+  ];
+  const expenseCards = [
+    expenseBreakdown.salary || { label: 'Gaji Karyawan', amount: 0, count: 0 },
+    expenseBreakdown.installation || { label: 'Pasang Baru', amount: 0, count: 0 },
+    expenseBreakdown.repair_tools || { label: 'Perbaikan / Alat', amount: 0, count: 0 },
+    expenseBreakdown.bandwidth || { label: 'Bayar Bandwidth', amount: 0, count: 0 }
+  ];
 %>
 <!DOCTYPE html>
 <html lang="<%= pageLang %>">
@@ -29,28 +47,39 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
-    .bk-filter-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      background:
-        linear-gradient(135deg, rgba(124, 116, 255, 0.08), rgba(255, 255, 255, 0.02)),
-        var(--surface-soft);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    }
-    .bk-filter-copy {
+    .bk-shell {
       display: grid;
-      gap: 4px;
+      gap: 16px;
+    }
+    .bk-card,
+    .bk-list-card,
+    .bk-toggle {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+    .bk-filter-card {
+      padding: 16px 18px;
+      display: grid;
+      gap: 14px;
+      background:
+        linear-gradient(135deg, rgba(124, 116, 255, 0.08), rgba(92, 141, 255, 0.04)),
+        var(--surface);
+    }
+    .bk-filter-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .bk-filter-copy strong {
-      font-size: 16px;
+      display: block;
+      font-size: 17px;
       color: var(--text);
+      margin-bottom: 4px;
     }
     .bk-filter-copy span {
       font-size: 12px;
@@ -58,113 +87,264 @@
     }
     .bk-filter-form {
       display: grid;
-      grid-template-columns: 118px 108px 150px minmax(170px, 1fr) auto;
+      grid-template-columns: 120px 110px 160px minmax(180px, 1fr) auto;
       gap: 10px;
       align-items: center;
-      width: min(100%, 760px);
     }
     .bk-filter-form .btn {
       min-width: 120px;
-      box-shadow: 0 14px 28px rgba(92, 141, 255, 0.18);
     }
-    .bk-layout {
+    .bk-summary-grid {
       display: grid;
-      grid-template-columns: minmax(290px, 0.92fr) minmax(0, 1.4fr);
-      gap: 18px;
-      align-items: start;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 16px;
     }
-    .bk-stats {
-      margin-bottom: 18px;
-    }
-    .bk-stats .sc {
-      min-height: 136px;
-    }
-    .bk-stats .sc.bk-income {
-      background:
-        radial-gradient(circle at top right, rgba(52, 211, 153, 0.16), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-        var(--surface);
-    }
-    .bk-stats .sc.bk-expense {
-      background:
-        radial-gradient(circle at top right, rgba(251, 113, 133, 0.16), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-        var(--surface);
-    }
-    .bk-stats .sc.bk-balance {
-      background:
-        radial-gradient(circle at top right, rgba(124, 116, 255, 0.16), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-        var(--surface);
-    }
-    .bk-stats .sc-val {
-      letter-spacing: -0.05em;
-    }
-    .bk-stats .sc-sub {
+    .bk-summary-panel-head {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 8px;
-      margin-top: 10px;
+      gap: 12px;
     }
-    .bk-stat-pill {
+    .bk-summary-panel-head strong {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .bk-summary-panel-head h3 {
+      margin: 0;
+      font-size: 29px;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .bk-summary-panel-head span {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bk-summary-badge {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 5px 9px;
+      gap: 6px;
+      padding: 7px 11px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-      font-size: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      font-size: 11px;
       font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .bk-summary-panel-body {
+      padding: 16px 18px 18px;
+    }
+    .bk-breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-breakdown-item {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 12px 13px;
+      background: var(--surface-soft);
+      min-width: 0;
+    }
+    .bk-breakdown-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
       color: var(--text);
     }
-    .bk-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 22px;
-      box-shadow: var(--shadow-soft);
-      overflow: hidden;
+    .bk-breakdown-top i {
+      font-size: 14px;
+      color: var(--primary);
     }
-    .bk-panel .card-hd {
-      padding: 15px 18px;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
-        rgba(255, 255, 255, 0.015);
+    .bk-breakdown-item.tone-cash .bk-breakdown-top i { color: #22c55e; }
+    .bk-breakdown-item.tone-online .bk-breakdown-top i { color: #7c74ff; }
+    .bk-breakdown-item.tone-other .bk-breakdown-top i { color: #f59e0b; }
+    .bk-breakdown-item.tone-partner .bk-breakdown-top i { color: #38bdf8; }
+    .bk-breakdown-amount {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.2;
     }
-    .bk-panel .card-bd {
-      padding: 18px;
-    }
-    .bk-form-note {
-      margin-top: 12px;
-      padding: 11px 12px;
-      border-radius: 14px;
-      background: var(--surface-soft);
+    .bk-breakdown-meta {
+      margin-top: 5px;
+      font-size: 11px;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
-      border: 1px solid var(--border);
     }
-    .bk-summary-row {
+    .bk-profit-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .bk-comparison-card {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 14px;
+      background: var(--surface-soft);
+    }
+    .bk-comparison-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 14px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
     }
-    .bk-summary-copy {
+    .bk-comparison-row strong {
+      color: var(--text);
+      font-size: 15px;
+    }
+    .bk-progress {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(148, 163, 184, 0.18);
+    }
+    .bk-progress > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--primary), var(--primary-2));
+    }
+    .bk-toggle > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .bk-toggle > summary::-webkit-details-marker {
+      display: none;
+    }
+    .bk-toggle-copy {
       display: grid;
       gap: 4px;
     }
-    .bk-summary-copy strong {
-      font-size: 16px;
-      color: var(--text);
-    }
-    .bk-summary-copy span {
+    .bk-toggle-copy span {
       font-size: 12px;
       color: var(--muted);
+      font-weight: 600;
+    }
+    .bk-toggle-body {
+      padding: 0 18px 18px;
+      display: grid;
+      gap: 14px;
+    }
+    .bk-subtitle {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .bk-subtitle strong {
+      font-size: 15px;
+      color: var(--text);
+    }
+    .bk-subtitle span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bk-actor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-actor-card {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 13px 14px;
+      background: var(--surface-soft);
+    }
+    .bk-actor-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .bk-actor-title strong {
+      font-size: 13px;
+      color: var(--text);
+    }
+    .bk-actor-role {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--primary);
+    }
+    .bk-actor-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .bk-actor-meta b {
+      color: var(--text);
+    }
+    .bk-inline-list {
+      display: grid;
+      gap: 10px;
+    }
+    .bk-inline-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: var(--surface-soft);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .bk-inline-item strong {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .bk-inline-item span {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .bk-inline-amount {
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text);
+      text-align: right;
+    }
+    .bk-list-card .card-hd,
+    .bk-list-card .card-bd {
+      padding: 16px 18px;
+    }
+    .bk-list-card .card-hd {
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .bk-list-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
     }
     .bk-chip-row {
       display: flex;
@@ -184,12 +364,8 @@
       font-size: 11px;
       font-weight: 800;
     }
-    .bk-chip i {
-      color: var(--primary);
-    }
-    .bk-chip strong {
-      color: var(--text);
-    }
+    .bk-chip i { color: var(--primary); }
+    .bk-chip strong { color: var(--text); }
     .bk-type {
       display: inline-flex;
       align-items: center;
@@ -249,12 +425,8 @@
       color: var(--text);
       white-space: nowrap;
     }
-    .bk-amount.income {
-      color: #22c55e;
-    }
-    .bk-amount.expense {
-      color: #fb7185;
-    }
+    .bk-amount.income { color: #22c55e; }
+    .bk-amount.expense { color: #fb7185; }
     .bk-empty {
       padding: 26px 18px;
       border: 1px dashed var(--border);
@@ -294,7 +466,7 @@
       background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
         var(--surface-soft);
-      padding: 15px 16px;
+      padding: 14px 15px;
       box-shadow: var(--shadow-soft);
       position: relative;
       overflow: hidden;
@@ -314,7 +486,7 @@
       background: linear-gradient(180deg, #fb7185, #ff9db0);
     }
     .bk-mobile-card + .bk-mobile-card {
-      margin-top: 12px;
+      margin-top: 10px;
     }
     .bk-mobile-head {
       display: flex;
@@ -338,7 +510,7 @@
     .bk-mobile-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
       margin-top: 12px;
     }
     .bk-mobile-cell {
@@ -365,75 +537,63 @@
       justify-content: flex-end;
       margin-top: 12px;
     }
-    body[data-theme="light"] .bk-panel,
+    body[data-theme="light"] .bk-card,
+    body[data-theme="light"] .bk-list-card,
+    body[data-theme="light"] .bk-toggle,
     body[data-theme="light"] .bk-mobile-card,
     body[data-theme="light"] .bk-empty {
       background: rgba(255, 255, 255, 0.92);
       box-shadow: 0 16px 36px rgba(165, 162, 211, 0.12);
     }
-    body[data-theme="light"] .bk-stats .sc.bk-income {
-      background:
-        radial-gradient(circle at top right, rgba(22, 163, 116, 0.15), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(247, 252, 249, 0.94)),
-        var(--surface);
-    }
-    body[data-theme="light"] .bk-stats .sc.bk-expense {
-      background:
-        radial-gradient(circle at top right, rgba(239, 71, 111, 0.14), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(255, 246, 248, 0.94)),
-        var(--surface);
-    }
-    body[data-theme="light"] .bk-stats .sc.bk-balance {
-      background:
-        radial-gradient(circle at top right, rgba(105, 88, 255, 0.14), transparent 34%),
-        linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(246, 247, 255, 0.94)),
-        var(--surface);
-    }
-    body[data-theme="light"] .bk-filter-bar {
+    body[data-theme="light"] .bk-filter-card {
       background:
         linear-gradient(135deg, rgba(105, 88, 255, 0.08), rgba(92, 141, 255, 0.06)),
-        rgba(255, 255, 255, 0.86);
-    }
-    body[data-theme="light"] .bk-panel .card-hd {
-      background:
-        linear-gradient(180deg, rgba(105, 88, 255, 0.04), transparent),
-        rgba(255, 255, 255, 0.92);
+        rgba(255, 255, 255, 0.9);
     }
     @media (max-width: 1100px) {
-      .bk-layout {
+      .bk-summary-grid {
         grid-template-columns: 1fr;
-      }
-      .bk-filter-form {
-        width: 100%;
       }
     }
     @media (max-width: 900px) {
-      .stat-grid.bk-stats,
-      .stat-grid.bk-stats[style] {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      }
       .bk-filter-form {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      .bk-filter-form .bk-filter-action {
+      .bk-filter-form .bk-filter-submit {
         grid-column: 1 / -1;
       }
       .bk-filter-form .btn {
         width: 100%;
       }
+      .bk-actor-grid {
+        grid-template-columns: 1fr;
+      }
     }
     @media (max-width: 768px) {
-      .bk-filter-bar {
-        padding: 12px 14px;
-        border-radius: 16px;
+      .bk-filter-card {
+        padding: 14px;
       }
-      .bk-filter-copy strong {
-        font-size: 15px;
+      .bk-filter-top {
+        align-items: stretch;
+      }
+      .bk-filter-top .btn {
+        width: 100%;
+        justify-content: center;
       }
       .bk-filter-form {
         grid-template-columns: 1fr;
       }
-      .bk-summary-row {
+      .bk-summary-panel-head,
+      .bk-summary-panel-body,
+      .bk-toggle > summary,
+      .bk-toggle-body,
+      .bk-list-card .card-hd,
+      .bk-list-card .card-bd {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+      .bk-summary-panel-head {
+        flex-direction: column;
         align-items: flex-start;
       }
       .tbl-wrap {
@@ -442,24 +602,36 @@
       .bk-mobile-list {
         display: block;
       }
+      .bk-list-head {
+        align-items: flex-start;
+      }
     }
     @media (max-width: 576px) {
-      .stat-grid.bk-stats,
-      .stat-grid.bk-stats[style] {
-        grid-template-columns: 1fr !important;
+      .bk-breakdown-grid {
+        gap: 8px;
       }
-      .bk-panel .card-hd,
-      .bk-panel .card-bd {
-        padding-left: 14px;
-        padding-right: 14px;
+      .bk-breakdown-item {
+        padding: 10px 11px;
+      }
+      .bk-breakdown-top {
+        font-size: 11px;
+        gap: 6px;
+      }
+      .bk-breakdown-amount {
+        font-size: 15px;
+      }
+      .bk-breakdown-meta {
+        font-size: 10px;
       }
       .bk-mobile-grid {
         grid-template-columns: 1fr;
       }
-      .bk-mobile-head {
+      .bk-mobile-head,
+      .bk-inline-item {
         flex-direction: column;
       }
-      .bk-amount {
+      .bk-amount,
+      .bk-inline-amount {
         text-align: left;
       }
     }
@@ -489,118 +661,192 @@
       <div class="alert alert-<%= pageMsg.type === 'error' ? 'd' : 's' %>" style="margin-bottom:16px"><%= pageMsg.text %></div>
     <% } %>
 
-    <div class="bk-filter-bar">
-      <div class="bk-filter-copy">
-        <strong>Periode Pembukuan</strong>
-        <span><%= monthLabel %> <%= selectedYear %> • <%= pageEntries.length %> entri tampil</span>
-      </div>
-      <form method="GET" action="/admin/bookkeeping" class="bk-filter-form">
-        <select class="fs" name="month" aria-label="Bulan">
-          <% for (let m = 1; m <= 12; m++) { %>
-            <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
-          <% } %>
-        </select>
-        <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
-        <select class="fs" name="type" aria-label="Jenis transaksi">
-          <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
-          <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
-          <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
-        </select>
-        <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan">
-        <div class="bk-filter-action">
-          <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+    <div class="bk-shell">
+      <section class="bk-card bk-filter-card">
+        <div class="bk-filter-top">
+          <div class="bk-filter-copy">
+            <strong>Periode Pembukuan</strong>
+            <span><%= monthLabel %> <%= selectedYear %> - <%= pageEntries.length %> entri tampil</span>
+          </div>
+          <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
+            <i class="bi bi-plus-circle"></i> Tambah Pembukuan
+          </a>
         </div>
-      </form>
-    </div>
-
-    <div class="stat-grid bk-stats" style="grid-template-columns:repeat(3,1fr)">
-      <div class="sc s bk-income">
-        <i class="bi bi-arrow-down-left-circle sc-icon"></i>
-        <div class="sc-label">Kas Masuk</div>
-        <div class="sc-val" style="font-size:22px">Rp <%= totalIncome.toLocaleString('id-ID') %></div>
-        <div class="sc-sub">
-          <span><%= incomeCount %> transaksi masuk</span>
-          <span class="bk-stat-pill"><i class="bi bi-graph-up-arrow"></i> arus sehat</span>
-        </div>
-      </div>
-      <div class="sc d bk-expense">
-        <i class="bi bi-arrow-up-right-circle sc-icon"></i>
-        <div class="sc-label">Kas Keluar</div>
-        <div class="sc-val" style="font-size:22px">Rp <%= totalExpense.toLocaleString('id-ID') %></div>
-        <div class="sc-sub">
-          <span><%= expenseCount %> transaksi keluar</span>
-          <span class="bk-stat-pill"><i class="bi bi-receipt-cutoff"></i> operasional</span>
-        </div>
-      </div>
-      <div class="sc <%= balance >= 0 ? 'p' : 'w' %> bk-balance">
-        <i class="bi bi-wallet2 sc-icon"></i>
-        <div class="sc-label">Selisih</div>
-        <div class="sc-val" style="font-size:22px">Rp <%= balance.toLocaleString('id-ID') %></div>
-        <div class="sc-sub">
-          <span>Hasil periode terpilih</span>
-          <span class="bk-stat-pill"><i class="bi bi-calendar3"></i> <%= monthLabel %></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="bk-layout">
-      <section class="bk-panel">
-        <div class="card-hd">
-          <h6><i class="bi bi-plus-circle"></i> Tambah Pemasukan / Pengeluaran</h6>
-        </div>
-        <div class="card-bd">
-          <form method="POST" action="/admin/bookkeeping">
-            <div class="form-row">
-              <div>
-                <label class="fl">Jenis</label>
-                <select class="fc" name="type" id="entryType" onchange="syncCategoryOptions()">
-                  <option value="expense">Pengeluaran</option>
-                  <option value="income">Pemasukan</option>
-                </select>
-              </div>
-              <div>
-                <label class="fl">Tanggal</label>
-                <input class="fc" type="date" name="entry_date" value="<%= new Date().toISOString().slice(0,10) %>">
-              </div>
-            </div>
-
-            <div class="form-row" style="margin-top:14px">
-              <div>
-                <label class="fl">Nominal</label>
-                <input class="fc" type="number" min="0" name="amount" required placeholder="Contoh: 250000">
-              </div>
-              <div>
-                <label class="fl">Kategori</label>
-                <select class="fc" name="category" id="entryCategory"></select>
-              </div>
-            </div>
-
-            <div style="margin-top:14px">
-              <label class="fl">Kategori Lainnya</label>
-              <input class="fc" name="custom_category" placeholder="Isi jika kategori belum tersedia">
-            </div>
-
-            <div style="margin-top:14px">
-              <label class="fl">Keterangan</label>
-              <textarea class="fc" rows="4" name="description" placeholder="Contoh: Bayar listrik kantor, pembayaran pelanggan, gaji teknisi"></textarea>
-            </div>
-
-            <div class="bk-form-note">
-              Pemasukan untuk kas masuk manual. Pengeluaran untuk operasional seperti listrik, bandwidth, gaji, dan kebutuhan lapangan.
-            </div>
-
-            <button class="btn btn-p" type="submit" style="margin-top:16px"><i class="bi bi-save2"></i> Simpan Pembukuan</button>
-          </form>
-        </div>
+        <form method="GET" action="/admin/bookkeeping" class="bk-filter-form">
+          <select class="fs" name="month" aria-label="Bulan">
+            <% for (let m = 1; m <= 12; m++) { %>
+              <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
+            <% } %>
+          </select>
+          <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
+          <select class="fs" name="type" aria-label="Jenis transaksi">
+            <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
+            <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
+            <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
+          </select>
+          <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan">
+          <div class="bk-filter-submit">
+            <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+          </div>
+        </form>
       </section>
 
-      <section class="bk-panel">
+      <div class="bk-summary-grid">
+        <section class="bk-card">
+          <div class="bk-summary-panel-head">
+            <div>
+              <strong>Pemasukan Total</strong>
+              <h3>Rp <%= totalIncome.toLocaleString('id-ID') %></h3>
+              <span><%= incomeCount %> transaksi masuk pada <%= monthLabel %> <%= selectedYear %></span>
+            </div>
+            <span class="bk-summary-badge"><i class="bi bi-arrow-down-left-circle"></i> Pemasukan</span>
+          </div>
+          <div class="bk-summary-panel-body">
+            <div class="bk-breakdown-grid">
+              <% incomeCards.forEach((item) => { %>
+                <div class="bk-breakdown-item tone-<%= item.tone %>">
+                  <div class="bk-breakdown-top"><i class="bi <%= item.icon %>"></i><span><%= item.label %></span></div>
+                  <div class="bk-breakdown-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                  <div class="bk-breakdown-meta"><%= Number(item.count || 0) %> transaksi</div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </section>
+
+        <section class="bk-card">
+          <div class="bk-summary-panel-head">
+            <div>
+              <strong>Rekap Ringkas</strong>
+              <h3>Rp <%= Number(comparison.netAmount || balance).toLocaleString('id-ID') %></h3>
+              <span><%= Number(comparison.netAmount || balance) >= 0 ? 'Selisih bersih periode ini' : 'Selisih minus periode ini' %></span>
+            </div>
+            <span class="bk-summary-badge"><i class="bi bi-wallet2"></i> Laba Rugi</span>
+          </div>
+          <div class="bk-summary-panel-body">
+            <div class="bk-profit-stack">
+              <div class="bk-comparison-card">
+                <div class="bk-comparison-row"><span>Total Pemasukan</span><strong>Rp <%= Number(comparison.incomeAmount || totalIncome).toLocaleString('id-ID') %></strong></div>
+                <div class="bk-comparison-row"><span>Total Pengeluaran</span><strong>Rp <%= Number(comparison.expenseAmount || totalExpense).toLocaleString('id-ID') %></strong></div>
+                <div class="bk-comparison-row" style="margin-bottom:0"><span>Total Bersih</span><strong>Rp <%= Number(comparison.netAmount || balance).toLocaleString('id-ID') %></strong></div>
+              </div>
+              <div class="bk-comparison-card">
+                <div class="bk-comparison-row"><span>Persentase pengeluaran</span><strong><%= Number(comparison.expenseVsIncomePercent || 0) %>%</strong></div>
+                <div class="bk-progress"><span style="width:<%= Math.min(100, Number(comparison.expenseVsIncomePercent || 0)) %>%"></span></div>
+              </div>
+              <div class="bk-breakdown-grid">
+                <% expenseCards.forEach((item, idx) => { %>
+                  <div class="bk-breakdown-item">
+                    <div class="bk-breakdown-top"><i class="bi <%= idx % 2 === 0 ? 'bi-receipt-cutoff' : 'bi-tools' %>"></i><span><%= item.label %></span></div>
+                    <div class="bk-breakdown-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                    <div class="bk-breakdown-meta"><%= Number(item.count || 0) %> transaksi</div>
+                  </div>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <details class="bk-toggle">
+        <summary>
+          <div class="bk-toggle-copy">
+            <strong>Info Petugas & Approval Pembayaran</strong>
+            <span>Lihat ringkasan pembayaran per petugas dan approval lapangan.</span>
+          </div>
+          <span class="bk-summary-badge"><i class="bi bi-chevron-down"></i> Buka</span>
+        </summary>
+        <div class="bk-toggle-body">
+          <section>
+            <div class="bk-subtitle">
+              <strong>Ringkasan Pembayaran per Petugas</strong>
+              <span>Diambil dari tagihan yang sudah lunas pada periode terpilih.</span>
+            </div>
+            <% if (!actorBreakdown.length) { %>
+              <div class="bk-empty" style="padding:18px 14px">
+                <strong>Belum ada data petugas</strong>
+                <span>Pembayaran yang sudah diproses admin, kasir, kolektor, atau teknisi akan muncul di sini.</span>
+              </div>
+            <% } else { %>
+              <div class="bk-actor-grid">
+                <% actorBreakdown.forEach((actor) => { %>
+                  <div class="bk-actor-card">
+                    <div class="bk-actor-title">
+                      <strong><%= actor.label %></strong>
+                      <span class="bk-actor-role"><%= actor.role %></span>
+                    </div>
+                    <div class="bk-actor-meta">
+                      <div>Total masuk: <b>Rp <%= Number(actor.amount || 0).toLocaleString('id-ID') %></b></div>
+                      <div>Cash: <b>Rp <%= Number(actor.cashAmount || 0).toLocaleString('id-ID') %></b> - Online: <b>Rp <%= Number(actor.onlineAmount || 0).toLocaleString('id-ID') %></b></div>
+                      <div><b><%= Number(actor.count || 0) %></b> transaksi - terakhir <%= actor.lastPaidAt || '-' %></div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </section>
+
+          <section>
+            <div class="bk-subtitle">
+              <strong>Daftar Pembayaran Terbaru</strong>
+              <span>Menampilkan pembayaran lunas per bulan dan siapa yang memprosesnya.</span>
+            </div>
+            <% if (!recentPayments.length) { %>
+              <div class="bk-empty" style="padding:18px 14px">
+                <strong>Belum ada pembayaran terbaru</strong>
+                <span>Daftar pembayaran lunas akan muncul otomatis di sini.</span>
+              </div>
+            <% } else { %>
+              <div class="bk-inline-list">
+                <% recentPayments.forEach((item) => { %>
+                  <div class="bk-inline-item">
+                    <div>
+                      <strong><%= item.customerName %> - <%= monthNames[Math.max(0, Math.min(11, (item.periodMonth || 1) - 1))] %> <%= item.periodYear %></strong>
+                      <span>Dilunaskan oleh <b><%= item.actorLabel %></b> - Kanal <b><%= item.gateway %></b></span>
+                      <span>Waktu: <%= item.paidAt || '-' %></span>
+                    </div>
+                    <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </section>
+
+          <section>
+            <div class="bk-subtitle">
+              <strong>Approval Pembayaran Kolektor</strong>
+              <span>Ringkasan pembayaran lapangan yang di-OK-kan admin atau kasir.</span>
+            </div>
+            <% if (!approvalBreakdown.length) { %>
+              <div class="bk-empty" style="padding:18px 14px">
+                <strong>Belum ada approval periode ini</strong>
+                <span>Saat ada approval pembayaran kolektor, rangkumannya akan tampil di sini.</span>
+              </div>
+            <% } else { %>
+              <div class="bk-inline-list">
+                <% approvalBreakdown.forEach((item) => { %>
+                  <div class="bk-inline-item">
+                    <div>
+                      <strong><%= item.customerName %></strong>
+                      <span>Kolektor: <b><%= item.collectorName %></b> - Di-OK-kan oleh <b><%= item.approvedBy %></b></span>
+                      <span>Waktu approval: <%= item.decidedAt || '-' %></span>
+                    </div>
+                    <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+          </section>
+        </div>
+      </details>
+
+      <section class="bk-list-card">
         <div class="card-hd">
           <h6><i class="bi bi-journal-text"></i> Riwayat Pembukuan</h6>
         </div>
         <div class="card-bd">
-          <div class="bk-summary-row">
-            <div class="bk-summary-copy">
+          <div class="bk-list-head">
+            <div class="bk-subtitle" style="margin-bottom:0">
               <strong>Riwayat Transaksi</strong>
               <span>Semua entri untuk <%= monthLabel %> <%= selectedYear %></span>
             </div>
@@ -615,7 +861,7 @@
             <div class="bk-empty">
               <i class="bi bi-journal-x"></i>
               <strong>Belum ada data pembukuan</strong>
-              <span>Masukkan pemasukan atau pengeluaran baru untuk mulai mencatat arus kas usaha Anda.</span>
+              <span>Gunakan tombol tambah untuk mencatat pemasukan atau pengeluaran baru.</span>
             </div>
           <% } else { %>
             <div class="tbl-wrap">
@@ -721,22 +967,5 @@
     </div>
   </div>
 </div>
-
-<script>
-  const CATEGORY_OPTIONS = <%- JSON.stringify(pageCategories) %>;
-  function syncCategoryOptions() {
-    const type = document.getElementById('entryType').value === 'income' ? 'income' : 'expense';
-    const select = document.getElementById('entryCategory');
-    const options = Array.isArray(CATEGORY_OPTIONS[type]) ? CATEGORY_OPTIONS[type] : [];
-    select.replaceChildren();
-    options.forEach((item) => {
-      const option = document.createElement('option');
-      option.value = String(item);
-      option.textContent = String(item);
-      select.appendChild(option);
-    });
-  }
-  syncCategoryOptions();
-</script>
 </body>
 </html>

@@ -88,6 +88,7 @@
               <th><%= t('admin.routers.table.name', 'Nama Router') %></th>
               <th><%= t('admin.routers.table.host', 'Host / IP') %></th>
               <th><%= t('admin.routers.table.port', 'Port') %></th>
+              <th>Mode OS</th>
               <th><%= t('admin.routers.table.username', 'Username') %></th>
               <th><%= t('admin.routers.table.status', 'Status') %></th>
               <th><%= t('common.actions', 'Aksi') %></th>
@@ -95,7 +96,7 @@
           </thead>
           <tbody>
           <% if (routers.length === 0) { %>
-            <tr><td colspan="7" class="text-center text-muted" style="padding:32px"><%= t('admin.routers.empty', 'Belum ada router yang ditambahkan') %></td></tr>
+            <tr><td colspan="8" class="text-center text-muted" style="padding:32px"><%= t('admin.routers.empty', 'Belum ada router yang ditambahkan') %></td></tr>
           <% } %>
           <% routers.forEach((r, i) => { %>
             <tr>
@@ -103,6 +104,7 @@
               <td class="fw6"><%= r.name %></td>
               <td><%= r.host %></td>
               <td><%= r.port %></td>
+              <td><%= r.os_mode === 'routeros_v6' ? 'ROS 6' : (r.os_mode === 'routeros_v7' ? 'ROS 7' : 'Auto') %></td>
               <td><%= r.user %></td>
               <td>
                 <% if (r.is_active) { %><span class="badge bs"><%= t('common.active', 'Aktif') %></span><% } else { %><span class="badge bm"><%= t('common.inactive', 'Nonaktif') %></span><% } %>
@@ -143,6 +145,10 @@
               <div class="router-mobile-cell">
                 <div class="router-mobile-label"><%= t('admin.routers.table.port', 'Port') %></div>
                 <div class="router-mobile-value"><%= r.port %></div>
+              </div>
+              <div class="router-mobile-cell">
+                <div class="router-mobile-label">Mode OS</div>
+                <div class="router-mobile-value"><%= r.os_mode === 'routeros_v6' ? 'ROS 6' : (r.os_mode === 'routeros_v7' ? 'ROS 7' : 'Auto') %></div>
               </div>
               <div class="router-mobile-cell">
                 <div class="router-mobile-label"><%= t('admin.routers.table.username', 'Username') %></div>
@@ -199,7 +205,17 @@
           <div class="fg"><label class="fl"><%= t('admin.routers.form.username', 'Username MikroTik') %> *</label><input class="fc" name="user" required></div>
         </div>
         <div class="form-row">
+          <div class="fg">
+            <label class="fl">Mode OS MikroTik</label>
+            <select class="fs" name="os_mode">
+              <option value="auto">Auto Detect</option>
+              <option value="routeros_v6">RouterOS v6</option>
+              <option value="routeros_v7">RouterOS v7</option>
+            </select>
+          </div>
           <div class="fg"><label class="fl"><%= t('admin.routers.form.password', 'Password') %> *</label><input class="fc" name="password" type="password" required></div>
+        </div>
+        <div class="form-row">
           <div class="fg">
             <label class="fl"><%= t('admin.routers.form.status', 'Status') %></label>
             <select class="fs" name="is_active">
@@ -233,7 +249,17 @@
           <div class="fg"><label class="fl"><%= t('admin.routers.form.username', 'Username MikroTik') %> *</label><input class="fc" name="user" id="e_user" required></div>
         </div>
         <div class="form-row">
+          <div class="fg">
+            <label class="fl">Mode OS MikroTik</label>
+            <select class="fs" name="os_mode" id="e_os_mode">
+              <option value="auto">Auto Detect</option>
+              <option value="routeros_v6">RouterOS v6</option>
+              <option value="routeros_v7">RouterOS v7</option>
+            </select>
+          </div>
           <div class="fg"><label class="fl"><%= t('admin.routers.form.password_keep', 'Password (Kosongkan jika tetap)') %></label><input class="fc" name="password" type="password"></div>
+        </div>
+        <div class="form-row">
           <div class="fg">
             <label class="fl"><%= t('admin.routers.form.status', 'Status') %></label>
             <select class="fs" name="is_active" id="e_active">
@@ -269,6 +295,7 @@ function editRouter(idx) {
   document.getElementById('e_host').value = r.host;
   document.getElementById('e_port').value = r.port;
   document.getElementById('e_user').value = r.user;
+  document.getElementById('e_os_mode').value = r.os_mode || 'auto';
   document.getElementById('e_active').value = r.is_active;
   document.getElementById('e_desc').value = r.description || '';
   openModal('editModal');

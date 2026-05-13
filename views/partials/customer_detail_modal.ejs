@@ -1,0 +1,763 @@
+<%
+  const customerDetailScope = typeof scope !== 'undefined' ? String(scope) : 'admin';
+  const customerDetailAllowPayment = Boolean(typeof allowPayment !== 'undefined' ? allowPayment : false);
+  const customerDetailAllowDeviceActions = Boolean(typeof allowDeviceActions !== 'undefined' ? allowDeviceActions : true);
+  const customerDetailApiBase = typeof detailApiBase !== 'undefined' ? String(detailApiBase) : (customerDetailScope === 'tech' ? '/tech/api/customers' : '/admin/api/customers');
+  const customerDetailDeviceApiBase = typeof deviceApiBase !== 'undefined' ? String(deviceApiBase) : (customerDetailScope === 'tech' ? '/tech/api/device' : '/admin/api/device');
+  const customerDetailPaymentApiBase = typeof paymentApiBase !== 'undefined' ? String(paymentApiBase) : customerDetailApiBase;
+%>
+<style>
+  .customer-detail-overlay{position:fixed;inset:0;background:rgba(2,6,23,.58);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:1400;padding:16px}
+  .customer-detail-overlay.show{display:flex}
+  .customer-detail-shell{width:min(920px,100%);max-height:calc(100vh - 32px);overflow:auto;border-radius:24px;border:1px solid rgba(148,163,184,.18);background:var(--bg2, #111827);box-shadow:0 30px 80px rgba(15,23,42,.32)}
+  .customer-detail-shell::-webkit-scrollbar{width:10px}
+  .customer-detail-shell::-webkit-scrollbar-thumb{background:rgba(148,163,184,.35);border-radius:999px}
+  .customer-detail-hero{position:relative;padding:18px;background:linear-gradient(135deg,#1f2f73 0%,#2f8fe8 55%,#0ea5e9 100%);color:#fff;min-height:0}
+  .customer-detail-hero.has-photo{background-size:cover;background-position:center}
+  .customer-detail-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,23,42,.18),rgba(15,23,42,.74))}
+  .customer-detail-hero > *{position:relative;z-index:1}
+  .customer-detail-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .customer-detail-title h3{margin:0;font-size:24px;font-weight:900;line-height:1.08}
+  .customer-hero-kicker{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.78;margin-bottom:6px}
+  .customer-detail-title .sub{margin-top:6px;font-size:13px;opacity:.92}
+  .customer-hero-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .customer-hero-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.14);font-size:11px;font-weight:700}
+  .customer-detail-close{border:0;background:rgba(255,255,255,.14);color:#fff;width:40px;height:40px;border-radius:14px;font-size:20px;flex:0 0 auto}
+  .customer-detail-summary-grid,.customer-detail-network-grid,.customer-detail-data-grid{display:grid;gap:10px}
+  .customer-detail-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .customer-detail-network-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .customer-detail-data-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .customer-detail-body{padding:16px;background:var(--bg, #0f172a)}
+  .customer-detail-section{background:var(--bg2, #111827);border:1px solid var(--border, rgba(148,163,184,.16));border-radius:20px;padding:14px 14px 12px;margin-bottom:12px}
+  .customer-detail-section h4{margin:0 0 12px;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px}
+  .customer-detail-cell{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(148,163,184,.12)}
+  .customer-detail-cell.emphasis{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16)}
+  .customer-detail-cell .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted, #94a3b8);margin-bottom:4px}
+  .customer-detail-cell .value{font-size:13px;font-weight:700;line-height:1.4;word-break:break-word}
+  .customer-detail-cell .value.status-chip{display:flex;align-items:flex-start}
+  .customer-detail-cell.emphasis .value{font-size:15px;font-weight:900}
+  .customer-span-2{grid-column:span 2}
+  .customer-span-3{grid-column:span 3}
+  .customer-detail-cell.compact{padding:10px 11px}
+  .customer-detail-cell.compact .label{margin-bottom:3px}
+  .customer-detail-cell.compact .value{font-size:12.5px}
+  .customer-docs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .customer-doc-card{border-radius:18px;border:1px solid rgba(148,163,184,.14);padding:10px;background:rgba(255,255,255,.03)}
+  .customer-doc-card img{width:100%;height:160px;object-fit:cover;border-radius:14px;display:block}
+  .customer-doc-empty{height:160px;border-radius:14px;border:1px dashed rgba(148,163,184,.24);display:grid;place-items:center;color:var(--muted,#94a3b8);font-size:12px}
+  .customer-billing-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .customer-live-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(16,185,129,.18);border:1px solid rgba(52,211,153,.22);font-size:11px;font-weight:800;color:#bbf7d0}
+  .customer-collapsible{padding:0}
+  .customer-collapsible summary{list-style:none;cursor:pointer;padding:14px 14px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .customer-collapsible summary::-webkit-details-marker{display:none}
+  .customer-collapsible summary .chev{transition:transform .18s ease}
+  .customer-collapsible[open] summary .chev{transform:rotate(180deg)}
+  .customer-collapsible-body{padding:0 14px 12px}
+  .customer-billing-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .billing-month{padding:10px 11px;border-radius:16px;border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.03)}
+  .billing-month .head{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-bottom:6px}
+  .billing-month .name{font-size:12px;font-weight:800}
+  .billing-month .status{font-size:10px;font-weight:800;padding:4px 7px;border-radius:999px}
+  .billing-month .status.paid{background:rgba(34,197,94,.14);color:#22c55e}
+  .billing-month .status.unpaid{background:rgba(245,158,11,.14);color:#f59e0b}
+  .billing-month .status.isolated{background:rgba(239,68,68,.14);color:#ef4444}
+  .billing-month .status.missing{background:rgba(148,163,184,.14);color:var(--muted,#94a3b8)}
+  .billing-month .meta{font-size:11px;color:var(--muted,#94a3b8);line-height:1.45}
+  .billing-pay-btn{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:var(--primary,#3b82f6);color:#fff;font-size:12px;font-weight:800}
+  .device-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .device-action-card{padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.035)}
+  .device-action-card label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#94a3b8);margin-bottom:6px}
+  .device-action-card input{width:100%;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.06);color:inherit;padding:10px 11px}
+  .device-action-card button{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:rgba(59,130,246,.18);color:inherit;font-weight:800}
+  .customer-detail-muted{color:var(--muted,#94a3b8)}
+  .customer-mobile-secondary{display:block}
+  .customer-avatar{width:70px;height:70px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18);font-size:32px;overflow:hidden;flex:0 0 auto}
+  .customer-avatar img{width:100%;height:100%;object-fit:cover}
+  .customer-hero-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+  .customer-hero-identity{display:flex;gap:14px;align-items:center;min-width:0}
+  .customer-hero-meta{min-width:0}
+  .customer-hero-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .customer-hero-name-row h3{margin:0}
+  .customer-hero-contact{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:13px;opacity:.96}
+  .customer-code-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#3ea3ff;color:#fff;font-size:12px;font-weight:800;box-shadow:0 10px 24px rgba(59,130,246,.26)}
+  .customer-hero-traffic{display:grid;gap:8px;justify-items:end;text-align:right}
+  .customer-traffic-rate{font-size:13px;font-weight:800;line-height:1.35}
+  .customer-traffic-total{font-size:12px;opacity:.9}
+  .customer-rate-down{color:#86efac}
+  .customer-rate-up{color:#93c5fd}
+  .customer-detail-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:var(--bg2,#111827);border:1px solid var(--border,rgba(148,163,184,.16));border-radius:18px;padding:4px;margin:14px 0 0}
+  .customer-tab-btn{border:0;background:transparent;color:var(--muted,#94a3b8);padding:10px 6px;border-radius:14px;font-size:12px;font-weight:800;font-family:inherit}
+  .customer-tab-btn.active{background:rgba(59,130,246,.16);color:#fff;box-shadow:inset 0 -2px 0 rgba(255,255,255,.08)}
+  .customer-tab-panel{display:none}
+  .customer-tab-panel.active{display:block}
+  .customer-state-banner{
+    display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 18px;border-radius:20px;
+    background:linear-gradient(135deg,rgba(34,197,94,.22),rgba(22,163,74,.24));border:1px solid rgba(74,222,128,.24);color:#dcfce7;
+    font-size:16px;font-weight:900;letter-spacing:-.02em;margin-bottom:12px
+  }
+  .customer-state-banner.unpaid{background:linear-gradient(135deg,rgba(245,158,11,.18),rgba(249,115,22,.2));border-color:rgba(251,191,36,.24);color:#fef3c7}
+  .customer-state-banner.suspended{background:linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.22));border-color:rgba(248,113,113,.24);color:#fee2e2}
+  .customer-state-banner i{font-size:24px}
+  .customer-network-status{
+    display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
+    border:1px solid transparent
+  }
+  .customer-network-status.online{background:rgba(34,197,94,.14);color:#22c55e;border-color:rgba(34,197,94,.22)}
+  .customer-network-status.offline{background:rgba(239,68,68,.14);color:#ef4444;border-color:rgba(239,68,68,.22)}
+  .customer-network-status.warn{background:rgba(245,158,11,.14);color:#f59e0b;border-color:rgba(245,158,11,.22)}
+  .customer-detail-cardline{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .customer-detail-cardline .value{margin-top:0!important}
+  .customer-traffic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .customer-traffic-card{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.04)}
+  .customer-traffic-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#94a3b8)}
+  .customer-traffic-card .value{font-size:18px;font-weight:900;line-height:1.1;margin-top:6px}
+  .customer-traffic-card .sub{font-size:11px;color:var(--muted,#94a3b8);margin-top:4px}
+  .customer-traffic-card.download .value{color:#86efac}
+  .customer-traffic-card.upload .value{color:#93c5fd}
+  .customer-list-rows{display:grid;gap:10px}
+  .customer-list-row{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
+  .customer-list-row .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .customer-list-row .title{font-size:13px;font-weight:800}
+  .customer-list-row .meta{font-size:11px;color:var(--muted,#94a3b8);margin-top:4px;line-height:1.45}
+  .customer-doc-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .customer-note-box{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
+  .customer-note-box .big{font-size:13px;font-weight:700;line-height:1.5}
+  @media (max-width: 860px){
+    .customer-detail-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .customer-detail-network-grid,.customer-detail-data-grid,.customer-docs,.device-actions{grid-template-columns:1fr}
+  }
+  @media (max-width: 560px){
+    .customer-detail-overlay{padding:0;align-items:flex-end}
+    .customer-detail-shell{width:100%;max-height:92vh;border-radius:24px 24px 0 0;border-bottom:0}
+    .customer-detail-hero{padding:14px}
+    .customer-detail-topbar{margin-bottom:10px}
+    .customer-detail-title h3{font-size:20px}
+    .customer-detail-title .sub{font-size:12px}
+    .customer-hero-pills{gap:6px}
+    .customer-hero-pill{font-size:10px;padding:6px 9px}
+    .customer-detail-close{width:38px;height:38px;border-radius:12px}
+    .customer-detail-body{padding:12px}
+    .customer-detail-section{padding:12px 12px 10px;border-radius:18px}
+    .customer-detail-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .customer-detail-network-grid,.customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .customer-detail-cell{padding:9px 10px}
+    .customer-detail-cell .value{font-size:12px;line-height:1.32}
+    .customer-detail-cell.emphasis .value{font-size:14px}
+    .customer-mobile-secondary{display:none}
+    .customer-span-2,.customer-span-3{grid-column:span 2}
+    .customer-doc-card img,.customer-doc-empty{height:132px}
+    .customer-billing-months{grid-template-columns:1fr}
+    .customer-collapsible summary{padding:12px 12px 10px}
+    .customer-collapsible-body{padding:0 12px 10px}
+    .customer-hero-main{flex-direction:column}
+    .customer-hero-identity{align-items:flex-start}
+    .customer-avatar{width:58px;height:58px;font-size:28px}
+    .customer-hero-contact{font-size:12px;gap:8px}
+    .customer-code-pill{font-size:11px;padding:6px 10px}
+    .customer-hero-traffic{width:100%;justify-items:start;text-align:left}
+    .customer-detail-tabs{margin-top:12px}
+    .customer-tab-btn{font-size:10.5px;padding:9px 4px}
+    .customer-state-banner{font-size:14px;padding:14px 12px}
+    .customer-traffic-grid{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="customer-detail-overlay" id="customerDetailOverlay" onclick="if(event.target===this) closeCustomerDetailModal()">
+  <div class="customer-detail-shell">
+    <div id="customerDetailContent"></div>
+  </div>
+</div>
+
+<script>
+  const CUSTOMER_DETAIL_OPTIONS = {
+    scope: <%- JSON.stringify(customerDetailScope) %>,
+    allowPayment: <%- JSON.stringify(customerDetailAllowPayment) %>,
+    allowDeviceActions: <%- JSON.stringify(customerDetailAllowDeviceActions) %>,
+    detailApiBase: <%- JSON.stringify(customerDetailApiBase) %>,
+    deviceApiBase: <%- JSON.stringify(customerDetailDeviceApiBase) %>,
+    paymentApiBase: <%- JSON.stringify(customerDetailPaymentApiBase) %>
+  };
+  let customerDetailState = { customerId: null, year: new Date().getFullYear(), data: null, activeTab: 'detail', refreshTimer: null };
+  const customerTrafficHistory = new Map();
+
+  function escapeCustomerDetailHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function customerDetailRupiah(value) {
+    return 'Rp ' + (Number(value || 0) || 0).toLocaleString('id-ID');
+  }
+
+  function customerDetailBytesToGb(bytes) {
+    return ((Number(bytes || 0) || 0) / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  function customerDetailDateTime(value, fallback = '-') {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  function customerDetailDate(value, fallback = '-') {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    }).format(date);
+  }
+
+  function customerDetailMonthName(month) {
+    return ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][Math.max(0, (Number(month || 1) - 1))] || '-';
+  }
+
+  function customerDetailStatusChip(status) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'active') return 'Aktif';
+    if (normalized === 'suspended') return 'Suspend';
+    if (normalized === 'inactive') return 'Nonaktif';
+    return normalized || '-';
+  }
+
+  function customerDetailInvoiceStatus(invoice) {
+    if (!invoice) return { label: 'Belum Ada Tagihan', cls: 'missing' };
+    if (String(invoice.status || '').toLowerCase() === 'paid') return { label: 'Lunas', cls: 'paid' };
+    return { label: 'Belum Lunas', cls: 'unpaid' };
+  }
+
+  function customerDetailFormatRate(bytesPerSecond) {
+    const value = Number(bytesPerSecond || 0) || 0;
+    if (value <= 0) return '0 kb/s';
+    const kbPerSecond = value / 1024;
+    if (kbPerSecond >= 1024) return (kbPerSecond / 1024).toFixed(1) + ' Mb/s';
+    return kbPerSecond.toFixed(1) + ' kb/s';
+  }
+
+  function customerDetailComputeTrafficState(detail) {
+    const usage = detail?.usage || {};
+    const now = Date.now();
+    const key = String(customerDetailState.customerId || '0');
+    const currentDown = Number(usage.liveDownloadBytes || usage.downloadBytes || 0) || 0;
+    const currentUp = Number(usage.liveUploadBytes || usage.uploadBytes || 0) || 0;
+    const previous = customerTrafficHistory.get(key);
+    let downRate = 0;
+    let upRate = 0;
+
+    if (previous && usage.isLive) {
+      const seconds = Math.max(1, (now - previous.time) / 1000);
+      downRate = Math.max(0, currentDown - previous.down) / seconds;
+      upRate = Math.max(0, currentUp - previous.up) / seconds;
+    }
+
+    customerTrafficHistory.set(key, { down: currentDown, up: currentUp, time: now });
+
+    return {
+      downRateText: customerDetailFormatRate(downRate),
+      upRateText: customerDetailFormatRate(upRate)
+    };
+  }
+
+  function customerDetailNetworkStatusChip(online, status) {
+    const normalized = String(status || '').trim() || (online ? 'Online' : 'Offline');
+    const lower = normalized.toLowerCase();
+    const cls = online ? 'online' : (lower.includes('disable') || lower.includes('suspend') ? 'warn' : 'offline');
+    return `<span class="customer-network-status ${cls}"><i class="bi bi-circle-fill"></i>${escapeCustomerDetailHtml(normalized)}</span>`;
+  }
+
+  function customerDetailCurrentCode(customer) {
+    return customer?.customerCode || customer?.genieacsTag || customer?.pppoeUsername || customer?.phone || String(customer?.id || '-');
+  }
+
+  function customerDetailBanner(invoiceStatus, currentInvoice, network) {
+    if (!currentInvoice) {
+      return { text: 'Belum ada tagihan aktif', cls: '', icon: 'bi-clock-history' };
+    }
+    if (invoiceStatus.cls === 'paid') {
+      return { text: 'Tidak ada tagihan', cls: '', icon: 'bi-check-circle' };
+    }
+    if (String(customerDetailStatusChip(network?.status || '')).toLowerCase().includes('suspend')) {
+      return { text: 'Tagihan belum lunas dan layanan tersuspend', cls: 'suspended', icon: 'bi-x-octagon' };
+    }
+    return { text: 'Tagihan aktif ' + customerDetailRupiah(currentInvoice.amount), cls: 'unpaid', icon: 'bi-receipt' };
+  }
+
+  function customerDetailSwitchTab(tabName) {
+    customerDetailState.activeTab = String(tabName || 'detail');
+    document.querySelectorAll('[data-customer-tab]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.customerTab === customerDetailState.activeTab);
+    });
+    document.querySelectorAll('[data-customer-panel]').forEach((panel) => {
+      panel.classList.toggle('active', panel.dataset.customerPanel === customerDetailState.activeTab);
+    });
+  }
+
+  function customerDetailStartPolling() {
+    if (customerDetailState.refreshTimer) clearInterval(customerDetailState.refreshTimer);
+    customerDetailState.refreshTimer = setInterval(() => {
+      if (!document.getElementById('customerDetailOverlay')?.classList.contains('show')) return;
+      if (!customerDetailState.customerId) return;
+      loadCustomerDetail(customerDetailState.year);
+    }, 3000);
+  }
+
+  function openCustomerDetail(customerId, year = null) {
+    customerDetailState.customerId = Number(customerId || 0) || 0;
+    customerDetailState.year = Number(year || new Date().getFullYear()) || new Date().getFullYear();
+    customerDetailState.activeTab = customerDetailState.activeTab || 'detail';
+    const overlay = document.getElementById('customerDetailOverlay');
+    const content = document.getElementById('customerDetailContent');
+    if (!overlay || !content || !customerDetailState.customerId) return;
+    overlay.classList.add('show');
+    content.replaceChildren();
+    content.insertAdjacentHTML('afterbegin', '<div class="customer-detail-hero"><div class="customer-detail-title"><h3>Memuat detail pelanggan...</h3><div class="sub">Mohon tunggu sebentar</div></div></div>');
+    customerDetailStartPolling();
+    loadCustomerDetail();
+  }
+
+  function closeCustomerDetailModal() {
+    if (customerDetailState.refreshTimer) {
+      clearInterval(customerDetailState.refreshTimer);
+      customerDetailState.refreshTimer = null;
+    }
+    document.getElementById('customerDetailOverlay')?.classList.remove('show');
+  }
+
+  async function parseCustomerDetailResponse(res) {
+    const contentType = String(res?.headers?.get('content-type') || '').toLowerCase();
+    if (contentType.includes('application/json')) {
+      return await res.json();
+    }
+
+    const raw = await res.text();
+    if (res.redirected || /<!doctype|<html/i.test(raw)) {
+      throw new Error('Sesi admin sudah berakhir. Silakan login ulang.');
+    }
+
+    throw new Error('Server tidak mengirim detail pelanggan yang valid.');
+  }
+
+  async function loadCustomerDetail(year = null) {
+    const customerId = customerDetailState.customerId;
+    const targetYear = Number(year || customerDetailState.year || new Date().getFullYear()) || new Date().getFullYear();
+    customerDetailState.year = targetYear;
+    const content = document.getElementById('customerDetailContent');
+    if (!customerId || !content) return;
+    const url = `${CUSTOMER_DETAIL_OPTIONS.detailApiBase}/${encodeURIComponent(String(customerId))}/detail?year=${encodeURIComponent(String(targetYear))}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'fetch'
+        },
+        credentials: 'same-origin',
+        signal: controller.signal
+      });
+      const json = await parseCustomerDetailResponse(res);
+      if (!res.ok) throw new Error(json?.error || 'Gagal memuat detail pelanggan');
+      customerDetailState.data = json;
+      renderCustomerDetail(json);
+    } catch (error) {
+      const message = error?.name === 'AbortError'
+        ? 'Memuat detail terlalu lama. Silakan coba lagi.'
+        : (error.message || String(error));
+      content.replaceChildren();
+      content.insertAdjacentHTML('afterbegin', `<div class="customer-detail-hero"><div class="customer-detail-title"><h3>Gagal memuat detail</h3><div class="sub">${escapeCustomerDetailHtml(message)}</div></div></div>`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  function renderCustomerDetail(detail) {
+    const content = document.getElementById('customerDetailContent');
+    if (!content) return;
+    const customer = detail?.customer || {};
+    const usage = detail?.usage || {};
+    const network = detail?.network || {};
+    const device = detail?.device || null;
+    const currentInvoice = detail?.currentInvoice || null;
+    const billing = detail?.billing || { months: [], year: new Date().getFullYear() };
+    const invoiceStatus = customerDetailInvoiceStatus(currentInvoice);
+    const banner = customerDetailBanner(invoiceStatus, currentInvoice, network);
+    const heroClass = customer.housePhotoUrl ? 'customer-detail-hero has-photo' : 'customer-detail-hero';
+    const heroStyle = customer.housePhotoUrl ? ` style="background-image:url('${escapeCustomerDetailHtml(customer.housePhotoUrl)}')"` : '';
+    const heroSubtitle = [customer.phone || '-', customer.address || ''].filter(Boolean).join(' • ');
+    const packageSpeedText = customer.speedDown
+      ? `${Math.round(Number(customer.speedDown || 0) / 1000)} / ${Math.round(Number(customer.speedUp || 0) / 1000)} Mbps`
+      : '-';
+    const routerText = customer.routerName || customer.oltName || 'Tanpa router';
+    const trafficLabel = usage?.isLive ? 'Traffic Live' : 'Traffic Tersimpan';
+    const trafficHint = usage?.isLive ? 'Data sesi aktif dari MikroTik' : 'Data terakhir tersimpan';
+    const monthlyTrafficText = customerDetailBytesToGb(usage.storedTotalBytes || usage.totalBytes);
+    const trafficState = customerDetailComputeTrafficState(detail);
+    const showPayTab = CUSTOMER_DETAIL_OPTIONS.allowPayment;
+    const codeLabel = customerDetailCurrentCode(customer);
+    const activeTab = customerDetailState.activeTab || 'detail';
+
+    content.replaceChildren();
+    content.insertAdjacentHTML('afterbegin', `
+      <div class="${heroClass}"${heroStyle}>
+        <div class="customer-detail-topbar">
+          <div class="customer-detail-title" style="width:100%">
+            <div class="customer-hero-kicker">Detail Pelanggan</div>
+            <div class="customer-hero-main">
+              <div class="customer-hero-identity">
+                <div class="customer-avatar">
+                  ${customer.housePhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.housePhotoUrl)}" alt="Foto rumah">` : '<i class="bi bi-person-circle"></i>'}
+                </div>
+                <div class="customer-hero-meta">
+                  <div class="customer-hero-name-row">
+                    <h3>${escapeCustomerDetailHtml(customer.name || '-')}</h3>
+                    ${customerDetailNetworkStatusChip(Boolean(network.online), network.status)}
+                  </div>
+                  <div class="customer-hero-contact">
+                    <span><i class="bi bi-telephone-fill"></i> ${escapeCustomerDetailHtml(customer.phone || '-')}</span>
+                    <span><i class="bi bi-box-seam"></i> ${escapeCustomerDetailHtml(customer.packageName || '-')}</span>
+                  </div>
+                  <div class="customer-hero-pills" style="margin-top:8px">
+                    <span class="customer-code-pill">ID Pel : ${escapeCustomerDetailHtml(codeLabel)}</span>
+                    <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(routerText)}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="customer-hero-traffic">
+                <div class="customer-traffic-rate">
+                  <div class="customer-rate-down"><i class="bi bi-arrow-down"></i> ${escapeCustomerDetailHtml(trafficState.downRateText)}</div>
+                  <div class="customer-rate-up"><i class="bi bi-arrow-up"></i> ${escapeCustomerDetailHtml(trafficState.upRateText)}</div>
+                </div>
+                <div class="customer-traffic-total">${customerDetailBytesToGb(usage.totalBytes)}</div>
+                <div class="customer-detail-muted" style="font-size:11px;color:rgba(255,255,255,.8)">${escapeCustomerDetailHtml(trafficHint)}</div>
+              </div>
+            </div>
+            <div class="customer-detail-tabs">
+              <button type="button" class="customer-tab-btn ${activeTab === 'detail' ? 'active' : ''}" data-customer-tab="detail" onclick="customerDetailSwitchTab('detail')">Detail</button>
+              <button type="button" class="customer-tab-btn ${activeTab === 'month' ? 'active' : ''}" data-customer-tab="month" onclick="customerDetailSwitchTab('month')">Bulan</button>
+              ${showPayTab ? `<button type="button" class="customer-tab-btn ${activeTab === 'pay' ? 'active' : ''}" data-customer-tab="pay" onclick="customerDetailSwitchTab('pay')">Bayar</button>` : ''}
+              <button type="button" class="customer-tab-btn ${activeTab === 'tech' ? 'active' : ''}" data-customer-tab="tech" onclick="customerDetailSwitchTab('tech')">H. Teknis</button>
+            </div>
+          </div>
+          <button type="button" class="customer-detail-close" onclick="closeCustomerDetailModal()">&times;</button>
+        </div>
+        <div class="customer-detail-summary-grid" style="display:none">
+          <div class="customer-detail-cell emphasis">
+            <div class="label">Tagihan</div>
+            <div class="value">${currentInvoice ? customerDetailRupiah(currentInvoice.amount) : 'Belum dibuat'}</div>
+          </div>
+          <div class="customer-detail-cell emphasis">
+            <div class="label">Status</div>
+            <div class="value">${escapeCustomerDetailHtml(invoiceStatus.label)}</div>
+          </div>
+          <div class="customer-detail-cell emphasis">
+            <div class="label">${trafficLabel} Download</div>
+            <div class="value">${customerDetailBytesToGb(usage.downloadBytes)}</div>
+          </div>
+          <div class="customer-detail-cell emphasis">
+            <div class="label">${trafficLabel} Upload</div>
+            <div class="value">${customerDetailBytesToGb(usage.uploadBytes)}</div>
+          </div>
+        </div>
+        <div class="customer-hero-pills" style="margin-top:10px">
+          <span class="customer-hero-pill"><i class="bi bi-calendar-check"></i>${currentInvoice ? `Jatuh tempo tgl ${currentInvoice.dueDay || 10}` : 'Belum ada invoice'}</span>
+          <span class="customer-hero-pill"><i class="bi bi-speedometer2"></i>${escapeCustomerDetailHtml(packageSpeedText)}</span>
+          <span class="customer-hero-pill"><i class="bi bi-bar-chart-line"></i>${customerDetailBytesToGb(usage.totalBytes)}</span>
+          <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(trafficHint)}</span>
+        </div>
+      </div>
+      <div class="customer-detail-body">
+        <section class="customer-tab-panel ${activeTab === 'detail' ? 'active' : ''}" data-customer-panel="detail">
+          <div class="customer-state-banner ${banner.cls}">
+            <i class="bi ${banner.icon}"></i>
+            <span>${escapeCustomerDetailHtml(banner.text)}</span>
+          </div>
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-router"></i> Rincian Jaringan</h4>
+            <div class="customer-detail-network-grid">
+              <div class="customer-detail-cell compact">
+                <div class="label">Akun PPPoE</div>
+                <div class="value">${escapeCustomerDetailHtml(network.username || customer.pppoeUsername || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Status</div>
+                <div class="value status-chip">${customerDetailNetworkStatusChip(Boolean(network.online), network.status)}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Uptime</div>
+                <div class="value">${escapeCustomerDetailHtml(network.uptime || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Remote Address</div>
+                <div class="value">${escapeCustomerDetailHtml(network.remoteAddress || network.activeAddress || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Profile</div>
+                <div class="value">${escapeCustomerDetailHtml(network.profile || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Terakhir Online</div>
+                <div class="value">${escapeCustomerDetailHtml(customerDetailDateTime(network.lastOnlineAt, 'Belum ada data'))}</div>
+              </div>
+              <div class="customer-detail-cell compact customer-span-2">
+                <div class="label">Jalur Jaringan</div>
+                <div class="value">${escapeCustomerDetailHtml(customer.odpName || 'Belum ada ODP')}</div>
+                <div class="customer-detail-muted" style="font-size:11px;margin-top:6px">${escapeCustomerDetailHtml(customer.ponPort || 'PON belum diisi')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">Interface</div>
+                <div class="value">${escapeCustomerDetailHtml(network.interface || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact">
+                <div class="label">IP Lokal</div>
+                <div class="value">${escapeCustomerDetailHtml(network.localAddress || '-')}</div>
+              </div>
+              <div class="customer-detail-cell compact customer-mobile-secondary">
+                <div class="label">PPPoE / Modem</div>
+                <div class="value">${escapeCustomerDetailHtml((network.username || '-') + ' - ' + (device?.model || customer.macAddress || '-'))}</div>
+                <div class="customer-detail-muted" style="font-size:11px;margin-top:6px">${escapeCustomerDetailHtml(routerText)}</div>
+              </div>
+              <div class="customer-detail-cell compact customer-mobile-secondary">
+                <div class="label">Sumber Data</div>
+                <div class="value">${escapeCustomerDetailHtml(usage.snapshotSource || network.source || 'tersimpan')}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-bar-chart-line"></i> Monitoring Trafik</h4>
+            <div class="customer-traffic-grid">
+              <div class="customer-traffic-card download">
+                <div class="label">Download Sekarang</div>
+                <div class="value">${escapeCustomerDetailHtml(trafficState.downRateText)}</div>
+                <div class="sub">Akumulasi ${customerDetailBytesToGb(usage.downloadBytes)}</div>
+              </div>
+              <div class="customer-traffic-card upload">
+                <div class="label">Upload Sekarang</div>
+                <div class="value">${escapeCustomerDetailHtml(trafficState.upRateText)}</div>
+                <div class="sub">Akumulasi ${customerDetailBytesToGb(usage.uploadBytes)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-person-vcard"></i> Rincian Data</h4>
+            <div class="customer-detail-data-grid">
+              <div class="customer-detail-cell compact"><div class="label">Tanggal Daftar</div><div class="value">${escapeCustomerDetailHtml(customerDetailDate(customer.createdAt || customer.installDate, '-'))}</div></div>
+              <div class="customer-detail-cell compact"><div class="label">Tagihan Tanggal</div><div class="value">${escapeCustomerDetailHtml(String(currentInvoice?.dueDay || customer.isolateDay || '-'))}</div></div>
+              <div class="customer-detail-cell compact"><div class="label">Tanggal Isolir</div><div class="value">${escapeCustomerDetailHtml(String(customer.isolateDay || currentInvoice?.dueDay || '-'))}</div></div>
+              <div class="customer-detail-cell compact"><div class="label">Lokasi</div><div class="value">${customer.lat && customer.lng ? `${escapeCustomerDetailHtml(customer.lat)}, ${escapeCustomerDetailHtml(customer.lng)}` : 'Klik buka lokasi'}</div></div>
+              <div class="customer-detail-cell compact customer-span-2"><div class="label">Alamat</div><div class="value">${escapeCustomerDetailHtml(customer.address || '-')}</div></div>
+              <div class="customer-detail-cell compact customer-mobile-secondary"><div class="label">Password App</div><div class="value">${escapeCustomerDetailHtml(customer.phone ? 'Kirim Password Pelanggan' : '-')}</div></div>
+            </div>
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-cash-coin"></i> Rincian Biaya</h4>
+            <div class="customer-detail-data-grid">
+              <div class="customer-detail-cell compact"><div class="label">Paket</div><div class="value">${escapeCustomerDetailHtml(customer.packageName || '-')}</div></div>
+              <div class="customer-detail-cell compact"><div class="label">PPN / FUP</div><div class="value">${customer.useFup ? 'FUP aktif' : 'PPN 0%'}</div></div>
+              <div class="customer-detail-cell compact customer-span-2"><div class="label">Total per Bulan</div><div class="value">${customer.packagePrice ? customerDetailRupiah(customer.packagePrice) : '-'}</div></div>
+            </div>
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-journal-text"></i> Catatan</h4>
+            <div class="customer-note-box"><div class="big">${escapeCustomerDetailHtml(customer.notes || 'Tidak ada Catatan')}</div></div>
+          </div>
+        </section>
+
+        <section class="customer-tab-panel ${activeTab === 'month' ? 'active' : ''}" data-customer-panel="month">
+          <div class="customer-detail-section">
+            <div class="customer-billing-toolbar">
+              <h4 style="margin:0"><i class="bi bi-calendar-check"></i> Tagihan per Bulan</h4>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="customer-live-badge"><i class="bi bi-pie-chart"></i> Total ${monthlyTrafficText}</span>
+                <select id="customerDetailYearSelect" onchange="loadCustomerDetail(this.value)" style="border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.06);color:inherit;border:1px solid rgba(148,163,184,.16)">
+                  ${[new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map((yr) => `<option value="${yr}" ${Number(billing.year) === yr ? 'selected' : ''}>${yr}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="customer-billing-months">
+              ${(Array.isArray(billing.months) ? billing.months : []).map((row) => `
+                <div class="billing-month">
+                  <div class="head">
+                    <div class="name">${customerDetailMonthName(row.month)} ${billing.year}</div>
+                    <div class="status ${escapeCustomerDetailHtml(row.status)}">${escapeCustomerDetailHtml(row.label)}</div>
+                  </div>
+                  <div class="meta">
+                    <div>${row.invoiceId ? customerDetailRupiah(row.amount) : 'Belum ada invoice'}</div>
+                    <div>${row.paidAt ? 'Lunas: ' + customerDetailDateTime(row.paidAt, '-') : (row.dueDay ? 'Jatuh tempo tgl ' + row.dueDay : '')}</div>
+                  </div>
+                  ${CUSTOMER_DETAIL_OPTIONS.allowPayment && row.invoiceId && row.status !== 'paid' ? `<button type="button" class="billing-pay-btn" onclick="customerDetailMarkPaid(${Number(row.invoiceId)})">Lunaskan</button>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </section>
+
+        ${showPayTab ? `
+          <section class="customer-tab-panel ${activeTab === 'pay' ? 'active' : ''}" data-customer-panel="pay">
+            <div class="customer-detail-section">
+              <h4><i class="bi bi-wallet2"></i> Pembayaran</h4>
+              <div class="customer-list-rows">
+                ${currentInvoice ? `
+                  <div class="customer-list-row">
+                    <div class="top">
+                      <div>
+                        <div class="title">Tagihan Bulan Ini</div>
+                        <div class="meta">${customerDetailRupiah(currentInvoice.amount)} • Jatuh tempo tgl ${currentInvoice.dueDay || '-'}</div>
+                      </div>
+                      <div>${customerDetailNetworkStatusChip(invoiceStatus.cls === 'paid', invoiceStatus.label)}</div>
+                    </div>
+                    ${invoiceStatus.cls !== 'paid' ? `<button type="button" class="billing-pay-btn" onclick="customerDetailMarkPaid(${Number(currentInvoice.id)})">Tandai Lunas</button>` : ''}
+                  </div>
+                ` : `<div class="customer-note-box"><div class="big">Belum ada tagihan aktif.</div></div>`}
+                ${(Array.isArray(detail.unpaidInvoices) ? detail.unpaidInvoices : []).filter((item) => item && item.id && (!currentInvoice || Number(item.id) !== Number(currentInvoice.id))).map((item) => `
+                  <div class="customer-list-row">
+                    <div class="top">
+                      <div>
+                        <div class="title">${customerDetailMonthName(item.periodMonth)} ${item.periodYear}</div>
+                        <div class="meta">${customerDetailRupiah(item.amount)} • ${item.packageName || 'Tagihan pelanggan'}</div>
+                      </div>
+                      <div>${customerDetailNetworkStatusChip(false, 'Belum Lunas')}</div>
+                    </div>
+                    <button type="button" class="billing-pay-btn" onclick="customerDetailMarkPaid(${Number(item.id)})">Lunaskan</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </section>
+        ` : ''}
+
+        <section class="customer-tab-panel ${activeTab === 'tech' ? 'active' : ''}" data-customer-panel="tech">
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-wifi"></i> Modem & Teknis</h4>
+            ${device ? `
+              <div class="customer-detail-network-grid" style="margin-bottom:10px">
+                <div class="customer-detail-cell"><div class="label">Tag / Token</div><div class="value">${escapeCustomerDetailHtml(device.token || customer.genieacsTag || '-')}</div></div>
+                <div class="customer-detail-cell"><div class="label">SSID</div><div class="value">${escapeCustomerDetailHtml(device.ssid || '-')}</div></div>
+                <div class="customer-detail-cell"><div class="label">Status Modem</div><div class="value">${customerDetailNetworkStatusChip(String(device.status || '').toLowerCase().includes('online'), device.status || '-')}</div></div>
+                <div class="customer-detail-cell"><div class="label">Uptime Modem</div><div class="value">${escapeCustomerDetailHtml(device.uptime || '-')}</div></div>
+                <div class="customer-detail-cell"><div class="label">Model</div><div class="value">${escapeCustomerDetailHtml(device.model || '-')}</div></div>
+                <div class="customer-detail-cell"><div class="label">Serial</div><div class="value">${escapeCustomerDetailHtml(device.serialNumber || '-')}</div></div>
+              </div>
+            ` : `<div class="customer-detail-muted">Data modem belum ditemukan di GenieACS.</div>`}
+            ${CUSTOMER_DETAIL_OPTIONS.allowDeviceActions ? `
+              <div class="device-actions" style="margin-top:10px">
+                <div class="device-action-card">
+                  <label>Nama WiFi</label>
+                  <input type="text" id="customerDetailSsidInput" value="${escapeCustomerDetailHtml(device?.ssid || '')}" placeholder="Nama WiFi">
+                  <button type="button" onclick="customerDetailUpdateDeviceField('ssid')">Simpan SSID</button>
+                </div>
+                <div class="device-action-card">
+                  <label>Password WiFi</label>
+                  <input type="text" id="customerDetailPasswordInput" placeholder="Minimal 8 karakter">
+                  <button type="button" onclick="customerDetailUpdateDeviceField('password')">Simpan Password</button>
+                </div>
+                <div class="device-action-card">
+                  <label>Akses Modem</label>
+                  <div class="customer-detail-muted" style="font-size:12px">Gunakan untuk paksa reconnect modem pelanggan.</div>
+                  <button type="button" onclick="customerDetailRebootDevice()">Cek / Reboot Modem</button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-image"></i> Dokumen</h4>
+            <div class="customer-docs">
+              <div class="customer-doc-card">
+                <div class="customer-doc-title"><span class="customer-detail-muted" style="font-size:12px">Foto Rumah</span></div>
+                ${customer.housePhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.housePhotoUrl)}" alt="Foto rumah">` : '<div class="customer-doc-empty">Belum ada foto rumah</div>'}
+              </div>
+              <div class="customer-doc-card">
+                <div class="customer-doc-title"><span class="customer-detail-muted" style="font-size:12px">Foto KTP</span></div>
+                ${customer.ktpPhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.ktpPhotoUrl)}" alt="Foto KTP">` : '<div class="customer-doc-empty">Belum ada foto KTP</div>'}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    `);
+    customerDetailSwitchTab(activeTab);
+  }
+
+  async function customerDetailUpdateDeviceField(kind) {
+    const detail = customerDetailState.data;
+    const token = detail?.device?.token || detail?.customer?.genieacsTag || detail?.customer?.pppoeUsername;
+    if (!token) return alert('Tag perangkat tidak ditemukan.');
+    try {
+      let endpoint = '';
+      let payload = {};
+      if (kind === 'ssid') {
+        endpoint = `${CUSTOMER_DETAIL_OPTIONS.deviceApiBase}/${encodeURIComponent(token)}/ssid`;
+        payload = { ssid: document.getElementById('customerDetailSsidInput')?.value || '' };
+      } else {
+        endpoint = `${CUSTOMER_DETAIL_OPTIONS.deviceApiBase}/${encodeURIComponent(token)}/password`;
+        payload = { password: document.getElementById('customerDetailPasswordInput')?.value || '' };
+      }
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) throw new Error(json?.error || 'Gagal menyimpan pengaturan modem');
+      alert('Pengaturan modem berhasil disimpan.');
+      loadCustomerDetail();
+    } catch (error) {
+      alert(error.message || String(error));
+    }
+  }
+
+  async function customerDetailRebootDevice() {
+    const detail = customerDetailState.data;
+    const token = detail?.device?.token || detail?.customer?.genieacsTag || detail?.customer?.pppoeUsername;
+    if (!token) return alert('Tag perangkat tidak ditemukan.');
+    if (!confirm('Reboot modem pelanggan sekarang?')) return;
+    try {
+      const res = await fetch(`${CUSTOMER_DETAIL_OPTIONS.deviceApiBase}/${encodeURIComponent(token)}/reboot`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) throw new Error(json?.error || 'Gagal reboot modem');
+      alert('Permintaan reboot modem berhasil dikirim.');
+    } catch (error) {
+      alert(error.message || String(error));
+    }
+  }
+
+  async function customerDetailMarkPaid(invoiceId) {
+    if (!CUSTOMER_DETAIL_OPTIONS.allowPayment) return;
+    const customerId = customerDetailState.customerId;
+    if (!customerId || !invoiceId) return;
+    const defaultNote = CUSTOMER_DETAIL_OPTIONS.scope === 'tech'
+      ? 'Lunas oleh teknisi'
+      : 'Dilunasi oleh admin';
+    const note = prompt('Catatan pembayaran (opsional):', defaultNote) || '';
+    try {
+      const res = await fetch(`${CUSTOMER_DETAIL_OPTIONS.paymentApiBase}/${encodeURIComponent(String(customerId))}/invoices/${encodeURIComponent(String(invoiceId))}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: note })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) throw new Error(json?.error || 'Gagal melunaskan tagihan');
+      alert('Tagihan berhasil dilunasi.');
+      loadCustomerDetail();
+    } catch (error) {
+      alert(error.message || String(error));
+    }
+  }
+</script>
