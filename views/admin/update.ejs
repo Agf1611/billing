@@ -112,7 +112,7 @@
         </div>
 
         <div style="margin-top:12px;color:var(--muted);font-size:12px;line-height:1.5">
-          Update hanya berlaku untuk <strong>instance/folder aktif</strong> ini. Data yang tetap dijaga saat update: <strong>settings.json</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, dan <strong>uploads</strong>. Setelah source diambil, sistem akan menjalankan validasi dan rollback commit sebelumnya jika update gagal.
+          Update hanya berlaku untuk <strong>instance/folder aktif</strong> ini. Data yang tetap dijaga saat update: <strong>settings.json</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, dan <strong>uploads</strong>. Jika ada perubahan source lokal yang menghalangi update, sistem akan mengamankannya dulu ke <strong>git stash</strong>. Setelah source diambil, sistem akan menjalankan validasi dan rollback commit sebelumnya jika update gagal.
         </div>
       </div>
     </div>

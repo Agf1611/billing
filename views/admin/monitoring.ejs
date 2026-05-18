@@ -11,7 +11,7 @@
     .onu-shell{display:grid;gap:14px}
     .onu-hero{
       display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
-      padding:14px 16px;border-radius:22px;background:var(--surface-strong);border:1px solid var(--border);box-shadow:var(--shadow-soft)
+      padding:12px 14px;border-radius:20px;background:var(--surface-strong);border:1px solid var(--border);box-shadow:var(--shadow-soft)
     }
     .onu-hero h2{margin:0;font-size:22px;line-height:1.05;letter-spacing:-0.04em}
     .onu-hero p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
@@ -50,6 +50,14 @@
       display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:20px;
       background:var(--surface-strong);border:1px solid var(--border);box-shadow:var(--shadow-soft)
     }
+    .onu-tools-summary{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+      width:100%;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)
+    }
+    .onu-tools-summary strong{font-size:13px;color:var(--text)}
+    .onu-tools-summary span{font-size:11px;color:var(--muted)}
+    .onu-filter-quick{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+    .onu-filter-quick .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
     .onu-tools .sinput{flex:1 1 260px}
     .onu-tools .fs{min-width:140px}
     .onu-tools-meta{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
@@ -139,6 +147,10 @@
     body[data-theme="light"] .onu-mobile-item{
       background:rgba(255,255,255,.92)
     }
+    body[data-theme="light"] .onu-tools-summary{
+      background:rgba(105,88,255,.04);
+      border-color:rgba(148,163,184,.18);
+    }
 
     @media (max-width: 960px){
       .onu-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -158,6 +170,7 @@
       .onu-tools .sinput{flex-basis:100%}
       .onu-tools .fs,.onu-tools .btn{width:100%}
       .onu-tools-meta{width:100%;justify-content:flex-start;margin-left:0}
+      .onu-filter-quick .btn{flex:1 1 calc(50% - 4px)}
       .onu-list-head,.onu-summary-head{padding:12px 12px}
       .onu-list-head h3,.onu-summary-head h3{font-size:14px}
       .onu-mobile-grid{grid-template-columns:1fr 1fr}
@@ -199,12 +212,11 @@
     </div>
   </div>
 
-  <div class="page">
+  <div class="page admin-shell-page">
     <div class="onu-shell">
       <section class="onu-hero">
         <div>
           <h2>Monitoring ONU</h2>
-          <p>Pantau status perangkat, cari pelanggan, dan ambil tindakan cepat tanpa pindah ke dashboard.</p>
         </div>
         <div class="onu-hero-badges">
           <span class="onu-pill <%= systemStatusClass %>">
@@ -247,6 +259,16 @@
       </section>
 
       <section class="onu-tools">
+        <div class="onu-tools-summary">
+          <div>
+            <strong>Filter Monitoring ONU</strong>
+            <span>Cari perangkat atau fokus ke status online dan offline dengan lebih cepat.</span>
+          </div>
+          <div class="onu-tools-meta">
+            <span class="live-dot"></span>
+            <span>Realtime GenieACS</span>
+          </div>
+        </div>
         <div class="sinput">
           <i class="bi bi-search"></i>
           <input class="fc" id="search-device" placeholder="Cari tag, serial number, IP, atau username PPPoE">
@@ -259,9 +281,10 @@
         <button class="btn btn-p btn-sm" type="button" onclick="refreshAll()">
           <i class="bi bi-arrow-repeat"></i> Muat Ulang
         </button>
-        <div class="onu-tools-meta">
-          <span class="live-dot"></span>
-          <span>Realtime GenieACS</span>
+        <div class="onu-filter-quick">
+          <button class="btn btn-g btn-sm is-active" type="button" data-onu-quick="all" onclick="setOnuStatusFilter('all', this)">Semua</button>
+          <button class="btn btn-g btn-sm" type="button" data-onu-quick="online" onclick="setOnuStatusFilter('online', this)">Online</button>
+          <button class="btn btn-g btn-sm" type="button" data-onu-quick="offline" onclick="setOnuStatusFilter('offline', this)">Offline</button>
         </div>
       </section>
 
@@ -511,6 +534,21 @@ async function loadStats() {
 function statusChip(status) {
   const isOnline = String(status || '').toLowerCase() === 'online';
   return `<span class="onu-chip ${isOnline ? 'online' : 'offline'}"><i class="bi bi-circle-fill"></i>${isOnline ? I18N.online : I18N.offline}</span>`;
+}
+
+function syncOnuQuickFilterButtons() {
+  const activeStatus = document.getElementById('filter-status')?.value || 'all';
+  document.querySelectorAll('[data-onu-quick]').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.onuQuick === activeStatus);
+  });
+}
+
+function setOnuStatusFilter(status, trigger) {
+  const select = document.getElementById('filter-status');
+  if (select) select.value = status;
+  document.querySelectorAll('[data-onu-quick]').forEach((btn) => btn.classList.remove('is-active'));
+  if (trigger) trigger.classList.add('is-active');
+  loadDevices();
 }
 
 function deviceLastInform(value) {
@@ -832,7 +870,10 @@ document.getElementById('btn-save-password')?.addEventListener('click', async fu
   }
 });
 
-document.getElementById('filter-status')?.addEventListener('change', loadDevices);
+document.getElementById('filter-status')?.addEventListener('change', () => {
+  syncOnuQuickFilterButtons();
+  loadDevices();
+});
 const searchEl = document.getElementById('search-device');
 if (searchEl) {
   let searchTimer;
@@ -847,6 +888,7 @@ function refreshAll() {
   loadDevices();
 }
 
+syncOnuQuickFilterButtons();
 refreshAll();
 setInterval(refreshAll, 40000);
 </script>

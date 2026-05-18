@@ -1,15 +1,15 @@
-const CACHE_NAME = 'customer-pwa-v1';
+const CACHE_NAME = 'billing-pwa-v6';
 const PRECACHE_URLS = [
   '/css/style.css',
+  '/css/admin.css',
   '/img/logo.png',
   '/img/pwa-icon.svg',
   '/img/hero.png',
-  '/customer/login',
-  '/customer/register',
-  '/customer/tos',
-  '/customer/privacy',
-  '/customer/about',
-  '/customer/contact'
+  '/pwa/customer.webmanifest',
+  '/pwa/admin.webmanifest',
+  '/pwa/tech.webmanifest',
+  '/pwa/agent.webmanifest',
+  '/pwa/collector.webmanifest'
 ];
 
 self.addEventListener('install', (event) => {
@@ -68,15 +68,65 @@ self.addEventListener('fetch', (event) => {
 
   const path = url.pathname;
 
-  if (req.mode === 'navigate' && path.startsWith('/customer/')) {
-    event.respondWith(networkFirst(req, '/customer/login'));
+  if (path.startsWith('/customer/api/')) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(req, { cache: 'no-store' });
+      } catch (_) {
+        return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
+          status: 503,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store'
+          }
+        });
+      }
+    })());
     return;
   }
 
-  if (path.startsWith('/css/') || path.startsWith('/img/') || path === '/manifest.webmanifest') {
+  if (path.startsWith('/css/') || path.startsWith('/img/') || path.startsWith('/pwa/') || path.endsWith('/manifest.webmanifest') || path === '/manifest.webmanifest') {
     event.respondWith(cacheFirst(req));
     return;
   }
 
   event.respondWith(networkFirst(req));
+});
+
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.type !== 'SHOW_NOTIFICATION') return;
+  const title = String(data.title || 'SICKAS WIFI');
+  const options = {
+    body: String(data.body || ''),
+    icon: data.icon || '/img/logo.png',
+    badge: data.badge || '/img/logo.png',
+    tag: data.tag || `notif-${Date.now()}`,
+    data: data.data || {},
+    renotify: Boolean(data.renotify),
+    requireInteraction: Boolean(data.requireInteraction)
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || '/';
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of allClients) {
+      if ('focus' in client) {
+        try {
+          await client.focus();
+          if (targetUrl && 'navigate' in client) {
+            await client.navigate(targetUrl);
+          }
+          return;
+        } catch (_) {}
+      }
+    }
+    if (clients.openWindow) {
+      return clients.openWindow(targetUrl);
+    }
+  })());
 });

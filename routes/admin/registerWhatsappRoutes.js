@@ -35,7 +35,8 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       title: 'Status WhatsApp',
       company: company(),
       activePage: 'whatsapp',
-      msg: flashMsg(req)
+      msg: flashMsg(req),
+      getSetting
     });
   });
 
@@ -195,13 +196,17 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
               const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
               const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
+              const payload = buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, { baseUrl: requestBaseUrl });
               let formattedMsg = fillWhatsappTemplate(
                 message,
                 {
-                  ...buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, { baseUrl: requestBaseUrl }),
+                  ...payload,
                   company: company()
                 }
               );
+              if (!/\{\{\s*payment_guide\s*\}\}/i.test(message) && payload.payment_guide) {
+                formattedMsg += `\n\n${payload.payment_guide}`;
+              }
 
               formattedMsg = addMessageVariation(formattedMsg, i);
 
@@ -303,20 +308,22 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
   router.post('/whatsapp/test-notification', requireAdminSession, async (req, res) => {
     try {
+      const startedAt = Date.now();
       const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('../../services/whatsappBot.mjs');
       const ready = await ensureWhatsAppReady(25000);
       if (!ready) {
         throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
       }
-      const adminPhone = resolveWhatsappTestRecipient(whatsappStatus);
-      if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia.');
+      const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
+      if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
       const messageText =
         `TEST NOTIFIKASI WHATSAPP\n\n` +
         `WhatsApp bot untuk ${getSetting('company_header', 'Portal Billing ISP')} sudah berfungsi.\n` +
         `Waktu: ${new Date().toLocaleString('id-ID')}`;
       const ok = await sendWA(adminPhone, messageText);
       if (!ok) throw new Error('Gagal mengirim pesan test (sendWA=false).');
-      req.session._msg = { type: 'success', text: `Test notifikasi WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)}.` };
+      const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      req.session._msg = { type: 'success', text: `Test notifikasi WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal kirim test WhatsApp: ' + e.message };
     }
@@ -325,18 +332,20 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
   router.post('/whatsapp/test-template', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
     try {
+      const startedAt = Date.now();
       const { sendWA, whatsappStatus, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
       const ready = await ensureWhatsAppReady(25000);
       if (!ready) {
         throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
       }
-      const adminPhone = resolveWhatsappTestRecipient(whatsappStatus);
-      if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia.');
+      const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
+      if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
       const templateKey = String(req.body.template_key || 'billing').trim();
       const previewMessage = buildWhatsappTemplatePreview(templateKey, { baseUrl: resolveRequestBaseUrl(req) });
       const ok = await sendWA(adminPhone, previewMessage);
       if (!ok) throw new Error('Gagal mengirim test message.');
-      req.session._msg = { type: 'success', text: `Test message WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)}.` };
+      const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      req.session._msg = { type: 'success', text: `Test message WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal kirim test message: ' + e.message };
     }

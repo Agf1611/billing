@@ -11,6 +11,14 @@
     .cashier-stat { border:1px solid var(--border); border-radius:18px; padding:14px 16px; background:rgba(255,255,255,0.04); }
     .cashier-stat-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:5px; }
     .cashier-stat-value { font-size:15px; font-weight:800; color:var(--text); }
+    .cashier-filter-shell { border:1px solid var(--border); border-radius:18px; padding:14px 16px; background:rgba(255,255,255,0.04); }
+    .cashier-filter-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+    .cashier-filter-copy { display:grid; gap:4px; }
+    .cashier-filter-copy strong { font-size:14px; color:var(--text); }
+    .cashier-filter-copy span { font-size:12px; color:var(--muted); }
+    .cashier-filter-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:rgba(99,102,241,.12); color:var(--primary); font-size:11px; font-weight:700; }
+    .cashier-filter-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .cashier-filter-badges { display:flex; gap:8px; flex-wrap:wrap; }
     .cashier-mobile-list { display:none; }
     .cashier-mobile-card { border:1px solid var(--border); border-radius:18px; background:rgba(255,255,255,0.03); padding:14px 16px; }
     .cashier-mobile-card + .cashier-mobile-card { margin-top:12px; }
@@ -21,16 +29,24 @@
     .cashier-mobile-cell { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,0.04); }
     .cashier-mobile-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
     .cashier-mobile-value { font-size:13px; font-weight:700; color:var(--text); word-break:break-word; }
+    body[data-theme="light"] .cashier-filter-shell,
+    body[data-theme="light"] .cashier-stat,
+    body[data-theme="light"] .cashier-mobile-card,
+    body[data-theme="light"] .cashier-mobile-cell { background:rgba(255,255,255,.92); box-shadow:0 14px 30px rgba(165,162,211,.10); }
+    body[data-theme="light"] .cashier-filter-chip { background:rgba(105,88,255,.08); }
     @media (max-width: 768px) {
       .tbl-wrap { display:none; }
       .cashier-mobile-list { display:block; }
       .card-bd[style] { flex-direction:column; align-items:stretch !important; }
       .card-bd[style] .fs { min-width:0 !important; width:100%; }
+      .cashier-filter-controls { flex-direction:column; align-items:stretch; }
+      .cashier-filter-chip { width:fit-content; }
     }
     @media (max-width: 520px) {
       .cashier-stat-grid,
       .cashier-mobile-grid { grid-template-columns:1fr; }
       .cashier-mobile-head { flex-direction:column; }
+      .cashier-filter-summary { align-items:flex-start; }
     }
   </style>
 </head>
@@ -78,21 +94,33 @@
       <div class="card-hd">
         <h6><i class="bi bi-funnel"></i> Filter</h6>
       </div>
-      <div class="card-bd" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <% if (cashiers && cashiers.length > 1) { %>
-          <select class="fs" style="min-width:240px" onchange="location='/admin/cashiers/reports?cashierId='+encodeURIComponent(this.value)">
-            <option value="">Semua Kasir</option>
-            <% (cashiers || []).forEach(c => { %>
-              <option value="<%= c.id %>" <%= cashierId && Number(cashierId)===Number(c.id) ? 'selected' : '' %>><%= c.name %> (@<%= c.username %>)</option>
-            <% }) %>
-          </select>
-        <% } else if (cashiers && cashiers.length === 1) { %>
-          <span class="badge bm"><%= cashiers[0].name %><%= cashiers[0].username ? (' (@' + cashiers[0].username + ')') : '' %></span>
-        <% } %>
-        <span class="badge bm"><%= Number(summary?.count || 0) %> transaksi</span>
-        <span class="badge bs">Rp <%= Number(summary?.total || 0).toLocaleString('id-ID') %></span>
-        <span class="badge bm">Tagihan: <%= Number(summary?.invoice_count || 0) %> (Rp <%= Number(summary?.invoice_total || 0).toLocaleString('id-ID') %>)</span>
-        <span class="badge bm">Deposit Agent: <%= Number(summary?.topup_count || 0) %> (Rp <%= Number(summary?.topup_total || 0).toLocaleString('id-ID') %>)</span>
+      <div class="card-bd">
+        <div class="cashier-filter-shell">
+          <div class="cashier-filter-summary">
+            <div class="cashier-filter-copy">
+              <strong>Filter Pembukuan Kasir</strong>
+              <span>Lihat transaksi kasir dengan ringkas dan lebih nyaman di mobile.</span>
+            </div>
+            <div class="cashier-filter-chip"><i class="bi bi-journal-check"></i> <%= Number(summary?.count || 0) %> transaksi</div>
+          </div>
+          <div class="cashier-filter-controls">
+            <% if (cashiers && cashiers.length > 1) { %>
+              <select class="fs" style="min-width:240px" onchange="location='/admin/cashiers/reports?cashierId='+encodeURIComponent(this.value)">
+                <option value="">Semua Kasir</option>
+                <% (cashiers || []).forEach(c => { %>
+                  <option value="<%= c.id %>" <%= cashierId && Number(cashierId)===Number(c.id) ? 'selected' : '' %>><%= c.name %> (@<%= c.username %>)</option>
+                <% }) %>
+              </select>
+            <% } else if (cashiers && cashiers.length === 1) { %>
+              <span class="badge bm"><%= cashiers[0].name %><%= cashiers[0].username ? (' (@' + cashiers[0].username + ')') : '' %></span>
+            <% } %>
+            <div class="cashier-filter-badges">
+              <span class="badge bs">Rp <%= Number(summary?.total || 0).toLocaleString('id-ID') %></span>
+              <span class="badge bm">Tagihan: <%= Number(summary?.invoice_count || 0) %> (Rp <%= Number(summary?.invoice_total || 0).toLocaleString('id-ID') %>)</span>
+              <span class="badge bm">Deposit Agent: <%= Number(summary?.topup_count || 0) %> (Rp <%= Number(summary?.topup_total || 0).toLocaleString('id-ID') %>)</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

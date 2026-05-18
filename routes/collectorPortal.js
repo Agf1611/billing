@@ -22,6 +22,31 @@ function flashMsg(req) {
   return m || null;
 }
 
+router.get('/manifest.webmanifest', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.type('application/manifest+json');
+  return res.json({
+    id: '/collector/',
+    name: 'Portal Kolektor',
+    short_name: 'Kolektor',
+    description: `Portal Kolektor ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    start_url: '/collector/login?source=pwa',
+    scope: '/collector/',
+    display: 'standalone',
+    display_override: ['standalone', 'minimal-ui'],
+    orientation: 'portrait',
+    background_color: '#08111f',
+    theme_color: '#0f172a',
+    icons: [
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  });
+});
+
 router.get('/login', (req, res) => {
   if (req.session && req.session.isCollector) return res.redirect('/collector');
   res.render('collector/login', { title: 'Login Kolektor', company: company(), error: null });

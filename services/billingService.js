@@ -84,6 +84,95 @@ function countInvoicesForCustomer(customerId) {
   return r ? Number(r.c) || 0 : 0;
 }
 
+function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
+  const invId = Number(invoiceId || 0);
+  if (!Number.isFinite(invId) || invId <= 0) throw new Error('Invoice ID tidak valid');
+
+  const current = db.prepare(`
+    SELECT id, customer_id, status, amount, qris_unique_code, qris_amount_unique, qris_assigned_at
+    FROM invoices
+    WHERE id = ?
+  `).get(invId);
+  if (!current) throw new Error('Tagihan tidak ditemukan');
+  if (String(current.status || '').toLowerCase() !== 'unpaid') {
+    throw new Error('Hanya tagihan belum bayar yang bisa dibuat QRIS unik.');
+  }
+
+  if (!force && Number(current.qris_amount_unique || 0) > 0 && Number(current.qris_unique_code || 0) > 0) {
+    return getInvoiceById(invId);
+  }
+
+  const baseAmount = Number(current.amount || 0);
+  if (!Number.isFinite(baseAmount) || baseAmount <= 0) throw new Error('Nominal tagihan tidak valid');
+
+  const exists = db.prepare('SELECT id FROM invoices WHERE status = ? AND qris_amount_unique = ? AND id != ? LIMIT 1');
+  const update = db.prepare(`
+    UPDATE invoices
+    SET qris_unique_code = ?, qris_amount_unique = ?, qris_assigned_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+
+  let chosenCode = 0;
+  let chosenAmount = 0;
+
+  for (let i = 0; i < 50; i += 1) {
+    const code = 1 + Math.floor(Math.random() * 999);
+    const amount = baseAmount + code;
+    if (!exists.get('unpaid', amount, invId)) {
+      chosenCode = code;
+      chosenAmount = amount;
+      break;
+    }
+  }
+
+  if (!chosenAmount) {
+    for (let code = 1; code <= 999; code += 1) {
+      const amount = baseAmount + code;
+      if (!exists.get('unpaid', amount, invId)) {
+        chosenCode = code;
+        chosenAmount = amount;
+        break;
+      }
+    }
+  }
+
+  if (!chosenAmount) throw new Error('Gagal membuat nominal unik QRIS untuk tagihan ini.');
+  update.run(chosenCode, chosenAmount, invId);
+  return getInvoiceById(invId);
+}
+
+function backfillUniqueQrisForUnpaidInvoices(invoiceIds = []) {
+  const normalizedIds = Array.isArray(invoiceIds)
+    ? [...new Set(invoiceIds.map((id) => Number(id || 0)).filter((id) => Number.isFinite(id) && id > 0))]
+    : [];
+  const targets = normalizedIds.length
+    ? normalizedIds
+    : db.prepare(`
+        SELECT id
+        FROM invoices
+        WHERE status = 'unpaid'
+          AND (qris_amount_unique IS NULL OR qris_amount_unique <= 0 OR qris_unique_code IS NULL OR qris_unique_code <= 0)
+        ORDER BY period_year DESC, period_month DESC, id DESC
+      `).all().map((row) => Number(row.id || 0)).filter((id) => id > 0);
+
+  let assigned = 0;
+  const failed = [];
+  for (const id of targets) {
+    try {
+      assignUniqueQrisForInvoice(id);
+      assigned += 1;
+    } catch (error) {
+      failed.push({ id, error: String(error?.message || error || '') });
+    }
+  }
+
+  return {
+    assigned,
+    failed,
+    scanned: targets.length
+  };
+}
+
 /**
  * Hitung nominal tagihan + catatan otomatis (promo siklus & prorata bulan pertama).
  * Promo: pakai promo_price untuk N invoice pertama per pelanggan (promo_cycles), lalu harga normal.
@@ -154,6 +243,10 @@ function generateMonthlyInvoices(month, year) {
     }
   });
   run();
+  if (createdInvoiceIds.length) {
+    backfillUniqueQrisForUnpaidInvoices(createdInvoiceIds);
+    createdInvoiceIds.forEach((invoiceId) => pushPortalInvoiceNotification(invoiceId));
+  }
   return {
     count: created,
     createdInvoiceIds
@@ -187,7 +280,25 @@ function generateInvoiceForCustomer(customerId, month, year) {
   if (bump) {
     db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?').run(cid);
   }
+  assignUniqueQrisForInvoice(r.lastInsertRowid);
+  pushPortalInvoiceNotification(r.lastInsertRowid);
   return { created: true, invoiceId: r.lastInsertRowid, customerName: customer.name };
+}
+
+function pushPortalInvoiceNotification(invoiceId) {
+  try {
+    const invoice = getInvoiceById(invoiceId);
+    if (!invoice || !invoice.customer_id) return null;
+    const customerSvc = require('./customerService');
+    return customerSvc.addPortalNotification(invoice.customer_id, {
+      kind: 'invoice',
+      tab: 'billing',
+      title: `Tagihan baru INV-${invoice.id} tersedia`,
+      body: `Periode ${invoice.period_month}/${invoice.period_year} - Rp ${Number(invoice.amount || 0).toLocaleString('id-ID')}`
+    }, { dedupeWindowMs: 30 * 24 * 60 * 60 * 1000 });
+  } catch (_) {
+    return null;
+  }
 }
 
 function payInvoiceForCustomerPeriod(customerId, month, year, paidByName, notes) {
@@ -310,10 +421,19 @@ function getCustomerBillingYearSummary(customerId, year) {
   if (!customer) throw new Error('Pelanggan tidak ditemukan');
 
   const invoices = db.prepare(`
-    SELECT period_month as month, status, amount
+    SELECT
+      id,
+      period_month as month,
+      period_month,
+      period_year,
+      status,
+      amount,
+      paid_at,
+      due_day_snapshot,
+      notes
     FROM invoices
     WHERE customer_id=? AND period_year=?
-    ORDER BY period_month ASC
+    ORDER BY period_month ASC, id ASC
   `).all(cid, y);
 
   return {
@@ -327,7 +447,7 @@ function getCustomerBillingYearSummary(customerId, year) {
 
 function getAllInvoices({ month, year, status, search, limit = 300 } = {}) {
   let q = `
-    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, p.name as package_name
+    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, c.status as customer_status, p.name as package_name
     FROM invoices i
     JOIN customers c ON i.customer_id = c.id
     LEFT JOIN packages p ON c.package_id = p.id
@@ -518,6 +638,107 @@ function getRecentPayments(limit = 8) {
   `).all(limit);
 }
 
+function computeInvoiceTaxBreakdown(amount, pkg = {}) {
+  const nominalInvoice = Math.max(0, Number(amount || 0) || 0);
+  const includePpn = Number(pkg.include_ppn || 0) === 1;
+  const ppnPercent = includePpn ? Math.max(0, Number(pkg.ppn_percent || 0) || 0) : 0;
+
+  if (!includePpn || ppnPercent <= 0) {
+    return {
+      saleAmount: nominalInvoice,
+      ppnAmount: 0,
+      nominalInvoice
+    };
+  }
+
+  const divisor = 1 + (ppnPercent / 100);
+  const saleAmount = Math.round(nominalInvoice / divisor);
+  const ppnAmount = Math.max(0, nominalInvoice - saleAmount);
+
+  return {
+    saleAmount,
+    ppnAmount,
+    nominalInvoice
+  };
+}
+
+function getPaidInvoiceReport({ year, month = 0 } = {}) {
+  const filterYear = Math.max(2000, parseInt(year, 10) || new Date().getFullYear());
+  const filterMonth = Math.max(0, Math.min(12, parseInt(month, 10) || 0));
+  const yearStr = String(filterYear);
+  const monthStr = String(filterMonth).padStart(2, '0');
+
+  const rows = db.prepare(`
+    SELECT
+      i.id,
+      i.customer_id,
+      i.period_month,
+      i.period_year,
+      i.amount,
+      i.status,
+      i.paid_at,
+      i.paid_by_name,
+      i.notes,
+      c.name AS customer_name,
+      c.nik,
+      c.npwp,
+      c.address,
+      p.name AS package_name,
+      p.include_ppn,
+      p.ppn_percent
+    FROM invoices i
+    JOIN customers c ON c.id = i.customer_id
+    LEFT JOIN packages p ON p.id = c.package_id
+    WHERE i.status = 'paid'
+      AND strftime('%Y', i.paid_at, 'localtime') = ?
+      AND (? = 0 OR strftime('%m', i.paid_at, 'localtime') = ?)
+    ORDER BY datetime(i.paid_at) ASC, c.name ASC, i.id ASC
+  `).all(yearStr, filterMonth, monthStr);
+
+  const items = [];
+  let totalSaleAmount = 0;
+  let totalPpnAmount = 0;
+  let totalInvoiceAmount = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const breakdown = computeInvoiceTaxBreakdown(row.amount, row);
+    totalSaleAmount += breakdown.saleAmount;
+    totalPpnAmount += breakdown.ppnAmount;
+    totalInvoiceAmount += breakdown.nominalInvoice;
+
+    const descriptionParts = [];
+    if (row.package_name) descriptionParts.push(`Paket ${row.package_name}`);
+    if (row.paid_by_name) descriptionParts.push(`Lunas oleh ${row.paid_by_name}`);
+    if (row.notes) descriptionParts.push(String(row.notes).trim());
+
+    items.push({
+      no: index + 1,
+      customerId: Number(row.customer_id || 0) || null,
+      customerName: String(row.customer_name || '').trim(),
+      nik: String(row.nik || '').trim(),
+      npwp: String(row.npwp || '').trim(),
+      address: String(row.address || '').trim(),
+      saleAmount: breakdown.saleAmount,
+      ppnAmount: breakdown.ppnAmount,
+      nominalInvoice: breakdown.nominalInvoice,
+      description: descriptionParts.filter(Boolean).join(' | '),
+      paidAt: row.paid_at || '',
+      invoiceId: Number(row.id || 0) || null,
+      periodMonth: Number(row.period_month || 0) || null,
+      periodYear: Number(row.period_year || 0) || null
+    });
+  }
+
+  return {
+    year: filterYear,
+    month: filterMonth,
+    items,
+    totalSaleAmount,
+    totalPpnAmount,
+    totalInvoiceAmount
+  };
+}
+
 function getTopUnpaid(limit = 5) {
   return db.prepare(`
     SELECT c.name, c.phone, COUNT(*) as unpaid_count, SUM(i.amount) as total_unpaid
@@ -659,6 +880,7 @@ function createInstallProrataCatchUpInvoice(customerId) {
   const r = db.prepare('INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)').run(
     cid, periodMonth, periodYear, amount, notesAuto, resolveInvoiceDueDay(customer, periodMonth, periodYear)
   );
+  assignUniqueQrisForInvoice(r.lastInsertRowid);
 
   return {
     invoiceId: r.lastInsertRowid,
@@ -696,9 +918,12 @@ module.exports = {
   getInvoiceSummary, getMonthlyRevenue,
   getDashboardStats, getRecentPayments, getTopUnpaid,
   getTodayRevenue,
+  assignUniqueQrisForInvoice,
+  backfillUniqueQrisForUnpaidInvoices,
   getInvoiceDueDate,
   resolveInvoiceDueDay,
   getEffectiveBillingDay,
   normalizeBillingAnchorDay,
-  updatePaymentInfo
+  updatePaymentInfo,
+  getPaidInvoiceReport
 };

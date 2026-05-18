@@ -58,12 +58,19 @@
     .overview-link:hover{text-decoration:underline}
     .mobile-add-customer{display:none}
     .page-tools{display:flex;gap:8px;flex-wrap:wrap}
+    .page-tools .tool-label{display:inline}
     .mobile-stack{display:none}
     .customer-card{background:var(--bg2);border:1px solid var(--border);border-radius:15px;padding:9px;display:grid;gap:6px}
     .customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
     .customer-head strong{display:block;font-size:13px;line-height:1.12}
     .customer-sub{margin-top:2px;font-size:10px;color:var(--muted);line-height:1.3}
     .customer-chip-row{display:flex;gap:6px;flex-wrap:wrap}
+    .customer-chip-row .badge{font-size:10px;padding:6px 9px}
+    .customer-inline-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+    .customer-inline-box{padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+    .customer-inline-box small{display:block;font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+    .customer-inline-box strong{display:block;font-size:10.5px;line-height:1.22}
+    .customer-inline-box span{display:block;font-size:9.5px;line-height:1.22;color:var(--muted)}
     .customer-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .customer-meta{padding:7px 8px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
     .customer-meta small{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
@@ -87,27 +94,232 @@
     }
     .action-mini .action-label{display:none}
     .quick-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .quick-filter-row .btn{padding:7px 12px}
-    .mobile-filter-toggle{display:none}
-    .customer-filter-panel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1}
+    .quick-filter-row .btn{
+      padding:8px 12px;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+    }
+    .quick-filter-row .btn i{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:16px;
+      height:16px;
+      font-size:14px;
+      line-height:1;
+      flex:0 0 16px;
+    }
+    .quick-filter-row .btn .filter-chip-label{
+      min-width:0;
+      font-weight:800;
+      line-height:1.1;
+      white-space:nowrap;
+    }
+    .quick-filter-row .btn .filter-chip-count{
+      margin-left:auto;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:28px;
+      height:22px;
+      padding:0 8px;
+      border-radius:999px;
+      background:rgba(99,102,241,.12);
+      color:var(--primary);
+      font-size:11px;
+      font-weight:800;
+      line-height:1;
+      flex:0 0 auto;
+    }
+    .quick-filter-row .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
+    .quick-filter-row .btn.is-active .filter-chip-count{background:rgba(255,255,255,.18);color:#fff}
+    .mobile-filter-toggle{display:none;position:relative}
+    .mobile-filter-badge{
+      position:absolute;
+      top:-5px;
+      right:-5px;
+      min-width:18px;
+      height:18px;
+      padding:0 5px;
+      border-radius:999px;
+      background:#ef4444;
+      color:#fff;
+      font-size:10px;
+      font-weight:800;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 8px 18px rgba(239,68,68,.24)
+    }
+    .mobile-filter-badge.show{display:inline-flex}
+    .customer-filter-form{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;width:100%}
+    .customer-search-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;width:100%;min-width:0}
+    .customer-search-row .sinput{flex:1 1 auto;min-width:0}
+    .customer-filter-form .customer-search-row{flex:0 1 360px;max-width:360px}
+    .customer-filter-panel{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+    .customer-filter-panel::-webkit-scrollbar{display:none}
+    .customer-filter-main-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:0}
+    .customer-filter-panel .mobile-filter-field{min-width:0}
+    .customer-filter-panel .mobile-date-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .customer-filter-panel .mobile-filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .customer-filter-panel .fs,
+    .customer-filter-panel .fc,
+    .customer-filter-panel .btn{white-space:nowrap}
+    .customer-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
+    .customer-filter-summary strong{font-size:13px;color:var(--text)}
+    .customer-filter-summary span{font-size:12px;color:var(--muted)}
+    .customer-filter-summary .summary-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .customer-filter-summary .summary-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(99,102,241,.12);color:var(--primary);font-size:11px;font-weight:700}
+    .upload-preview-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;flex-wrap:wrap}
+    .upload-preview-card{width:104px;min-height:104px;border-radius:16px;border:1px dashed rgba(148,163,184,.35);background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+    .upload-preview-card img{width:100%;height:104px;object-fit:cover;display:block}
+    .upload-preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px;color:var(--muted);font-size:11px;text-align:center;line-height:1.35}
+    .upload-preview-empty i{font-size:20px;color:var(--primary)}
+    .upload-preview-meta{display:flex;flex-direction:column;gap:4px;max-width:220px}
+    .upload-preview-name{font-size:11px;color:var(--text);line-height:1.4;word-break:break-word}
+    .upload-preview-state{font-size:10px;color:var(--muted)}
+    .upload-preview-clear{min-height:32px}
     body[data-theme="light"] .customer-card{
       background:rgba(255,255,255,.9);
       box-shadow:0 14px 30px rgba(165,162,211,.12);
+    }
+    body[data-theme="light"] .customer-filter-summary{
+      background:rgba(105,88,255,.04);
+      border-color:rgba(148,163,184,.18);
     }
     body[data-theme="light"] .customer-meta{
       background:rgba(105,88,255,.04);
       border-color:rgba(148,163,184,.18);
     }
+    body[data-theme="light"] .customer-inline-box{
+      background:rgba(105,88,255,.04);
+      border-color:rgba(148,163,184,.18);
+    }
     body[data-theme="light"] .customer-head strong,
     body[data-theme="light"] .customer-meta strong,
-    body[data-theme="light"] .customer-meta span{
+    body[data-theme="light"] .customer-meta span,
+    body[data-theme="light"] .customer-inline-box strong{
       color:#24304a;
+    }
+    body[data-theme="light"] .customer-inline-box span{
+      color:#6f7d98;
     }
     body[data-theme="light"] .customer-sub,
     body[data-theme="light"] .customer-address-line{
       color:#6f7d98;
     }
+    body[data-theme="dark"] .customer-overview-shell{
+      background:linear-gradient(180deg,#0d1730 0%,#101c36 150px,#0f172a 150px,#0f172a 100%);
+    }
+    body[data-theme="dark"] .tbl-wrap,
+    body[data-theme="dark"] .dtbl{
+      color:var(--text);
+    }
+    body[data-theme="dark"] .dtbl td{
+      color:rgba(226,232,240,.94);
+    }
+    body[data-theme="dark"] .dtbl td strong,
+    body[data-theme="dark"] .dtbl td b,
+    body[data-theme="dark"] .dtbl td .text-strong{
+      color:#f8fafc;
+    }
+    body[data-theme="dark"] .dtbl td .text-muted,
+    body[data-theme="dark"] .dtbl td div[style*='font-size:10px'],
+    body[data-theme="dark"] .dtbl td div[style*='font-size:12px']{
+      color:rgba(148,163,184,.94) !important;
+    }
+    body[data-theme="dark"] .dtbl td a,
+    body[data-theme="dark"] .dtbl td .usage-label,
+    body[data-theme="dark"] .dtbl td .customer-inline-link{
+      color:#e2e8f0;
+    }
+    body[data-theme="dark"] .dtbl td .package-name,
+    body[data-theme="dark"] .dtbl td .package-line,
+    body[data-theme="dark"] .dtbl td .usage-line,
+    body[data-theme="dark"] .dtbl td .address-line{
+      color:#e2e8f0;
+    }
+    body[data-theme="dark"] .dtbl td .package-sub,
+    body[data-theme="dark"] .dtbl td .usage-sub,
+    body[data-theme="dark"] .dtbl td .address-sub{
+      color:#94a3b8;
+    }
+    body[data-theme="dark"] .customer-overview-banner,
+    body[data-theme="dark"] .customer-overview-card{
+      background:rgba(17,24,39,.96);
+      color:var(--text);
+      border:1px solid var(--border);
+      box-shadow:0 18px 44px rgba(2,6,23,.34);
+    }
+    body[data-theme="dark"] .customer-overview-banner i{
+      background:rgba(59,130,246,.14);
+      color:#7ab8ff;
+    }
+    body[data-theme="dark"] .customer-period-form label,
+    body[data-theme="dark"] .overview-label,
+    body[data-theme="dark"] .customer-overview-total,
+    body[data-theme="dark"] .overview-amount{
+      color:var(--muted);
+    }
+    body[data-theme="dark"] .customer-period-form select,
+    body[data-theme="dark"] .overview-section h4,
+    body[data-theme="dark"] .overview-value,
+    body[data-theme="dark"] .overview-copy strong,
+    body[data-theme="dark"] .customer-overview-banner strong,
+    body[data-theme="dark"] .customer-overview-banner span{
+      color:var(--text);
+    }
+    body[data-theme="dark"] .overview-link,
+    body[data-theme="dark"] .overview-foot{
+      color:#7ab8ff;
+    }
+    body[data-theme="dark"] .overview-icon.gray{
+      background:rgba(148,163,184,.12);
+      color:#cbd5e1;
+    }
+    body[data-theme="dark"] .overview-icon.blue{
+      background:rgba(59,130,246,.14);
+      color:#7ab8ff;
+    }
+    body[data-theme="dark"] .overview-icon.green{
+      background:rgba(34,197,94,.14);
+      color:#6ee7a1;
+    }
+    body[data-theme="dark"] .overview-icon.orange,
+    body[data-theme="dark"] .overview-icon.amber{
+      background:rgba(245,158,11,.14);
+      color:#fbbf24;
+    }
+    body[data-theme="dark"] .overview-icon.red,
+    body[data-theme="dark"] .overview-icon.rose{
+      background:rgba(239,68,68,.14);
+      color:#fda4af;
+    }
+    body[data-theme="dark"] .overview-icon.mint{
+      background:rgba(20,184,166,.14);
+      color:#5eead4;
+    }
     @media(max-width:768px){
+      .topbar{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:start;
+        gap:8px;
+      }
+      .topbar .tb-title{min-width:0}
+      .topbar .tb-right{
+        justify-self:end;
+        display:flex;
+        align-items:center;
+        gap:6px;
+        flex-wrap:nowrap;
+      }
+      .topbar .tb-right .adm-badge{display:none}
+      .topbar .tb-right .tb-theme-btn{min-width:42px;padding:0 10px}
+      .topbar .tb-right .tb-theme-btn span{display:none}
+      .topbar .tb-right > .btn.btn-g.btn-sm:last-child{min-width:42px;padding:0 10px}
       .customer-overview-shell{border-radius:24px;background:linear-gradient(180deg,#1f2f73 0%,#1f2f73 140px,#f7f9ff 140px,#fff 100%)}
       .customer-overview-top{padding:16px 16px 82px}
       .customer-overview-title h3{font-size:17px}
@@ -128,52 +340,185 @@
       .mobile-add-customer .btn{width:min(100%,340px);border-radius:18px;min-height:54px;font-size:16px;box-shadow:0 18px 36px rgba(31,47,115,.25)}
       .card-hd{align-items:flex-start}
       .card-hd h6{line-height:1.35}
-      .page-tools{width:100%}
-      .page-tools .btn{flex:1 1 calc(50% - 4px);justify-content:center}
+      .page-tools{width:100%;display:grid;grid-template-columns:46px 46px minmax(0,1fr);gap:8px}
+      .page-tools .btn{justify-content:center;min-width:0}
+      .page-tools .btn:nth-child(1),
+      .page-tools .btn:nth-child(2){padding-inline:0}
+      .page-tools .btn:nth-child(1) .tool-label,
+      .page-tools .btn:nth-child(2) .tool-label{display:none}
       .location-input-group{flex-wrap:wrap}
       .location-action-btn{flex:1}
       .srow{align-items:stretch}
       .srow .sinput{max-width:none !important;flex:1 1 auto}
+      #customerSearchForm{display:block !important;width:100%}
+      .customer-filter-form{display:block !important;width:100%}
       .mobile-filter-toggle{display:inline-flex;flex:0 0 46px;min-width:46px;height:46px;padding:0;justify-content:center}
+      .customer-search-row{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) 46px;
+        align-items:start;
+        gap:8px;
+        width:100%;
+        margin-bottom:10px;
+      }
+      .customer-search-row .sinput{
+        min-width:0;
+        width:100%;
+        max-width:none !important;
+      }
+      .customer-filter-form .customer-search-row{max-width:none}
+      .customer-search-row .mobile-filter-toggle{align-self:stretch}
       .customer-filter-panel{
         display:none;
+        position:static !important;
+        float:none !important;
         width:100%;
-        grid-template-columns:1fr 1fr;
+        min-width:0;
         gap:8px;
         margin-top:10px;
         padding:10px;
         border:1px solid var(--border);
         border-radius:16px;
         background:rgba(255,255,255,.03);
+        overflow:visible;
       }
-      .customer-filter-panel.show{display:grid}
+      .customer-filter-panel.show{display:grid !important;grid-template-columns:1fr}
+      .customer-filter-main-row{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+        width:100%;
+      }
+      .customer-filter-panel .mobile-filter-field{width:100%}
+      .customer-filter-panel .mobile-date-row{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
       .customer-filter-panel .fs,
       .customer-filter-panel .fc,
       .customer-filter-panel .btn{width:100% !important;max-width:none !important}
       .customer-filter-panel .btn{justify-content:center}
       .customer-filter-panel .btn-apply-mobile{display:inline-flex}
+      .customer-filter-panel .mobile-filter-actions{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
+      .quick-filter-row{
+        display:grid;
+        grid-template-columns:repeat(4,minmax(0,1fr));
+        gap:6px;
+      }
+      .quick-filter-row .btn{
+        width:100%;
+        justify-content:center;
+        min-height:42px;
+        padding:7px 6px;
+        font-size:10.5px;
+        gap:5px;
+      }
       .tbl-wrap{display:none}
       .mobile-stack{display:grid;gap:8px;padding:0 0 12px}
     }
     @media(max-width:576px){
-      .customer-filter-panel{grid-template-columns:1fr}
+      .customer-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr))}
       .customer-card{padding:8px;gap:6px}
       .customer-head strong{font-size:13px}
       .customer-sub{font-size:10px}
+      .customer-chip-row{gap:5px}
+      .customer-chip-row .badge{font-size:9.5px;padding:5px 8px}
+      .customer-inline-grid{gap:6px}
+      .customer-inline-box{padding:6px 7px}
+      .customer-inline-box small{font-size:8px}
+      .customer-inline-box strong{font-size:10px}
+      .customer-inline-box span{font-size:9px}
       .customer-meta{padding:6px 7px}
       .customer-meta small{font-size:8.5px;margin-bottom:2px}
       .customer-meta strong,.customer-meta span{font-size:10px}
+      .customer-meta-grid{display:none}
       .customer-actions{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
-      .customer-actions .btn,.customer-actions form .btn{height:36px;min-height:36px;border-radius:11px}
-      .customer-actions .action-mini{flex-direction:row;gap:0;line-height:1}
+      .customer-actions .btn,.customer-actions form .btn{height:42px;min-height:42px;border-radius:11px}
+      .customer-actions .action-mini{flex-direction:column;gap:2px;line-height:1}
       .customer-actions .action-mini i{
-        width:16px;
-        height:16px;
+        width:17px;
+        height:17px;
         font-size:14px;
-        flex-basis:16px;
+        flex-basis:17px;
       }
-      .customer-actions .action-mini .action-label{display:none}
-      .page-tools .btn{flex:1 1 100%}
+      .customer-actions .action-mini .action-label{
+        display:block;
+        font-size:8.5px;
+        font-weight:700;
+        letter-spacing:.01em;
+      }
+      .page-tools{grid-template-columns:42px 42px minmax(0,1fr);gap:6px}
+      .page-tools .btn{min-height:42px}
+      .upload-preview-card{width:92px;min-height:92px}
+      .upload-preview-card img{height:92px}
+    }
+    @media(max-width:430px){
+      .topbar .tb-title{
+        font-size:0;
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
+      .topbar .tb-title::after{
+        content:"Manajemen Pelanggan";
+        font-size:14px;
+        font-weight:800;
+        color:var(--text);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .customer-filter-panel{gap:6px;padding:8px}
+      .customer-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+      .customer-filter-panel .mobile-date-row{
+        grid-template-columns:1fr 1fr;
+        gap:6px;
+      }
+      .quick-filter-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+      .quick-filter-row .btn{
+        min-height:44px;
+        padding:5px 2px;
+        gap:2px;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+      }
+      .quick-filter-row .btn .filter-chip-label{
+        max-width:100%;
+        font-size:8.5px;
+        line-height:1.05;
+        text-align:center;
+        white-space:nowrap;
+      }
+      .quick-filter-row .btn .filter-chip-count{
+        margin-left:0;
+        min-width:18px;
+        height:16px;
+        padding:0 4px;
+        font-size:7.5px;
+      }
+      .quick-filter-row .btn i{
+        display:none;
+      }
+      .customer-filter-panel .fs,
+      .customer-filter-panel .fc{
+        min-height:42px;
+        font-size:11px;
+        padding-left:10px;
+        padding-right:28px;
+      }
+      .customer-filter-panel .mobile-filter-actions{
+        grid-template-columns:1fr 1fr;
+      }
     }
     body[data-theme="light"] .customer-overview-shell{
       background:linear-gradient(180deg,#23377d 0%,#23377d 152px,#f5f8ff 152px,#ffffff 100%);
@@ -199,7 +544,7 @@
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-  <div class="page">
+<div class="page admin-shell-page">
 
     <% if (msg) { %>
     <div class="alert alert-<%= msg.type === 'success' ? 's' : 'd' %>">
@@ -214,6 +559,13 @@
       const currentSelectedMonth = typeof selectedMonth !== 'undefined' ? selectedMonth : (new Date().getMonth() + 1);
       const currentSelectedYear = typeof selectedYear !== 'undefined' ? selectedYear : new Date().getFullYear();
       const currentPageNumber = typeof currentPage !== 'undefined' ? currentPage : 1;
+      const currentStatusLabel = currentFilterStatus === 'active'
+        ? 'Pelanggan Aktif'
+        : currentFilterStatus === 'inactive'
+          ? 'Pelanggan Nonaktif'
+          : currentFilterStatus === 'suspended'
+            ? 'Pelanggan Terisolir'
+            : 'Semua Pelanggan';
       const totalPageCount = typeof totalPages !== 'undefined' ? totalPages : 1;
       const totalCustomerRows = typeof totalCustomersCount !== 'undefined' ? totalCustomersCount : customers.length;
       const customerRowOffset = (currentPageNumber - 1) * (typeof pageSize !== 'undefined' ? pageSize : customers.length || 25);
@@ -399,43 +751,76 @@
     %>
 
     <!-- Search & Add -->
-    <div class="card page-filter-card">
+    <div class="card page-filter-card admin-compact-card">
       <div class="card-hd">
         <h6><i class="bi bi-people"></i> <%= t('admin.customers.list', 'Daftar Pelanggan') %> (<%= totalCustomerRows %>)</h6>
         <div class="page-tools">
-          <a href="/admin/customers/export" class="btn btn-g btn-sm"><i class="bi bi-file-earmark-excel"></i> <%= t('admin.customers.export_excel', 'Export Excel') %></a>
-          <button class="btn btn-g btn-sm" onclick="openModal('importModal')"><i class="bi bi-file-earmark-arrow-up"></i> <%= t('admin.customers.import_excel', 'Import Excel') %></button>
-          <button class="btn btn-p btn-sm" onclick="openModal('addModal')"><i class="bi bi-plus-lg"></i> <%= t('admin.customers.add', 'Tambah Pelanggan') %></button>
+          <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
+          <a href="/admin/customers/export" class="btn btn-g btn-sm" aria-label="<%= t('admin.customers.export_excel', 'Export Excel') %>"><i class="bi bi-file-earmark-excel"></i> <span class="tool-label"><%= t('admin.customers.export_excel', 'Export Excel') %></span></a>
+          <button class="btn btn-g btn-sm" onclick="openModal('importModal')" aria-label="<%= t('admin.customers.import_excel', 'Import Excel') %>"><i class="bi bi-file-earmark-arrow-up"></i> <span class="tool-label"><%= t('admin.customers.import_excel', 'Import Excel') %></span></button>
+          <button class="btn btn-p btn-sm" onclick="openModal('addModal')"><i class="bi bi-plus-lg"></i> <span class="tool-label"><%= t('admin.customers.add', 'Tambah Pelanggan') %></span></button>
+          <% } %>
         </div>
       </div>
       <div class="card-bd" style="padding-bottom:0">
-          <form method="GET" action="/admin/customers" class="srow" id="customerSearchForm">
-            <div class="sinput" style="max-width:340px">
-              <i class="bi bi-search"></i>
-              <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, tag...') %>" value="<%= currentSearch %>">
-              <datalist id="customerSearchSuggestions"></datalist>
+          <form method="GET" action="/admin/customers" class="srow customer-filter-form" id="customerSearchForm" style="width:100%">
+            <div class="customer-search-row">
+              <div class="sinput" style="max-width:340px">
+                <i class="bi bi-search"></i>
+                <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, tag...') %>" value="<%= currentSearch %>">
+                <datalist id="customerSearchSuggestions"></datalist>
+              </div>
+              <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleCustomerFilterPanel()" aria-label="Filter pelanggan">
+                <i class="bi bi-funnel"></i>
+                <span class="mobile-filter-badge" id="customerFilterBadge"></span>
+              </button>
             </div>
-            <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleCustomerFilterPanel()" aria-label="Filter pelanggan">
-              <i class="bi bi-funnel"></i>
-            </button>
             <div class="customer-filter-panel" id="customerFilterPanel">
-              <select class="fs" name="status" style="width:140px" onchange="window.innerWidth > 768 ? this.form.submit() : null">
-                <option value=""><%= t('admin.customers.filter.all_status', 'Semua Status') %></option>
-                <option value="active" <%= currentFilterStatus==='active' ? 'selected':'' %>><%= t('admin.customers.filter.active', 'Aktif') %></option>
-                <option value="suspended" <%= currentFilterStatus==='suspended' ? 'selected':'' %>><%= t('admin.customers.filter.suspended', 'Suspend') %></option>
-                <option value="inactive" <%= currentFilterStatus==='inactive' ? 'selected':'' %>><%= t('admin.customers.filter.inactive', 'Nonaktif') %></option>
-              </select>
-              <input class="fc" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl tagih dari" value="<%= currentBillingDayStart %>" style="width:130px">
-              <input class="fc" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl tagih sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
-              <button class="btn btn-g btn-sm btn-apply-mobile" type="submit"><i class="bi bi-check2"></i> Terapkan</button>
-              <% if (currentSearch || currentFilterStatus || currentBillingDayStart || currentBillingDayEnd) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
+              <div class="customer-filter-main-row">
+                <select class="fs mobile-filter-field" name="status" style="width:140px">
+                  <option value="active" <%= currentFilterStatus==='active' ? 'selected':'' %>><%= t('admin.customers.filter.active', 'Aktif') %></option>
+                  <option value="all" <%= !currentFilterStatus ? 'selected':'' %>><%= t('admin.customers.filter.all_status', 'Semua Status') %></option>
+                  <option value="suspended" <%= currentFilterStatus==='suspended' ? 'selected':'' %>><%= t('admin.customers.filter.suspended', 'Suspend') %></option>
+                  <option value="inactive" <%= currentFilterStatus==='inactive' ? 'selected':'' %>><%= t('admin.customers.filter.inactive', 'Nonaktif') %></option>
+                </select>
+                <select class="fs mobile-filter-field" name="month" style="width:124px">
+                  <% for (let m = 1; m <= 12; m++) { %>
+                  <option value="<%= m %>" <%= Number(currentSelectedMonth || 0) === m ? 'selected' : '' %>><%= customerMonthNames[m-1] %></option>
+                  <% } %>
+                </select>
+                <select class="fs mobile-filter-field" name="year" style="width:96px">
+                  <% for (let y = new Date().getFullYear(); y >= 2023; y--) { %>
+                  <option value="<%= y %>" <%= Number(currentSelectedYear || 0) === y ? 'selected' : '' %>><%= y %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="mobile-date-row">
+                <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl tagih dari" value="<%= currentBillingDayStart %>" style="width:130px">
+                <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl tagih sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
+              </div>
+              <div class="mobile-filter-actions">
+                <button class="btn btn-g btn-sm btn-apply-mobile" type="submit"><i class="bi bi-check2"></i> Terapkan</button>
+                <% if (currentSearch || currentFilterStatus !== 'active' || currentBillingDayStart || currentBillingDayEnd || Number(currentSelectedMonth || 0) !== (new Date().getMonth() + 1) || Number(currentSelectedYear || 0) !== new Date().getFullYear()) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
+              </div>
             </div>
         </form>
+        <div class="customer-filter-summary">
+          <div>
+            <strong><%= currentStatusLabel %></strong>
+            <span><%= totalCustomerRows %> pelanggan</span>
+          </div>
+          <div class="summary-meta">
+            <span class="summary-chip"><i class="bi bi-calendar-check"></i> <%= reportMonthLabel %> <%= reportYearLabel %></span>
+            <% if (currentBillingDayStart || currentBillingDayEnd) { %>
+              <span class="summary-chip"><i class="bi bi-funnel"></i> Tagihan <%= currentBillingDayStart || '1' %>-<%= currentBillingDayEnd || '31' %></span>
+            <% } %>
+          </div>
+        </div>
         <div class="quick-filter-row page-chip-row">
-          <a href="<%= buildCustomerFilterHref({ status: 'active', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-check-circle"></i> Aktif</a>
-          <a href="<%= buildCustomerFilterHref({ status: 'suspended', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-pause-circle"></i> Suspend</a>
-          <a href="<%= buildCustomerFilterHref({ status: 'inactive', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-x-circle"></i> Nonaktif</a>
-          <a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-arrow-repeat"></i> Semua</a>
+          <a href="<%= buildCustomerFilterHref({ status: 'active', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'active' ? 'is-active' : '' %>"><i class="bi bi-check-circle"></i><span class="filter-chip-label">Aktif</span><span class="filter-chip-count"><%= Number(stats.active || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'suspended', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'suspended' ? 'is-active' : '' %>"><i class="bi bi-pause-circle"></i><span class="filter-chip-label">Suspend</span><span class="filter-chip-count"><%= Number(stats.suspended || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'inactive', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'inactive' ? 'is-active' : '' %>"><i class="bi bi-x-circle"></i><span class="filter-chip-label">Nonaktif</span><span class="filter-chip-count"><%= Number(stats.inactive || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'all', page: 1 }) %>" class="btn btn-g btn-sm <%= !currentFilterStatus ? 'is-active' : '' %>"><i class="bi bi-arrow-repeat"></i><span class="filter-chip-label">Semua</span><span class="filter-chip-count"><%= Number(stats.total || 0) %></span></a>
         </div>
       </div>
       <div class="tbl-wrap">
@@ -511,6 +896,9 @@
                 <button class="btn btn-g btn-icon btn-sm" title="Detail Pelanggan" data-id="<%= c.id %>" onclick="openCustomerDetail(+this.dataset.id)"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-s btn-icon btn-sm" title="<%= t('admin.customers.actions.generate_invoice', 'Generate Tagihan') %>" data-idx="<%= i %>" onclick="openGenInvoice(+this.dataset.idx)"><i class="bi bi-lightning-charge"></i></button>
                 <button class="btn btn-p btn-icon btn-sm" title="<%= t('admin.customers.actions.pay_invoice', 'Bayar Tagihan') %>" data-idx="<%= i %>" onclick="openPayInvoice(+this.dataset.idx)"><i class="bi bi-cash-coin"></i></button>
+                <form method="POST" action="/admin/customers/<%= c.id %>/usage/reset" style="display:inline" onsubmit="return confirm('Reset penggunaan data bulan ini untuk pelanggan ini?')">
+                  <button type="submit" class="btn btn-s btn-sm" title="Reset penggunaan data bulan ini"><i class="bi bi-arrow-clockwise"></i> Reset Usage</button>
+                </form>
                 <% if (typeof session !== 'undefined' && !session.isCashier) { %>
                 <% if (c.package_id && (c.package_promo_cycles || 0) > 0) { %>
                 <form method="POST" action="/admin/customers/<%= c.id %>/billing/reset-promo-cycles" style="display:inline" onsubmit="return confirm('Reset counter siklus promo untuk pelanggan ini? Tagihan berikutnya akan memakai harga promo lagi sesuai pengaturan paket.')">
@@ -523,10 +911,12 @@
                 </form>
                 <% } %>
                 <% } %>
+                <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                 <button class="btn btn-g btn-icon btn-sm" title="<%= t('common.edit', 'Edit') %>" data-idx="<%= i %>" onclick="editCust(+this.dataset.idx)"><i class="bi bi-pencil"></i></button>
                 <form method="POST" action="/admin/customers/<%= c.id %>/delete" style="display:inline" data-confirm-msg=<%- JSON.stringify(t('admin.customers.confirm_delete', 'Hapus pelanggan ini?')) %> onsubmit="return confirm(this.dataset.confirmMsg)">
                   <button class="btn btn-d btn-icon btn-sm" title="<%= t('common.delete', 'Hapus') %>"><i class="bi bi-trash"></i></button>
                 </form>
+                <% } %>
               </td>
             </tr>
           <% }) %>
@@ -563,6 +953,23 @@
                 <span class="badge bs">Lunas</span>
               <% } %>
               <span class="badge bm">Auto: <%= c.auto_isolate === 0 ? 'OFF' : 'Tgl ' + (c.isolate_day || 10) %></span>
+              <% if (c.package_name) { %>
+                <span class="badge bm"><%= c.package_name %></span>
+              <% } %>
+              <span class="badge bm"><%= usedGB.toFixed(2) %> GB</span>
+            </div>
+
+            <div class="customer-inline-grid">
+              <div class="customer-inline-box">
+                <small>Paket</small>
+                <strong><%= c.package_name || '-' %></strong>
+                <span><% if (c.package_name) { %><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps • Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %><% } else { %>-<% } %></span>
+              </div>
+              <div class="customer-inline-box">
+                <small>Usage</small>
+                <strong><%= usedGB.toFixed(2) %> GB</strong>
+                <span><% if (useFup && limitGB > 0) { %>Limit <%= limitGB %> GB<% } else { %>Unlimited<% } %></span>
+              </div>
             </div>
 
             <div class="customer-meta-grid">
@@ -593,6 +1000,12 @@
               <button class="btn btn-p btn-sm" type="button" title="Bayar Tagihan" data-idx="<%= i %>" onclick="openPayInvoice(+this.dataset.idx)">
                 <span class="action-mini"><i class="bi bi-cash-coin"></i><span class="action-label">Bayar</span></span>
               </button>
+              <form method="POST" action="/admin/customers/<%= c.id %>/usage/reset" onsubmit="return confirm('Reset penggunaan data bulan ini untuk pelanggan ini?')">
+                <button class="btn btn-s btn-sm" type="submit" title="Reset penggunaan data" style="width:100%">
+                  <span class="action-mini"><i class="bi bi-arrow-clockwise"></i><span class="action-label">Reset Usage</span></span>
+                </button>
+              </form>
+              <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
               <button class="btn btn-g btn-sm" type="button" title="Edit" data-idx="<%= i %>" onclick="editCust(+this.dataset.idx)">
                 <span class="action-mini"><i class="bi bi-pencil"></i><span class="action-label">Edit</span></span>
               </button>
@@ -601,6 +1014,7 @@
                   <span class="action-mini"><i class="bi bi-trash"></i><span class="action-label">Hapus</span></span>
                 </button>
               </form>
+              <% } %>
             </div>
           </div>
         <% }) %>
@@ -635,8 +1049,34 @@
           <div class="fg"><label class="fl">NPWP</label><input class="fc" name="npwp" placeholder="Opsional"></div>
         </div>
         <div class="form-row">
-          <div class="fg"><label class="fl">Upload KTP</label><input class="fc" type="file" name="ktp_photo_file" accept="image/*"></div>
-          <div class="fg"><label class="fl">Foto Rumah</label><input class="fc" type="file" name="house_photo_file" accept="image/*"></div>
+          <div class="fg">
+            <label class="fl">Upload KTP</label>
+            <input class="fc" type="file" name="ktp_photo_file" id="add_ktp_photo_file" accept="image/*">
+            <div class="upload-preview-row">
+              <div class="upload-preview-card" id="add_ktp_preview">
+                <div class="upload-preview-empty"><i class="bi bi-card-image"></i><span>Preview KTP</span></div>
+              </div>
+              <div class="upload-preview-meta">
+                <div class="upload-preview-name" id="add_ktp_preview_name">Belum ada file dipilih</div>
+                <div class="upload-preview-state">JPG, PNG, atau WEBP</div>
+                <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_ktp_photo_file','add_ktp_preview','add_ktp_preview_name','Preview KTP')">Hapus</button>
+              </div>
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Foto Rumah</label>
+            <input class="fc" type="file" name="house_photo_file" id="add_house_photo_file" accept="image/*">
+            <div class="upload-preview-row">
+              <div class="upload-preview-card" id="add_house_preview">
+                <div class="upload-preview-empty"><i class="bi bi-house-door"></i><span>Preview Rumah</span></div>
+              </div>
+              <div class="upload-preview-meta">
+                <div class="upload-preview-name" id="add_house_preview_name">Belum ada file dipilih</div>
+                <div class="upload-preview-state">Foto tampak depan atau patokan rumah</div>
+                <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_house_photo_file','add_house_preview','add_house_preview_name','Preview Rumah')">Hapus</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-row">
           <div class="fg" id="add_normal_pppoe_profile_field">
@@ -830,13 +1270,33 @@
         <div class="form-row">
           <div class="fg">
             <label class="fl">Upload KTP Baru</label>
-            <input class="fc" type="file" name="ktp_photo_file" accept="image/*">
+            <input class="fc" type="file" name="ktp_photo_file" id="e_ktp_photo_file" accept="image/*">
             <div class="hint">Kosongkan jika tidak ingin mengganti file lama.</div>
+            <div class="upload-preview-row">
+              <div class="upload-preview-card" id="edit_ktp_preview">
+                <div class="upload-preview-empty"><i class="bi bi-card-image"></i><span>Preview KTP</span></div>
+              </div>
+              <div class="upload-preview-meta">
+                <div class="upload-preview-name" id="edit_ktp_preview_name">Belum ada file dipilih</div>
+                <div class="upload-preview-state">Akan menampilkan file lama jika sudah ada</div>
+                <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('e_ktp_photo_file','edit_ktp_preview','edit_ktp_preview_name','Preview KTP')">Hapus</button>
+              </div>
+            </div>
           </div>
           <div class="fg">
             <label class="fl">Foto Rumah Baru</label>
-            <input class="fc" type="file" name="house_photo_file" accept="image/*">
+            <input class="fc" type="file" name="house_photo_file" id="e_house_photo_file" accept="image/*">
             <div class="hint">Kosongkan jika tidak ingin mengganti file lama.</div>
+            <div class="upload-preview-row">
+              <div class="upload-preview-card" id="edit_house_preview">
+                <div class="upload-preview-empty"><i class="bi bi-house-door"></i><span>Preview Rumah</span></div>
+              </div>
+              <div class="upload-preview-meta">
+                <div class="upload-preview-name" id="edit_house_preview_name">Belum ada file dipilih</div>
+                <div class="upload-preview-state">Akan menampilkan file lama jika sudah ada</div>
+                <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('e_house_photo_file','edit_house_preview','edit_house_preview_name','Preview Rumah')">Hapus</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="form-row">
@@ -1091,7 +1551,7 @@
 
 <%- include('../partials/customer_detail_modal', {
   scope: 'admin',
-  allowPayment: false,
+  allowPayment: true,
   allowDeviceActions: !(typeof session !== 'undefined' && session.isCashier && !session.isAdmin),
   detailApiBase: '/admin/api/customers',
   deviceApiBase: '/admin/api/device',
@@ -1126,14 +1586,53 @@ const officeCoords = {
 
 function openModal(id){document.getElementById(id).classList.add('show')}
 function closeModal(id){document.getElementById(id).classList.remove('show')}
+function syncCustomerMobileFilterLayout() {
+  const form = document.getElementById('customerSearchForm');
+  const searchRow = form?.querySelector('.customer-search-row');
+  const panel = document.getElementById('customerFilterPanel');
+  const dateRow = panel?.querySelector('.mobile-date-row');
+  const actionRow = panel?.querySelector('.mobile-filter-actions');
+  if (!form || !searchRow || !panel) return;
+  const isMobile = window.innerWidth <= 768;
+  searchRow.removeAttribute('style');
+  panel.removeAttribute('style');
+  dateRow?.removeAttribute('style');
+  actionRow?.removeAttribute('style');
+  if (!isMobile) panel.classList.remove('show');
+}
 function toggleCustomerFilterPanel(force) {
   const panel = document.getElementById('customerFilterPanel');
   if (!panel) return;
+  syncCustomerMobileFilterLayout();
+  if (window.innerWidth > 768) return;
   if (typeof force === 'boolean') {
     panel.classList.toggle('show', force);
     return;
   }
   panel.classList.toggle('show');
+}
+
+function getActiveCustomerFilterCount() {
+  const statusValue = String(document.querySelector('#customerSearchForm [name="status"]')?.value || '').trim();
+  const monthValue = String(document.querySelector('#customerSearchForm [name="month"]')?.value || '').trim();
+  const yearValue = String(document.querySelector('#customerSearchForm [name="year"]')?.value || '').trim();
+  const billingDayStartValue = String(document.querySelector('#customerSearchForm [name="billingDayStart"]')?.value || '').trim();
+  const billingDayEndValue = String(document.querySelector('#customerSearchForm [name="billingDayEnd"]')?.value || '').trim();
+  let count = 0;
+  if (statusValue && statusValue !== 'active') count += 1;
+  if (monthValue && Number(monthValue) !== (new Date().getMonth() + 1)) count += 1;
+  if (yearValue && Number(yearValue) !== new Date().getFullYear()) count += 1;
+  if (billingDayStartValue) count += 1;
+  if (billingDayEndValue) count += 1;
+  return count;
+}
+
+function syncCustomerFilterBadge() {
+  const badge = document.getElementById('customerFilterBadge');
+  if (!badge) return;
+  const count = getActiveCustomerFilterCount();
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.classList.toggle('show', count > 0);
 }
 
 function applyLocationToInputs(type, lat, lng) {
@@ -1278,8 +1777,74 @@ function syncAddPppoeSecretUi() {
   passwordWrap.style.opacity = enabled ? '1' : '0.55';
 }
 
+function setUploadPreview(previewId, nameId, sourceUrl, emptyLabel, fileName = '') {
+  const preview = document.getElementById(previewId);
+  const nameEl = document.getElementById(nameId);
+  if (!preview || !nameEl) return;
+  preview.replaceChildren();
+  if (sourceUrl) {
+    const img = document.createElement('img');
+    img.src = sourceUrl;
+    img.alt = emptyLabel;
+    preview.appendChild(img);
+    nameEl.textContent = fileName || 'File siap diunggah';
+    return;
+  }
+  const empty = document.createElement('div');
+  empty.className = 'upload-preview-empty';
+  empty.innerHTML = `<i class="bi ${/rumah/i.test(emptyLabel) ? 'bi-house-door' : 'bi-card-image'}"></i><span>${emptyLabel}</span>`;
+  preview.appendChild(empty);
+  nameEl.textContent = 'Belum ada file dipilih';
+}
+
+function bindUploadPreview(inputId, previewId, nameId, emptyLabel) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (!file) {
+      setUploadPreview(previewId, nameId, '', emptyLabel);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setUploadPreview(previewId, nameId, String(reader.result || ''), emptyLabel, file.name || 'File dipilih');
+    reader.readAsDataURL(file);
+  });
+}
+
+function clearUploadPreview(inputId, previewId, nameId, emptyLabel) {
+  const input = document.getElementById(inputId);
+  if (input) input.value = '';
+  setUploadPreview(previewId, nameId, '', emptyLabel);
+}
+
+function syncEditUploadPreviews(customer = null) {
+  setUploadPreview(
+    'edit_ktp_preview',
+    'edit_ktp_preview_name',
+    String(customer?.ktp_photo_url || '').trim(),
+    'Preview KTP',
+    customer?.ktp_photo_url ? 'File KTP tersimpan' : ''
+  );
+  setUploadPreview(
+    'edit_house_preview',
+    'edit_house_preview_name',
+    String(customer?.house_photo_url || '').trim(),
+    'Preview Rumah',
+    customer?.house_photo_url ? 'Foto rumah tersimpan' : ''
+  );
+  const ktpInput = document.getElementById('e_ktp_photo_file');
+  const houseInput = document.getElementById('e_house_photo_file');
+  if (ktpInput) ktpInput.value = '';
+  if (houseInput) houseInput.value = '';
+}
+
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
 document.getElementById('add_create_pppoe_secret')?.addEventListener('change', syncAddPppoeSecretUi);
+bindUploadPreview('add_ktp_photo_file', 'add_ktp_preview', 'add_ktp_preview_name', 'Preview KTP');
+bindUploadPreview('add_house_photo_file', 'add_house_preview', 'add_house_preview_name', 'Preview Rumah');
+bindUploadPreview('e_ktp_photo_file', 'edit_ktp_preview', 'edit_ktp_preview_name', 'Preview KTP');
+bindUploadPreview('e_house_photo_file', 'edit_house_preview', 'edit_house_preview_name', 'Preview Rumah');
 function editCust(idx) {
   const c = customersData[idx];
   if (!c) return;
@@ -1309,6 +1874,7 @@ function editCust(idx) {
   document.getElementById('e_notes').value=c.notes||'';
   document.getElementById('e_auto_isolate').value=(c.auto_isolate !== undefined ? c.auto_isolate : 1);
   document.getElementById('e_isolate_day').value=(c.isolate_day || 10);
+  syncEditUploadPreviews(c);
   toggleConnectionFields('edit');
   openModal('editModal');
   loadPppoeEdit(c.router_id || '', c.id || '');
@@ -1543,19 +2109,6 @@ document.getElementById('customerSearchInput')?.addEventListener('input', (event
   syncCustomerSearchSuggestions(event.target.value);
 });
 
-let customerSearchSubmitTimer = null;
-function applyCustomerLocalFilter(keyword) {
-  const normalized = String(keyword || '').trim().toLowerCase();
-  document.querySelectorAll('.dtbl tbody tr').forEach((row) => {
-    const haystack = String(row.textContent || '').toLowerCase();
-    row.style.display = !normalized || haystack.includes(normalized) ? '' : 'none';
-  });
-  document.querySelectorAll('.mobile-stack .customer-card').forEach((card) => {
-    const haystack = String(card.textContent || '').toLowerCase();
-    card.style.display = !normalized || haystack.includes(normalized) ? '' : 'none';
-  });
-}
-
 function triggerCustomerAutoSearch(force = false) {
   const input = document.getElementById('customerSearchInput');
   const form = document.getElementById('customerSearchForm');
@@ -1569,29 +2122,33 @@ function triggerCustomerAutoSearch(force = false) {
   window.location.assign(nextUrl);
 }
 
-document.getElementById('customerSearchInput')?.addEventListener('input', (event) => {
-  if (customerSearchSubmitTimer) clearTimeout(customerSearchSubmitTimer);
-  const keyword = String(event.target.value || '').trim();
-  applyCustomerLocalFilter(keyword);
-  customerSearchSubmitTimer = setTimeout(() => {
-    if (!keyword || keyword.length >= 2) triggerCustomerAutoSearch();
-  }, 320);
-});
-
 document.getElementById('customerSearchInput')?.addEventListener('change', () => {
-  if (customerSearchSubmitTimer) clearTimeout(customerSearchSubmitTimer);
   triggerCustomerAutoSearch(true);
 });
 
-applyCustomerLocalFilter(document.getElementById('customerSearchInput')?.value || '');
-if (window.innerWidth <= 768) {
-  const hasActiveCustomerFilters = Boolean(
-    String(document.querySelector('#customerSearchForm [name=\"status\"]')?.value || '').trim() ||
-    String(document.querySelector('#customerSearchForm [name=\"billingDayStart\"]')?.value || '').trim() ||
-    String(document.querySelector('#customerSearchForm [name=\"billingDayEnd\"]')?.value || '').trim()
-  );
-  if (hasActiveCustomerFilters) toggleCustomerFilterPanel(true);
+syncCustomerMobileFilterLayout();
+syncCustomerFilterBadge();
+window.addEventListener('resize', syncCustomerMobileFilterLayout);
+
+document.querySelectorAll('#customerFilterPanel select, #customerFilterPanel input').forEach((field) => {
+  field.addEventListener('change', () => {
+    syncCustomerFilterBadge();
+  });
+});
+
+if (window.innerWidth > 768) {
+  document.querySelectorAll('#customerFilterPanel select').forEach((field) => {
+    field.addEventListener('change', () => {
+      const form = document.getElementById('customerSearchForm');
+      if (!form) return;
+      form.requestSubmit();
+    });
+  });
 }
+
+document.getElementById('customerSearchForm')?.addEventListener('submit', () => {
+  if (window.innerWidth <= 768) toggleCustomerFilterPanel(false);
+});
 
 setTimeout(()=>document.querySelectorAll('.alert').forEach(a=>a.style.display='none'),4000);
 </script>

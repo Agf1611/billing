@@ -16,25 +16,25 @@
     .legend i { width: 16px; height: 16px; display: inline-block; margin-right: 12px; border-radius: 50%; vertical-align: middle; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
     /* Stats Cards on Map */
     .map-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
-    .msc { padding: 12px; border-radius: 12px; background: white; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .msc { padding: 12px; border-radius: 16px; background: var(--surface-strong); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-soft); }
     .msc-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
     .msc-p { background: #eff6ff; color: #3b82f6; }
     .msc-s { background: #f0fdf4; color: #10b981; }
     .msc-d { background: #fef2f2; color: #ef4444; }
     .msc-w { background: #fff7ed; color: #f59e0b; }
-    .msc-info .val { font-size: 18px; font-weight: 700; line-height: 1.2; color: #1e293b; }
-    .msc-info .lbl { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .msc-info .val { font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--text); }
+    .msc-info .lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; }
 
     /* Legend Cards */
     .legend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
-    .lc { background: white; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+    .lc { background: var(--surface-strong); border: 1px solid var(--border); padding: 10px 12px; border-radius: 14px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-soft); }
     .lc i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
-    .lc span { font-size: 12px; font-weight: 700; color: #334155; }
+    .lc span { font-size: 12px; font-weight: 700; color: var(--text); }
     
-    .odps-panel { background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 12px; overflow: hidden; }
-    .odps-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 12px; border-bottom: 1px solid #e2e8f0; }
-    .odps-title { font-weight: 900; font-size: 13px; color: #0f172a; display: inline-flex; align-items: center; gap: 8px; }
-    .odps-search { width: 240px; max-width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: 700; font-size: 12px; outline: none; }
+    .odps-panel { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-soft); margin-bottom: 12px; overflow: hidden; }
+    .odps-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 12px; border-bottom: 1px solid var(--border); }
+    .odps-title { font-weight: 900; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+    .odps-search { width: 240px; max-width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 700; font-size: 12px; outline: none; }
     .odps-search:focus { border-color: rgba(59,130,246,0.85); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
     .odps-table-wrap { max-height: 240px; overflow: auto; }
     .odps-table { width: 100%; border-collapse: collapse; }
@@ -50,6 +50,10 @@
     .odps-card { border:1px solid #e2e8f0; border-radius:16px; background:#fff; padding:14px 16px; box-shadow:0 2px 4px rgba(0,0,0,0.03); }
     .odps-card + .odps-card { margin-top:12px; }
     .odps-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+    .odps-meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .odps-meta-cell { border:1px solid #e2e8f0; border-radius:14px; background:#f8fafc; padding:10px 12px; min-width:0; }
+    .odps-meta-label { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#64748b; font-weight:800; margin-bottom:4px; }
+    .odps-meta-value { font-size:12px; color:#0f172a; font-weight:800; word-break:break-word; }
     .odps-card-actions { display:flex; gap:8px; margin-top:12px; }
     .odps-card-actions .btn { flex:1; justify-content:center; }
     @media (max-width: 768px) {
@@ -57,8 +61,8 @@
       .topbar { align-items:flex-start; }
       .topbar .tb-right { width:100%; }
       .topbar .tb-right .btn { width:100%; justify-content:center; }
-      .legend-grid { grid-template-columns:1fr; }
-      .map-stats { grid-template-columns:1fr; }
+      .legend-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .map-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .odps-head { flex-wrap: wrap; }
       .odps-search { width: 100%; }
       .odps-hide-sm { display: none; }
@@ -158,7 +162,7 @@
     </div>
   </div>
 
-  <div class="page">
+<div class="page admin-shell-page">
     <% if (msg) { %>
       <div class="alert alert-<%= msg.type==='error'?'d':'s' %>"><%= msg.text %></div>
     <% } %>
@@ -255,7 +259,16 @@
                   <% if (o.description) { %><div class="odps-desc"><%= o.description %></div><% } %>
                 </div>
               </div>
-              <div class="odps-coord"><%= (Number(o.lat) || 0).toFixed(6) %>, <%= (Number(o.lng) || 0).toFixed(6) %></div>
+              <div class="odps-meta-grid">
+                <div class="odps-meta-cell">
+                  <div class="odps-meta-label">Latitude</div>
+                  <div class="odps-meta-value"><%= (Number(o.lat) || 0).toFixed(6) %></div>
+                </div>
+                <div class="odps-meta-cell">
+                  <div class="odps-meta-label">Longitude</div>
+                  <div class="odps-meta-value"><%= (Number(o.lng) || 0).toFixed(6) %></div>
+                </div>
+              </div>
               <div class="odps-card-actions">
                 <button type="button" class="btn btn-sm btn-p" data-odp-id="<%= Number(o.id) %>" onclick="editOdpFromBtn(this)"><i class="bi bi-pencil"></i> Edit</button>
                 <button type="button" class="btn btn-sm btn-ghost" data-odp-id="<%= Number(o.id) %>" onclick="focusOdpFromBtn(this)"><i class="bi bi-geo-alt"></i> Fokus</button>

@@ -22,7 +22,8 @@
     .voucher-mobile-name { font-size:14px; font-weight:800; color:var(--text); }
     .voucher-mobile-sub { font-size:12px; color:var(--muted); margin-top:4px; }
     .voucher-mobile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-    .voucher-mobile-cell { padding:10px 12px; border-radius:14px; }
+    .voucher-mobile-cell { padding:10px 12px; border-radius:14px; min-width:0; }
+    .voucher-mobile-cell.span-2 { grid-column:span 2; }
     .voucher-mobile-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:4px; }
     .voucher-mobile-value { font-size:13px; font-weight:700; color:var(--text); word-break:break-word; }
     .voucher-mobile-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
@@ -42,15 +43,16 @@
       .kv .fg.w160 { min-width:0; flex:1 1 100%; }
       .kv .fg.w120 button,
       .kv .btn { width:100%; justify-content:center; }
-      .voucher-mobile-actions { flex-direction:column; }
+      .voucher-mobile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
       .voucher-mobile-actions .btn { width:100%; min-height:40px; }
       .tbl-wrap { display:none; }
       .voucher-mobile-list { display:block; }
     }
     @media (max-width: 520px) {
-      .stat-grid[style] { grid-template-columns:1fr !important; }
-      .voucher-mobile-grid { grid-template-columns:1fr; }
+      .stat-grid[style] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+      .voucher-mobile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .voucher-mobile-head { flex-direction:column; }
+      .voucher-mobile-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
   </style>
 </head>
@@ -77,7 +79,7 @@
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-  <div class="page">
+<div class="page admin-shell-page">
     <% const mTab = 'vouchers'; %>
     <% if (msg) { %>
       <div class="alert <%= msg.type === 'success' ? 's' : (msg.type === 'error' ? 'd' : 'w') %>"><%= msg.text %></div>
@@ -89,14 +91,14 @@
       <a href="/admin/routers" class="mtab <%= mTab==='routers' ? 'active' : '' %>"><i class="bi bi-hdd-network"></i> Router</a>
     </div>
 
-    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
       <div class="sc p"><i class="bi bi-collection sc-icon"></i><div class="sc-label"><%= t('admin.vouchers.stats.batches', 'Batch') %></div><div class="sc-val" id="stat-batches">0</div></div>
       <div class="sc s"><i class="bi bi-ticket sc-icon"></i><div class="sc-label"><%= t('admin.vouchers.stats.vouchers', 'Voucher') %></div><div class="sc-val" id="stat-vouchers">0</div></div>
       <div class="sc w"><i class="bi bi-check2-circle sc-icon"></i><div class="sc-label"><%= t('admin.vouchers.stats.used', 'Terpakai') %></div><div class="sc-val" id="stat-used">0</div></div>
       <div class="sc d"><i class="bi bi-circle sc-icon"></i><div class="sc-label"><%= t('admin.vouchers.stats.unused', 'Belum') %></div><div class="sc-val" id="stat-unused">0</div></div>
     </div>
 
-    <div class="card" style="margin-bottom:20px">
+    <div class="card admin-compact-card" style="margin-bottom:14px">
       <div class="card-hd">
         <h6><i class="bi bi-plus-circle"></i> <%= t('admin.vouchers.create.title', 'Buat Voucher Batch') %></h6>
         <div class="pill"><i class="bi bi-building"></i> <b><%= settings.company_header || company %></b></div>
@@ -151,7 +153,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card admin-compact-card">
       <div class="card-hd">
         <h6><i class="bi bi-list-check"></i> <%= t('admin.vouchers.batches.title', 'Batch Voucher') %></h6>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -162,6 +164,7 @@
               <option value="mks" <%= (settings.voucher_print_default_style || '') === 'mks' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_mks', 'Template Jadi: MKS') %></option>
               <option value="simple" <%= (settings.voucher_print_default_style || '') === 'simple' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_simple', 'Template Jadi: Simple') %></option>
               <option value="minimal" <%= (settings.voucher_print_default_style || '') === 'minimal' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_minimal', 'Template Jadi: Minimal') %></option>
+              <option value="thermal" <%= (settings.voucher_print_default_style || '') === 'thermal' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_thermal', 'Thermal Bluetooth') %></option>
               <option value="template" <%= (settings.voucher_print_default_style || '') === 'template' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_custom', 'Template Custom (Editor)') %></option>
             </select>
           </div>
@@ -258,6 +261,7 @@
           <option value="mks" <%= (settings.voucher_print_default_style || '') === 'mks' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_mks', 'Template Jadi: MKS') %></option>
           <option value="simple" <%= (settings.voucher_print_default_style || '') === 'simple' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_simple', 'Template Jadi: Simple') %></option>
           <option value="minimal" <%= (settings.voucher_print_default_style || '') === 'minimal' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_minimal', 'Template Jadi: Minimal') %></option>
+          <option value="thermal" <%= (settings.voucher_print_default_style || '') === 'thermal' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_thermal', 'Thermal Bluetooth') %></option>
           <option value="template" <%= (settings.voucher_print_default_style || '') === 'template' ? 'selected' : '' %>><%= t('admin.vouchers.print_style_custom', 'Template Custom (Editor)') %></option>
         </select>
       </div>
@@ -569,7 +573,7 @@
               <div class="voucher-mobile-label">Terpakai</div>
               <div class="voucher-mobile-value">${escapeHtml(used)}</div>
             </div>
-            <div class="voucher-mobile-cell">
+            <div class="voucher-mobile-cell span-2">
               <div class="voucher-mobile-label">Dibuat</div>
               <div class="voucher-mobile-value">${escapeHtml(created)}</div>
             </div>
@@ -693,7 +697,7 @@
               <div class="voucher-mobile-label">Last Seen</div>
               <div class="voucher-mobile-value">${escapeHtml(seenAt)}</div>
             </div>
-            <div class="voucher-mobile-cell">
+            <div class="voucher-mobile-cell span-2">
               <div class="voucher-mobile-label">Info</div>
               <div class="voucher-mobile-value">${escapeHtml(seen)}</div>
             </div>

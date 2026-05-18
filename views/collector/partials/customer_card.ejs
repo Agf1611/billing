@@ -17,7 +17,7 @@
   const statusIcon = isPaid ? 'bi-check-circle' : (isPending ? 'bi-hourglass-split' : 'bi-exclamation-circle');
   const pendingText = isPending ? 'Sudah diajukan' : '';
   const allowSubmit = !isPaid && !isPending;
-  const mapHref = (inv.lat && inv.lng) ? `https://www.google.com/maps?q=${encodeURIComponent(`${inv.lat},${inv.lng}`)}` : '';
+  const mapHref = (inv.lat && inv.lng) ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${inv.lat},${inv.lng}`)}` : '';
 %>
 
 <article

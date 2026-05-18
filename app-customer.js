@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const dns = require('dns');
 require('dotenv').config();
+process.env.TZ = process.env.TZ || 'Asia/Jakarta';
 const crypto = require('crypto');
 const { logger } = require('./config/logger');
 const db = require('./config/database');
@@ -32,9 +33,106 @@ const session = require('express-session');
 const { getSetting, getSettingsWithCache } = require('./config/settingsManager');
 const { SUPPORTED_LANGS, FALLBACK_LANG, normalizeLang, t } = require('./config/i18n');
 const { createSqliteSessionStore } = require('./config/sqliteSessionStore');
+const billingSvc = require('./services/billingService');
+const {
+  buildCustomerCheckBillingLink,
+  buildCustomerPortalLoginLink,
+  buildPublicInvoicePrintLink,
+  buildPublicInvoiceReceiptLink,
+  formatInvoiceDueDate,
+  defaultPaidWhatsappTemplate,
+  fillWhatsappTemplate,
+  ensureDueDateLine,
+  resolveRequestBaseUrl
+} = require('./services/publicLinkService');
 
 // Inisialisasi aplikasi Express
 const app = express();
+
+function buildPortalManifest(portalKey = 'customer') {
+  const settings = getSettingsWithCache();
+  const companyName = String(settings.company_header || 'SICKAS WIFI').trim() || 'SICKAS WIFI';
+  const logoSrc = String(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
+  const portalMap = {
+    customer: {
+      name: 'Portal Pelanggan',
+      shortName: 'Pelanggan',
+      startUrl: '/customer/login?source=pwa',
+      scope: '/customer/',
+      themeColor: '#2f6bff',
+      backgroundColor: '#f6faff'
+    },
+    admin: {
+      name: 'Admin',
+      shortName: 'Admin',
+      startUrl: '/admin?source=pwa',
+      scope: '/admin/',
+      themeColor: '#0f172a',
+      backgroundColor: '#0f172a'
+    },
+    tech: {
+      name: 'Portal Teknisi',
+      shortName: 'Teknisi',
+      startUrl: '/tech/login?source=pwa',
+      scope: '/tech/',
+      themeColor: '#0f172a',
+      backgroundColor: '#0f172a'
+    },
+    agent: {
+      name: 'Portal Agent',
+      shortName: 'Agent',
+      startUrl: '/agent/login?source=pwa',
+      scope: '/agent/',
+      themeColor: '#1e293b',
+      backgroundColor: '#0f172a'
+    },
+    collector: {
+      name: 'Portal Kolektor',
+      shortName: 'Kolektor',
+      startUrl: '/collector/login?source=pwa',
+      scope: '/collector/',
+      themeColor: '#0f172a',
+      backgroundColor: '#08111f'
+    }
+  };
+  const portal = portalMap[portalKey] || portalMap.customer;
+  return {
+    id: portal.scope,
+    name: portal.name,
+    short_name: portal.shortName,
+    description: `${portal.name} ${companyName}`,
+    start_url: portal.startUrl,
+    scope: portal.scope,
+    display: 'standalone',
+    display_override: ['standalone', 'minimal-ui'],
+    orientation: 'portrait',
+    background_color: portal.backgroundColor,
+    theme_color: portal.themeColor,
+    icons: [
+      { src: logoSrc, sizes: '192x192', purpose: 'any maskable' },
+      { src: logoSrc, sizes: '512x512', purpose: 'any maskable' },
+      { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  };
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const manifestMap = {
+    '/manifest.webmanifest': 'customer',
+    '/admin/manifest.webmanifest': 'admin',
+    '/tech/manifest.webmanifest': 'tech',
+    '/agent/manifest.webmanifest': 'agent',
+    '/collector/manifest.webmanifest': 'collector'
+  };
+  const portalKey = manifestMap[req.path];
+  if (!portalKey) return next();
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.type('application/manifest+json');
+  return res.send(buildPortalManifest(portalKey));
+});
 
 const bootSettings = getSettingsWithCache();
 assertCriticalSecuritySettings(bootSettings);
@@ -147,6 +245,31 @@ const updateWebhookPaymentNotifMatch = db.prepare(`
   WHERE id = ?
 `);
 
+const selectRecentDuplicateWebhookMatched = db.prepare(`
+  SELECT id, matched_invoice_id, created_at
+  FROM webhook_payment_notifs
+  WHERE service = ?
+    AND content = ?
+    AND parsed_amount = ?
+    AND id != ?
+    AND created_at >= datetime('now', '-2 day')
+    AND matched_invoice_id IS NOT NULL
+  ORDER BY id DESC
+  LIMIT 1
+`);
+
+const selectRecentDuplicateWebhookAny = db.prepare(`
+  SELECT id, matched_invoice_id, created_at
+  FROM webhook_payment_notifs
+  WHERE service = ?
+    AND content = ?
+    AND parsed_amount = ?
+    AND id != ?
+    AND created_at >= datetime('now', '-2 day')
+  ORDER BY id DESC
+  LIMIT 1
+`);
+
 const selectInvoiceByUniqueAmount = db.prepare(`
   SELECT i.id, i.customer_id, i.status, i.amount, i.qris_amount_unique, i.qris_unique_code, i.notes,
          c.status as customer_status
@@ -246,6 +369,59 @@ function parseRupiahAmountFromNotification(content) {
   return Number.isFinite(amount) ? amount : null;
 }
 
+function buildWebhookPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl) {
+  const template = String(
+    settings?.whatsapp_paid_message ||
+    defaultPaidWhatsappTemplate(settings?.company_header || 'ISP')
+  ).trim();
+  const billingLink = buildCustomerCheckBillingLink(customer, { baseUrl });
+  const invoiceLink = buildPublicInvoicePrintLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
+  const receiptLink = buildPublicInvoiceReceiptLink(invoice, customer, 48 * 60 * 60 * 1000, { baseUrl });
+  const paymentProofLink = receiptLink || invoiceLink || billingLink;
+  const dueDateText = formatInvoiceDueDate(invoice, customer);
+  return ensureDueDateLine(fillWhatsappTemplate(template, {
+    nama: customer?.name || 'Pelanggan',
+    paket: String(customer?.package_name || invoice?.package_name || '-').trim() || '-',
+    tagihan: Number(invoice?.amount || 0).toLocaleString('id-ID'),
+    rincian: `${invoice?.period_month || '-'}/${invoice?.period_year || '-'}`,
+    jatuh_tempo: dueDateText,
+    link: paymentProofLink,
+    billing_link: billingLink,
+    portal_link: buildCustomerPortalLoginLink({ baseUrl }),
+    invoice_link: invoiceLink || billingLink,
+    receipt_link: receiptLink || invoiceLink || billingLink,
+    invoice_no: invoice?.id ? `INV-${invoice.id}` : '-',
+    login_id: String(customer?.pppoe_username || customer?.genieacs_tag || customer?.phone || customer?.id || '').trim(),
+    group_link: String(settings?.whatsapp_group_invite_link || '').trim(),
+    group_line: String(settings?.whatsapp_group_invite_link || '').trim() ? `Grup pelanggan: ${String(settings.whatsapp_group_invite_link).trim()}` : '',
+    company: settings?.company_header || 'ISP',
+    paid_by: String(gateway || '-').trim() || '-',
+    paid_at: new Date().toLocaleString('id-ID')
+  }), dueDateText);
+}
+
+async function trySendWebhookPaidWhatsapp(req, customerId, invoiceId, gatewayLabel) {
+  try {
+    const settings = getSettingsWithCache();
+    if (!settings?.whatsapp_enabled) return false;
+    const customer = customerSvc.getCustomerById(customerId);
+    const invoice = billingSvc.getInvoiceById(invoiceId);
+    if (!customer || !invoice || !customer.phone) return false;
+    const { sendWA, ensureWhatsAppReady } = await import('./services/whatsappBot.mjs');
+    const ready = await ensureWhatsAppReady(12000);
+    if (!ready) throw new Error('Bot WhatsApp belum siap');
+    const ok = await sendWA(
+      customer.phone,
+      buildWebhookPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req))
+    );
+    if (!ok) throw new Error('sendWA mengembalikan gagal');
+    return true;
+  } catch (error) {
+    logger.error(`[WEBHOOK][payment-notif] Gagal kirim notif lunas WA: ${error?.message || error}`);
+    return false;
+  }
+}
+
 app.post('/api/webhook/v1/payment-notif', async (req, res) => {
   const { service, content, secret_key } = req.body || {};
   const expected = String(
@@ -289,6 +465,31 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
     let matchedInvoiceId = null;
     if (amount != null) {
       try {
+        const normalizedService = String(service || '');
+        const duplicateMatched = notifId
+          ? selectRecentDuplicateWebhookMatched.get(normalizedService, rawText, amount, notifId)
+          : null;
+        const duplicateAny = !duplicateMatched && notifId
+          ? selectRecentDuplicateWebhookAny.get(normalizedService, rawText, amount, notifId)
+          : null;
+
+        if (duplicateMatched || duplicateAny) {
+          matchedInvoiceId = Number((duplicateMatched?.matched_invoice_id ?? duplicateAny?.matched_invoice_id) || 0) || null;
+          if (notifId && matchedInvoiceId) {
+            try { updateWebhookPaymentNotifMatch.run(matchedInvoiceId, notifId); } catch {}
+          }
+          logger.warn(
+            `[WEBHOOK][payment-notif] DUPLICATE ignored service=${normalizedService || '-'} amount=${amount} prior_notif=${duplicateMatched?.id || duplicateAny?.id || '-'} prior_match=${matchedInvoiceId || '-'}`
+          );
+          return res.status(200).json({
+            status: 'processed',
+            parsed: true,
+            amount,
+            matched_invoice_id: matchedInvoiceId,
+            duplicate: true
+          });
+        }
+
         const candidates = selectInvoiceByUniqueAmount.all(amount);
         if (Array.isArray(candidates) && candidates.length === 1) {
           const inv = candidates[0];
@@ -302,6 +503,8 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
             if (notifId) {
               try { updateWebhookPaymentNotifMatch.run(invId, notifId); } catch {}
             }
+
+            await trySendWebhookPaidWhatsapp(req, custId, invId, String(service || 'QRIS').toUpperCase());
 
             if (custId > 0 && String(inv.customer_status || '') === 'suspended') {
               const cnt = countUnpaidInvoicesForCustomer.get(custId);
@@ -484,14 +687,26 @@ app.get('/login', (req, res) => {
 // Halaman Isolir (Akses langsung dari redirect MikroTik)
 app.get('/isolated', (req, res) => {
   const { getSettingsWithCache } = require('./config/settingsManager');
+  const customerSvc = require('./services/customerService');
   const settings = getSettingsWithCache();
+  const sessionCustomerId = Number(req.session?.customerId || 0);
+  const sessionPhone = String(req.session?.phone || '').trim();
+  const profile = sessionCustomerId > 0
+    ? customerSvc.getCustomerById(sessionCustomerId)
+    : (sessionPhone ? customerSvc.findCustomerByAny(sessionPhone) : null);
+  const normalizedStatus = String(profile?.status || 'suspended').trim().toLowerCase();
+  const isInactive = normalizedStatus === 'inactive';
   res.render('isolated', {
     company: settings.company_header || 'My ISP',
     adminPhone: settings.company_phone || '',
     address: settings.company_address || '',
+    accountState: isInactive ? 'inactive' : 'suspended',
+    accountStateLabel: isInactive ? 'Nonaktif' : 'Terisolir',
     isolationNotice: String(
-      settings.customer_isolation_notice ||
-      'Layanan internet Anda sedang dinonaktifkan sementara karena masih ada tagihan yang belum lunas. Silakan cek tagihan atau hubungi admin bila membutuhkan bantuan.'
+      isInactive
+        ? 'Akun pelanggan Anda sedang nonaktif. Silakan hubungi admin untuk aktivasi atau informasi lanjutan.'
+        : (settings.customer_isolation_notice ||
+          'Layanan internet Anda sedang dinonaktifkan sementara karena masih ada tagihan yang belum lunas. Silakan cek tagihan atau hubungi admin bila membutuhkan bantuan.')
     ).trim()
   });
 });
@@ -499,27 +714,7 @@ app.get('/isolated', (req, res) => {
 // Tambahkan view engine dan static
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
-app.get('/manifest.webmanifest', (req, res) => {
-  res.type('application/manifest+json');
-  res.sendFile(path.join(__dirname, 'public', 'manifest.webmanifest'));
-});
-app.get('/admin/manifest.webmanifest', (req, res) => {
-  res.type('application/manifest+json');
-  res.send({
-    name: 'Admin Billing',
-    short_name: 'Admin',
-    start_url: '/admin/settings?source=pwa',
-    scope: '/admin/',
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#0f172a',
-    icons: [
-      { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
-      { src: '/img/logo.png', sizes: '2000x545', type: 'image/png', purpose: 'any' }
-    ]
-  });
-});
+
 app.use(express.static(path.join(__dirname, 'public')));
 // Mount customer portal
 const customerPortal = require('./routes/customerPortal');

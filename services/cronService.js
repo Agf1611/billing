@@ -77,6 +77,60 @@ function buildInvoicePeriods(invoices = []) {
   return periods.length ? periods.join(', ') : '-';
 }
 
+function formatRupiahValue(value) {
+  return Number(Math.max(0, Number(value || 0) || 0)).toLocaleString('id-ID');
+}
+
+function buildPaymentGuideMessage(customer, invoices = []) {
+  const invoiceList = Array.isArray(invoices) ? invoices.filter(Boolean) : [];
+  let primaryInvoice = invoiceList[0] || null;
+  if (
+    primaryInvoice &&
+    String(primaryInvoice.status || 'unpaid').toLowerCase() === 'unpaid' &&
+    (!Number(primaryInvoice.qris_amount_unique || 0) || !Number(primaryInvoice.qris_unique_code || 0)) &&
+    String(getSetting('qris_static_payload', '') || '').trim()
+  ) {
+    try {
+      const assigned = billingSvc.assignUniqueQrisForInvoice(primaryInvoice.id);
+      if (assigned) {
+        primaryInvoice = { ...primaryInvoice, ...assigned };
+        const idx = invoiceList.findIndex((inv) => Number(inv.id || 0) === Number(primaryInvoice.id || 0));
+        if (idx >= 0) invoiceList[idx] = { ...invoiceList[idx], ...assigned };
+      }
+    } catch (error) {
+      logger.warn(`[CRON] Gagal auto-assign kode unik INV-${primaryInvoice.id}: ${error.message || error}`);
+    }
+  }
+  const totalTagihan = invoiceList.reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
+  const includePpn = Number(customer?.package_include_ppn || 0) === 1;
+  const ppnPercent = includePpn ? Math.max(0, Number(customer?.package_ppn_percent || 0) || 0) : 0;
+  const lines = [];
+
+  if (includePpn && ppnPercent > 0 && totalTagihan > 0) {
+    const saleAmount = Math.round(totalTagihan / (1 + (ppnPercent / 100)));
+    const ppnAmount = Math.max(0, totalTagihan - saleAmount);
+    lines.push(
+      '',
+      `Rincian: Dasar Rp ${formatRupiahValue(saleAmount)} + PPN ${Number(ppnPercent || 0).toLocaleString('id-ID')}% Rp ${formatRupiahValue(ppnAmount)}`
+    );
+  }
+
+  const baseAmount = Number(primaryInvoice?.amount || 0) || 0;
+  const uniqueAmount = Number(primaryInvoice?.qris_amount_unique || 0) || 0;
+  const uniqueCode = Number(primaryInvoice?.qris_unique_code || 0) || 0;
+  const uniqueDelta = uniqueAmount > baseAmount ? (uniqueAmount - baseAmount) : uniqueCode;
+  if (baseAmount > 0 && uniqueAmount > 0 && uniqueDelta > 0) {
+    lines.push(
+      '',
+      `Bayar otomatis: Rp ${formatRupiahValue(uniqueAmount)}`,
+      `Kode unik: ${String(uniqueCode || uniqueDelta).padStart(3, '0')}`,
+      'Bayar sesuai nominal agar otomatis terbaca lunas.'
+    );
+  }
+
+  return lines.join('\n').trim();
+}
+
 function buildWhatsappMessageContext(customer, invoices = []) {
   const invoiceList = Array.isArray(invoices) ? invoices.filter(Boolean) : [];
   const primaryInvoice = invoiceList[0] || null;
@@ -95,8 +149,13 @@ function buildWhatsappMessageContext(customer, invoices = []) {
     login_id: String(customer?.pppoe_username || customer?.genieacs_tag || customer?.phone || customer?.id || '').trim(),
     group_link: groupLink,
     group_line: groupLink ? `Grup pelanggan: ${groupLink}` : '',
+    payment_guide: buildPaymentGuideMessage(customer, invoiceList),
     company: getSetting('company_header', 'ISP')
   };
+}
+
+function normalizeUsageTrackingUsername(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 // Helper: Message variation untuk menghindari spam detection
@@ -193,23 +252,23 @@ function startCronJobs() {
   cron.schedule('0 9 * * *', async () => {
     const enabled = getSetting('whatsapp_auto_billing_enabled', false);
     const waEnabled = getSetting('whatsapp_enabled', false);
-    if (!enabled || !waEnabled) return;
+    if (!enabled) return;
 
     let ensureWhatsAppReady;
-    try {
-      const mod = await import('./whatsappBot.mjs');
-      ensureWhatsAppReady = mod.ensureWhatsAppReady;
-    } catch (e) {
-      logger.error(`[CRON] Gagal load WhatsApp bot: ${e.message || e}`);
-      return;
+    if (waEnabled) {
+      try {
+        const mod = await import('./whatsappBot.mjs');
+        ensureWhatsAppReady = mod.ensureWhatsAppReady;
+      } catch (e) {
+        logger.error(`[CRON] Gagal load WhatsApp bot: ${e.message || e}`);
+      }
     }
 
-    const ready = typeof ensureWhatsAppReady === 'function'
+    const ready = waEnabled && typeof ensureWhatsAppReady === 'function'
       ? await ensureWhatsAppReady(25000)
       : false;
-    if (!ready) {
+    if (waEnabled && !ready) {
       logger.warn('[CRON] WhatsApp bot belum terhubung, pengingat tagihan otomatis dilewati.');
-      return;
     }
 
     const baseDelayMs = (Number(getSetting('whatsapp_broadcast_delay', 5) || 5) * 1000); // Default 5 detik
@@ -259,6 +318,19 @@ function startCronJobs() {
       if (!shouldSend) continue;
 
       seenPhones.add(digits);
+      try {
+        const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
+        const primaryInvoice = unpaidInvoices[0] || null;
+        const dueText = primaryInvoice ? formatInvoiceDueDate(primaryInvoice, c) : `Tanggal ${dueDay}`;
+        customerSvc.addPortalNotification(c.id, {
+          kind: 'due-reminder',
+          tab: 'billing',
+          title: `Pengingat jatuh tempo H-${Math.max(1, dueDay - day)}`,
+          body: `Tagihan internet Anda akan jatuh tempo ${dueText}. Silakan cek tagihan agar layanan tetap aktif.`
+        }, { dedupeWindowMs: 20 * 60 * 60 * 1000 });
+      } catch (notificationError) {
+        logger.warn(`[CRON] Gagal simpan notif jatuh tempo customer ${c.id}: ${notificationError.message || notificationError}`);
+      }
       targetCustomers.push(c);
     }
 
@@ -288,15 +360,21 @@ function startCronJobs() {
             reminderTemplate,
             messageContext
           ), messageContext.jatuh_tempo);
+          if (!/\{\{\s*payment_guide\s*\}\}/i.test(reminderTemplate) && messageContext.payment_guide) {
+            formattedMsg += `\n\n${messageContext.payment_guide}`;
+          }
 
           // Add subtle variation untuk menghindari spam detection
           formattedMsg = addMessageVariation(formattedMsg, i);
 
-          const ok = await sendCustomerWhatsapp(c.phone, formattedMsg);
+          const ok = ready ? await sendCustomerWhatsapp(c.phone, formattedMsg) : false;
           if (ok) {
             sent++;
             targetCount++;
             batchCount++;
+          } else if (!ready) {
+            targetCount++;
+            break;
           } else {
             throw new Error('Gagal kirim pesan');
           }
@@ -395,8 +473,8 @@ function startCronJobs() {
     }
   });
 
-  // 6. Track Usage Pelanggan (Data Traffic) - Setiap 10 Menit
-  cron.schedule('*/10 * * * *', async () => {
+  // 6. Track Usage Pelanggan (Data Traffic) - Setiap 1 Menit
+  cron.schedule('* * * * *', async () => {
     const enabled = getSetting('usage_tracking_enabled', true);
     if (!enabled) return;
 
@@ -404,19 +482,26 @@ function startCronJobs() {
       const routers = mikrotikService.getAllRouters();
       const customers = customerSvc.getAllCustomers();
       const customerMap = new Map();
-      customers.forEach(c => { if (c.pppoe_username) customerMap.set(c.pppoe_username, c); });
+      customers.forEach((c) => {
+        const key = normalizeUsageTrackingUsername(c.pppoe_username);
+        if (key) customerMap.set(key, c);
+      });
 
       for (const r of routers) {
         try {
           const actives = await mikrotikService.getPppoeActive(r.id);
           for (const s of actives) {
-            const username = s.name;
+            const username = normalizeUsageTrackingUsername(s.name);
             const cust = customerMap.get(username);
             if (!cust) continue;
 
             const totalIn = Number(s['bytes-in'] ?? s.bytesIn ?? s.bytes_in ?? 0) || 0;
             const totalOut = Number(s['bytes-out'] ?? s.bytesOut ?? s.bytes_out ?? 0) || 0;
-            usageSvc.syncUsageTotals(cust.id, totalIn, totalOut);
+            usageSvc.syncUsageTotals(cust.id, totalIn, totalOut, new Date(), {
+              sessionId: String(s['session-id'] ?? s.sessionId ?? s['.id'] ?? s.id ?? '').trim(),
+              uptime: String(s.uptime ?? '').trim(),
+              source: `cron-router-${r.id}`
+            });
           }
         } catch (err) {
           logger.error(`[CRON] Gagal track usage di router ${r.name}: ${err.message}`);

@@ -1,3 +1,5 @@
+const { buildDynamicQrisPayload, buildDynamicQrisBuffer } = require('../../services/qrisService');
+
 module.exports = function registerBillingRoutes(router, deps = {}) {
   const {
     express,
@@ -18,20 +20,53 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     redirectBack
   } = deps;
 
+  function getInvoiceDueDateLocal(invoiceLike) {
+    const month = Math.max(1, Math.min(12, Number(invoiceLike?.period_month || 0) || 1));
+    const year = Math.max(2000, Number(invoiceLike?.period_year || 0) || new Date().getFullYear());
+    const fallbackDay = Math.max(1, Math.min(31, Number(invoiceLike?.due_day_snapshot || 10) || 10));
+    const maxDay = new Date(year, month, 0).getDate() || 31;
+    const day = Math.min(fallbackDay, maxDay);
+    return new Date(year, month - 1, day, 23, 59, 59, 999);
+  }
+
+  function hasDynamicQrisSource() {
+    return Boolean(String(getSetting('qris_static_payload', '') || '').trim());
+  }
+
+  async function buildInvoiceQrisImageBuffer(invoice) {
+    const exactAmount = Number(invoice?.qris_amount_unique || invoice?.amount || 0) || 0;
+    const basePayload = String(getSetting('qris_static_payload', '') || '').trim();
+    if (!exactAmount || !basePayload) return Buffer.alloc(0);
+    const qrisPayload = buildDynamicQrisPayload(basePayload, exactAmount);
+    if (!qrisPayload) return Buffer.alloc(0);
+    return buildDynamicQrisBuffer(qrisPayload, { width: 720, margin: 1 });
+  }
+
   router.get('/billing', requireAdminSession, (req, res) => {
+    const now = new Date();
     const {
-      month: filterMonth,
-      year: rawFilterYear = new Date().getFullYear(),
+      month: rawFilterMonth,
+      year: rawFilterYear = now.getFullYear(),
       status: filterStatus = 'all',
       search = '',
       billingDayStart = '',
       billingDayEnd = '',
       page: rawPage = '1'
     } = req.query;
-    const filterYear = parseInt(rawFilterYear, 10) || new Date().getFullYear();
+    const monthQueryProvided = Object.prototype.hasOwnProperty.call(req.query, 'month');
+    const defaultMonth = now.getMonth() + 1;
+    const normalizedRawMonth = monthQueryProvided ? String(rawFilterMonth ?? '').trim() : String(defaultMonth);
+    const filterMonth = normalizedRawMonth === ''
+      ? ''
+      : Math.max(1, Math.min(12, parseInt(normalizedRawMonth, 10) || defaultMonth));
+    const filterYear = parseInt(rawFilterYear, 10) || now.getFullYear();
     const currentPage = Math.max(1, parseInt(rawPage, 10) || 1);
     const pageSize = 25;
-    let invoices = billingSvc.getAllInvoices({ month: filterMonth, year: filterYear, status: filterStatus, search });
+    const nativeStatusFilter = ['paid', 'unpaid'].includes(filterStatus) ? filterStatus : 'all';
+    let invoices = billingSvc.getAllInvoices({ month: filterMonth, year: filterYear, status: nativeStatusFilter, search });
+    const isIsolatedInvoice = (inv) => String(inv?.customer_status || '').toLowerCase() === 'suspended';
+    const isOpenUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && !isIsolatedInvoice(inv);
+    const isIsolatedUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && isIsolatedInvoice(inv);
     const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
     const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
     if (normalizedBillingDayStart || normalizedBillingDayEnd) {
@@ -43,16 +78,48 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
         return true;
       });
     }
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const overdueCountBase = invoices.filter((inv) =>
+      isOpenUnpaidInvoice(inv) &&
+      getInvoiceDueDateLocal(inv).getTime() < todayStart.getTime()
+    ).length;
+    const isolatedCountBase = invoices.filter((inv) => isIsolatedUnpaidInvoice(inv)).length;
+    if (filterStatus === 'unpaid') {
+      invoices = invoices.filter((inv) => isOpenUnpaidInvoice(inv));
+    } else if (filterStatus === 'overdue') {
+      invoices = invoices.filter((inv) =>
+        isOpenUnpaidInvoice(inv) &&
+        getInvoiceDueDateLocal(inv).getTime() < todayStart.getTime()
+      );
+    } else if (filterStatus === 'isolated') {
+      invoices = invoices.filter((inv) => isIsolatedUnpaidInvoice(inv));
+    }
     const summary = buildInvoiceSummaryFromList(invoices);
     const totalInvoicesCount = invoices.length;
     const totalPages = Math.max(1, Math.ceil(totalInvoicesCount / pageSize));
     const safePage = Math.min(currentPage, totalPages);
     const paginatedInvoices = invoices.slice((safePage - 1) * pageSize, safePage * pageSize);
+    const invoiceGroups = [];
+    let currentGroup = null;
+    for (const inv of paginatedInvoices) {
+      const key = `${inv.period_year}-${String(inv.period_month).padStart(2, '0')}`;
+      if (!currentGroup || currentGroup.key !== key) {
+        currentGroup = {
+          key,
+          month: Number(inv.period_month || 0) || 0,
+          year: Number(inv.period_year || 0) || filterYear,
+          invoices: []
+        };
+        invoiceGroups.push(currentGroup);
+      }
+      currentGroup.invoices.push(inv);
+    }
     res.render('admin/billing', {
       title: 'Tagihan',
       company: company(),
       activePage: 'billing',
       invoices: paginatedInvoices,
+      invoiceGroups,
       summary,
       filterMonth,
       filterYear,
@@ -60,6 +127,11 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       search,
       billingDayStart: normalizedBillingDayStart || '',
       billingDayEnd: normalizedBillingDayEnd || '',
+      defaultMonth,
+      defaultYear: now.getFullYear(),
+      showingAllMonths: filterMonth === '',
+      overdueCountBase,
+      isolatedCountBase,
       currentPage: safePage,
       totalPages,
       totalInvoicesCount,
@@ -253,55 +325,12 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     try {
       const invId = Number(req.params.id);
       if (!Number.isFinite(invId) || invId <= 0) throw new Error('Invoice ID tidak valid');
-
       const force = String(req.query.force || '') === '1';
-      const inv = db.prepare('SELECT id, status, amount, qris_amount_unique FROM invoices WHERE id=?').get(invId);
-      if (!inv) throw new Error('Tagihan tidak ditemukan');
-      if (String(inv.status) !== 'unpaid') throw new Error('Hanya tagihan BELUM BAYAR yang bisa dibuat kode QRIS.');
-
-      if (!force && inv.qris_amount_unique) {
-        req.session._msg = { type: 'success', text: 'Kode QRIS sudah ada untuk tagihan ini.' };
-        return redirectBack(res, '/admin/billing');
-      }
-
-      const baseAmount = Number(inv.amount || 0);
-      if (!Number.isFinite(baseAmount) || baseAmount <= 0) throw new Error('Nominal tagihan tidak valid');
-
-      const exists = db.prepare('SELECT id FROM invoices WHERE status=? AND qris_amount_unique=? AND id!=? LIMIT 1');
-      const update = db.prepare(`
-        UPDATE invoices
-        SET qris_unique_code=?, qris_amount_unique=?, qris_assigned_at=CURRENT_TIMESTAMP
-        WHERE id=?
-      `);
-
-      let chosenCode = 0;
-      let chosenAmount = 0;
-
-      for (let i = 0; i < 50; i += 1) {
-        const code = 1 + Math.floor(Math.random() * 999);
-        const amount = baseAmount + code;
-        if (!exists.get('unpaid', amount, invId)) {
-          chosenCode = code;
-          chosenAmount = amount;
-          break;
-        }
-      }
-
-      if (!chosenAmount) {
-        for (let code = 1; code <= 999; code += 1) {
-          const amount = baseAmount + code;
-          if (!exists.get('unpaid', amount, invId)) {
-            chosenCode = code;
-            chosenAmount = amount;
-            break;
-          }
-        }
-      }
-
-      if (!chosenAmount) throw new Error('Gagal membuat nominal unik (slot 1-999 penuh).');
-
-      update.run(chosenCode, chosenAmount, invId);
-      req.session._msg = { type: 'success', text: `Kode QRIS dibuat: Rp ${Number(chosenAmount).toLocaleString('id-ID')} (kode ${chosenCode}).` };
+      const assigned = billingSvc.assignUniqueQrisForInvoice(invId, { force });
+      req.session._msg = {
+        type: 'success',
+        text: `Kode QRIS dibuat: Rp ${Number(assigned?.qris_amount_unique || 0).toLocaleString('id-ID')} (kode ${String(assigned?.qris_unique_code || '').padStart(3, '0')}).`
+      };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal membuat kode QRIS: ' + e.message };
     }
@@ -326,43 +355,41 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
   router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
     try {
-      const inv = billingSvc.getInvoiceById(req.params.id);
+      const startedAt = Date.now();
+      let inv = billingSvc.getInvoiceById(req.params.id);
       if (!inv) throw new Error('Tagihan tidak ditemukan');
+      if (String(inv.status || '').toLowerCase() === 'unpaid' && hasDynamicQrisSource()) {
+        inv = billingSvc.assignUniqueQrisForInvoice(inv.id);
+      }
 
       const customer = customerSvc.getCustomerById(inv.customer_id);
       if (!customer || !customer.phone) throw new Error('Nomor WhatsApp pelanggan tidak ditemukan');
 
-      const { sendWA, whatsappStatus } = await import('../../services/whatsappBot.mjs');
-
-      if (whatsappStatus.connection !== 'open') {
+      const { sendWA, sendWAImage, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
+      const ready = await ensureWhatsAppReady(25000);
+      if (!ready) {
         throw new Error('Bot WhatsApp belum terhubung. Silakan cek status WhatsApp di menu Admin.');
       }
 
       const qrisAmountUnique = Number(inv.qris_amount_unique || 0) || 0;
-      const qrisCode = Number(inv.qris_unique_code || 0) || 0;
-      const qrisQrUrl = String(getSetting('qris_static_qr_url', '') || '').trim();
       const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
       const requestBaseUrl = resolveRequestBaseUrl(req);
       let finalMessage = buildBillingWhatsappMessage(customer, unpaidInvoices, inv, { baseUrl: requestBaseUrl });
 
-      if (qrisAmountUnique > 0 && qrisCode > 0) {
-        const qrisLines = [
-          '',
-          'Pembayaran QRIS',
-          `Nominal tepat: Rp ${Number(qrisAmountUnique).toLocaleString('id-ID')}`,
-          `Kode unik: ${String(qrisCode).padStart(3, '0')}`
-        ];
-        if (qrisQrUrl) qrisLines.push(`QRIS: ${qrisQrUrl}`);
-        finalMessage += `\n${qrisLines.join('\n')}`;
-      }
-
       const manualPaymentInfo = buildManualPaymentMessage();
       if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
 
-      const sent = await sendWA(customer.phone, finalMessage);
+      const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(inv) : Buffer.alloc(0);
+      if (qrisImageBuffer.length) {
+        finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
+      }
+      const sent = qrisImageBuffer.length
+        ? await sendWAImage(customer.phone, qrisImageBuffer, finalMessage)
+        : await sendWA(customer.phone, finalMessage);
       if (!sent) throw new Error('Gagal mengirim pesan melalui WhatsApp Bot.');
 
-      req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name}.` };
+      const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
     }

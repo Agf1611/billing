@@ -1,8 +1,23 @@
 const db = require('../config/database');
+const path = require('path');
+const RosClient = require('ros-client');
+const { execFile } = require('child_process');
+const { getSettingsWithCache } = require('../config/settingsManager');
 const customerSvc = require('./customerService');
 const billingSvc = require('./billingService');
 const customerDevice = require('./customerDeviceService');
 const mikrotikService = require('./mikrotikService');
+const ticketSvc = require('./ticketService');
+const pppoeTrafficSamples = new Map();
+
+function prunePppoeTrafficSamples(now = Date.now()) {
+  const maxAgeMs = 2 * 60 * 1000;
+  for (const [key, value] of pppoeTrafficSamples.entries()) {
+    if (!value || !value.t || now - value.t > maxAgeMs) {
+      pppoeTrafficSamples.delete(key);
+    }
+  }
+}
 
 function meaningfulText(...values) {
   for (const value of values) {
@@ -31,59 +46,444 @@ function mergeNetworkSnapshot(base, extra) {
     rateLimit: meaningfulText(base.rateLimit, extra.rateLimit) || '-',
     bytesIn: Math.max(Number(base.bytesIn || 0) || 0, Number(extra.bytesIn || 0) || 0),
     bytesOut: Math.max(Number(base.bytesOut || 0) || 0, Number(extra.bytesOut || 0) || 0),
+    rxMbps: Math.max(Number(base.rxMbps || 0) || 0, Number(extra.rxMbps || 0) || 0),
+    txMbps: Math.max(Number(base.txMbps || 0) || 0, Number(extra.txMbps || 0) || 0),
     online: Boolean(base.online || extra.online),
     statusText: meaningfulText(base.statusText, extra.statusText) || (Boolean(base.online || extra.online) ? 'Online' : 'Offline')
   };
 }
 
-async function resolvePppoeSnapshot(username, preferredRouterId = null) {
-  const normalizedUsername = String(username || '').trim();
-  if (!normalizedUsername) return null;
+function numField(obj, keys) {
+  for (const key of keys) {
+    const value = Number(obj?.[key]);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return 0;
+}
 
-  const tried = new Set();
+function strField(obj, keys) {
+  for (const key of keys) {
+    const raw = String(obj?.[key] ?? '').trim();
+    if (raw) return raw;
+  }
+  return '';
+}
+
+function resolveCandidateRouterIds(preferredRouterId = null, extraRouterIds = [], limit = 3) {
   const routerIds = [];
-  const preferredId = Number(preferredRouterId || 0);
-  if (preferredId > 0) routerIds.push(preferredId);
+  const pushId = (value) => {
+    const id = Number(value || 0);
+    if (id > 0 && !routerIds.includes(id)) routerIds.push(id);
+  };
+
+  pushId(preferredRouterId);
+  for (const candidate of Array.isArray(extraRouterIds) ? extraRouterIds : []) {
+    pushId(candidate);
+  }
 
   const activeRouters = db.prepare(`
     SELECT id
     FROM routers
     WHERE is_active = 1
     ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, id ASC
-  `).all(preferredId > 0 ? preferredId : -1);
+  `).all(Number(preferredRouterId || 0) > 0 ? Number(preferredRouterId) : -1);
 
   for (const row of activeRouters) {
-    const id = Number(row?.id || 0);
-    if (id > 0 && !routerIds.includes(id)) routerIds.push(id);
+    pushId(row?.id);
+    if (routerIds.length >= Math.max(1, Number(limit || 3))) break;
   }
+
+  return routerIds;
+}
+
+async function invokeRouterOsMenuCommand(menu, command, args = {}) {
+  if (!menu) return [];
+  if (typeof menu.exec === 'function') {
+    return await menu.exec(command, args);
+  }
+  if (typeof menu.call === 'function') {
+    return await menu.call(command, args);
+  }
+  throw new Error('Perintah RouterOS tidak didukung pada adapter ini');
+}
+
+async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+
+  const now = Date.now();
+  prunePppoeTrafficSamples(now);
+
+  let conn = null;
+  try {
+    conn = await mikrotikService.getConnection(routerId);
+    let sessions = await mikrotikService.getPppoeActive(routerId).catch(() => []);
+    sessions = (Array.isArray(sessions) ? sessions : []).filter((row) => String(row?.name || '').trim() === normalizedUsername);
+    if (!sessions.length) {
+      sessions = await conn.client.menu('/ppp/active').where('name', normalizedUsername).get().catch(() => []);
+    }
+    if (!sessions || !sessions.length) {
+      return {
+        online: false,
+        username: normalizedUsername,
+        rxMbps: 0,
+        txMbps: 0,
+        bytesIn: 0,
+        bytesOut: 0,
+        statusText: 'Offline',
+        source: 'ppp-active'
+      };
+    }
+
+    const session = sessions[0];
+    let iface = strField(session, ['interface', 'interface-name', 'interfaceName', 'ifname', 'if-name', 'pppInterface']) || null;
+    const baseSessionId = strField(session, ['.id', 'id', 'sessionId', 'session-id']) || normalizedUsername;
+    const bytesIn = numField(session, ['bytesIn', 'bytes-in', 'bytes_in']);
+    const bytesOut = numField(session, ['bytesOut', 'bytes-out', 'bytes_out']);
+    const uptime = strField(session, ['uptime']) || null;
+    const remoteAddress = strField(session, ['address']);
+
+    if (!iface) {
+      try {
+        const pppoeSrvMenu = conn.client.menu('/interface/pppoe-server');
+        let pppoeRows = [];
+        try {
+          pppoeRows = await pppoeSrvMenu.where('user', normalizedUsername).get();
+        } catch {
+          pppoeRows = await pppoeSrvMenu.get();
+        }
+        const hit = (Array.isArray(pppoeRows) ? pppoeRows : []).find((row) => String(row?.user || row?.['user'] || '').trim() === normalizedUsername);
+        const ifaceName = strField(hit, ['name']);
+        if (ifaceName) iface = ifaceName;
+      } catch {}
+    }
+
+    const sessionId = `${baseSessionId}${iface ? `|${iface}` : ''}`;
+    const key = `${routerId || 'default'}:${normalizedUsername}`;
+    const prev = pppoeTrafficSamples.get(key);
+    let rxBytes = bytesIn;
+    let txBytes = bytesOut;
+    let source = 'ppp-active';
+    let rxMbps = 0;
+    let txMbps = 0;
+
+    if (iface) {
+      try {
+        const ifMenu = conn.client.menu('/interface');
+        const mtRaw = await invokeRouterOsMenuCommand(ifMenu, 'monitor-traffic', { interface: iface, once: '' });
+        const mt = Array.isArray(mtRaw) ? mtRaw[0] : mtRaw;
+        const rxBps = numField(mt, ['rxBitsPerSecond', 'rx-bits-per-second']);
+        const txBps = numField(mt, ['txBitsPerSecond', 'tx-bits-per-second']);
+        if (rxBps || txBps) {
+          rxMbps = (Number(rxBps) || 0) / 1e6;
+          txMbps = (Number(txBps) || 0) / 1e6;
+          source = 'monitor-traffic';
+        }
+      } catch {}
+    }
+
+    if ((!rxMbps && !txMbps) && iface) {
+      try {
+        const ifRows = await conn.client.menu('/interface').where('name', iface).get();
+        if (ifRows && ifRows.length > 0) {
+          const row = ifRows[0];
+          const ifRx = numField(row, ['rxByte', 'rx-byte', 'rx-bytes', 'rxBytes']);
+          const ifTx = numField(row, ['txByte', 'tx-byte', 'tx-bytes', 'txBytes']);
+          if (ifRx || ifTx) {
+            rxBytes = ifRx;
+            txBytes = ifTx;
+            source = 'interface';
+          }
+        }
+      } catch {}
+    }
+
+    pppoeTrafficSamples.set(key, { t: now, sessionId, rxBytes, txBytes, source });
+
+    if ((!rxMbps && !txMbps) && prev && prev.sessionId === sessionId && prev.t) {
+      const dtMs = Math.max(1, now - prev.t);
+      const dIn = rxBytes - numField(prev, ['rxBytes']);
+      const dOut = txBytes - numField(prev, ['txBytes']);
+      if (dIn >= 0 && dOut >= 0) {
+        rxMbps = (dIn * 8) / (dtMs / 1000) / 1e6;
+        txMbps = (dOut * 8) / (dtMs / 1000) / 1e6;
+      }
+    }
+
+    return {
+      online: true,
+      username: normalizedUsername,
+      sessionId,
+      iface,
+      uptime,
+      remoteAddress: remoteAddress || '-',
+      activeAddress: remoteAddress || '-',
+      bytesIn: rxBytes,
+      bytesOut: txBytes,
+      rxMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
+      txMbps: Number.isFinite(txMbps) ? txMbps : 0,
+      statusText: 'Online',
+      source
+    };
+  } catch {
+    return null;
+  } finally {
+    if (conn?.api) {
+      try { await conn.api.close(); } catch {}
+    }
+  }
+}
+
+async function resolvePppoeTrafficLive(username, routerId = null, extraRouterIds = []) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+
+  const candidateRouterIds = resolveCandidateRouterIds(routerId, extraRouterIds, 3);
+  let firstOffline = null;
+
+  for (const candidateRouterId of candidateRouterIds) {
+    const live = await resolvePppoeTrafficLiveSingle(normalizedUsername, candidateRouterId);
+    if (live?.online) {
+      return { ...live, routerId: candidateRouterId, source: live.source || `router:${candidateRouterId}` };
+    }
+    if (live && !firstOffline) {
+      firstOffline = { ...live, routerId: candidateRouterId, source: live.source || `router:${candidateRouterId}` };
+    }
+  }
+
+  if (!candidateRouterIds.length || !candidateRouterIds.includes(null)) {
+    const fallback = await resolvePppoeTrafficLiveSingle(normalizedUsername, null);
+    if (fallback) {
+      if (fallback.online) {
+        return { ...fallback, routerId: null, source: fallback.source || 'default' };
+      }
+      if (!firstOffline) {
+        firstOffline = { ...fallback, routerId: null, source: fallback.source || 'default' };
+      }
+    }
+  }
+
+  return firstOffline;
+}
+
+function resolveFastRouterConfig(routerId = null) {
+  const settings = getSettingsWithCache();
+  if (routerId) {
+    const router = db.prepare('SELECT host, port, user, password FROM routers WHERE id = ? LIMIT 1').get(routerId);
+    if (router?.host && router?.user) {
+      return {
+        host: router.host,
+        port: Number(router.port || 8728) || 8728,
+        user: router.user,
+        password: router.password || ''
+      };
+    }
+  }
+  if (!settings.mikrotik_host || !settings.mikrotik_user) return null;
+  return {
+    host: settings.mikrotik_host,
+    port: Number(settings.mikrotik_port || 8728) || 8728,
+    user: settings.mikrotik_user,
+    password: settings.mikrotik_password || ''
+  };
+}
+
+async function fetchPppoeSnapshotFast(username, routerId = null) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+  const config = resolveFastRouterConfig(routerId);
+  if (!config) return null;
+  const api = new RosClient({
+    host: config.host,
+    username: config.user,
+    password: config.password,
+    port: config.port,
+    timeout: 2200
+  });
+  try {
+    await api.connect();
+    const [secretRows, activeRows] = await Promise.all([
+      api.send(['/ppp/secret/print', `?name=${normalizedUsername}`]).catch(() => []),
+      api.send(['/ppp/active/print', `?name=${normalizedUsername}`]).catch(() => [])
+    ]);
+    const secret = Array.isArray(secretRows) && secretRows.length ? secretRows[0] : null;
+    const active = Array.isArray(activeRows) && activeRows.length ? activeRows[0] : null;
+    if (!secret && !active) return null;
+    return {
+      username: normalizedUsername,
+      profile: meaningfulText(secret?.profile, active?.profile) || '-',
+      uptime: meaningfulText(active?.uptime) || '-',
+      remoteAddress: meaningfulText(active?.address, secret?.['remote-address'], secret?.remoteAddress) || '-',
+      localAddress: meaningfulText(secret?.['local-address'], secret?.localAddress) || '-',
+      activeAddress: meaningfulText(active?.address) || '-',
+      callerId: meaningfulText(active?.['caller-id'], active?.callerId, secret?.['caller-id'], secret?.callerId) || '-',
+      interface: meaningfulText(active?.['interface-name'], active?.interface, active?.name) || '-',
+      sessionId: meaningfulText(active?.['session-id'], active?.sessionId, active?.['.id'], active?.id) || '-',
+      comment: meaningfulText(secret?.comment) || '-',
+      rateLimit: meaningfulText(secret?.['rate-limit'], secret?.rateLimit) || '-',
+      bytesIn: Math.max(0, Number(active?.['bytes-in'] || active?.bytesIn || 0) || 0),
+      bytesOut: Math.max(0, Number(active?.['bytes-out'] || active?.bytesOut || 0) || 0),
+      online: Boolean(active),
+      statusText: active ? 'Online' : (String(secret?.disabled || '').toLowerCase() === 'true' ? 'Disabled' : 'Offline')
+    };
+  } catch {
+    return null;
+  } finally {
+    try { await api.close(); } catch {
+      try { await api.disconnect(); } catch {}
+    }
+  }
+}
+
+function fetchPppoeSnapshotViaChild(username, routerId = null) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return Promise.resolve(null);
+  const config = resolveFastRouterConfig(routerId);
+  if (!config) return Promise.resolve(null);
+  const payload = Buffer.from(JSON.stringify({ ...config, username: normalizedUsername }), 'utf8').toString('base64');
+  const script = `
+    const RosClient = require('ros-client');
+    const payload = JSON.parse(Buffer.from(process.argv[1], 'base64').toString('utf8'));
+    (async () => {
+      const api = new RosClient({
+        host: payload.host,
+        username: payload.user,
+        password: payload.password,
+        port: Number(payload.port || 8728),
+        timeout: 2200
+      });
+      try {
+        await api.connect();
+        const [secretRows, activeRows] = await Promise.all([
+          api.send(['/ppp/secret/print', '?name=' + payload.username]).catch(() => []),
+          api.send(['/ppp/active/print', '?name=' + payload.username]).catch(() => [])
+        ]);
+        const secret = Array.isArray(secretRows) && secretRows.length ? secretRows[0] : null;
+        const active = Array.isArray(activeRows) && activeRows.length ? activeRows[0] : null;
+        if (!secret && !active) {
+          console.log('null');
+          return;
+        }
+        console.log(JSON.stringify({
+          username: payload.username,
+          profile: String(secret?.profile || active?.profile || '-').trim() || '-',
+          uptime: String(active?.uptime || '-').trim() || '-',
+          remoteAddress: String(active?.address || secret?.['remote-address'] || secret?.remoteAddress || '-').trim() || '-',
+          localAddress: String(secret?.['local-address'] || secret?.localAddress || '-').trim() || '-',
+          activeAddress: String(active?.address || '-').trim() || '-',
+          callerId: String(active?.['caller-id'] || active?.callerId || secret?.['caller-id'] || secret?.callerId || '-').trim() || '-',
+          interface: String(active?.['interface-name'] || active?.interface || active?.name || '-').trim() || '-',
+          sessionId: String(active?.['session-id'] || active?.sessionId || active?.['.id'] || active?.id || '-').trim() || '-',
+          comment: String(secret?.comment || '-').trim() || '-',
+          rateLimit: String(secret?.['rate-limit'] || secret?.rateLimit || '-').trim() || '-',
+          bytesIn: Math.max(0, Number(active?.['bytes-in'] || active?.bytesIn || 0) || 0),
+          bytesOut: Math.max(0, Number(active?.['bytes-out'] || active?.bytesOut || 0) || 0),
+          online: Boolean(active),
+          statusText: active ? 'Online' : (String(secret?.disabled || '').toLowerCase() === 'true' ? 'Disabled' : 'Offline')
+        }));
+      } catch {
+        console.log('null');
+      } finally {
+        try { await api.close(); } catch {
+          try { await api.disconnect(); } catch {}
+        }
+      }
+    })();
+  `;
+
+  return new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      ['-e', script, payload],
+      {
+        cwd: path.resolve(__dirname, '..'),
+        timeout: 2600,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024
+      },
+      (error, stdout) => {
+        const raw = String(stdout || '').trim();
+        if (error && !raw) return resolve(null);
+        const lines = raw ? raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+        const last = lines.length ? lines[lines.length - 1] : '';
+        if (!last || last === 'null') return resolve(null);
+        try {
+          resolve(JSON.parse(last));
+        } catch {
+          resolve(null);
+        }
+      }
+    );
+  });
+}
+
+async function resolvePppoeSnapshot(username, preferredRouterId = null, extraRouterIds = []) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+
+  const tried = new Set();
+  const preferredId = Number(preferredRouterId || 0);
+  const routerIds = resolveCandidateRouterIds(preferredId, extraRouterIds, 3);
+  let firstSnapshotResult = null;
 
   for (const routerId of routerIds) {
     tried.add(`router:${routerId}`);
     const snapshot = await withTimeout(
-      mikrotikService.getPppoeCustomerSnapshot(normalizedUsername, routerId),
-      4200,
+      fetchPppoeSnapshotViaChild(normalizedUsername, routerId),
+      2800,
       null
     );
     if (snapshot?.online) {
       return { snapshot, routerId, source: `router:${routerId}` };
     }
-    if (snapshot && !preferredId) {
-      return { snapshot, routerId, source: `router:${routerId}` };
+    if (snapshot && !firstSnapshotResult) {
+      firstSnapshotResult = { snapshot, routerId, source: `router:${routerId}` };
     }
   }
 
   if (!tried.has('default')) {
     const fallbackSnapshot = await withTimeout(
-      mikrotikService.getPppoeCustomerSnapshot(normalizedUsername, null),
-      3600,
+      fetchPppoeSnapshotViaChild(normalizedUsername, null),
+      2800,
       null
     );
     if (fallbackSnapshot) {
-      return { snapshot: fallbackSnapshot, routerId: null, source: 'default' };
+      if (fallbackSnapshot.online) {
+        return { snapshot: fallbackSnapshot, routerId: null, source: 'default' };
+      }
+      if (!firstSnapshotResult) {
+        firstSnapshotResult = { snapshot: fallbackSnapshot, routerId: null, source: 'default' };
+      }
     }
   }
 
+  if (firstSnapshotResult) return firstSnapshotResult;
+
   return { snapshot: null, routerId: preferredId > 0 ? preferredId : null, source: preferredId > 0 ? `router:${preferredId}` : 'default' };
+}
+
+function resolveBestPppoeState(username, customerRouterId = null) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+  const preferredRouterId = Number(customerRouterId || 0) > 0 ? Number(customerRouterId) : null;
+  const rows = db.prepare(`
+    SELECT username, is_online, profile_name, remote_address, session_uptime, last_online_at, offline_since, last_logout_at, updated_at, router_key, router_id
+    FROM pppoe_monitoring_state
+    WHERE username = ?
+    ORDER BY
+      CASE WHEN ? > 0 AND router_id = ? THEN 0 ELSE 1 END,
+      datetime(updated_at) DESC,
+      is_online DESC,
+      router_id ASC
+    LIMIT 5
+  `).all(normalizedUsername, preferredRouterId || 0, preferredRouterId || -1);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+function isRecentPppoeState(row, maxAgeMs = 5 * 60 * 1000) {
+  const updatedAt = new Date(row?.updated_at || row?.last_online_at || 0);
+  if (Number.isNaN(updatedAt.getTime())) return false;
+  return (Date.now() - updatedAt.getTime()) <= maxAgeMs;
 }
 
 function monthStatusLabel(status) {
@@ -160,6 +560,83 @@ function buildMonthlyBilling(customer, invoices = [], year) {
   return months;
 }
 
+async function resolveCustomerLiveState(customer, username, deviceToken, pppoeState, options = {}) {
+  const stateRouterId = Number(pppoeState?.router_id || 0) > 0 ? Number(pppoeState.router_id) : null;
+  const preferredRouterId = stateRouterId || customer.router_id || null;
+  const forceNetworkRefresh = Boolean(options.forceNetworkRefresh);
+  const disableTrafficProbe = Boolean(options.disableTrafficProbe);
+  const candidateRouters = [customer.router_id, stateRouterId].filter(Boolean);
+  const trafficPromise = username && !disableTrafficProbe
+    ? withTimeout(resolvePppoeTrafficLive(username, preferredRouterId, candidateRouters), forceNetworkRefresh ? 6500 : 4500, null)
+    : Promise.resolve(null);
+  const networkPromise = username
+    ? resolvePppoeSnapshot(
+        username,
+        preferredRouterId,
+        candidateRouters
+      )
+    : Promise.resolve({
+        snapshot: null,
+        routerId: preferredRouterId,
+        source: preferredRouterId ? `router:${Number(preferredRouterId)}` : 'default'
+      });
+  const devicePromise = deviceToken
+    ? withTimeout(
+        customerDevice.getCustomerDeviceData(deviceToken, { timeoutMs: 950 }),
+        1050,
+        null
+      )
+    : Promise.resolve(null);
+
+  const [trafficLive, networkResult, device] = await Promise.all([trafficPromise, networkPromise, devicePromise]);
+
+  let network = mergeNetworkSnapshot(networkResult?.snapshot || null, trafficLive || null);
+  const snapshotRouterId = Number(networkResult?.routerId || 0) > 0
+    ? Number(networkResult.routerId)
+    : preferredRouterId;
+  const stateOnline = Number(pppoeState?.is_online || 0) === 1 && isRecentPppoeState(pppoeState);
+
+  if (username && stateOnline && (!network || (!meaningfulText(network.uptime) && !meaningfulText(network.remoteAddress, network.activeAddress)))) {
+    const refreshed = await withTimeout(
+      fetchPppoeSnapshotViaChild(username, snapshotRouterId),
+      forceNetworkRefresh ? 3600 : 2200,
+      null
+    );
+    if (refreshed) {
+      network = mergeNetworkSnapshot(network, refreshed);
+    }
+  }
+
+  const needsDeepTraffic = !disableTrafficProbe && Boolean(
+    username && (
+      !network ||
+      !meaningfulText(network.remoteAddress, network.activeAddress) ||
+      !meaningfulText(network.uptime) ||
+      (!Number(network.rxMbps || 0) && !Number(network.txMbps || 0))
+    )
+  );
+
+  if (needsDeepTraffic) {
+    const deepTraffic = await withTimeout(
+      resolvePppoeTrafficLive(username, snapshotRouterId, candidateRouters),
+      forceNetworkRefresh ? 6500 : 3800,
+      null
+    );
+    if (deepTraffic) {
+      network = mergeNetworkSnapshot(network, deepTraffic);
+    }
+  }
+
+  return {
+    network,
+    device,
+    trafficLive,
+    stateRouterId,
+    snapshotRouterId,
+    source: trafficLive?.source || networkResult?.source || (snapshotRouterId ? `router:${snapshotRouterId}` : 'default')
+  };
+}
+
 async function buildCustomerDetail(customerId, options = {}) {
   const id = Number(customerId || 0);
   if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
@@ -184,83 +661,44 @@ async function buildCustomerDetail(customerId, options = {}) {
   const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(id);
   const billingYear = billingSvc.getCustomerBillingYearSummary(id, year);
   const monthlyBilling = buildMonthlyBilling(customer, billingYear?.invoices || [], year);
+  const tickets = ticketSvc.getTicketsByCustomerId(id);
 
   let pppoeState = null;
   const username = String(customer.pppoe_username || '').trim();
   const deviceToken = String(customer.genieacs_tag || customer.pppoe_username || '').trim();
-  const networkPromise = username
-    ? resolvePppoeSnapshot(username, customer.router_id || null)
-    : Promise.resolve({ snapshot: null, routerId: customer.router_id || null, source: customer.router_id ? `router:${Number(customer.router_id)}` : 'default' });
-  const devicePromise = deviceToken
-    ? withTimeout(
-        customerDevice.getCustomerDeviceData(deviceToken, { timeoutMs: 1800 }),
-        2200,
-        null
-      )
-    : Promise.resolve(null);
 
   if (username) {
-    const exactState = db.prepare(`
-      SELECT username, is_online, last_online_at, offline_since, last_logout_at, updated_at
-      FROM pppoe_monitoring_state
-      WHERE router_key = ? AND username = ?
-      LIMIT 1
-    `).get(
-      customer.router_id ? `router:${Number(customer.router_id)}` : 'default',
-      username
-    ) || null;
-
-    const anyState = db.prepare(`
-      SELECT username, is_online, last_online_at, offline_since, last_logout_at, updated_at, router_key, router_id
-      FROM pppoe_monitoring_state
-      WHERE username = ?
-      ORDER BY is_online DESC, updated_at DESC
-      LIMIT 1
-    `).get(username) || null;
-
-    pppoeState = exactState || anyState || null;
+    pppoeState = resolveBestPppoeState(username, customer.router_id || null);
   }
 
-  const [networkResult, device] = await Promise.all([networkPromise, devicePromise]);
-  let network = networkResult?.snapshot || null;
-  const stateRouterId = Number(pppoeState?.router_id || 0) > 0 ? Number(pppoeState.router_id) : null;
-  const snapshotRouterId = Number(networkResult?.routerId || 0) > 0
-    ? Number(networkResult.routerId)
-    : (stateRouterId || customer.router_id || null);
-  const stateOnline = Number(pppoeState?.is_online || 0) === 1;
-  if (username) {
-    const needsLiveRefresh = !network || (
-      stateOnline && (
-        !meaningfulText(network.uptime) ||
-        !meaningfulText(network.remoteAddress, network.activeAddress)
-      )
-    );
-    if (needsLiveRefresh) {
-      const refreshRouterIds = [];
-      for (const candidate of [snapshotRouterId, stateRouterId, customer.router_id, null]) {
-        const normalized = Number(candidate || 0) > 0 ? Number(candidate) : null;
-        if (!refreshRouterIds.some((item) => item === normalized)) refreshRouterIds.push(normalized);
-      }
-      for (const routerId of refreshRouterIds) {
-        const refreshed = await withTimeout(
-          mikrotikService.getPppoeCustomerSnapshot(username, routerId),
-          4200,
-          null
-        );
-        if (refreshed) {
-          network = mergeNetworkSnapshot(network, refreshed);
-          if (refreshed.online && meaningfulText(refreshed.uptime, refreshed.remoteAddress, refreshed.activeAddress)) break;
-        }
-      }
+  const liveState = await withTimeout(
+    resolveCustomerLiveState(customer, username, deviceToken, pppoeState, {
+      forceNetworkRefresh: Boolean(options.forceNetworkRefresh),
+      disableTrafficProbe: true
+    }),
+    options.forceNetworkRefresh ? 8500 : 6000,
+    {
+      network: null,
+      device: null,
+      stateRouterId: Number(pppoeState?.router_id || 0) > 0 ? Number(pppoeState.router_id) : null,
+      snapshotRouterId: Number(pppoeState?.router_id || 0) > 0 ? Number(pppoeState.router_id) : (customer.router_id || null),
+      source: customer.router_id ? `router:${Number(customer.router_id)}` : 'default'
     }
-  }
+  );
 
-  const resolvedOnline = Boolean(network?.online || stateOnline);
-  const liveDownloadBytes = Number(network?.bytesIn || 0) || 0;
-  const liveUploadBytes = Number(network?.bytesOut || 0) || 0;
+  const network = liveState?.network || null;
+  const device = liveState?.device || null;
+  const stateRouterId = Number(liveState?.stateRouterId || 0) > 0 ? Number(liveState.stateRouterId) : (Number(pppoeState?.router_id || 0) > 0 ? Number(pppoeState.router_id) : null);
+  const snapshotRouterId = Number(liveState?.snapshotRouterId || 0) > 0 ? Number(liveState.snapshotRouterId) : (stateRouterId || customer.router_id || null);
+  const stateOnline = Number(pppoeState?.is_online || 0) === 1 && isRecentPppoeState(pppoeState);
+
+  const hasFreshNetworkState = Boolean(network && Object.prototype.hasOwnProperty.call(network, 'online'));
+  const resolvedOnline = hasFreshNetworkState ? Boolean(network.online) : stateOnline;
+  const liveDownloadBytes = resolvedOnline ? (Number(network?.bytesOut || 0) || 0) : 0;
+  const liveUploadBytes = resolvedOnline ? (Number(network?.bytesIn || 0) || 0) : 0;
   const hasLiveTraffic = Boolean(resolvedOnline && network);
-  const displayDownloadBytes = hasLiveTraffic ? liveDownloadBytes : usageBytesIn;
-  const displayUploadBytes = hasLiveTraffic ? liveUploadBytes : usageBytesOut;
+  const displayDownloadBytes = usageBytesOut;
+  const displayUploadBytes = usageBytesIn;
   const displayTotalBytes = displayDownloadBytes + displayUploadBytes;
   let resolvedStatus = 'Offline';
   if (resolvedOnline) {
@@ -280,6 +718,23 @@ async function buildCustomerDetail(customerId, options = {}) {
       )
     ).catch(() => {});
   }
+
+  const usesPppoe = Boolean(username);
+  const resolvedRemoteAddress = (resolvedOnline || !usesPppoe)
+    ? (meaningfulText(
+        network?.remoteAddress,
+        network?.activeAddress,
+        network?.pppoeIp,
+        pppoeState?.remote_address,
+        customer.static_ip
+      ) || '-')
+    : '-';
+  const resolvedActiveAddress = resolvedOnline
+    ? (meaningfulText(network?.activeAddress, network?.pppoeIp, network?.remoteAddress) || '-')
+    : '-';
+  const resolvedUptime = resolvedOnline
+    ? (meaningfulText(network?.uptime, pppoeState?.session_uptime) || 'Online sekarang')
+    : '-';
 
   return {
     customer: {
@@ -320,14 +775,14 @@ async function buildCustomerDetail(customerId, options = {}) {
       downloadBytes: displayDownloadBytes,
       uploadBytes: displayUploadBytes,
       totalBytes: displayTotalBytes,
-      storedDownloadBytes: usageBytesIn,
-      storedUploadBytes: usageBytesOut,
+      storedDownloadBytes: usageBytesOut,
+      storedUploadBytes: usageBytesIn,
       storedTotalBytes: usageBytesIn + usageBytesOut,
       liveDownloadBytes,
       liveUploadBytes,
       liveTotalBytes: liveDownloadBytes + liveUploadBytes,
       isLive: hasLiveTraffic,
-      snapshotSource: networkResult?.source || '',
+      snapshotSource: liveState?.source || '',
       snapshotUpdatedAt: pppoeState?.updated_at || ''
     },
     currentInvoice: currentInvoice ? {
@@ -350,23 +805,25 @@ async function buildCustomerDetail(customerId, options = {}) {
     })),
     network: {
       username: username,
-      profile: meaningfulText(network?.profile, customer.normal_pppoe_profile, customer.package_pppoe_profile, customer.package_name) || '',
-      uptime: meaningfulText(network?.uptime) || '-',
+      profile: meaningfulText(network?.profile, pppoeState?.profile_name, customer.normal_pppoe_profile, customer.package_pppoe_profile, customer.package_name) || '',
+      uptime: resolvedUptime,
       status: resolvedStatus,
       online: resolvedOnline,
-      remoteAddress: meaningfulText(network?.remoteAddress, network?.activeAddress, network?.pppoeIp, customer.static_ip) || '-',
+      remoteAddress: resolvedRemoteAddress,
       localAddress: meaningfulText(network?.localAddress) || '-',
-      activeAddress: meaningfulText(network?.activeAddress, network?.pppoeIp, network?.remoteAddress) || '-',
+      activeAddress: resolvedActiveAddress,
       callerId: meaningfulText(network?.callerId) || '-',
       interface: meaningfulText(network?.interface) || '-',
       sessionId: meaningfulText(network?.sessionId) || '-',
       comment: meaningfulText(network?.comment) || '-',
       rateLimit: meaningfulText(network?.rateLimit) || '-',
+      rxMbps: Number(network?.rxMbps || 0) || 0,
+      txMbps: Number(network?.txMbps || 0) || 0,
       lastOnlineAt: pppoeState?.last_online_at || '',
       offlineSince: resolvedOnline ? '' : (pppoeState?.offline_since || ''),
       lastLogoutAt: pppoeState?.last_logout_at || '',
       stateUpdatedAt: pppoeState?.updated_at || '',
-      source: networkResult?.source || ''
+      source: liveState?.source || ''
     },
     device: device ? {
       token: deviceToken,
@@ -378,6 +835,15 @@ async function buildCustomerDetail(customerId, options = {}) {
       lastInform: device.lastInform || '-',
       totalUsers: Number(device.totalAssociations || 0) || 0
     } : null,
+    technicianHistory: (Array.isArray(tickets) ? tickets : []).map((ticket) => ({
+      id: Number(ticket.id || 0) || 0,
+      subject: ticket.subject || 'Laporan teknisi',
+      message: ticket.message || '',
+      status: String(ticket.status || 'open').toLowerCase(),
+      technicianName: ticket.technician_name || '',
+      createdAt: ticket.created_at || '',
+      updatedAt: ticket.updated_at || ''
+    })),
     billing: {
       year,
       months: monthlyBilling
@@ -386,5 +852,7 @@ async function buildCustomerDetail(customerId, options = {}) {
 }
 
 module.exports = {
-  buildCustomerDetail
+  buildCustomerDetail,
+  resolveCandidateRouterIds,
+  resolvePppoeTrafficLive
 };

@@ -10,22 +10,48 @@
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 12px;
-      line-height: 1.25;
+      line-height: 1.3;
       color: #000;
       margin: 0 auto;
-      padding: 6px 10px;
+      padding: 5px 7px 8px;
       max-width: 58mm;
+      background: #fff;
     }
     .text-center { text-align: center; }
     .bold { font-weight: bold; }
-    .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
+    .divider { border-bottom: 1px dashed #000; margin: 7px 0; }
     .row { display: flex; justify-content: space-between; gap: 10px; }
     .mono { font-family: inherit; }
     .small { font-size: 10px; }
-    .title { font-size: 14px; letter-spacing: 0.5px; }
-    .mt { margin-top: 8px; }
-    .mb { margin-bottom: 6px; }
-    .code { font-size: 13px; font-weight: bold; }
+    .tiny { font-size: 9px; }
+    .title { font-size: 13px; letter-spacing: 0.4px; }
+    .mt { margin-top: 6px; }
+    .mb { margin-bottom: 5px; }
+    .code-wrap{
+      border: 1px dashed #000;
+      padding: 8px 6px;
+      margin-top: 6px;
+    }
+    .code { font-size: 24px; font-weight: 900; letter-spacing: 2px; line-height: 1.1; }
+    .subcode { font-size: 10px; color:#222; margin-top: 4px; }
+    .label{
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .summary{
+      border: 1px solid #000;
+      padding: 6px 6px 4px;
+    }
+    .summary .row + .row{
+      margin-top: 5px;
+    }
+    .foot-note{
+      margin-top: 6px;
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.4;
+    }
     .top-actions{
       position: fixed;
       top: 8px;
@@ -44,7 +70,7 @@
       cursor: pointer;
     }
     @media print {
-      body { width: 100%; max-width: 100%; margin: 0; padding: 5mm 5mm 0 5mm; }
+      body { width: 100%; max-width: 100%; margin: 0; padding: 3mm 3mm 0 3mm; }
       .top-actions{ display:none; }
     }
   </style>
@@ -68,42 +94,53 @@
   <div class="divider"></div>
 
   <div class="text-center bold mb"><%= t('agent.receipt.voucher_title', 'STRUK VOUCHER HOTSPOT') %></div>
+  <div class="text-center small"><%= tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID') %></div>
+  <div class="text-center tiny">Ref: #<%= tx.id %></div>
 
-  <div class="small">
-    <div class="row"><div><%= t('agent.receipt.transaction_no', 'No. Transaksi') %></div><div class="bold">#<%= tx.id %></div></div>
-    <div class="row"><div><%= t('agent.receipt.date', 'Tanggal') %></div><div class="bold"><%= tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID') %></div></div>
-    <div class="row"><div><%= t('admin.nav.agents', 'Agent') %></div><div class="bold"><%= tx.agent_name || '' %><%= tx.agent_username ? (' (@' + tx.agent_username + ')') : '' %></div></div>
+  <div class="divider"></div>
+
+  <div class="text-center mt">
+    <% if (tx.profile_name) { %>
+      <div class="label"><%= t('agent.package', 'Paket') %></div>
+      <div class="small bold"><%= tx.profile_name %></div>
+    <% } %>
+    <div class="code-wrap">
+      <div class="label"><%= t('agent.receipt.code', 'KODE VOUCHER') %></div>
+      <div class="code"><%= tx.voucher_code || '-' %></div>
+      <% if (tx.voucher_password && tx.voucher_password !== tx.voucher_code) { %>
+        <div class="subcode"><%= t('agent.receipt.password', 'PASSWORD') %>: <%= tx.voucher_password %></div>
+      <% } %>
+    </div>
   </div>
 
   <div class="divider"></div>
 
-  <div class="small">
-    <div class="row"><div><%= t('agent.package', 'Paket') %></div><div class="bold"><%= tx.profile_name || '-' %></div></div>
+  <div class="summary">
+    <% if (tx.amount_sell) { %>
+      <div class="row bold">
+        <div><%= t('agent.price', 'HARGA') %></div>
+        <div>Rp <%= Number(tx.amount_sell || 0).toLocaleString('id-ID') %></div>
+      </div>
+    <% } %>
+    <% if (tx.validity_text || tx.validity) { %>
+      <div class="row bold">
+        <div><%= t('agent.validity', 'Masa Aktif') %></div>
+        <div><%= tx.validity_text || tx.validity %></div>
+      </div>
+    <% } %>
     <% if (tx.router_name) { %>
-      <div class="row"><div><%= t('agent.receipt.router', 'Router') %></div><div class="bold"><%= tx.router_name %></div></div>
+      <div class="row">
+        <div>Router</div>
+        <div><%= tx.router_name %></div>
+      </div>
     <% } %>
   </div>
 
   <div class="divider"></div>
 
-  <div class="text-center mt">
-    <div class="small"><%= t('agent.receipt.code', 'KODE VOUCHER') %></div>
-    <div class="code"><%= tx.voucher_code || '-' %></div>
-    <div class="small mt"><%= t('agent.receipt.password', 'PASSWORD') %></div>
-    <div class="code"><%= tx.voucher_password || '-' %></div>
-  </div>
-
-  <div class="divider"></div>
-
-  <div class="row bold">
-    <div><%= t('agent.price', 'HARGA') %></div>
-    <div>Rp <%= Number(tx.amount_sell || 0).toLocaleString('id-ID') %></div>
-  </div>
-
-  <div class="divider"></div>
-
-  <div class="text-center small mt">
-    <%= String(t('agent.receipt.thanks_voucher', 'Terima kasih.\nSimpan struk ini sebagai bukti transaksi.')).replace(/\n/g,'<br>') %>
+  <div class="foot-note">
+    Simpan kode voucher ini.<br>
+    Tunjukkan struk ini bila dibutuhkan.
   </div>
 
   <script>

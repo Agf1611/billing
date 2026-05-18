@@ -86,12 +86,70 @@
       color: var(--muted);
     }
     .bk-filter-form {
-      display: grid;
-      grid-template-columns: 120px 110px 160px minmax(180px, 1fr) auto;
-      gap: 10px;
+      display: flex;
       align-items: center;
+      gap: 10px;
+      width: 100%;
+      flex-wrap: nowrap;
     }
-    .bk-filter-form .btn {
+    .bk-filter-search-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 1 320px;
+      max-width: 320px;
+      width: 100%;
+      min-width: 0;
+    }
+    .bk-filter-search-row .fs {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .bk-filter-toggle {
+      display: none;
+      position: relative;
+      flex: 0 0 46px;
+      min-width: 46px;
+      height: 46px;
+      padding: 0;
+      justify-content: center;
+    }
+    .bk-filter-panel {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+    }
+    .bk-filter-panel::-webkit-scrollbar {
+      display: none;
+    }
+    .bk-filter-main-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-wrap: nowrap;
+    }
+    .bk-filter-main-row .fs {
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .bk-filter-main-row .bk-search-desktop {
+      min-width: 220px;
+      flex: 1 1 220px;
+    }
+    .bk-filter-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+    .bk-filter-actions .btn {
       min-width: 120px;
     }
     .bk-summary-grid {
@@ -557,13 +615,12 @@
     }
     @media (max-width: 900px) {
       .bk-filter-form {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        flex-wrap: wrap;
       }
-      .bk-filter-form .bk-filter-submit {
-        grid-column: 1 / -1;
-      }
-      .bk-filter-form .btn {
-        width: 100%;
+      .bk-filter-search-row,
+      .bk-filter-panel {
+        max-width: none;
+        flex: 1 1 100%;
       }
       .bk-actor-grid {
         grid-template-columns: 1fr;
@@ -581,7 +638,55 @@
         justify-content: center;
       }
       .bk-filter-form {
+        display: block;
+      }
+      .bk-filter-search-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 46px;
+        gap: 8px;
+        max-width: none;
+        margin-top: 8px;
+      }
+      .bk-filter-search-row .bk-search-desktop {
+        display: none;
+      }
+      .bk-filter-search-row .bk-search-mobile {
+        display: block;
+      }
+      .bk-filter-toggle {
+        display: inline-flex;
+      }
+      .bk-filter-panel {
+        display: none;
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(255,255,255,.03);
+        overflow: visible;
+      }
+      .bk-filter-panel.show {
+        display: grid;
         grid-template-columns: 1fr;
+      }
+      .bk-filter-main-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .bk-filter-main-row .bk-search-mobile {
+        display: none;
+      }
+      .bk-filter-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .bk-filter-actions .btn {
+        width: 100%;
+        min-width: 0;
       }
       .bk-summary-panel-head,
       .bk-summary-panel-body,
@@ -607,6 +712,18 @@
       }
     }
     @media (max-width: 576px) {
+      .bk-filter-panel {
+        padding: 8px;
+      }
+      .bk-filter-main-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .bk-filter-main-row .fs {
+        min-height: 42px;
+        font-size: 11px;
+        padding-left: 10px;
+        padding-right: 28px;
+      }
       .bk-breakdown-grid {
         gap: 8px;
       }
@@ -635,6 +752,11 @@
         text-align: left;
       }
     }
+    @media (min-width: 769px) {
+      .bk-filter-search-row .bk-search-mobile {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -656,7 +778,7 @@
     </div>
   </div>
 
-  <div class="page">
+<div class="page admin-shell-page">
     <% if (pageMsg && pageMsg.text) { %>
       <div class="alert alert-<%= pageMsg.type === 'error' ? 'd' : 's' %>" style="margin-bottom:16px"><%= pageMsg.text %></div>
     <% } %>
@@ -668,25 +790,37 @@
             <strong>Periode Pembukuan</strong>
             <span><%= monthLabel %> <%= selectedYear %> - <%= pageEntries.length %> entri tampil</span>
           </div>
+          <% if (!pageSession.isCashier) { %>
           <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
             <i class="bi bi-plus-circle"></i> Tambah Pembukuan
           </a>
+          <% } %>
         </div>
-        <form method="GET" action="/admin/bookkeeping" class="bk-filter-form">
-          <select class="fs" name="month" aria-label="Bulan">
-            <% for (let m = 1; m <= 12; m++) { %>
-              <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
-            <% } %>
-          </select>
-          <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
-          <select class="fs" name="type" aria-label="Jenis transaksi">
-            <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
-            <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
-            <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
-          </select>
-          <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan">
-          <div class="bk-filter-submit">
-            <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+        <form method="GET" action="/admin/bookkeeping" class="bk-filter-form" id="bkFilterForm">
+          <div class="bk-filter-search-row">
+            <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan" aria-label="Cari kategori / keterangan">
+            <button class="btn btn-g btn-sm bk-filter-toggle" type="button" onclick="toggleBookkeepingFilterPanel()" aria-label="Filter pembukuan">
+              <i class="bi bi-funnel"></i>
+            </button>
+          </div>
+          <div class="bk-filter-panel" id="bkFilterPanel">
+            <div class="bk-filter-main-row">
+              <select class="fs" name="month" aria-label="Bulan">
+                <% for (let m = 1; m <= 12; m++) { %>
+                  <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
+                <% } %>
+              </select>
+              <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
+              <select class="fs" name="type" aria-label="Jenis transaksi">
+                <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
+                <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
+                <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
+              </select>
+            </div>
+            <div class="bk-filter-actions">
+              <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
+              <a href="/admin/bookkeeping?month=<%= now.getMonth() + 1 %>&year=<%= now.getFullYear() %>" class="btn btn-g btn-sm"><i class="bi bi-x"></i> Reset</a>
+            </div>
           </div>
         </form>
       </section>
@@ -904,7 +1038,7 @@
                       <td><span class="bk-entry-main"><%= entry.created_by_name || '-' %></span></td>
                       <td class="num bk-amount <%= entry.type === 'income' ? 'income' : 'expense' %>">Rp <%= Number(entry.amount || 0).toLocaleString('id-ID') %></td>
                       <td class="num">
-                        <% if (String(entry.source_type || '') !== 'invoice') { %>
+                        <% if (!pageSession.isCashier && String(entry.source_type || '') !== 'invoice') { %>
                           <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
                             <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i></button>
                           </form>
@@ -951,7 +1085,7 @@
                     <% } %>
                   </div>
 
-                  <% if (String(entry.source_type || '') !== 'invoice') { %>
+                  <% if (!pageSession.isCashier && String(entry.source_type || '') !== 'invoice') { %>
                     <div class="bk-mobile-actions">
                       <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
                         <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i> Hapus</button>
@@ -967,5 +1101,36 @@
     </div>
   </div>
 </div>
+<script>
+function syncBookkeepingMobileFilterLayout() {
+  const form = document.getElementById('bkFilterForm');
+  const searchRow = form?.querySelector('.bk-filter-search-row');
+  const panel = document.getElementById('bkFilterPanel');
+  if (!form || !searchRow || !panel) return;
+  if (window.innerWidth > 768) {
+    panel.classList.remove('show');
+  }
+}
+
+function toggleBookkeepingFilterPanel(force) {
+  const panel = document.getElementById('bkFilterPanel');
+  if (!panel) return;
+  syncBookkeepingMobileFilterLayout();
+  if (window.innerWidth > 768) return;
+  if (typeof force === 'boolean') {
+    panel.classList.toggle('show', force);
+    return;
+  }
+  panel.classList.toggle('show');
+}
+
+window.addEventListener('resize', syncBookkeepingMobileFilterLayout);
+document.addEventListener('DOMContentLoaded', () => {
+  syncBookkeepingMobileFilterLayout();
+  document.getElementById('bkFilterForm')?.addEventListener('submit', () => {
+    if (window.innerWidth <= 768) toggleBookkeepingFilterPanel(false);
+  });
+});
+</script>
 </body>
 </html>

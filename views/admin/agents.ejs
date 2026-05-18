@@ -63,13 +63,15 @@
                   </td>
                   <td>
                     <div class="d-flex gap-2" style="flex-wrap:wrap">
-                      <button class="btn btn-p btn-sm" onclick='openTopup(<%- JSON.stringify(a) %>)'><i class="bi bi-cash-stack"></i></button>
                       <% if (typeof session !== 'undefined' && session.isAdmin) { %>
+                        <button class="btn btn-p btn-sm" onclick='openTopup(<%- JSON.stringify(a) %>)'><i class="bi bi-cash-stack"></i></button>
                         <button class="btn btn-g btn-sm" onclick='editAgent(<%- JSON.stringify(a) %>)'><i class="bi bi-pencil"></i></button>
                         <button class="btn btn-g btn-sm" onclick='openPrices(<%- JSON.stringify(a) %>)'><i class="bi bi-ticket-perforated"></i></button>
                         <form action="/admin/agents/<%= a.id %>/delete" method="POST" onsubmit="return confirm(I18N.confirmDeleteAgent)">
                           <button type="submit" class="btn btn-d btn-sm"><i class="bi bi-trash"></i></button>
                         </form>
+                      <% } else { %>
+                        <span class="text-muted" style="font-size:12px">Pantau saja</span>
                       <% } %>
                     </div>
                   </td>

@@ -14,7 +14,8 @@ let watcher = null;
 // Helper untuk baca settings.json secara dinamis
 function getSettings() {
   try {
-    return JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    const raw = fs.readFileSync(settingsPath, 'utf-8').replace(/^\uFEFF/, '');
+    return JSON.parse(raw);
   } catch (error) {
     logger.error(`[settings] Error reading settings.json: ${error.message}`);
     return {};

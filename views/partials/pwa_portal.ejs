@@ -1,0 +1,158 @@
+<%
+  const pwaPortalKey = typeof portalKey !== 'undefined' ? String(portalKey || '').trim() : 'customer';
+  const pwaManifestBaseHref = typeof manifestPath !== 'undefined' && manifestPath ? String(manifestPath) : (pwaPortalKey === 'customer' ? '/manifest.webmanifest' : `/${pwaPortalKey}/manifest.webmanifest`);
+  const pwaAssetVersion = '20260516-pwa2';
+  const pwaManifestHref = `${pwaManifestBaseHref}${pwaManifestBaseHref.includes('?') ? '&' : '?'}v=${pwaAssetVersion}`;
+  const pwaScope = typeof scope !== 'undefined' && scope ? String(scope) : (pwaPortalKey === 'customer' ? '/customer/' : `/${pwaPortalKey}/`);
+  const pwaThemeColor = typeof themeColor !== 'undefined' && themeColor ? String(themeColor) : '#0f172a';
+  const pwaLogo = (typeof settings !== 'undefined' && settings && String(settings.pwa_logo_url || '').trim())
+    ? String(settings.pwa_logo_url || '').trim()
+    : ((typeof settings !== 'undefined' && settings && String(settings.company_logo_url || '').trim())
+      ? String(settings.company_logo_url || '').trim()
+      : '/img/logo.png');
+  const pwaAppTitle = typeof appTitle !== 'undefined' && appTitle ? String(appTitle) : '';
+  const pwaInstallLabelMap = {
+    customer: 'Install Pelanggan',
+    admin: 'Install Admin',
+    tech: 'Install Teknisi',
+    agent: 'Install Agent',
+    collector: 'Install Kolektor'
+  };
+  const pwaInstallLabel = typeof installLabel !== 'undefined' && installLabel
+    ? String(installLabel)
+    : (pwaInstallLabelMap[pwaPortalKey] || 'Install Aplikasi');
+%>
+<link rel="manifest" href="<%= pwaManifestHref %>">
+<meta name="theme-color" content="<%= pwaThemeColor %>">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="<%= pwaAppTitle || company || 'SICKAS WIFI' %>">
+<link rel="apple-touch-icon" href="<%= pwaLogo %>">
+<link rel="icon" href="<%= pwaLogo %>">
+<style>
+  .pwa-install-launcher{
+    position:fixed;
+    right:16px;
+    bottom:88px;
+    z-index:1200;
+    display:none;
+    align-items:center;
+    gap:10px;
+    min-height:48px;
+    padding:0 16px;
+    border:none;
+    border-radius:999px;
+    background:linear-gradient(135deg, #2f6bff 0%, #5b6dfb 100%);
+    color:#fff;
+    box-shadow:0 18px 40px rgba(47,107,255,.28);
+    font:700 13px/1 "Plus Jakarta Sans","DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    letter-spacing:.01em;
+    cursor:pointer;
+    transition:transform .18s ease, box-shadow .18s ease, opacity .18s ease;
+  }
+  .pwa-install-launcher.is-visible{
+    display:inline-flex;
+  }
+  .pwa-install-launcher:hover{
+    transform:translateY(-1px);
+    box-shadow:0 22px 46px rgba(47,107,255,.32);
+  }
+  .pwa-install-launcher:active{
+    transform:translateY(0);
+  }
+  .pwa-install-launcher__icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:22px;
+    height:22px;
+    border-radius:999px;
+    background:rgba(255,255,255,.18);
+    font-size:14px;
+    font-weight:900;
+  }
+  .pwa-install-launcher__text{
+    white-space:nowrap;
+  }
+  @media (max-width: 575.98px){
+    .pwa-install-launcher{
+      right:14px;
+      left:14px;
+      bottom:78px;
+      justify-content:center;
+      width:auto;
+    }
+  }
+</style>
+<script>
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    var installLabel = <%- JSON.stringify(pwaInstallLabel) %>;
+    var installButton = null;
+    function isStandaloneMode() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+    function ensureInstallButton() {
+      if (installButton || !document.body) return installButton;
+      installButton = document.createElement('button');
+      installButton.type = 'button';
+      installButton.className = 'pwa-install-launcher';
+      installButton.setAttribute('aria-label', installLabel);
+      installButton.innerHTML =
+        '<span class=\"pwa-install-launcher__icon\">+</span>' +
+        '<span class=\"pwa-install-launcher__text\">' + installLabel + '</span>';
+      installButton.addEventListener('click', async function () {
+        var promptEvent = window.__deferredInstallPrompt;
+        if (!promptEvent) return;
+        try {
+          promptEvent.prompt();
+          var choice = await promptEvent.userChoice;
+          if (choice && choice.outcome === 'accepted') {
+            window.__deferredInstallPrompt = null;
+            updateInstallButton();
+          }
+        } catch (_) {}
+      });
+      document.body.appendChild(installButton);
+      return installButton;
+    }
+    function updateInstallButton() {
+      if (!document.body) return;
+      var button = ensureInstallButton();
+      if (!button) return;
+      var canShow = Boolean(window.__deferredInstallPrompt) && !isStandaloneMode();
+      button.classList.toggle('is-visible', canShow);
+    }
+    window.__pwaPortal = {
+      portal: <%- JSON.stringify(pwaPortalKey) %>,
+      scope: <%- JSON.stringify(pwaScope) %>,
+      manifest: <%- JSON.stringify(pwaManifestHref) %>
+    };
+    window.__deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault();
+      window.__deferredInstallPrompt = event;
+      updateInstallButton();
+      window.dispatchEvent(new CustomEvent('pwa-install-ready', {
+        detail: {
+          portal: window.__pwaPortal.portal,
+          scope: window.__pwaPortal.scope
+        }
+      }));
+    });
+    window.addEventListener('appinstalled', function () {
+      window.__deferredInstallPrompt = null;
+      updateInstallButton();
+      window.dispatchEvent(new CustomEvent('pwa-installed', {
+        detail: {
+          portal: window.__pwaPortal.portal
+        }
+      }));
+    });
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js?v=' + <%- JSON.stringify(pwaAssetVersion) %>, { scope: window.__pwaPortal.scope }).catch(function () {});
+      ensureInstallButton();
+      updateInstallButton();
+    });
+  })();
+</script>

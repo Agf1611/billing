@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Layanan Terisolir | <%= company %></title>
+  <title><%= accountStateLabel || 'Akses Terbatas' %> | <%= company %></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root {
@@ -156,8 +156,8 @@
 </head>
 <body>
   <div class="container">
-    <div class="status-badge">
-      <i class="bi bi-shield-lock-fill"></i> Terisolir
+    <div class="status-badge <%= accountState === 'inactive' ? 'inactive' : '' %>">
+      <i class="bi <%= accountState === 'inactive' ? 'bi-pause-circle-fill' : 'bi-shield-lock-fill' %>"></i> <%= accountStateLabel || 'Terisolir' %>
     </div>
     
     <h1>Akses Terbatas</h1>
@@ -212,3 +212,7 @@
   </div>
 </body>
 </html>
+    .status-badge.inactive {
+      background: rgba(245, 158, 11, 0.12);
+      color: #f59e0b;
+    }

@@ -92,6 +92,8 @@
     ? Math.max(0, invoiceAmount - invoiceBaseAmount)
     : 0;
   const invoiceAmountWords = terbilang(invoiceAmount);
+  const invoiceUniqueAmount = Number(invoice?.qris_amount_unique || 0) || 0;
+  const invoiceUniqueCode = Number(invoice?.qris_unique_code || 0) || 0;
   const supportBrandName = settings?.upstream_provider_name || companyLegalName || companyName;
   const showSupportFooter = supportByEnabled && String(supportBrandName || '').trim().length > 0;
   const supportLines = [companyAddress, companyPhone !== '-' ? `Telp/WA: ${companyPhone}` : '', companyEmail ? `Email: ${companyEmail}` : ''].filter(Boolean);
@@ -115,7 +117,7 @@
     *{ box-sizing:border-box; }
     html,body{ margin:0; padding:0; color:var(--ink); }
     body{
-      font-family: "Segoe UI", Arial, sans-serif;
+      font-family: "Times New Roman", Times, serif;
       background:#eef5ff;
       padding:12px;
     }
@@ -153,20 +155,19 @@
       margin:0 auto;
       background:#fff;
       border-radius:12px;
-      box-shadow:0 22px 54px rgba(15, 23, 42, 0.1);
+      box-shadow:0 14px 32px rgba(15, 23, 42, 0.08);
       overflow:hidden;
       position:relative;
-      border:1px solid #d9e3f1;
+      border:1px solid #cbd5e1;
+      border-radius:4px;
     }
     .sheet-head{
       display:grid;
       grid-template-columns:1.18fr .82fr;
       gap:10px;
       padding:15px 16px 9px;
-      background:
-        radial-gradient(circle at top right, rgba(37,99,235,.14), transparent 42%),
-        linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-      border-bottom:1px solid var(--line);
+      background:#fff;
+      border-bottom:1.5px solid #94a3b8;
     }
     .brand-box{
       display:flex;
@@ -174,53 +175,54 @@
       align-items:flex-start;
     }
     .brand-box img{
-      width:48px;
-      height:48px;
+      width:52px;
+      height:52px;
       object-fit:contain;
-      border-radius:14px;
+      border-radius:6px;
       background:#fff;
-      border:1px solid rgba(15,23,42,.06);
-      padding:8px;
+      border:1px solid rgba(15,23,42,.1);
+      padding:7px;
     }
     .brand-copy h1{
       margin:0;
-      font-size:19px;
-      letter-spacing:.03em;
+      font-size:20px;
+      letter-spacing:.02em;
       line-height:1.1;
+      font-weight:700;
     }
     .brand-copy h2{
-      margin:2px 0 5px;
-      font-size:9.5px;
-      letter-spacing:.25em;
+      margin:4px 0 5px;
+      font-size:12px;
+      letter-spacing:.02em;
       color:var(--muted);
       font-weight:700;
-      text-transform:uppercase;
+      text-transform:none;
     }
     .brand-copy p{
       margin:2px 0;
       color:var(--muted);
-      font-size:10px;
-      line-height:1.28;
+      font-size:11px;
+      line-height:1.35;
     }
     .invoice-meta-card{
       background:#fff;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:11px 13px;
+      border:1px solid #cbd5e1;
+      border-radius:6px;
+      padding:10px 12px;
       align-self:start;
     }
     .invoice-meta-card .label{
       color:var(--muted);
       text-transform:uppercase;
-      font-size:12px;
+      font-size:11px;
       font-weight:700;
-      letter-spacing:.16em;
+      letter-spacing:.12em;
     }
     .invoice-meta-card .title{
       margin:6px 0 10px;
-      font-size:22px;
+      font-size:24px;
       line-height:1;
-      letter-spacing:.05em;
+      letter-spacing:.04em;
     }
     .meta-grid{
       display:grid;
@@ -242,18 +244,18 @@
     .status-pill{
       display:inline-flex;
       align-items:center;
-      gap:8px;
+      gap:6px;
       margin-top:9px;
-      padding:6px 10px;
+      padding:6px 11px;
       border-radius:999px;
-      font-size:11px;
+      font-size:10px;
       font-weight:800;
-      letter-spacing:.08em;
+      letter-spacing:.06em;
       background:<%= isPaid ? '#e8fff1' : '#fff7e7' %>;
       color:<%= isPaid ? '#14803d' : '#b45309' %>;
     }
     .sheet-body{
-      padding:10px 16px 10px;
+      padding:9px 16px 10px;
     }
     .hero-grid{
       display:grid;
@@ -263,31 +265,31 @@
     }
     .panel{
       border:1px solid var(--line);
-      border-radius:14px;
-      padding:11px 12px;
+      border-radius:6px;
+      padding:10px 11px;
       background:#fff;
       page-break-inside:avoid;
     }
     .panel.soft{
-      background:var(--soft);
+      background:#f8fafc;
     }
     .panel h3{
       margin:0 0 8px;
       font-size:10px;
       text-transform:uppercase;
-      letter-spacing:.14em;
+      letter-spacing:.1em;
       color:var(--muted);
     }
     .recipient-name{
       margin:0 0 6px;
-      font-size:17px;
+      font-size:18px;
       line-height:1.1;
     }
     .recipient-lines{
       display:grid;
       gap:5px;
       color:#334155;
-      font-size:10.8px;
+      font-size:11px;
     }
     .recipient-lines strong{
       color:var(--ink);
@@ -308,8 +310,8 @@
       font-size:11px;
     }
     .summary-total strong{
-      font-size:22px;
-      color:var(--accent);
+      font-size:24px;
+      color:#0f172a;
       line-height:1;
     }
     .service-table{
@@ -319,7 +321,7 @@
     }
     .service-table th,
     .service-table td{
-      padding:7px 6px;
+      padding:8px 7px;
       border-bottom:1px solid var(--line);
       vertical-align:top;
       text-align:left;
@@ -328,21 +330,22 @@
       font-size:10px;
       color:var(--muted);
       text-transform:uppercase;
-      letter-spacing:.14em;
+      letter-spacing:.1em;
+      border-bottom:1.5px solid #94a3b8;
     }
     .service-table td strong{
       font-size:11px;
     }
     .service-note{
       color:var(--muted);
-      font-size:9.5px;
+      font-size:9.8px;
       margin-top:3px;
     }
     .totals-card{
       margin-top:8px;
       padding:9px 11px;
-      border-radius:14px;
-      background:linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      border-radius:6px;
+      background:#f8fafc;
       border:1px solid var(--line);
     }
     .totals-row{
@@ -358,7 +361,7 @@
     .totals-row.total{
       font-size:15px;
       font-weight:800;
-      color:var(--accent);
+      color:#0f172a;
     }
     .footer-grid{
       display:grid;
@@ -376,15 +379,15 @@
       align-items:center;
       gap:8px;
       padding:5px 9px;
-      border-radius:12px;
-      background:var(--accent-soft);
-      color:var(--accent);
+      border-radius:999px;
+      background:#eef2ff;
+      color:#1e3a8a;
       font-weight:800;
       width:max-content;
       font-size:10px;
     }
     .bank-number{
-      font-size:18px;
+      font-size:19px;
       font-weight:900;
       letter-spacing:.06em;
     }
@@ -449,7 +452,7 @@
       mix-blend-mode:multiply;
     }
     .signature-line{
-      border-top:2px solid #0f172a;
+      border-top:1.5px solid #0f172a;
       padding-top:7px;
       width:210px;
     }
@@ -468,9 +471,9 @@
     }
     .status-box{
       border:1px dashed var(--line);
-      border-radius:14px;
+      border-radius:6px;
       padding:9px 11px;
-      background:var(--soft);
+      background:#f8fafc;
     }
     .status-box strong{
       display:block;
@@ -486,7 +489,7 @@
       padding:7px 16px 9px;
       border-top:1px solid var(--line);
       color:var(--muted);
-      font-size:9.5px;
+      font-size:10px;
       display:grid;
       gap:8px;
       justify-items:center;
@@ -689,7 +692,9 @@
           <img src="<%= companyLogo %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
           <div class="brand-copy">
             <h1><%= companyLegalName || companyName %></h1>
-            <h2>Internet Service Provider</h2>
+            <% if (companyLegalName && companyName && companyLegalName !== companyName) { %>
+              <h2><%= companyName %></h2>
+            <% } %>
             <% supportLines.forEach((line) => { %>
               <p><%= line %></p>
             <% }) %>
@@ -827,6 +832,9 @@
               </div>
               <ul class="info-list">
                 <li><%= isPaid ? 'Dokumen ini menjadi bukti bahwa pembayaran telah terverifikasi.' : 'Invoice dinyatakan lunas setelah dana diterima dan terverifikasi.' %></li>
+                <% if (!isPaid && invoiceUniqueAmount > 0) { %>
+                  <li>Jika ingin pembayaran terbaca otomatis, transfer manual bank seperti BRI/BRImo maupun bayar QRIS harus sesuai nominal tepat: <strong>Rp <%= invoiceUniqueAmount.toLocaleString('id-ID') %></strong><% if (invoiceUniqueCode > 0) { %> (kode unik <%= String(invoiceUniqueCode).padStart(3, '0') %>)<% } %>.</li>
+                <% } %>
                 <% if (packageIncludePpn) { %><li>Nominal sudah termasuk PPN <%= packagePpnPercent.toLocaleString('id-ID') %>% sebesar Rp <%= invoicePpnAmount.toLocaleString('id-ID') %>.</li><% } %>
                 <% if (manualPaymentNotes) { %><li><%= manualPaymentNotes %></li><% } %>
               </ul>

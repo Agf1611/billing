@@ -10,17 +10,82 @@
     .filter-bar{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:14px 18px;margin-bottom:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     .paid-row td{opacity:.7}
     .mobile-stack{display:none}
-    .mobile-filter-toggle{display:none}
-    .billing-filter-panel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1}
-    .invoice-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:11px;display:grid;gap:8px}
+    .mobile-filter-toggle{display:none;position:relative}
+    .mobile-filter-badge{
+      position:absolute;
+      top:-5px;
+      right:-5px;
+      min-width:18px;
+      height:18px;
+      padding:0 5px;
+      border-radius:999px;
+      background:#ef4444;
+      color:#fff;
+      font-size:10px;
+      font-weight:800;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      box-shadow:0 8px 18px rgba(239,68,68,.24)
+    }
+    .mobile-filter-badge.show{display:inline-flex}
+    .billing-summary-grid{grid-template-columns:repeat(5,minmax(0,1fr)) !important}
+    .billing-summary-grid .sc{min-height:auto;padding:14px 16px}
+    .billing-summary-grid .sc-label{font-size:11px;letter-spacing:.04em}
+    .billing-summary-grid .sc-val{font-size:18px;line-height:1.05}
+    .billing-summary-grid .sc-sub{font-size:11px;margin-top:4px}
+    .billing-period-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px}
+    .billing-period-copy{display:grid;gap:4px}
+    .billing-period-copy strong{font-size:14px;color:var(--text)}
+    .billing-period-copy span{font-size:12px;color:var(--muted)}
+    .billing-filter-quick{display:flex;gap:8px;flex-wrap:wrap}
+    .billing-filter-quick .btn{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      min-width:0;
+    }
+    .billing-filter-quick .btn i{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:15px;
+      height:15px;
+      font-size:13px;
+      line-height:1;
+      flex:0 0 15px;
+    }
+    .billing-filter-quick .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
+    .billing-filter-form{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;width:100%}
+    .billing-search-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;width:100%;min-width:0}
+    .billing-search-row .sinput{flex:1 1 auto;min-width:0}
+    .billing-filter-form .billing-search-row{flex:0 1 360px;max-width:360px}
+    .billing-filter-panel{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+    .billing-filter-panel::-webkit-scrollbar{display:none}
+    .billing-filter-main-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:0}
+    .billing-filter-panel .mobile-filter-field{min-width:0}
+    .billing-filter-panel .mobile-date-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .billing-filter-panel .mobile-filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .billing-filter-panel .fs,
+    .billing-filter-panel .fc,
+    .billing-filter-panel .btn{white-space:nowrap}
+    .billing-filter-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(99,102,241,.12);color:var(--primary);font-size:11px;font-weight:700}
+    .billing-group{display:grid;gap:10px}
+    .billing-group + .billing-group{margin-top:16px}
+    .billing-group-label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)}
+    .billing-group-label strong{font-size:14px;color:var(--text)}
+    .billing-group-label span{font-size:11px;color:var(--muted)}
+    .invoice-card{background:var(--bg2);border:1px solid var(--border);border-radius:15px;padding:10px;display:grid;gap:7px}
     .invoice-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-    .invoice-head strong{display:block;font-size:14px;line-height:1.15}
-    .invoice-sub{margin-top:2px;font-size:11px;color:var(--muted);line-height:1.35}
+    .invoice-head strong{display:block;font-size:13px;line-height:1.1}
+    .invoice-sub{margin-top:2px;font-size:10px;color:var(--muted);line-height:1.28}
     .invoice-amount{font-size:20px;font-weight:800;letter-spacing:-0.04em;color:var(--success)}
+    .invoice-side{display:grid;justify-items:end;gap:6px;min-width:110px}
+    .invoice-side .invoice-amount{font-size:15px}
     .invoice-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-    .invoice-meta{padding:8px 9px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
-    .invoice-meta small{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-    .invoice-meta span,.invoice-meta strong{display:block;font-size:11px;line-height:1.35}
+    .invoice-meta{padding:7px 8px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+    .invoice-meta small{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+    .invoice-meta span,.invoice-meta strong{display:block;font-size:10px;line-height:1.22}
     .invoice-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
     .invoice-actions > *{min-width:0}
     .invoice-actions > a,
@@ -35,8 +100,8 @@
     .invoice-actions form .btn{
       justify-content:center;
       padding:0;
-      height:34px;
-      min-height:34px;
+      height:32px;
+      min-height:32px;
       width:100%;
       display:flex;
     }
@@ -45,14 +110,14 @@
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:16px;
-      height:16px;
-      font-size:14px;
+      width:14px;
+      height:14px;
+      font-size:12px;
       line-height:1;
-      flex:0 0 16px;
+      flex:0 0 14px;
     }
     .action-mini i.is-strong{
-      font-size:16px;
+      font-size:14px;
       transform:scale(1.08);
       transform-origin:center;
     }
@@ -62,11 +127,23 @@
       background:rgba(255,255,255,.9);
       box-shadow:0 14px 30px rgba(165,162,211,.12);
     }
+    body[data-theme="light"] .billing-group-label{
+      background:rgba(255,255,255,.92);
+      box-shadow:0 10px 24px rgba(165,162,211,.10);
+      border-color:rgba(148,163,184,.16);
+    }
+    body[data-theme="light"] .billing-filter-chip{
+      background:rgba(105,88,255,.08);
+    }
+    @media(max-width:1200px){
+      .billing-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+    }
     body[data-theme="light"] .invoice-meta{
       background:rgba(105,88,255,.04);
       border-color:rgba(148,163,184,.18);
     }
     body[data-theme="light"] .invoice-head strong,
+    body[data-theme="light"] .billing-group-label strong,
     body[data-theme="light"] .invoice-meta strong,
     body[data-theme="light"] .invoice-meta span,
     body[data-theme="light"] .invoice-amount{
@@ -75,54 +152,200 @@
     body[data-theme="light"] .invoice-sub{
       color:#6f7d98;
     }
+    body[data-theme="light"] .billing-group-label span,
+    body[data-theme="light"] .billing-period-copy span{
+      color:#6f7d98;
+    }
     @media(max-width:768px){
+      .topbar{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:start;
+        gap:8px;
+      }
+      .topbar .tb-title{min-width:0}
+      .topbar .tb-right{
+        justify-self:end;
+        display:flex;
+        align-items:center;
+        gap:6px;
+        flex-wrap:nowrap;
+      }
+      .topbar .tb-right .adm-badge{display:none}
+      .topbar .tb-right .tb-theme-btn{min-width:42px;padding:0 10px}
+      .topbar .tb-right .tb-theme-btn span{display:none}
+      .topbar .tb-right > .btn.btn-g.btn-sm:last-child{min-width:42px;padding:0 10px}
+      .topbar-generate-btn{min-width:42px;padding:0 10px}
       .filter-bar{padding:12px;gap:8px}
-      .filter-bar .sinput{max-width:none !important;flex:1 1 auto}
+      .filter-bar .sinput{max-width:none !important;flex:1 1 100%}
+      #billingSearchForm{display:block !important;width:100%}
+      .billing-filter-form{display:block !important;width:100%}
       .mobile-filter-toggle{display:inline-flex;flex:0 0 46px;min-width:46px;height:46px;padding:0;justify-content:center}
+      .billing-search-row{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) 46px;
+        align-items:start;
+        gap:8px;
+        width:100%;
+        margin-bottom:10px;
+      }
+      .billing-search-row .sinput{
+        min-width:0;
+        width:100%;
+        max-width:none !important;
+      }
+      .billing-filter-form .billing-search-row{max-width:none}
+      .billing-search-row .mobile-filter-toggle{align-self:stretch}
       .billing-filter-panel{
         display:none;
+        position:static !important;
+        float:none !important;
         width:100%;
-        grid-template-columns:1fr 1fr;
+        min-width:0;
         gap:8px;
         margin-top:10px;
         padding:10px;
         border:1px solid var(--border);
         border-radius:16px;
         background:rgba(255,255,255,.03);
+        overflow:visible;
       }
-      .billing-filter-panel.show{display:grid}
+      .billing-filter-panel.show{display:grid !important;grid-template-columns:1fr}
+      .billing-filter-main-row{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+        width:100%;
+      }
+      .billing-filter-panel .mobile-filter-field{width:100%}
+      .billing-filter-panel .mobile-date-row{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
+      .billing-filter-panel .mobile-filter-actions{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
       .billing-filter-panel .fs,
       .billing-filter-panel .fc,
       .billing-filter-panel .btn{width:100% !important;max-width:none !important}
       .billing-filter-panel .btn{justify-content:center}
+      .billing-period-summary{align-items:flex-start}
+      .billing-filter-quick{width:100%}
+      .billing-filter-quick{
+        display:flex;
+        flex-wrap:nowrap;
+        overflow-x:auto;
+        overflow-y:hidden;
+        gap:6px;
+        padding-bottom:2px;
+        scrollbar-width:none;
+      }
+      .billing-filter-quick::-webkit-scrollbar{display:none}
+      .billing-filter-quick .btn{
+        flex:0 0 auto;
+        justify-content:center;
+        min-height:38px;
+        padding:6px 10px;
+        font-size:10.5px;
+        white-space:nowrap;
+      }
       .tbl-wrap{display:none}
       .mobile-stack{display:grid;gap:8px;padding:0 0 12px}
     }
     @media(max-width:576px){
-      .billing-filter-panel{grid-template-columns:1fr}
-      .stat-grid{grid-template-columns:repeat(2,1fr) !important}
-      .invoice-card{padding:10px;gap:7px}
-      .invoice-head strong{font-size:13px}
-      .invoice-sub{font-size:10px}
-      .invoice-amount{font-size:18px}
-      .invoice-meta{padding:7px 8px}
-      .invoice-meta small{font-size:9px;margin-bottom:3px}
-      .invoice-meta span,.invoice-meta strong{font-size:10.5px}
-      .invoice-actions{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
-      .invoice-actions .btn,.invoice-actions form .btn{height:44px;min-height:44px;border-radius:12px}
+      .billing-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .billing-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+      .billing-summary-grid .sc{padding:10px 11px;border-radius:14px}
+      .billing-summary-grid .sc:nth-child(3){order:-3}
+      .billing-summary-grid .sc:nth-child(2){order:-2}
+      .billing-summary-grid .sc:nth-child(4){order:-1}
+      .billing-summary-grid .sc:nth-child(5){order:1}
+      .billing-summary-grid .sc:nth-child(1){order:2}
+      .billing-summary-grid .sc-label{font-size:9.5px}
+      .billing-summary-grid .sc-val{font-size:15px}
+      .billing-summary-grid .sc-sub{font-size:10px}
+      .billing-summary-grid .sc-icon{width:34px;height:34px;font-size:15px}
+      .invoice-card{padding:9px;gap:6px}
+      .invoice-head strong{font-size:12px}
+      .invoice-sub{font-size:9px}
+      .invoice-side{min-width:96px;gap:5px}
+      .invoice-side .invoice-amount{font-size:14px}
+      .invoice-meta-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+      .invoice-meta{padding:6px 6px}
+      .invoice-meta small{font-size:8px;margin-bottom:2px}
+      .invoice-meta span,.invoice-meta strong{font-size:9.5px}
+      .invoice-actions{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+      .invoice-actions .btn,.invoice-actions form .btn{height:36px;min-height:36px;border-radius:10px}
       .invoice-actions .action-mini{flex-direction:column;gap:2px;line-height:1}
       .invoice-actions .action-mini i{
-        width:18px;
-        height:18px;
-        font-size:15px;
-        flex-basis:18px;
+        width:15px;
+        height:15px;
+        font-size:13px;
+        flex-basis:15px;
       }
       .invoice-actions .action-mini i.is-strong{
-        font-size:18px;
+        font-size:15px;
       }
-      .invoice-actions .action-mini .action-label{display:block;font-size:9px;font-weight:700;letter-spacing:.01em}
+      .invoice-actions .action-mini .action-label{display:block;font-size:8px;font-weight:700;letter-spacing:.01em}
       .topbar-generate-btn span{display:none}
       .topbar-generate-btn{padding:8px 10px}
+    }
+    @media(max-width:430px){
+      .topbar .tb-title{
+        font-size:0;
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
+      .topbar .tb-title::after{
+        content:"Manajemen Tagihan";
+        font-size:14px;
+        font-weight:800;
+        color:var(--text);
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .billing-filter-panel{gap:6px;padding:8px}
+      .billing-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+      .billing-filter-panel .mobile-date-row{
+        grid-template-columns:1fr 1fr;
+        gap:6px;
+      }
+      .billing-filter-quick{gap:5px}
+      .billing-filter-quick .btn{font-size:9.5px;padding:6px 8px}
+      .invoice-meta-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+      .invoice-meta{padding:5px 5px}
+      .invoice-meta small{font-size:7.5px}
+      .invoice-meta span,.invoice-meta strong{font-size:9px}
+      .invoice-side{min-width:88px}
+      .invoice-side .invoice-amount{font-size:13px}
+      .invoice-actions{gap:4px}
+      .invoice-actions .btn,.invoice-actions form .btn{height:34px;min-height:34px}
+      .invoice-actions .action-mini i{
+        width:14px;
+        height:14px;
+        font-size:12px;
+        flex-basis:14px;
+      }
+      .invoice-actions .action-mini .action-label{font-size:7.5px}
+      .billing-filter-panel .fs,
+      .billing-filter-panel .fc{
+        min-height:42px;
+        font-size:11px;
+        padding-left:10px;
+        padding-right:28px;
+      }
+      .billing-filter-panel .mobile-filter-actions{
+        grid-template-columns:1fr 1fr;
+      }
     }
   </style>
 </head>
@@ -132,7 +355,9 @@
   <div class="topbar">
     <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-receipt"></i> <%= t('admin.billing.manage_title', 'Manajemen Tagihan') %></div>
     <div class="tb-right">
+      <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
       <button class="btn btn-p btn-sm topbar-generate-btn" onclick="openModal('genModal')"><i class="bi bi-lightning-charge"></i> <span><%= t('admin.billing.generate', 'Generate Tagihan') %></span></button>
+      <% } %>
       <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
         <i class="bi bi-sun"></i>
         <span>Terang</span>
@@ -141,7 +366,7 @@
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-  <div class="page">
+<div class="page admin-shell-page">
 
     <% if (msg) { %>
     <div class="alert alert-<%= msg.type==='success'?'s':'d' %>">
@@ -149,12 +374,25 @@
     </div>
     <% } %>
 
+    <%
+      const safeSummary = {
+        total: { count: Number(summary?.total?.count || 0), total: Number(summary?.total?.total || 0) },
+        paid: { count: Number(summary?.paid?.count || 0), total: Number(summary?.paid?.total || 0) },
+        unpaid: { count: Number(summary?.unpaid?.count || 0), total: Number(summary?.unpaid?.total || 0) },
+        isolated: { count: Number(summary?.isolated?.count || 0), total: Number(summary?.isolated?.total || 0) }
+      };
+      const collectedPct = safeSummary.total.count > 0
+        ? Math.round((safeSummary.paid.count / safeSummary.total.count) * 100)
+        : 0;
+    %>
+
     <!-- Summary Cards -->
-    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="sc p"><i class="bi bi-receipt sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.total', 'Total Tagihan') %></div><div class="sc-val"><%= summary.total.count||0 %></div><div class="sc-sub">Rp <%= (summary.total.total||0).toLocaleString('id-ID') %></div></div>
-      <div class="sc s"><i class="bi bi-check-circle sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.paid', 'Sudah Bayar') %></div><div class="sc-val"><%= summary.paid.count||0 %></div><div class="sc-sub">Rp <%= (summary.paid.total||0).toLocaleString('id-ID') %></div></div>
-      <div class="sc d"><i class="bi bi-hourglass sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.unpaid', 'Belum Bayar') %></div><div class="sc-val"><%= summary.unpaid.count||0 %></div><div class="sc-sub">Rp <%= (summary.unpaid.total||0).toLocaleString('id-ID') %></div></div>
-      <div class="sc w"><i class="bi bi-percent sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.collected_pct', '% Terkumpul') %></div><div class="sc-val"><%= summary.total.count>0 ? Math.round((summary.paid.count/summary.total.count)*100) : 0 %>%</div></div>
+    <div class="stat-grid billing-summary-grid">
+      <div class="sc p"><i class="bi bi-receipt sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.total', 'Total Tagihan') %></div><div class="sc-val"><%= safeSummary.total.count %></div><div class="sc-sub">Rp <%= safeSummary.total.total.toLocaleString('id-ID') %></div></div>
+      <div class="sc s"><i class="bi bi-check-circle sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.paid', 'Sudah Bayar') %></div><div class="sc-val"><%= safeSummary.paid.count %></div><div class="sc-sub">Rp <%= safeSummary.paid.total.toLocaleString('id-ID') %></div></div>
+      <div class="sc d"><i class="bi bi-hourglass sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.unpaid', 'Belum Bayar') %></div><div class="sc-val"><%= safeSummary.unpaid.count %></div><div class="sc-sub">Rp <%= safeSummary.unpaid.total.toLocaleString('id-ID') %></div></div>
+      <div class="sc i"><i class="bi bi-wifi-off sc-icon"></i><div class="sc-label">Isolir</div><div class="sc-val"><%= safeSummary.isolated.count %></div><div class="sc-sub">Rp <%= safeSummary.isolated.total.toLocaleString('id-ID') %></div></div>
+      <div class="sc w"><i class="bi bi-percent sc-icon"></i><div class="sc-label"><%= t('admin.billing.summary.collected_pct', '% Terkumpul') %></div><div class="sc-val"><%= collectedPct %>%</div></div>
     </div>
 
     <%
@@ -168,6 +406,25 @@
       const totalPageCount = typeof totalPages !== 'undefined' ? totalPages : 1;
       const totalInvoiceRows = typeof totalInvoicesCount !== 'undefined' ? totalInvoicesCount : invoices.length;
       const invoiceRowOffset = (currentPageNumber - 1) * (typeof pageSize !== 'undefined' ? pageSize : invoices.length || 25);
+      const defaultMonthValue = typeof defaultMonth !== 'undefined' ? defaultMonth : (new Date().getMonth() + 1);
+      const defaultYearValue = typeof defaultYear !== 'undefined' ? defaultYear : new Date().getFullYear();
+      const overdueCount = typeof overdueCountBase !== 'undefined' ? overdueCountBase : 0;
+      const isolatedCount = typeof isolatedCountBase !== 'undefined' ? isolatedCountBase : 0;
+      const allMonthNames = (lang === 'en')
+        ? ['January','February','March','April','May','June','July','August','September','October','November','December']
+        : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+      const currentPeriodLabel = currentFilterMonth
+        ? `${allMonthNames[Number(currentFilterMonth) - 1]} ${currentFilterYear}`
+        : `Semua bulan ${currentFilterYear}`;
+      const currentStatusLabel = currentFilterStatus === 'paid'
+        ? 'Lunas'
+        : currentFilterStatus === 'unpaid'
+          ? 'Belum Bayar'
+          : currentFilterStatus === 'overdue'
+            ? 'Telat Bayar'
+            : currentFilterStatus === 'isolated'
+              ? 'Terisolir'
+          : 'Semua Status';
       function buildBillingFilterHref(overrides = {}) {
         const params = new URLSearchParams();
         const merged = {
@@ -186,51 +443,72 @@
         const qs = params.toString();
         return `/admin/billing${qs ? '?' + qs : ''}`;
       }
+      const invoiceMonthGroups = Array.isArray(invoiceGroups) ? invoiceGroups : [];
     %>
 
     <!-- Filter -->
-    <div class="page-filter-card card" style="margin-bottom:18px">
+    <div class="page-filter-card card admin-compact-card" style="margin-bottom:18px">
       <div class="card-bd">
-        <form method="GET" action="/admin/billing" class="filter-bar" style="margin-bottom:0" id="billingSearchForm">
-          <div class="sinput" style="max-width:260px">
-            <i class="bi bi-search"></i>
-            <input class="fc" id="billingSearchInput" name="search" list="billingSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.billing.search_placeholder', 'Cari nama / telepon...') %>" value="<%= currentSearch %>">
-            <datalist id="billingSearchSuggestions"></datalist>
+        <form method="GET" action="/admin/billing" class="filter-bar billing-filter-form" style="margin-bottom:0;width:100%" id="billingSearchForm">
+          <div class="billing-search-row">
+            <div class="sinput" style="max-width:260px">
+              <i class="bi bi-search"></i>
+              <input class="fc" id="billingSearchInput" name="search" list="billingSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.billing.search_placeholder', 'Cari nama / telepon...') %>" value="<%= currentSearch %>">
+              <datalist id="billingSearchSuggestions"></datalist>
+            </div>
+            <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleBillingFilterPanel()" aria-label="Filter tagihan">
+              <i class="bi bi-funnel"></i>
+              <span class="mobile-filter-badge" id="billingFilterBadge"></span>
+            </button>
           </div>
-          <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleBillingFilterPanel()" aria-label="Filter tagihan">
-            <i class="bi bi-funnel"></i>
-          </button>
           <div class="billing-filter-panel" id="billingFilterPanel">
-            <select class="fs" name="month" style="width:130px">
-              <option value=""><%= t('admin.billing.all_months', 'Semua Bulan') %></option>
-              <% const monthNames = (lang === 'en')
-                ? ['January','February','March','April','May','June','July','August','September','October','November','December']
-                : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-                 for(let m=1;m<=12;m++){%>
-              <option value="<%= m %>" <%= currentFilterMonth==m?'selected':'' %>><%= monthNames[m-1] %></option>
-              <% } %>
-            </select>
-            <select class="fs" name="year" style="width:100px">
-              <% for(let y=new Date().getFullYear(); y>=2023; y--){ %>
-              <option value="<%= y %>" <%= currentFilterYear==y?'selected':'' %>><%= y %></option>
-              <% } %>
-            </select>
-            <select class="fs" name="status" style="width:130px">
-              <option value="all" <%= currentFilterStatus==='all'?'selected':'' %>><%= t('admin.billing.all_status', 'Semua Status') %></option>
-              <option value="unpaid" <%= currentFilterStatus==='unpaid'?'selected':'' %>><%= t('admin.billing.unpaid', 'Belum Bayar') %></option>
-              <option value="paid" <%= currentFilterStatus==='paid'?'selected':'' %>><%= t('admin.billing.paid', 'Sudah Bayar') %></option>
-            </select>
-            <input class="fc" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl dari" value="<%= currentBillingDayStart %>" style="width:110px">
-            <input class="fc" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl sampai" value="<%= currentBillingDayEnd %>" style="width:110px">
-            <button class="btn btn-g btn-sm" type="submit"><i class="bi bi-check2"></i> <%= t('common.filter', 'Filter') %></button>
-            <a href="/admin/billing" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a>
+            <div class="billing-filter-main-row">
+              <select class="fs mobile-filter-field" name="status" style="width:130px">
+                <option value="all" <%= currentFilterStatus==='all'?'selected':'' %>><%= t('admin.billing.all_status', 'Semua Status') %></option>
+                <option value="unpaid" <%= currentFilterStatus==='unpaid'?'selected':'' %>><%= t('admin.billing.unpaid', 'Belum Bayar') %></option>
+                <option value="paid" <%= currentFilterStatus==='paid'?'selected':'' %>><%= t('admin.billing.paid', 'Sudah Bayar') %></option>
+                <option value="overdue" <%= currentFilterStatus==='overdue'?'selected':'' %>>Telat Bayar</option>
+                <option value="isolated" <%= currentFilterStatus==='isolated'?'selected':'' %>>Terisolir</option>
+              </select>
+              <select class="fs mobile-filter-field" name="month" style="width:130px">
+                <option value=""><%= t('admin.billing.all_months', 'Semua Bulan') %></option>
+                <% const monthNames = (lang === 'en')
+                  ? ['January','February','March','April','May','June','July','August','September','October','November','December']
+                  : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+                   for(let m=1;m<=12;m++){%>
+                <option value="<%= m %>" <%= currentFilterMonth==m?'selected':'' %>><%= monthNames[m-1] %></option>
+                <% } %>
+              </select>
+              <select class="fs mobile-filter-field" name="year" style="width:100px">
+                <% for(let y=new Date().getFullYear(); y>=2023; y--){ %>
+                <option value="<%= y %>" <%= currentFilterYear==y?'selected':'' %>><%= y %></option>
+                <% } %>
+              </select>
+            </div>
+            <div class="mobile-date-row">
+              <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl dari" value="<%= currentBillingDayStart %>" style="width:110px">
+              <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl sampai" value="<%= currentBillingDayEnd %>" style="width:110px">
+            </div>
+            <div class="mobile-filter-actions">
+              <button class="btn btn-g btn-sm" type="submit"><i class="bi bi-check2"></i> <%= t('common.filter', 'Filter') %></button>
+              <a href="/admin/billing?month=<%= defaultMonthValue %>&year=<%= defaultYearValue %>" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a>
+            </div>
           </div>
         </form>
-        <div class="page-chip-row" style="margin-top:12px">
-          <a href="<%= buildBillingFilterHref({ status: 'unpaid', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-hourglass"></i> Belum Bayar</a>
-          <a href="<%= buildBillingFilterHref({ status: 'paid', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-check-circle"></i> Lunas</a>
-          <a href="<%= buildBillingFilterHref({ status: 'all', month: new Date().getMonth()+1, year: new Date().getFullYear(), page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-calendar2-week"></i> Bulan Ini</a>
-          <a href="<%= buildBillingFilterHref({ status: 'all', year: new Date().getFullYear(), month: '', page: 1 }) %>" class="btn btn-g btn-sm"><i class="bi bi-calendar-range"></i> Tahun Ini</a>
+        <div class="billing-period-summary">
+          <div class="billing-period-copy">
+            <strong><%= currentPeriodLabel %></strong>
+            <span><%= totalInvoiceRows %> tagihan - <%= currentStatusLabel %></span>
+          </div>
+          <div class="billing-filter-chip"><i class="bi bi-calendar3"></i> Tahun <%= currentFilterYear %></div>
+          <div class="billing-filter-quick">
+            <a href="<%= buildBillingFilterHref({ status: 'unpaid', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'unpaid' ? 'is-active' : '' %>"><i class="bi bi-hourglass"></i> Belum Bayar</a>
+            <a href="<%= buildBillingFilterHref({ status: 'paid', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' ? 'is-active' : '' %>"><i class="bi bi-check-circle"></i> Lunas</a>
+            <a href="<%= buildBillingFilterHref({ status: 'overdue', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'overdue' ? 'is-active' : '' %>"><i class="bi bi-exclamation-circle"></i> Telat <%= overdueCount > 0 ? `(${overdueCount})` : '' %></a>
+            <a href="<%= buildBillingFilterHref({ status: 'isolated', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'isolated' ? 'is-active' : '' %>"><i class="bi bi-wifi-off"></i> Isolir <%= isolatedCount > 0 ? `(${isolatedCount})` : '' %></a>
+            <a href="<%= buildBillingFilterHref({ status: 'all', month: defaultMonthValue, year: defaultYearValue, page: 1 }) %>" class="btn btn-g btn-sm <%= String(currentFilterMonth || '') === String(defaultMonthValue) && String(currentFilterYear || '') === String(defaultYearValue) ? 'is-active' : '' %>"><i class="bi bi-calendar2-week"></i> Bulan Ini</a>
+            <a href="<%= buildBillingFilterHref({ status: 'all', year: currentFilterYear, month: '', page: 1 }) %>" class="btn btn-g btn-sm <%= !currentFilterMonth ? 'is-active' : '' %>"><i class="bi bi-calendar-range"></i> Semua Bulan</a>
+          </div>
         </div>
       </div>
     </div>
@@ -259,9 +537,20 @@
           <% if (invoices.length===0) { %>
             <tr><td colspan="9" class="text-center text-muted" style="padding:32px"><%= t('admin.billing.empty', 'Tidak ada tagihan. Generate tagihan bulanan terlebih dahulu.') %></td></tr>
           <% } %>
-          <% invoices.forEach((inv,i)=>{ %>
+          <% let invoiceIndexCounter = invoiceRowOffset; %>
+          <% invoiceMonthGroups.forEach((group)=>{ %>
+            <% const desktopMonthName = allMonthNames[Math.max(0, Number(group.month || 1) - 1)] || '-'; %>
+            <% if (!currentFilterMonth) { %>
+              <tr>
+                <td colspan="9" style="padding:12px 14px;background:rgba(255,255,255,.03);font-weight:800;color:var(--text)">
+                  <%= desktopMonthName %> <%= group.year %>
+                  <span style="font-size:11px;color:var(--muted);font-weight:600;margin-left:8px"><%= group.invoices.length %> tagihan</span>
+                </td>
+              </tr>
+            <% } %>
+            <% group.invoices.forEach((inv)=>{ invoiceIndexCounter++; %>
             <tr class="<%= inv.status==='paid'?'paid-row':'' %>">
-              <td class="text-muted"><%= invoiceRowOffset + i + 1 %></td>
+              <td class="text-muted"><%= invoiceIndexCounter %></td>
               <td>
                 <div class="fw6"><%= inv.customer_name %></div>
                 <div style="font-size:11px;color:var(--muted)"><%= inv.customer_phone||inv.genieacs_tag||'' %></div>
@@ -287,6 +576,7 @@
               </td>
               <td>
                 <% if(inv.status==='paid'){%><span class="badge bs"><i class="bi bi-check-circle-fill" style="font-size:9px"></i> <%= t('admin.billing.status.paid', 'Lunas') %></span>
+                <%}else if (String(inv.customer_status || '').toLowerCase() === 'suspended') { %><span class="badge bw"><i class="bi bi-wifi-off" style="font-size:9px"></i> Isolir</span>
                 <%}else{%><span class="badge bd"><i class="bi bi-clock-fill" style="font-size:9px"></i> <%= t('admin.billing.status.unpaid', 'Belum Bayar') %></span><%}%>
               </td>
               <td style="font-size:12px">
@@ -305,6 +595,7 @@
                     data-period="<%= mns[inv.period_month-1] %> <%= inv.period_year %>">
                     <i class="bi bi-check-lg"></i>
                   </button>
+                  <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                   <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign" style="display:inline" title="Buat nominal unik QRIS (semi-otomatis)" onsubmit="return true">
                     <button class="btn btn-g btn-icon btn-sm"><i class="bi bi-qr-code"></i></button>
                   </form>
@@ -316,28 +607,36 @@
                       <button class="btn btn-d btn-icon btn-sm"><i class="bi bi-x-lg"></i></button>
                     </form>
                   <% } %>
+                  <% } %>
+                  <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                   <form method="POST" action="/admin/customers/<%= inv.customer_id %>/unisolate" style="display:inline" class="needs-confirm" data-confirm-key="confirmUnisolate">
                     <button class="btn btn-p btn-icon btn-sm" title="<%= t('admin.billing.actions.unisolate', 'Buka Isolir') %>"><i class="bi bi-wifi"></i></button>
                   </form>
-                  <form method="POST" action="/admin/billing/<%= inv.id %>/whatsapp" style="display:inline">
-                    <button class="btn btn-icon btn-sm" style="background:#25d366;color:white" title="<%= t('admin.billing.actions.send_wa', 'Kirim Tagihan WA') %>"><i class="bi bi-whatsapp"></i></button>
+                  <% } %>
+                  <form method="POST" action="/admin/billing/<%= inv.id %>/whatsapp" style="display:inline" data-wa-submit data-wa-waiting="Sedang mengirim tagihan WhatsApp. Mohon tunggu beberapa saat...">
+                    <button class="btn btn-icon btn-sm" style="background:#25d366;color:white" title="<%= t('admin.billing.actions.send_wa', 'Kirim Tagihan WA') %>" data-submit-label="WA"><i class="bi bi-whatsapp"></i></button>
                   </form>
                   <a href="/admin/billing/<%= inv.id %>/print?style=a4" target="_blank" class="btn btn-s btn-icon btn-sm" title="Cetak Invoice A4"><i class="bi bi-printer"></i></a>
                 <%}else{%>
                   <a href="/admin/billing/<%= inv.id %>/print?style=a4" target="_blank" class="btn btn-s btn-icon btn-sm" title="Cetak Invoice A4"><i class="bi bi-printer"></i></a>
                   <a href="/admin/billing/<%= inv.id %>/print?style=receipt" target="_blank" class="btn btn-g btn-icon btn-sm" title="Cetak Struk Kecil"><i class="bi bi-receipt-cutoff"></i></a>
+                  <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                   <form method="POST" action="/admin/billing/<%= inv.id %>/unpay" style="display:inline" class="needs-confirm" data-confirm-key="confirmUnpay">
                     <button class="btn btn-w btn-icon btn-sm" title="<%= t('admin.billing.actions.unpay', 'Batalkan Lunas') %>"><i class="bi bi-arrow-counterclockwise"></i></button>
                   </form>
+                  <% } %>
                 <%}%>
+                  <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                   <form method="POST" action="/admin/customers/<%= inv.customer_id %>/isolate" style="display:inline" class="needs-confirm" data-confirm-key="confirmIsolateManual">
                     <button class="btn btn-w btn-icon btn-sm" title="<%= t('admin.billing.actions.isolate_manual', 'Isolir Manual') %>"><i class="bi bi-wifi-off"></i></button>
                   </form>
                   <form method="POST" action="/admin/billing/<%= inv.id %>/delete" style="display:inline" class="needs-confirm" data-confirm-key="confirmDelete">
                     <button class="btn btn-d btn-icon btn-sm" title="<%= t('common.delete', 'Hapus') %>"><i class="bi bi-trash"></i></button>
                   </form>
+                  <% } %>
               </td>
             </tr>
+            <% }) %>
           <% }) %>
           </tbody>
         </table>
@@ -346,7 +645,16 @@
         <% if (invoices.length===0) { %>
           <div class="text-center text-muted" style="padding:18px 6px"><%= t('admin.billing.empty', 'Tidak ada tagihan. Generate tagihan bulanan terlebih dahulu.') %></div>
         <% } %>
-        <% invoices.forEach((inv,i)=>{ %>
+        <% invoiceMonthGroups.forEach((group)=>{ %>
+          <% const mobileMonthName = allMonthNames[Math.max(0, Number(group.month || 1) - 1)] || '-'; %>
+          <div class="billing-group">
+            <% if (!currentFilterMonth) { %>
+              <div class="billing-group-label">
+                <strong><%= mobileMonthName %> <%= group.year %></strong>
+                <span><%= group.invoices.length %> tagihan</span>
+              </div>
+            <% } %>
+            <% group.invoices.forEach((inv)=>{ %>
           <% const mns = (lang === 'en') ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] : ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']; %>
           <div class="invoice-card">
             <div class="invoice-head">
@@ -354,13 +662,13 @@
                 <strong><%= inv.customer_name %></strong>
                 <div class="invoice-sub"><%= inv.customer_phone||inv.genieacs_tag||'' %> &bull; <%= mns[inv.period_month-1] %> <%= inv.period_year %> &bull; Tgl <%= inv.due_day_snapshot || 10 %></div>
               </div>
-              <div>
+              <div class="invoice-side">
                 <% if(inv.status==='paid'){%><span class="badge bs"><i class="bi bi-check-circle-fill" style="font-size:9px"></i> Lunas</span>
+                <%}else if (String(inv.customer_status || '').toLowerCase() === 'suspended') { %><span class="badge bw"><i class="bi bi-wifi-off" style="font-size:9px"></i> Isolir</span>
                 <%}else{%><span class="badge bd"><i class="bi bi-clock-fill" style="font-size:9px"></i> Belum Bayar</span><%}%>
+                <div class="invoice-amount">Rp <%= inv.amount.toLocaleString('id-ID') %></div>
               </div>
             </div>
-
-            <div class="invoice-amount">Rp <%= inv.amount.toLocaleString('id-ID') %></div>
 
             <div class="invoice-meta-grid">
               <div class="invoice-meta">
@@ -368,12 +676,12 @@
                 <span><%= inv.package_name||'-' %></span>
               </div>
               <div class="invoice-meta">
-                <small>Dibayar Oleh</small>
-                <span><%= inv.paid_by_name||'-' %></span>
+                <small>Waktu Bayar</small>
+                <span><%= inv.paid_at ? new Date(inv.paid_at).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-' %></span>
               </div>
               <div class="invoice-meta">
-                <small>Waktu Bayar</small>
-                <span><%= inv.paid_at ? new Date(inv.paid_at).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-' %></span>
+                <small>Dibayar Oleh</small>
+                <span><%= inv.paid_by_name||'-' %></span>
               </div>
               <div class="invoice-meta">
                 <small>Catatan</small>
@@ -396,6 +704,7 @@
                   data-period="<%= mns[inv.period_month-1] %> <%= inv.period_year %>">
                   <span class="action-mini"><i class="bi bi-check-circle"></i><span class="action-label">Lunas</span></span>
                 </button>
+                <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                 <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign">
                   <button class="btn btn-g btn-sm" type="submit">
                     <span class="action-mini"><i class="bi bi-qr-code is-strong"></i><span class="action-label">QRIS</span></span>
@@ -406,8 +715,9 @@
                     <span class="action-mini"><i class="bi bi-unlock-fill is-strong"></i><span class="action-label">Buka</span></span>
                   </button>
                 </form>
-                <form method="POST" action="/admin/billing/<%= inv.id %>/whatsapp">
-                  <button class="btn btn-sm" type="submit" style="background:#25d366;color:white;width:100%">
+                <% } %>
+                <form method="POST" action="/admin/billing/<%= inv.id %>/whatsapp" data-wa-submit data-wa-waiting="Sedang mengirim tagihan WhatsApp. Mohon tunggu beberapa saat...">
+                  <button class="btn btn-sm" type="submit" style="background:#25d366;color:white;width:100%" data-submit-label="WA">
                     <span class="action-mini"><i class="bi bi-whatsapp"></i><span class="action-label">WA</span></span>
                   </button>
                 </form>
@@ -421,12 +731,15 @@
                 <a href="/admin/billing/<%= inv.id %>/print?style=receipt" target="_blank" class="btn btn-g btn-sm">
                   <span class="action-mini"><i class="bi bi-receipt-cutoff"></i><span class="action-label">Struk</span></span>
                 </a>
+                <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                 <form method="POST" action="/admin/billing/<%= inv.id %>/unpay" class="needs-confirm" data-confirm-key="confirmUnpay">
                   <button class="btn btn-w btn-sm" type="submit">
                     <span class="action-mini"><i class="bi bi-arrow-counterclockwise"></i><span class="action-label">Batal</span></span>
                   </button>
                 </form>
+                <% } %>
               <%}%>
+              <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
               <form method="POST" action="/admin/customers/<%= inv.customer_id %>/isolate" class="needs-confirm" data-confirm-key="confirmIsolateManual">
                 <button class="btn btn-w btn-sm" type="submit" style="width:100%">
                   <span class="action-mini"><i class="bi bi-ban"></i><span class="action-label">Isolir</span></span>
@@ -437,7 +750,10 @@
                   <span class="action-mini"><i class="bi bi-trash"></i><span class="action-label">Hapus</span></span>
                 </button>
               </form>
+              <% } %>
             </div>
+          </div>
+            <% }) %>
           </div>
         <% }) %>
       </div>
@@ -523,14 +839,53 @@
 <script>
 function openModal(id){document.getElementById(id).classList.add('show')}
 function closeModal(id){document.getElementById(id).classList.remove('show')}
+function syncBillingMobileFilterLayout() {
+  const form = document.getElementById('billingSearchForm');
+  const searchRow = form?.querySelector('.billing-search-row');
+  const panel = document.getElementById('billingFilterPanel');
+  const dateRow = panel?.querySelector('.mobile-date-row');
+  const actionRow = panel?.querySelector('.mobile-filter-actions');
+  if (!form || !searchRow || !panel) return;
+  const isMobile = window.innerWidth <= 768;
+  searchRow.removeAttribute('style');
+  panel.removeAttribute('style');
+  dateRow?.removeAttribute('style');
+  actionRow?.removeAttribute('style');
+  if (!isMobile) panel.classList.remove('show');
+}
 function toggleBillingFilterPanel(force) {
   const panel = document.getElementById('billingFilterPanel');
   if (!panel) return;
+  syncBillingMobileFilterLayout();
+  if (window.innerWidth > 768) return;
   if (typeof force === 'boolean') {
     panel.classList.toggle('show', force);
     return;
   }
   panel.classList.toggle('show');
+}
+
+function getActiveBillingFilterCount() {
+  const monthValue = String(document.querySelector('#billingSearchForm [name="month"]')?.value || '').trim();
+  const yearValue = String(document.querySelector('#billingSearchForm [name="year"]')?.value || '').trim();
+  const statusValue = String(document.querySelector('#billingSearchForm [name="status"]')?.value || '').trim();
+  const billingDayStartValue = String(document.querySelector('#billingSearchForm [name="billingDayStart"]')?.value || '').trim();
+  const billingDayEndValue = String(document.querySelector('#billingSearchForm [name="billingDayEnd"]')?.value || '').trim();
+  let count = 0;
+  if (statusValue && statusValue !== 'all') count += 1;
+  if (monthValue && Number(monthValue) !== Number('<%= defaultMonthValue %>')) count += 1;
+  if (yearValue && Number(yearValue) !== Number('<%= defaultYearValue %>')) count += 1;
+  if (billingDayStartValue) count += 1;
+  if (billingDayEndValue) count += 1;
+  return count;
+}
+
+function syncBillingFilterBadge() {
+  const badge = document.getElementById('billingFilterBadge');
+  if (!badge) return;
+  const count = getActiveBillingFilterCount();
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.classList.toggle('show', count > 0);
 }
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
 const LANG = "<%= lang || 'id' %>";
@@ -545,8 +900,44 @@ const I18N = {
   confirmUnisolate: "<%= t('admin.billing.confirm.unisolate_without_payment', 'Buka isolir pelanggan ini tanpa bayar?') %>",
   confirmUnpay: "<%= t('admin.billing.confirm.unpay', 'Batalkan status lunas?') %>",
   confirmIsolateManual: "<%= t('admin.billing.confirm.isolate_manual', 'Isolir pelanggan ini secara manual?') %>",
-  confirmDelete: "<%= t('admin.billing.confirm.delete', 'Hapus tagihan ini?') %>"
+  confirmDelete: "<%= t('admin.billing.confirm.delete', 'Hapus tagihan ini?') %>",
+  waPendingDefault: "Sedang memproses WhatsApp. Mohon tunggu beberapa saat...",
+  payPending: "Sedang menyimpan pembayaran dan mengirim notifikasi WhatsApp bila aktif...",
+  submitProcessing: "Memproses..."
 };
+
+function ensureBillingPendingBar() {
+  let pending = document.getElementById('billingPendingBar');
+  if (pending) return pending;
+  pending = document.createElement('div');
+  pending.id = 'billingPendingBar';
+  pending.style.position = 'fixed';
+  pending.style.left = '50%';
+  pending.style.bottom = '24px';
+  pending.style.transform = 'translateX(-50%)';
+  pending.style.zIndex = '9999';
+  pending.style.display = 'none';
+  pending.style.alignItems = 'center';
+  pending.style.gap = '10px';
+  pending.style.padding = '12px 16px';
+  pending.style.borderRadius = '14px';
+  pending.style.background = 'rgba(15,23,42,.94)';
+  pending.style.color = '#fff';
+  pending.style.boxShadow = '0 12px 30px rgba(15,23,42,.28)';
+  pending.style.fontSize = '13px';
+  pending.style.fontWeight = '700';
+  pending.style.maxWidth = 'calc(100vw - 28px)';
+  pending.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span id="billingPendingText"></span>';
+  document.body.appendChild(pending);
+  return pending;
+}
+
+function showBillingPending(message) {
+  const pending = ensureBillingPendingBar();
+  const textEl = document.getElementById('billingPendingText');
+  if (textEl) textEl.textContent = String(message || I18N.waPendingDefault);
+  pending.style.display = 'inline-flex';
+}
 
 document.addEventListener('submit', function(e) {
   const form = e.target;
@@ -555,6 +946,28 @@ document.addEventListener('submit', function(e) {
   const key = String(form.dataset.confirmKey || '');
   const msg = I18N[key] || 'Lanjutkan?';
   if (!confirm(msg)) e.preventDefault();
+});
+
+document.addEventListener('submit', function(e) {
+  const form = e.target;
+  if (!(form instanceof HTMLFormElement)) return;
+  if (e.defaultPrevented) return;
+  const action = String(form.getAttribute('action') || '');
+  const isWaSubmit = form.hasAttribute('data-wa-submit') || /\/admin\/billing\/\d+\/whatsapp$/i.test(action);
+  const isPaySubmit = form.id === 'payForm' || /\/admin\/billing\/(\d+\/pay|pay-bulk)$/i.test(action);
+  if (!isWaSubmit && !isPaySubmit) return;
+
+  const waitingText = isPaySubmit
+    ? I18N.payPending
+    : String(form.dataset.waWaiting || I18N.waPendingDefault);
+  showBillingPending(waitingText);
+
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.dataset.originalHtml = submitBtn.innerHTML;
+    submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>${I18N.submitProcessing}`;
+  }
 });
 
 // Handle "Tandai Lunas" via data-* attributes (avoid EJS/HTML quote conflict)
@@ -682,19 +1095,6 @@ document.getElementById('billingSearchInput')?.addEventListener('input', (event)
   syncBillingSearchSuggestions(event.target.value);
 });
 
-let billingSearchSubmitTimer = null;
-function applyBillingLocalFilter(keyword) {
-  const normalized = String(keyword || '').trim().toLowerCase();
-  document.querySelectorAll('.dtbl tbody tr').forEach((row) => {
-    const haystack = String(row.textContent || '').toLowerCase();
-    row.style.display = !normalized || haystack.includes(normalized) ? '' : 'none';
-  });
-  document.querySelectorAll('.mobile-stack .invoice-card').forEach((card) => {
-    const haystack = String(card.textContent || '').toLowerCase();
-    card.style.display = !normalized || haystack.includes(normalized) ? '' : 'none';
-  });
-}
-
 function triggerBillingAutoSearch(force = false) {
   const input = document.getElementById('billingSearchInput');
   const form = document.getElementById('billingSearchForm');
@@ -708,30 +1108,23 @@ function triggerBillingAutoSearch(force = false) {
   window.location.assign(nextUrl);
 }
 
-document.getElementById('billingSearchInput')?.addEventListener('input', (event) => {
-  if (billingSearchSubmitTimer) clearTimeout(billingSearchSubmitTimer);
-  const keyword = String(event.target.value || '').trim();
-  applyBillingLocalFilter(keyword);
-  billingSearchSubmitTimer = setTimeout(() => {
-    if (!keyword || keyword.length >= 2) triggerBillingAutoSearch();
-  }, 320);
-});
-
 document.getElementById('billingSearchInput')?.addEventListener('change', () => {
-  if (billingSearchSubmitTimer) clearTimeout(billingSearchSubmitTimer);
   triggerBillingAutoSearch(true);
 });
 
-applyBillingLocalFilter(document.getElementById('billingSearchInput')?.value || '');
-if (window.innerWidth <= 768) {
-  const hasActiveBillingFilters = Boolean(
-    String(document.querySelector('#billingSearchForm [name=\"month\"]')?.value || '').trim() ||
-    String(document.querySelector('#billingSearchForm [name=\"status\"]')?.value || '').trim() && String(document.querySelector('#billingSearchForm [name=\"status\"]')?.value || '').trim() !== 'all' ||
-    String(document.querySelector('#billingSearchForm [name=\"billingDayStart\"]')?.value || '').trim() ||
-    String(document.querySelector('#billingSearchForm [name=\"billingDayEnd\"]')?.value || '').trim()
-  );
-  if (hasActiveBillingFilters) toggleBillingFilterPanel(true);
-}
+syncBillingMobileFilterLayout();
+syncBillingFilterBadge();
+window.addEventListener('resize', syncBillingMobileFilterLayout);
+
+document.querySelectorAll('#billingFilterPanel select, #billingFilterPanel input').forEach((field) => {
+  field.addEventListener('change', () => {
+    syncBillingFilterBadge();
+  });
+});
+
+document.getElementById('billingSearchForm')?.addEventListener('submit', () => {
+  if (window.innerWidth <= 768) toggleBillingFilterPanel(false);
+});
 </script>
 </body>
 </html>

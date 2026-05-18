@@ -1,24 +1,31 @@
 {
+  "id": "/customer/",
   "name": "Portal Pelanggan",
   "short_name": "Pelanggan",
+  "description": "Portal Pelanggan SICKAS WIFI",
   "start_url": "/customer/login?source=pwa",
   "scope": "/customer/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#f6faff",
+  "theme_color": "#2f6bff",
   "icons": [
+    {
+      "src": "/img/logo.png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/img/logo.png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
     {
       "src": "/img/pwa-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/img/logo.png",
-      "sizes": "2000x545",
-      "type": "image/png",
-      "purpose": "any"
     }
   ]
 }

@@ -22,6 +22,8 @@ PREV_HEAD=""
 BRANCH=""
 REMOTE_VERSION="-"
 LOCAL_VERSION="-"
+STASH_REF=""
+STASH_LABEL=""
 
 echo ""
 echo -e "${CYAN}${BOLD}===============================================${NC}"
@@ -66,6 +68,10 @@ rollback_source() {
     git reset --hard "$PREV_HEAD"
     restore_runtime_data
     npm install --no-audit --no-fund
+    if [ -n "$STASH_REF" ]; then
+      echo -e "${BLUE}[INFO]${NC} Mengembalikan perubahan source lokal dari ${STASH_REF}..."
+      git stash pop "$STASH_REF" || echo -e "${YELLOW}[WARN]${NC} Stash ${STASH_REF} gagal dipulihkan otomatis. Cek manual dengan git stash list."
+    fi
   fi
 }
 
@@ -108,6 +114,13 @@ mkdir -p "$BACKUP_ROOT"
 [ -d "$SCRIPT_DIR/logs" ] && cp -a "$SCRIPT_DIR/logs" "$BACKUP_ROOT/logs"
 [ -d "$SCRIPT_DIR/public/uploads" ] && cp -a "$SCRIPT_DIR/public/uploads" "$BACKUP_ROOT/public_uploads"
 
+if [ -n "$(git status --porcelain)" ]; then
+  STASH_LABEL="admin-self-update-$(date +%s)"
+  echo -e "${BLUE}[INFO]${NC} Mengamankan perubahan source lokal ke stash: ${STASH_LABEL}"
+  git stash push --include-untracked -m "$STASH_LABEL"
+  STASH_REF="$(git stash list --format='%gd::%s' | awk -F'::' -v label="$STASH_LABEL" '$2==label{print $1; exit}')"
+fi
+
 echo -e "${BLUE}[INFO]${NC} Menarik source terbaru..."
 git switch "$BRANCH" >/dev/null 2>&1 || git switch --track "origin/${BRANCH}"
 git pull --ff-only origin "$BRANCH"
@@ -144,5 +157,8 @@ trap - ERR
 echo ""
 echo -e "${GREEN}${BOLD}Update selesai!${NC}"
 echo -e "Commit: ${YELLOW}${PREV_HEAD}${NC} -> ${YELLOW}${REMOTE_HEAD}${NC}"
+if [ -n "$STASH_REF" ]; then
+  echo -e "Perubahan source lokal lama diamankan di stash: ${YELLOW}${STASH_REF}${NC}"
+fi
 echo -e "Backup runtime: ${YELLOW}${BACKUP_ROOT}${NC}"
 echo ""

@@ -7,6 +7,7 @@ const paymentSvc = require('../services/paymentService');
 const customerSvc = require('../services/customerService');
 const packageChangeSvc = require('../services/packageChangeService');
 const mikrotikService = require('../services/mikrotikService');
+const customerDetailSvc = require('../services/customerDetailService');
 const { logger } = require('../config/logger');
 const ticketSvc = require('../services/ticketService');
 const usageSvc = require('../services/usageService');
@@ -27,7 +28,7 @@ const {
   fillWhatsappTemplate,
   ensureDueDateLine
 } = require('../services/publicLinkService');
-const { buildDynamicQrisPayload } = require('../services/qrisService');
+const { buildDynamicQrisPayload, buildDynamicQrisDataUrl } = require('../services/qrisService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
 const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
@@ -90,6 +91,44 @@ function getSessionCustomer(req) {
   return findCustomerProfileByLoginId(loginId);
 }
 
+function normalizePortalAccountStatus(status) {
+  const normalized = String(status || 'active').trim().toLowerCase();
+  if (normalized === 'suspended') return 'suspended';
+  if (normalized === 'inactive') return 'inactive';
+  return 'active';
+}
+
+function isPortalRestrictedStatus(status) {
+  const normalized = normalizePortalAccountStatus(status);
+  return normalized === 'suspended' || normalized === 'inactive';
+}
+
+function getPortalAccountState(status) {
+  const normalized = normalizePortalAccountStatus(status);
+  if (normalized === 'suspended') {
+    return {
+      kind: 'suspended',
+      label: 'Isolir',
+      heroLabel: 'Isolir',
+      notice: 'Layanan internet Anda sedang diisolir sementara karena masih ada tagihan yang belum lunas.'
+    };
+  }
+  if (normalized === 'inactive') {
+    return {
+      kind: 'inactive',
+      label: 'Nonaktif',
+      heroLabel: 'Nonaktif',
+      notice: 'Akun pelanggan Anda sedang nonaktif. Silakan hubungi admin untuk aktivasi atau informasi lanjutan.'
+    };
+  }
+  return {
+    kind: 'active',
+    label: 'Aktif',
+    heroLabel: 'Aktif',
+    notice: ''
+  };
+}
+
 /** Rute portal yang boleh diakses saat status suspended (bayar publik, logout, dll.) */
 function isSuspendedPortalExemptPath(reqPath) {
   const p = String(reqPath || '');
@@ -140,6 +179,25 @@ function buildPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl)
     paid_by: String(gateway || '-').trim() || '-',
     paid_at: new Date().toLocaleString('id-ID')
   }), dueDateText);
+}
+
+async function trySendGatewayPaidWhatsapp(req, customer, invoice, gatewayLabel, settings) {
+  try {
+    if (!settings?.whatsapp_enabled) return false;
+    if (!customer?.phone || !invoice) return false;
+    const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
+    const ready = await ensureWhatsAppReady(15000);
+    if (!ready) throw new Error('Bot WhatsApp belum siap');
+    const ok = await sendWA(
+      customer.phone,
+      buildPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req))
+    );
+    if (!ok) throw new Error('sendWA mengembalikan gagal');
+    return true;
+  } catch (error) {
+    logger.error(`[Webhook] Gagal kirim notif WA lunas (${gatewayLabel}): ${error.message || String(error)}`);
+    return false;
+  }
 }
 
 async function withTimeout(promise, timeoutMs, label, fallbackValue = null) {
@@ -482,58 +540,7 @@ async function resolveCustomerPaymentGateway(settings, method) {
 }
 
 function ensureStaticQrisInvoice(invoiceId) {
-  const invId = Number(invoiceId || 0);
-  if (!Number.isFinite(invId) || invId <= 0) throw new Error('Invoice ID tidak valid');
-
-  const current = db.prepare(`
-    SELECT id, customer_id, status, amount, qris_unique_code, qris_amount_unique, qris_assigned_at
-    FROM invoices
-    WHERE id = ?
-  `).get(invId);
-  if (!current) throw new Error('Tagihan tidak ditemukan');
-  if (String(current.status || '').toLowerCase() !== 'unpaid') throw new Error('Hanya tagihan belum bayar yang bisa dibuat QRIS statik.');
-
-  if (Number(current.qris_amount_unique || 0) > 0 && Number(current.qris_unique_code || 0) > 0) {
-    return billingSvc.getInvoiceById(invId);
-  }
-
-  const baseAmount = Number(current.amount || 0);
-  if (!Number.isFinite(baseAmount) || baseAmount <= 0) throw new Error('Nominal tagihan tidak valid');
-
-  const exists = db.prepare('SELECT id FROM invoices WHERE status = ? AND qris_amount_unique = ? AND id != ? LIMIT 1');
-  const update = db.prepare(`
-    UPDATE invoices
-    SET qris_unique_code = ?, qris_amount_unique = ?, qris_assigned_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `);
-
-  let chosenCode = 0;
-  let chosenAmount = 0;
-
-  for (let i = 0; i < 50; i++) {
-    const code = 1 + Math.floor(Math.random() * 999);
-    const amount = baseAmount + code;
-    if (!exists.get('unpaid', amount, invId)) {
-      chosenCode = code;
-      chosenAmount = amount;
-      break;
-    }
-  }
-
-  if (!chosenAmount) {
-    for (let code = 1; code <= 999; code++) {
-      const amount = baseAmount + code;
-      if (!exists.get('unpaid', amount, invId)) {
-        chosenCode = code;
-        chosenAmount = amount;
-        break;
-      }
-    }
-  }
-
-  if (!chosenAmount) throw new Error('Gagal membuat nominal unik QRIS untuk tagihan ini.');
-  update.run(chosenCode, chosenAmount, invId);
-  return billingSvc.getInvoiceById(invId);
+  return billingSvc.assignUniqueQrisForInvoice(invoiceId);
 }
 
 const pppoeTrafficSamples = new Map();
@@ -601,38 +608,67 @@ function mergeCustomerDashboardData(baseCustomer, pppoeSnapshot) {
   };
 }
 
-function buildCustomerNotifications({ invoices = [], tickets = [], appNotif = null, seenAt = null, profile = null } = {}) {
+function buildPortalCustomerViewModel(profile, deviceData, pppoeSnapshot) {
+  const profileBase = profile || {};
+  const deviceBase = deviceData || {};
+
+  const mergedBase = {
+    ...deviceBase,
+    ...profileBase,
+    id: pickFirstUsable(profileBase.id, deviceBase.id, null),
+    name: pickFirstUsable(profileBase.name, deviceBase.name, 'Pelanggan'),
+    phone: pickFirstUsable(profileBase.phone, deviceBase.phone, '-'),
+    address: pickFirstUsable(profileBase.address, deviceBase.address, deviceBase.lokasi, '-'),
+    lokasi: pickFirstUsable(profileBase.address, profileBase.lokasi, deviceBase.lokasi, '-'),
+    package_name: pickFirstUsable(profileBase.package_name, deviceBase.package_name, '-'),
+    package_price: Number(profileBase.package_price || deviceBase.package_price || 0) || 0,
+    genieacs_tag: pickFirstUsable(profileBase.genieacs_tag, deviceBase.genieacs_tag, deviceBase.tag, ''),
+    pppoe_username: pickFirstUsable(profileBase.pppoe_username, deviceBase.pppoeUsername, deviceBase.pppoe_username, ''),
+    pppoeUsername: pickFirstUsable(profileBase.pppoe_username, deviceBase.pppoeUsername, deviceBase.pppoe_username, '-'),
+    pppoeIP: pickFirstUsable(profileBase.static_ip, deviceBase.pppoeIP, deviceBase.pppoeIp, '-'),
+    router_name: pickFirstUsable(profileBase.router_name, deviceBase.router_name, deviceBase.routerName, '-'),
+    odp_name: pickFirstUsable(profileBase.odp_name, deviceBase.odp_name, deviceBase.odpName, '-'),
+    status: pickFirstUsable(profileBase.status, deviceBase.status, 'active'),
+    bytes_in: Number(profileBase.bytes_in || 0) || 0,
+    bytes_out: Number(profileBase.bytes_out || 0) || 0,
+    connectedUsers: Array.isArray(deviceBase.connectedUsers) ? deviceBase.connectedUsers : [],
+    model: pickFirstUsable(deviceBase.model, deviceBase.productClass, profileBase.router_name, '-'),
+    productClass: pickFirstUsable(deviceBase.productClass, deviceBase.model, '-'),
+    ssid: pickFirstUsable(deviceBase.ssid, '-'),
+    serialNumber: pickFirstUsable(deviceBase.serialNumber, '-'),
+    rxPower: pickFirstUsable(deviceBase.rxPower, '-'),
+    uptime: pickFirstUsable(deviceBase.uptime, '-'),
+    softwareVersion: pickFirstUsable(deviceBase.softwareVersion, '-'),
+    totalAssociations: pickFirstUsable(deviceBase.totalAssociations, '-')
+  };
+
+  return mergeCustomerDashboardData(mergedBase, pppoeSnapshot);
+}
+
+function syncPortalSessionProfile(req, profile, customerView = null) {
+  if (!req?.session || !profile || !profile.id) return;
+  req.session.customerId = Number(profile.id);
+
+  const routerId = Number(profile.router_id || customerView?.router_id || 0);
+  if (Number.isFinite(routerId) && routerId > 0) {
+    req.session.router_id = routerId;
+  }
+
+  const pppoeUsername = String(
+    profile.pppoe_username ||
+    customerView?.pppoeUsername ||
+    customerView?.pppoe_username ||
+    req.session.pppoe_username ||
+    ''
+  ).trim();
+  if (pppoeUsername) {
+    req.session.pppoe_username = pppoeUsername;
+  }
+}
+
+function buildCustomerNotifications({ invoices = [], tickets = [], appNotif = null, seenAt = null, profile = null, inboxItems = [] } = {}) {
   const notifications = [];
   const seenMs = seenAt ? new Date(seenAt).getTime() : 0;
-
-  (Array.isArray(invoices) ? invoices : [])
-    .filter((inv) => String(inv.status || '').toLowerCase() !== 'paid')
-    .forEach((inv) => {
-      const dueDate = new Date(Number(inv.period_year), Number(inv.period_month) - 1, 1).getTime() || Date.now();
-      notifications.push({
-        kind: 'invoice',
-        unread: true,
-        tab: 'billing',
-        title: `Tagihan INV-${inv.id} belum dibayar`,
-        body: `Periode ${inv.period_month}/${inv.period_year} • Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}`,
-        time: dueDate
-      });
-    });
-
-  (Array.isArray(tickets) ? tickets : []).forEach((ticket) => {
-    const createdMs = ticket.created_at ? new Date(ticket.created_at).getTime() : 0;
-    const updatedMs = ticket.updated_at ? new Date(ticket.updated_at).getTime() : createdMs;
-    const hasUpdate = updatedMs > createdMs || String(ticket.status || '').toLowerCase() !== 'open';
-    if (!hasUpdate) return;
-    notifications.push({
-      kind: 'ticket',
-      unread: updatedMs > seenMs,
-      tab: 'ticketing',
-      title: `Update tiket #${ticket.id}`,
-      body: `${ticket.subject || 'Keluhan pelanggan'} • Status ${String(ticket.status || 'open').toUpperCase()}`,
-      time: updatedMs || createdMs || Date.now()
-    });
-  });
 
   if (appNotif && appNotif.text) {
     notifications.push({
@@ -645,7 +681,8 @@ function buildCustomerNotifications({ invoices = [], tickets = [], appNotif = nu
     });
   }
 
-  if (profile && String(profile.status || '').toLowerCase() === 'suspended') {
+  const hasIsolationInbox = inboxItems.some((item) => ['suspension', 'reactivation'].includes(String(item?.kind || '').trim()));
+  if (profile && String(profile.status || '').toLowerCase() === 'suspended' && !hasIsolationInbox) {
     notifications.push({
       kind: 'suspension',
       unread: true,
@@ -656,12 +693,52 @@ function buildCustomerNotifications({ invoices = [], tickets = [], appNotif = nu
     });
   }
 
+  inboxItems
+    .filter((item) => String(item?.kind || '').trim() !== 'wifi-offline')
+    .forEach((item) => {
+    const createdMs = item?.created_at ? new Date(item.created_at).getTime() : Date.now();
+    notifications.push({
+      kind: String(item.kind || 'system').trim() || 'system',
+      unread: createdMs > seenMs,
+      tab: String(item.tab || 'home').trim() || 'home',
+      title: String(item.title || 'Info pelanggan').trim() || 'Info pelanggan',
+      body: String(item.body || '').trim(),
+      time: createdMs
+    });
+    });
+
   notifications.sort((a, b) => Number(b.time || 0) - Number(a.time || 0));
 
   return {
     items: notifications,
     unreadCount: notifications.filter((item) => item.unread).length
   };
+}
+
+function getCustomerNotificationPayload(profile, { appNotif = null } = {}) {
+  if (!profile?.id) return { items: [], unreadCount: 0 };
+  const invoices = billingSvc.getInvoicesByAny(resolveCustomerSessionLoginId(profile) || String(profile.id));
+  const tickets = ticketSvc.getTicketsByCustomerId(profile.id);
+  const inboxItems = customerSvc.getPortalNotifications(profile.id, 24);
+  return buildCustomerNotifications({
+    invoices: invoices || [],
+    tickets: tickets || [],
+    appNotif,
+    seenAt: profile.portal_notifications_seen_at || null,
+    profile,
+    inboxItems
+  });
+}
+
+function getPortalAccountStateLabel(status) {
+  const normalized = normalizePortalAccountStatus(status);
+  if (normalized === 'suspended') return 'Isolir';
+  if (normalized === 'inactive') return 'Nonaktif';
+  return 'Aktif';
+}
+
+function maybeCreatePortalOfflineAlert(profile, dashboardCustomer) {
+  return;
 }
 
 async function invokeRouterOsMenuCommand(menu, command, args) {
@@ -683,6 +760,10 @@ const {
   requestReboot,
   updateCustomerTag
 } = customerDevice;
+const {
+  resolveCandidateRouterIds,
+  resolvePppoeTrafficLive
+} = customerDetailSvc;
 
 function getPortalDeviceCache(req) {
   const cached = req?.session?.portalDeviceCache;
@@ -1014,7 +1095,7 @@ router.post('/login', async (req, res) => {
     await primePortalDeviceCache(req, loginTag);
     logger.info(`[Login] Login biasa berhasil untuk customerId=${matchedCustomer.id || '-'}.`);
     return req.session.save(() => {
-      if (matchedCustomer.status === 'suspended') {
+      if (isPortalRestrictedStatus(matchedCustomer.status)) {
         return res.redirect('/isolated');
       }
       return res.redirect('/customer/dashboard');
@@ -1124,7 +1205,7 @@ router.post('/login', async (req, res) => {
   // --- DIRECT LOGIN ---
   logger.info('[Login] Login direct berhasil.');
   req.session.phone = effectiveTag;
-  if (customer && customer.status === 'suspended') {
+  if (customer && isPortalRestrictedStatus(customer.status)) {
     return res.redirect('/isolated');
   }
   return res.redirect('/customer/dashboard');
@@ -1165,7 +1246,7 @@ router.post('/login-otp', async (req, res) => {
     await primePortalDeviceCache(req, pending.effectiveTag);
     delete req.session.pending_login;
     return req.session.save(() => {
-      if (customer.status === 'suspended') {
+      if (isPortalRestrictedStatus(customer.status)) {
         return res.redirect('/isolated');
       }
       return res.redirect('/customer/dashboard');
@@ -1175,12 +1256,12 @@ router.post('/login-otp', async (req, res) => {
   }
 });
 
-// Pelanggan terisolir: paksa halaman /isolated, kecuali cek tagihan / bayar / logout
+// Pelanggan nonaktif / terisolir: paksa halaman /isolated, kecuali cek tagihan / bayar / logout
 router.use((req, res, next) => {
   if (isSuspendedPortalExemptPath(req.path)) return next();
   const profile = getSessionCustomer(req);
   if (!profile) return next();
-  if (profile && profile.status === 'suspended') {
+  if (profile && isPortalRestrictedStatus(profile.status)) {
     return res.redirect('/isolated');
   }
   next();
@@ -1294,11 +1375,14 @@ router.get('/dashboard', async (req, res) => {
   }
   const routerId = profile && profile.router_id ? Number(profile.router_id) : null;
   const pppoeSnapshot = getPortalPppoeSnapshotCache(req);
-  if (profile?.id && pppoeSnapshot && (pppoeSnapshot.bytesIn > 0 || pppoeSnapshot.bytesOut > 0)) {
-    usageSvc.syncUsageTotals(profile.id, pppoeSnapshot.bytesIn, pppoeSnapshot.bytesOut);
-  }
   const refreshedProfile = profile?.id ? (customerSvc.getCustomerById(profile.id) || profile) : profile;
-  const dashboardCustomer = mergeCustomerDashboardData(deviceData || fallbackCustomer(loginId), pppoeSnapshot);
+  const dashboardCustomer = buildPortalCustomerViewModel(
+    refreshedProfile || fallbackCustomer(loginId),
+    deviceData || null,
+    pppoeSnapshot
+  );
+  maybeCreatePortalOfflineAlert(refreshedProfile, dashboardCustomer);
+  syncPortalSessionProfile(req, refreshedProfile, dashboardCustomer);
   
   // Data dari Billing DB (Coba cari pakai loginId atau pppoeUsername)
   let searchToken = resolveCustomerSessionLoginId(refreshedProfile) || loginId;
@@ -1317,7 +1401,7 @@ router.get('/dashboard', async (req, res) => {
   if (routerId) {
     req.session.router_id = routerId;
   }
-  const pppoeFromProfile = profile && String(profile.pppoe_username || '').trim();
+  const pppoeFromProfile = refreshedProfile && String(refreshedProfile.pppoe_username || '').trim();
   const pppoeFromDevice = dashboardCustomer && String(dashboardCustomer.pppoeUsername || '').trim();
   if (pppoeFromProfile) req.session.pppoe_username = pppoeFromProfile;
   else if (pppoeFromDevice) req.session.pppoe_username = pppoeFromDevice;
@@ -1341,13 +1425,7 @@ router.get('/dashboard', async (req, res) => {
 
   const genieSyncWarning = null;
   const baseNotif = msgNotif || null;
-  const notificationSummary = buildCustomerNotifications({
-    invoices: invoices || [],
-    tickets: tickets || [],
-    appNotif: baseNotif,
-    seenAt: refreshedProfile?.portal_notifications_seen_at || null,
-    profile: refreshedProfile || null
-  });
+  const notificationSummary = getCustomerNotificationPayload(refreshedProfile || null, { appNotif: baseNotif });
   const portalPackages = refreshedProfile
     ? customerSvc.getPortalPackages(refreshedProfile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(refreshedProfile.package_id || 0))
     : [];
@@ -1378,16 +1456,35 @@ router.get('/api/pppoe-traffic', async (req, res) => {
 
   let routerId = req.session && req.session.router_id ? Number(req.session.router_id) : null;
   let username = String((req.session && req.session.pppoe_username) || '').trim();
-  const profile = getSessionCustomer(req);
+  const profile = getSessionCustomer(req) || findCustomerProfileByLoginId(loginId);
+  const getFreshUsageProfile = () => {
+    if (!profile?.id) return profile;
+    return customerSvc.getCustomerById(profile.id) || profile;
+  };
   const getUsagePayload = () => {
-    const refreshed = profile?.id ? (customerSvc.getCustomerById(profile.id) || profile) : profile;
+    const refreshed = getFreshUsageProfile();
     return {
       usageBytesIn: Number(refreshed?.bytes_in || 0) || 0,
       usageBytesOut: Number(refreshed?.bytes_out || 0) || 0,
-      usageDownloadBytes: Number(refreshed?.bytes_in || 0) || 0,
-      usageUploadBytes: Number(refreshed?.bytes_out || 0) || 0
+      usageDownloadBytes: Number(refreshed?.bytes_out || 0) || 0,
+      usageUploadBytes: Number(refreshed?.bytes_in || 0) || 0
     };
   };
+  const buildSafePayload = (partial = {}) => ({
+    ok: true,
+    available: true,
+    online: false,
+    username: username || null,
+    iface: null,
+    source: 'snapshot',
+    uptime: null,
+    rxMbps: 0,
+    txMbps: 0,
+    uploadMbps: 0,
+    downloadMbps: 0,
+    ...getUsagePayload(),
+    ...partial
+  });
 
   if (!username || !routerId) {
     if (!routerId && profile && profile.router_id) {
@@ -1406,181 +1503,102 @@ router.get('/api/pppoe-traffic', async (req, res) => {
   }
 
   if (!username) return res.json({ ok: true, available: false, online: false, ...getUsagePayload() });
-
-  const now = Date.now();
-  prunePppoeTrafficSamples(now);
-
-  let conn = null;
   try {
-    conn = await mikrotikService.getConnection(routerId);
-    let sessions = await mikrotikService.getPppoeActive(routerId).catch(() => []);
-    sessions = (Array.isArray(sessions) ? sessions : []).filter((row) => String(row?.name || '').trim() === username);
-    if (!sessions.length) {
-      sessions = await conn.client.menu('/ppp/active').where('name', username).get();
+    const sessionProfile = profile || findCustomerProfileByLoginId(loginId);
+    const candidateRouterIds = resolveCandidateRouterIds(
+      routerId,
+      [sessionProfile?.router_id, req.session?.router_id],
+      3
+    );
+    const live = await withTimeout(
+      resolvePppoeTrafficLive(username, routerId, candidateRouterIds),
+      4200,
+      'customer portal pppoe traffic',
+      null
+    );
+
+    if (live?.routerId && Number(live.routerId) > 0) {
+      routerId = Number(live.routerId);
+      req.session.router_id = routerId;
     }
-    if (!sessions || sessions.length === 0) {
+
+    if (!live) {
+      const cachedSnapshot = getPortalPppoeSnapshotCache(req);
+      if (cachedSnapshot) {
+        return res.json(buildSafePayload({
+          username,
+          online: Boolean(cachedSnapshot.online),
+          iface: cachedSnapshot.interface || null,
+          source: 'snapshot-cache',
+          uptime: cachedSnapshot.uptime || null
+        }));
+      }
+      return res.json(buildSafePayload({
+        username,
+        available: true,
+        online: false,
+        source: 'fallback'
+      }));
+    }
+
+    if (!live.online) {
       setPortalPppoeSnapshotCache(req, {
         username,
         online: false,
         statusText: 'Offline'
       });
-      return res.json({ ok: true, online: false, username, rxMbps: 0, txMbps: 0, ...getUsagePayload() });
+      return res.json(buildSafePayload({
+        username,
+        online: false,
+        source: live.source || 'ppp-active'
+      }));
     }
 
-    const s = sessions[0];
-    let iface = strField(s, ['interface', 'interface-name', 'interfaceName', 'ifname', 'if-name', 'pppInterface']) || null;
-    const baseSessionId = strField(s, ['.id', 'id', 'sessionId', 'session-id']) || `${username}`;
-    const bytesIn = numField(s, ['bytesIn', 'bytes-in', 'bytes_in']);
-    const bytesOut = numField(s, ['bytesOut', 'bytes-out', 'bytes_out']);
-    const uptime = strField(s, ['uptime']) || null;
-
-    if (!iface) {
-      try {
-        const pppoeSrvMenu = conn.client.menu('/interface/pppoe-server');
-        let pppoeRows = [];
-        try {
-          pppoeRows = await pppoeSrvMenu.where('user', username).get();
-        } catch {
-          pppoeRows = await pppoeSrvMenu.get();
+    if (profile?.id && ((Number(live.bytesIn || 0) > 0) || (Number(live.bytesOut || 0) > 0))) {
+      usageSvc.syncUsageTotals(
+        profile.id,
+        Number(live.bytesIn || 0) || 0,
+        Number(live.bytesOut || 0) || 0,
+        new Date(),
+        {
+          sessionId: live.sessionId || '',
+          uptime: live.uptime || '',
+          source: live.source || 'portal-pppoe-traffic'
         }
-        const hit = (Array.isArray(pppoeRows) ? pppoeRows : []).find(r => String(r.user || r['user'] || '').trim() === username);
-        const ifaceName = strField(hit, ['name']);
-        if (ifaceName) iface = ifaceName;
-      } catch {}
-    }
-
-    const sessionId = `${baseSessionId}${iface ? `|${iface}` : ''}`;
-
-    const key = `${routerId || 'default'}:${username}`;
-    const prev = pppoeTrafficSamples.get(key);
-    let rxBytes = bytesIn;
-    let txBytes = bytesOut;
-    let source = 'ppp-active';
-
-    if (iface) {
-      const ifMenu = conn.client.menu('/interface');
-      if (ifMenu) {
-        try {
-          const mtRaw = await invokeRouterOsMenuCommand(ifMenu, 'monitor-traffic', { interface: iface, once: '' });
-          const mt = Array.isArray(mtRaw) ? mtRaw[0] : mtRaw;
-          const rxBps = numField(mt, ['rxBitsPerSecond', 'rx-bits-per-second', 'rx-bits-per-second']);
-          const txBps = numField(mt, ['txBitsPerSecond', 'tx-bits-per-second', 'tx-bits-per-second']);
-          if (rxBps || txBps) {
-            const routerRxMbps = (Number(rxBps) || 0) / 1e6;
-            const routerTxMbps = (Number(txBps) || 0) / 1e6;
-            setPortalPppoeSnapshotCache(req, {
-              username,
-              interface: iface,
-              uptime,
-              online: true,
-              statusText: 'Online',
-              bytesIn,
-              bytesOut
-            });
-            return res.json({
-              ok: true,
-              online: true,
-              username,
-              iface,
-              source: 'monitor-traffic',
-              uptime,
-              rxMbps: routerRxMbps,
-              txMbps: routerTxMbps,
-              uploadMbps: routerTxMbps,
-              downloadMbps: routerRxMbps,
-              ...getUsagePayload()
-            });
-          }
-        } catch {}
-      }
-    }
-
-    if (iface) {
-      try {
-        const ifRows = await conn.client.menu('/interface').where('name', iface).get();
-        if (ifRows && ifRows.length > 0) {
-          const row = ifRows[0];
-          const ifRx = numField(row, ['rxByte', 'rx-byte', 'rx-bytes', 'rxBytes']);
-          const ifTx = numField(row, ['txByte', 'tx-byte', 'tx-bytes', 'txBytes']);
-          if (ifRx || ifTx) {
-            rxBytes = ifRx;
-            txBytes = ifTx;
-            source = 'interface';
-          }
-        }
-      } catch {}
-    }
-
-    pppoeTrafficSamples.set(key, { t: now, sessionId, rxBytes, txBytes, source });
-
-    if (profile?.id && (rxBytes > 0 || txBytes > 0)) {
-      usageSvc.syncUsageTotals(profile.id, rxBytes, txBytes);
+      );
     }
     setPortalPppoeSnapshotCache(req, {
       username,
-      interface: iface,
-      uptime,
+      interface: live.iface || null,
+      uptime: live.uptime || null,
       online: true,
       statusText: 'Online',
-      bytesIn: rxBytes,
-      bytesOut: txBytes
+      bytesIn: Number(live.bytesIn || 0) || 0,
+      bytesOut: Number(live.bytesOut || 0) || 0
     });
 
-    if (!prev || prev.sessionId !== sessionId || !prev.t) {
-      return res.json({
-        ok: true,
-        online: true,
-        warmup: true,
-        username,
-        iface,
-        source,
-        uptime,
-        rxMbps: 0,
-        txMbps: 0,
-        ...getUsagePayload()
-      });
-    }
-
-    const dtMs = Math.max(1, now - prev.t);
-    const dIn = rxBytes - numField(prev, ['rxBytes']);
-    const dOut = txBytes - numField(prev, ['txBytes']);
-    if (dIn < 0 || dOut < 0) {
-      return res.json({
-        ok: true,
-        online: true,
-        warmup: true,
-        username,
-        iface,
-        source,
-        uptime,
-        rxMbps: 0,
-        txMbps: 0,
-        ...getUsagePayload()
-      });
-    }
-
-    const rxMbps = (dIn * 8) / (dtMs / 1000) / 1e6;
-    const txMbps = (dOut * 8) / (dtMs / 1000) / 1e6;
-
-    return res.json({
-      ok: true,
-      online: true,
+    return res.json(buildSafePayload({
       username,
-      iface,
-      source,
-      uptime,
-      bytesIn,
-      bytesOut,
-      rxMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
-      txMbps: Number.isFinite(txMbps) ? txMbps : 0,
-      uploadMbps: Number.isFinite(txMbps) ? txMbps : 0,
-      downloadMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
-      ...getUsagePayload()
-    });
+      online: true,
+      iface: live.iface || null,
+      source: live.source || 'ppp-active',
+      uptime: live.uptime || null,
+      bytesIn: Number(live.bytesIn || 0) || 0,
+      bytesOut: Number(live.bytesOut || 0) || 0,
+      rxMbps: Number(live.rxMbps || 0) || 0,
+      txMbps: Number(live.txMbps || 0) || 0,
+      uploadMbps: Number(live.rxMbps || 0) || 0,
+      downloadMbps: Number(live.txMbps || 0) || 0
+    }));
   } catch (e) {
-    return res.json({ ok: false, error: e.message || 'failed' });
-  } finally {
-    if (conn && conn.api) conn.api.close();
+    const cachedSnapshot = getPortalPppoeSnapshotCache(req);
+    return res.json(buildSafePayload({
+      username,
+      online: Boolean(cachedSnapshot?.online),
+      iface: cachedSnapshot?.interface || null,
+      source: cachedSnapshot ? 'snapshot-cache' : 'fallback-error',
+      uptime: cachedSnapshot?.uptime || null
+    }));
   }
 });
 
@@ -1603,10 +1621,20 @@ router.post('/change-password', async (req, res) => {
   const phone = req.session && req.session.phone;
   if (!phone) return res.redirect('/customer/login');
   const { password } = req.body;
+  const profile = getSessionCustomer(req);
   const ok = await updatePassword(phone, password);
-  
+
+  if (ok && profile?.id) {
+    customerSvc.addPortalNotification(profile.id, {
+      kind: 'password',
+      tab: 'settings',
+      title: 'Password WiFi berhasil diubah',
+      body: `Password WiFi baru Anda: ${password}. Jika password belum berubah di perangkat, coba restart modem / router Anda.`
+    }, { dedupeWindowMs: 60 * 1000 });
+  }
+
   req.session._msg = ok
-    ? { type: 'success', text: 'Password WiFi berhasil diubah.' }
+    ? { type: 'success', text: 'Password WiFi berhasil diubah. Jika perangkat belum ikut berubah, coba restart modem / router Anda.' }
     : { type: 'danger', text: 'Gagal mengubah password. Pastikan minimal 8 karakter.' };
 
   res.redirect('/customer/dashboard#settings');
@@ -1632,18 +1660,25 @@ router.post('/change-tag', async (req, res) => {
 
   if (!newTag || newTag === oldTag) {
     const data = await getCustomerDeviceData(oldTag);
-    const invoices = billingSvc.getInvoicesByAny(oldTag);
+    const profile = findCustomerProfileByLoginId(oldTag);
+    const invoices = billingSvc.getInvoicesByAny(resolveCustomerSessionLoginId(profile) || oldTag);
+    const dashboardCustomer = buildPortalCustomerViewModel(
+      profile || fallbackCustomer(oldTag),
+      data || null,
+      getPortalPppoeSnapshotCache(req)
+    );
+    syncPortalSessionProfile(req, profile, dashboardCustomer);
     return res.render('dashboard', {
-      customer: data || fallbackCustomer(oldTag),
-      profile: null,
+      customer: dashboardCustomer,
+      profile: profile || null,
       invoices: invoices || [],
-      tickets: [],
+      tickets: profile ? ticketSvc.getTicketsByCustomerId(profile.id) : [],
       settings,
       paymentChannels: [],
-      connectedUsers: data ? data.connectedUsers : [],
+      connectedUsers: Array.isArray(dashboardCustomer?.connectedUsers) ? dashboardCustomer.connectedUsers : [],
       notif: dashboardNotif('ID/Tag baru tidak boleh kosong atau sama dengan yang lama.', 'warning'),
-      portalPackages: [],
-      packageChangeState: buildPortalPackageChangeViewState(null)
+      portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : [],
+      packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null)
     });
   }
   const tagResult = await updateCustomerTag(oldTag, newTag);
@@ -1688,15 +1723,21 @@ router.post('/change-tag', async (req, res) => {
     return cleanDb === cleanLogin || c.phone === resolvedPhone || c.pppoe_username === (deviceData ? deviceData.pppoeUsername : null);
   });
   const tickets = profile ? ticketSvc.getTicketsByCustomerId(profile.id) : [];
+  const dashboardCustomer = buildPortalCustomerViewModel(
+    profile || fallbackCustomer(resolvedPhone),
+    deviceData || null,
+    getPortalPppoeSnapshotCache(req)
+  );
+  syncPortalSessionProfile(req, profile, dashboardCustomer);
 
   res.render('dashboard', {
-    customer: deviceData || fallbackCustomer(resolvedPhone),
+    customer: dashboardCustomer,
     profile: profile || null,
     invoices: invoices || [],
     tickets,
     settings,
     paymentChannels: [],
-    connectedUsers: deviceData ? deviceData.connectedUsers : [],
+    connectedUsers: Array.isArray(dashboardCustomer?.connectedUsers) ? dashboardCustomer.connectedUsers : [],
     notif,
     portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : [],
     packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null)
@@ -1739,6 +1780,22 @@ router.post('/notifications/read', (req, res) => {
     if (!profile || !profile.id) return res.status(401).json({ ok: false, error: 'unauthorized' });
     customerSvc.markPortalNotificationsSeen(profile.id);
     return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message || 'failed' });
+  }
+});
+
+router.get('/api/notifications', (req, res) => {
+  try {
+    const profile = getSessionCustomer(req);
+    if (!profile || !profile.id) return res.status(401).json({ ok: false, error: 'unauthorized' });
+    const refreshedProfile = customerSvc.getCustomerById(profile.id) || profile;
+    const summary = getCustomerNotificationPayload(refreshedProfile || null, { appNotif: null });
+    return res.json({
+      ok: true,
+      items: summary.items,
+      unreadCount: summary.unreadCount
+    });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message || 'failed' });
   }
@@ -1907,14 +1964,17 @@ router.get('/public/payment/static/:invoiceId', async (req, res) => {
     const customer = customerSvc.getCustomerById(invoice.customer_id);
     const exactAmount = Number(invoice.qris_amount_unique || invoice.amount || 0) || 0;
     const qrisPayload = buildDynamicQrisPayload(String(settings.qris_static_payload || '').trim(), exactAmount);
+    const qrisDataUrl = await buildDynamicQrisDataUrl(qrisPayload);
     res.render('static_qris_payment', {
       settings,
       invoice,
       customer,
       qrisUrl: String(settings.qris_static_qr_url || '').trim(),
       qrisPayload,
+      qrisDataUrl,
       exactAmount,
       qrisCode: Number(invoice.qris_unique_code || 0) || 0,
+      statusUrl: `/customer/public/payment/static/${encodeURIComponent(String(invoice.id))}/status?t=${encodeURIComponent(String(req.query.t || ''))}`,
       isLoggedIn: false,
       backUrl: `/customer/check-billing?q=${encodeURIComponent(String(payload.lookup || customer?.id || ''))}`,
       pageTitle: 'Pembayaran QRIS Statis'
@@ -1922,6 +1982,30 @@ router.get('/public/payment/static/:invoiceId', async (req, res) => {
   } catch (error) {
     logger.error(`[QRIS Static][Public] ${error.message}`);
     return redirectBack(payload.lookup, error.message || 'Gagal membuka QRIS statik.');
+  }
+});
+
+router.get('/public/payment/static/:invoiceId/status', async (req, res) => {
+  const settings = getSettingsWithCache();
+  const secret = settings.session_secret || '';
+  const payload = verifyPublicToken(req.query.t, secret);
+  if (!payload) return res.status(403).json({ ok: false, message: 'Token tidak valid.' });
+  if (String(req.params.invoiceId) !== String(payload.invoiceId)) return res.status(403).json({ ok: false, message: 'Tagihan tidak valid.' });
+
+  try {
+    const invoice = billingSvc.getInvoiceById(req.params.invoiceId);
+    if (!invoice) return res.status(404).json({ ok: false, message: 'Tagihan tidak ditemukan.' });
+    return res.json({
+      ok: true,
+      invoiceId: Number(invoice.id || 0) || 0,
+      status: String(invoice.status || '').toLowerCase(),
+      paid: String(invoice.status || '').toLowerCase() === 'paid',
+      paidAt: invoice.paid_at || null,
+      amount: Number(invoice.amount || 0) || 0
+    });
+  } catch (error) {
+    logger.error(`[QRIS Static][Public Status] ${error.message}`);
+    return res.status(500).json({ ok: false, message: 'Gagal cek status pembayaran.' });
   }
 });
 
@@ -1944,6 +2028,12 @@ router.post('/tickets/create', async (req, res) => {
   try {
     const result = ticketSvc.createTicket(customerId, subject, message);
     const ticketId = result.lastInsertRowid;
+    customerSvc.addPortalNotification(profile.id, {
+      kind: 'ticket',
+      tab: 'ticketing',
+      title: `Tiket #${ticketId} berhasil dikirim`,
+      body: 'Keluhan Anda sudah kami terima. Tim kami akan segera menindaklanjutinya.'
+    }, { dedupeWindowMs: 60 * 1000 });
     
     req.session._msg = { type: 'success', text: 'Keluhan berhasil dikirim. Tim teknisi akan segera mengeceknya.' };
 
@@ -1951,7 +2041,7 @@ router.post('/tickets/create', async (req, res) => {
     try {
       const settings = getSettingsWithCache();
       if (settings.whatsapp_enabled) {
-        const { sendWA } = await import('../services/whatsappBot.mjs');
+        const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
         const customer = customerSvc.getCustomerById(customerId);
         
         const waMsg = `🎫 *TIKET KELUHAN BARU*\n\n` +
@@ -2167,14 +2257,17 @@ router.get('/payment/static/:invoiceId', async (req, res) => {
     const customer = customerSvc.getCustomerById(invoice.customer_id);
     const exactAmount = Number(invoice.qris_amount_unique || invoice.amount || 0) || 0;
     const qrisPayload = buildDynamicQrisPayload(String(settings.qris_static_payload || '').trim(), exactAmount);
+    const qrisDataUrl = await buildDynamicQrisDataUrl(qrisPayload);
     res.render('static_qris_payment', {
       settings,
       invoice,
       customer,
       qrisUrl: String(settings.qris_static_qr_url || '').trim(),
       qrisPayload,
+      qrisDataUrl,
       exactAmount,
       qrisCode: Number(invoice.qris_unique_code || 0) || 0,
+      statusUrl: `/customer/payment/static/${encodeURIComponent(String(invoice.id))}/status`,
       isLoggedIn: true,
       backUrl: '/customer/dashboard#billing-section',
       pageTitle: 'Pembayaran QRIS Statis'
@@ -2182,6 +2275,28 @@ router.get('/payment/static/:invoiceId', async (req, res) => {
   } catch (error) {
     req.session._msg = { type: 'danger', text: error.message || 'Gagal membuka QRIS statik.' };
     return res.redirect('/customer/dashboard#billing-section');
+  }
+});
+
+router.get('/payment/static/:invoiceId/status', async (req, res) => {
+  const profile = getSessionCustomer(req);
+  if (!profile) return res.status(401).json({ ok: false, message: 'Sesi pelanggan berakhir.' });
+
+  try {
+    const invoice = billingSvc.getInvoiceById(req.params.invoiceId);
+    if (!invoice) return res.status(404).json({ ok: false, message: 'Tagihan tidak ditemukan.' });
+    if (Number(invoice.customer_id) !== Number(profile.id)) return res.status(403).json({ ok: false, message: 'Tagihan tidak valid untuk akun ini.' });
+    return res.json({
+      ok: true,
+      invoiceId: Number(invoice.id || 0) || 0,
+      status: String(invoice.status || '').toLowerCase(),
+      paid: String(invoice.status || '').toLowerCase() === 'paid',
+      paidAt: invoice.paid_at || null,
+      amount: Number(invoice.amount || 0) || 0
+    });
+  } catch (error) {
+    logger.error(`[QRIS Static][Status] ${error.message}`);
+    return res.status(500).json({ ok: false, message: 'Gagal cek status pembayaran.' });
   }
 });
 
@@ -2376,15 +2491,19 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       const customer = customerSvc.getCustomerById(checkInv.customer_id);
       
       try {
-        const { sendWA } = await import('../services/whatsappBot.mjs');
-        if (false) {
-          throw new Error('Bot WhatsApp belum terhubung');
+        const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
+        const ready = await ensureWhatsAppReady(15000);
+        if (!ready) {
+          throw new Error('Bot WhatsApp belum siap');
         }
         if (!customer.phone) {
           throw new Error('Nomor WhatsApp pelanggan kosong');
         }
         const msg = `✅ *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran tagihan internet periode *${checkInv.period_month}/${checkInv.period_year}* telah kami terima via *${gateway}*.\n\n💰 *Total:* Rp ${checkInv.amount.toLocaleString('id-ID')}\n📅 *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus layanan Anda kini telah aktif. Selamat berinternet kembali! 🚀`;
-        await sendWA(customer.phone, buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)));
+        const sent = await sendWA(customer.phone, buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)));
+        if (!sent) {
+          throw new Error('sendWA mengembalikan gagal');
+        }
       } catch (waErr) {
         logger.error(`[Webhook] Gagal kirim notif WA: ${waErr.message}`);
       }

@@ -9,6 +9,15 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
+    .asset-preview-card{position:relative;display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)}
+    .asset-preview-card img{background:#fff;border:1px solid var(--border)}
+    .asset-remove-btn{
+      position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:10px;border:1px solid rgba(239,68,68,.18);
+      background:rgba(239,68,68,.08);color:#ef4444;display:inline-flex;align-items:center;justify-content:center;
+      cursor:pointer;transition:.18s ease;box-shadow:none
+    }
+    .asset-remove-btn:hover{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.28);transform:translateY(-1px)}
+    .asset-remove-btn:focus-visible{outline:2px solid rgba(239,68,68,.22);outline-offset:2px}
     .secret-inline{display:flex;gap:8px;align-items:stretch}
     .secret-field{position:relative;flex:1}
     .secret-field .fc{padding-right:46px}
@@ -154,30 +163,41 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button type="button" class="btn btn-g btn-sm" onclick="enableEwalletNotif()"><i class="bi bi-bell"></i> <%= t('admin.settings.ewallet_logs.enable_notif', 'Aktifkan Notif') %></button>
           <button type="button" class="btn btn-p btn-sm" onclick="toggleEwalletLive()" id="ew_live_btn"><i class="bi bi-broadcast"></i> <%= t('admin.settings.ewallet_logs.live', 'Live') %></button>
+          <form method="POST" action="/admin/settings" id="ew_live_pref_form" style="display:inline-flex;gap:8px;align-items:center;margin:0">
+            <input type="hidden" name="settings_section" value="monitoring">
+            <input type="hidden" name="ewallet_live_auto_start" id="ew_live_pref_input" value="<%= settings.ewallet_live_auto_start ? 'true' : 'false' %>">
+            <button type="button" class="btn btn-g btn-sm" onclick="saveEwalletLivePref()"><i class="bi bi-save"></i> Simpan Live</button>
+          </form>
           <button type="button" class="btn btn-g btn-sm" onclick="loadEwalletLogs()"><i class="bi bi-arrow-clockwise"></i> <%= t('common.refresh', 'Refresh') %></button>
           <button type="button" class="btn btn-d btn-sm" onclick="clearEwalletLogs()"><i class="bi bi-trash"></i> <%= t('common.clear', 'Clear') %></button>
         </div>
       </div>
       <div class="card-bd">
-        <div class="form-row" style="align-items:flex-end">
-          <div class="fg">
-            <label class="fl"><%= t('admin.settings.ewallet_logs.service', 'Service') %></label>
-            <input class="fc" id="ew_service" placeholder="DANA / Gojek / ShopeePay (opsional)">
+        <form method="POST" action="/admin/settings" id="ew_filter_pref_form" style="display:grid;gap:12px;margin:0 0 10px">
+          <input type="hidden" name="settings_section" value="monitoring">
+          <div class="form-row" style="align-items:flex-end">
+            <div class="fg">
+              <label class="fl"><%= t('admin.settings.ewallet_logs.service', 'Service') %></label>
+              <input class="fc" id="ew_service" name="ewallet_log_service_default" value="<%= settings.ewallet_log_service_default || '' %>" placeholder="DANA / Gojek / ShopeePay (opsional)">
+            </div>
+            <div class="fg" style="flex:2">
+              <label class="fl"><%= t('admin.settings.ewallet_logs.search', 'Cari') %></label>
+              <input class="fc" id="ew_q" name="ewallet_log_query_default" value="<%= settings.ewallet_log_query_default || '' %>" placeholder="kata kunci (opsional)">
+            </div>
+            <div class="fg w160">
+              <label class="fl"><%= t('admin.settings.ewallet_logs.limit', 'Limit') %></label>
+              <select class="fs" id="ew_limit" name="ewallet_log_limit_default">
+                <option value="50" <%= String(settings.ewallet_log_limit_default || '200') === '50' ? 'selected' : '' %>>50</option>
+                <option value="100" <%= String(settings.ewallet_log_limit_default || '200') === '100' ? 'selected' : '' %>>100</option>
+                <option value="200" <%= String(settings.ewallet_log_limit_default || '200') === '200' ? 'selected' : '' %>>200</option>
+                <option value="500" <%= String(settings.ewallet_log_limit_default || '200') === '500' ? 'selected' : '' %>>500</option>
+              </select>
+            </div>
           </div>
-          <div class="fg" style="flex:2">
-            <label class="fl"><%= t('admin.settings.ewallet_logs.search', 'Cari') %></label>
-            <input class="fc" id="ew_q" placeholder="kata kunci (opsional)">
+          <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+            <button type="submit" class="btn btn-g btn-sm"><i class="bi bi-save"></i> Simpan Filter</button>
           </div>
-          <div class="fg w160">
-            <label class="fl"><%= t('admin.settings.ewallet_logs.limit', 'Limit') %></label>
-            <select class="fs" id="ew_limit">
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="200" selected>200</option>
-              <option value="500">500</option>
-            </select>
-          </div>
-        </div>
+        </form>
         <div class="hint" style="margin-top:6px">
           Endpoint MacroDroid: <span class="mono">POST /api/webhook/v1/payment-notif</span>
         </div>
@@ -203,8 +223,14 @@
       </div>
     </div>
 
-    <form method="POST" action="/admin/settings" enctype="multipart/form-data">
+    <form method="POST" action="/admin/settings" enctype="multipart/form-data" id="admin-settings-form">
         <input type="hidden" name="settings_section" id="settings_section" value="<%= activeSettingsPane || 'usaha' %>">
+        <input type="hidden" name="remove_company_logo" id="remove_company_logo" value="0">
+        <input type="hidden" name="remove_pwa_logo" id="remove_pwa_logo" value="0">
+        <input type="hidden" name="remove_support_logo" id="remove_support_logo" value="0">
+        <input type="hidden" name="remove_invoice_signature" id="remove_invoice_signature" value="0">
+        <input type="hidden" name="remove_invoice_stamp" id="remove_invoice_stamp" value="0">
+        <input type="hidden" name="remove_qris_static_qr" id="remove_qris_static_qr" value="0">
 
         <div class="card mb16 settings-card-pane" data-settings-pane="telegram">
           <div class="card-hd"><h6><i class="bi bi-telegram"></i> <%= t('admin.settings.telegram.title', 'Pengaturan Telegram Bot (Backup Admin)') %></h6></div>
@@ -277,7 +303,10 @@
             <div class="fg">
               <label class="fl">Logo Support by ISP</label>
               <% if (settings.support_isp_logo_url) { %>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)">
+                <div class="asset-preview-card">
+                  <button type="button" class="asset-remove-btn" title="Hapus logo support" aria-label="Hapus logo support" onclick="removeSupportLogo()">
+                    <i class="bi bi-trash"></i>
+                  </button>
                   <img src="<%= settings.support_isp_logo_url %>" alt="Logo support saat ini" style="width:48px;height:48px;object-fit:contain;border-radius:12px;background:#fff;padding:6px;border:1px solid var(--border)">
                   <div style="font-size:12px;color:var(--muted)">
                     <div style="font-weight:700;color:var(--text)">Logo support saat ini</div>
@@ -291,8 +320,11 @@
           <div class="fg">
             <label class="fl">Upload Logo Usaha / ISP</label>
             <% if (settings.company_logo_url) { %>
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)">
-                <img src="<%= settings.company_logo_url %>" alt="Logo Saat Ini" style="width:54px;height:54px;object-fit:contain;border-radius:14px;background:#fff;padding:6px;border:1px solid var(--border)">
+              <div class="asset-preview-card">
+                <button type="button" class="asset-remove-btn" title="Hapus logo" aria-label="Hapus logo" onclick="removeCompanyLogo()">
+                  <i class="bi bi-trash"></i>
+                </button>
+                <img src="<%= settings.company_logo_url %>" alt="Logo Saat Ini" style="width:54px;height:54px;object-fit:contain;border-radius:14px;padding:6px">
                 <div style="font-size:12px;color:var(--muted)">
                   <div style="font-weight:700;color:var(--text)">Logo saat ini</div>
                   <div><%= settings.company_logo_url %></div>
@@ -301,11 +333,31 @@
             <% } %>
             <input class="fc" type="file" name="company_logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*">
           </div>
+          <div class="fg">
+            <label class="fl">Upload Logo PWA Aplikasi</label>
+            <% if (settings.pwa_logo_url) { %>
+              <div class="asset-preview-card">
+                <button type="button" class="asset-remove-btn" title="Hapus logo PWA" aria-label="Hapus logo PWA" onclick="removePwaLogo()">
+                  <i class="bi bi-trash"></i>
+                </button>
+                <img src="<%= settings.pwa_logo_url %>" alt="Logo PWA Saat Ini" style="width:54px;height:54px;object-fit:contain;border-radius:14px;padding:6px">
+                <div style="font-size:12px;color:var(--muted)">
+                  <div style="font-weight:700;color:var(--text)">Logo PWA saat ini</div>
+                  <div><%= settings.pwa_logo_url %></div>
+                </div>
+              </div>
+            <% } %>
+            <input class="fc" type="file" name="pwa_logo_file" accept=".svg,image/svg+xml">
+            <div class="hint" style="margin-top:8px">Format wajib <strong>SVG</strong>. File akan disimpan ke <span class="mono">public/img/logo-pwa.svg</span>.</div>
+          </div>
           <div class="form-row">
             <div class="fg">
               <label class="fl">Upload Tanda Tangan Invoice</label>
               <% if (settings.invoice_signature_url) { %>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)">
+                <div class="asset-preview-card">
+                  <button type="button" class="asset-remove-btn" title="Hapus tanda tangan invoice" aria-label="Hapus tanda tangan invoice" onclick="removeInvoiceSignature()">
+                    <i class="bi bi-trash"></i>
+                  </button>
                   <img src="<%= settings.invoice_signature_url %>" alt="Tanda tangan saat ini" style="width:120px;height:54px;object-fit:contain;border-radius:10px;background:#fff;padding:6px;border:1px solid var(--border)">
                   <div style="font-size:12px;color:var(--muted)">
                     <div style="font-weight:700;color:var(--text)">Tanda tangan saat ini</div>
@@ -318,7 +370,10 @@
             <div class="fg">
               <label class="fl">Upload Cap / Stempel Invoice</label>
               <% if (settings.invoice_stamp_url) { %>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)">
+                <div class="asset-preview-card">
+                  <button type="button" class="asset-remove-btn" title="Hapus cap invoice" aria-label="Hapus cap invoice" onclick="removeInvoiceStamp()">
+                    <i class="bi bi-trash"></i>
+                  </button>
                   <img src="<%= settings.invoice_stamp_url %>" alt="Cap saat ini" style="width:86px;height:86px;object-fit:contain;border-radius:14px;background:#fff;padding:6px;border:1px solid var(--border)">
                   <div style="font-size:12px;color:var(--muted)">
                     <div style="font-weight:700;color:var(--text)">Cap saat ini</div>
@@ -558,6 +613,11 @@
             <input class="fc" name="whatsapp_admin_numbers" value="<%= (settings.whatsapp_admin_numbers || []).join(', ') %>" placeholder="6281xxx, 6282xxx">
           </div>
           <div class="fg">
+            <label class="fl">Nomor Test WA</label>
+            <input class="fc" name="whatsapp_test_number" value="<%= settings.whatsapp_test_number || '' %>" placeholder="6281xxx">
+            <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai khusus tombol test pesan agar tidak terkirim ke nomor bot atau pelanggan.</div>
+          </div>
+          <div class="fg">
             <label class="fl">Jeda Antar Pesan Broadcast (Detik)</label>
             <input class="fc" type="number" name="whatsapp_broadcast_delay" value="<%= settings.whatsapp_broadcast_delay || 2 %>" min="1" max="60">
           </div>
@@ -635,7 +695,10 @@
           <div style="background: rgba(0,0,0,0.02); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
             <h6 style="font-size:12px; margin-bottom: 10px;">QRIS Statis (Semi-Otomatis)</h6>
             <% if (settings.qris_static_qr_url) { %>
-              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)">
+              <div class="asset-preview-card" style="margin-bottom:12px;">
+                <button type="button" class="asset-remove-btn" title="Hapus gambar QRIS" aria-label="Hapus gambar QRIS" onclick="removeQrisStaticQr()">
+                  <i class="bi bi-trash"></i>
+                </button>
                 <img id="qris_static_qr_preview" src="<%= settings.qris_static_qr_url %>" alt="QRIS statik aktif" style="width:92px;height:92px;object-fit:contain;border-radius:14px;background:#fff;padding:8px;border:1px solid var(--border)">
                 <div style="font-size:12px;color:var(--muted);min-width:0">
                   <div style="font-weight:700;color:var(--text);margin-bottom:4px">QRIS statik aktif</div>
@@ -653,7 +716,7 @@
               <div class="fg">
                 <label class="fl">QRIS Static QR URL (opsional)</label>
                 <input class="fc" name="qris_static_qr_url" value="<%= settings.qris_static_qr_url || '' %>" placeholder="https://.../qris.png atau link QRIS">
-                <div style="font-size:10px; color:var(--muted); margin-top:4px">Boleh dikosongkan jika Anda memilih upload file gambar QRIS.</div>
+                <div style="font-size:10px; color:var(--muted); margin-top:4px">Boleh dikosongkan jika Anda memilih upload file gambar QRIS. Link halaman seperti <span class="mono">linkqr.id/qris</span> tidak selalu bisa dipakai langsung untuk QRIS dinamis.</div>
               </div>
               <div class="fg">
                 <label class="fl">Payload QRIS Merchant</label>
@@ -663,7 +726,7 @@
               <div class="fg">
                 <label class="fl">Upload Gambar QRIS</label>
                 <input class="fc" type="file" name="qris_static_qr_file" id="qris_static_qr_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*">
-                <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai sebagai fallback jika payload QRIS merchant belum diisi.</div>
+                <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai sebagai fallback jika payload QRIS merchant belum diisi. Sistem akan mencoba membaca payload QRIS otomatis dari gambar ini.</div>
               </div>
             </div>
             <div class="form-row3" style="margin-top:10px">
@@ -681,6 +744,12 @@
                 </div>
                 <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai oleh endpoint <span class="mono">POST /api/webhook/v1/payment-notif</span>. Secret ini harus sama dengan yang dipakai MacroDroid / sumber notifikasi mutasi.</div>
               </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+              <button type="button" class="btn btn-g btn-sm" id="test_qris_payload_btn">
+                <i class="bi bi-qr-code-scan"></i> Tes Baca Payload
+              </button>
+              <div id="qris_payload_test_result" style="display:none;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.5"></div>
             </div>
           </div>
 
@@ -879,6 +948,41 @@ const initialSettingsPane = (location.hash || '').startsWith('#settings-')
   : '<%= activeSettingsPane || "usaha" %>';
 showSettingsPane(initialSettingsPane);
 
+function removeCompanyLogo() {
+  submitAssetRemoval('usaha', 'remove_company_logo', 'Hapus logo usaha yang sedang dipakai?');
+}
+
+function removePwaLogo() {
+  submitAssetRemoval('usaha', 'remove_pwa_logo', 'Hapus logo PWA aplikasi yang sedang dipakai?');
+}
+
+function removeSupportLogo() {
+  submitAssetRemoval('usaha', 'remove_support_logo', 'Hapus logo support by ISP yang sedang dipakai?');
+}
+
+function removeInvoiceSignature() {
+  submitAssetRemoval('usaha', 'remove_invoice_signature', 'Hapus tanda tangan invoice yang sedang dipakai?');
+}
+
+function removeInvoiceStamp() {
+  submitAssetRemoval('usaha', 'remove_invoice_stamp', 'Hapus cap atau stempel invoice yang sedang dipakai?');
+}
+
+function removeQrisStaticQr() {
+  submitAssetRemoval('payment', 'remove_qris_static_qr', 'Hapus gambar QRIS statik yang sedang dipakai?');
+}
+
+function submitAssetRemoval(targetSection, flagId, message) {
+  const form = document.getElementById('admin-settings-form');
+  const flag = document.getElementById(flagId);
+  const section = document.getElementById('settings_section');
+  if (!form || !flag || !section) return;
+  if (!confirm(message)) return;
+  section.value = targetSection;
+  flag.value = '1';
+  form.submit();
+}
+
 function copyWebhook() {
   const el = document.getElementById('webhook_url');
   el.select();
@@ -925,6 +1029,52 @@ if (qrisStaticQrInput) {
     preview.onload = () => {
       try { URL.revokeObjectURL(blobUrl); } catch {}
     };
+  });
+}
+
+const qrisPayloadTestBtn = document.getElementById('test_qris_payload_btn');
+const qrisPayloadTestResult = document.getElementById('qris_payload_test_result');
+if (qrisPayloadTestBtn && qrisPayloadTestResult) {
+  qrisPayloadTestBtn.addEventListener('click', async () => {
+    const form = document.getElementById('admin-settings-form');
+    const payloadField = form ? form.querySelector('[name="qris_static_payload"]') : null;
+    const qrUrlField = form ? form.querySelector('[name="qris_static_qr_url"]') : null;
+    const fileField = document.getElementById('qris_static_qr_file');
+    const formData = new FormData();
+    formData.append('qris_static_payload', payloadField ? payloadField.value : '');
+    formData.append('qris_static_qr_url', qrUrlField ? qrUrlField.value : '');
+    if (fileField && fileField.files && fileField.files[0]) {
+      formData.append('qris_static_qr_file', fileField.files[0]);
+    }
+
+    qrisPayloadTestBtn.disabled = true;
+    qrisPayloadTestResult.style.display = 'block';
+    qrisPayloadTestResult.style.background = 'rgba(59,130,246,.12)';
+    qrisPayloadTestResult.style.border = '1px solid rgba(59,130,246,.35)';
+    qrisPayloadTestResult.style.color = 'var(--text)';
+    qrisPayloadTestResult.innerHTML = '<i class="bi bi-arrow-repeat"></i> Mengecek payload QRIS...';
+
+    try {
+      const response = await fetch('/admin/settings/payment/test-qris-payload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      });
+      const result = await response.json();
+      const isOk = Boolean(result && result.ok);
+      const payloadInfo = isOk && result.payloadLength
+        ? `<div style="margin-top:4px;font-size:11px;opacity:.8">Payload terbaca: ${result.payloadLength} karakter${result.source ? ` • sumber: ${escHtml(result.source)}` : ''}</div>`
+        : '';
+      qrisPayloadTestResult.style.background = isOk ? 'rgba(34,197,94,.12)' : 'rgba(244,63,94,.12)';
+      qrisPayloadTestResult.style.border = isOk ? '1px solid rgba(34,197,94,.35)' : '1px solid rgba(244,63,94,.35)';
+      qrisPayloadTestResult.innerHTML = `${isOk ? '<i class="bi bi-check-circle"></i>' : '<i class="bi bi-x-circle"></i>'} ${escHtml(result && result.message ? result.message : 'Tidak ada respons.')}${payloadInfo}`;
+    } catch (error) {
+      qrisPayloadTestResult.style.background = 'rgba(244,63,94,.12)';
+      qrisPayloadTestResult.style.border = '1px solid rgba(244,63,94,.35)';
+      qrisPayloadTestResult.innerHTML = `<i class="bi bi-x-circle"></i> ${escHtml(error && error.message ? error.message : 'Gagal mengetes payload QRIS.')}`;
+    } finally {
+      qrisPayloadTestBtn.disabled = false;
+    }
   });
 }
 
@@ -986,6 +1136,33 @@ function updateNotifHint() {
   el.textContent = msg;
 }
 
+async function showBrowserNotification(title, options) {
+  if (!canNotify()) return false;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/admin/');
+    if (registration && registration.active) {
+      registration.active.postMessage({
+        type: 'SHOW_NOTIFICATION',
+        title,
+        body: String(options?.body || ''),
+        tag: String(options?.tag || ''),
+        data: options?.data || {},
+        requireInteraction: Boolean(options?.requireInteraction),
+        renotify: Boolean(options?.renotify),
+        icon: '<%= (settings.pwa_logo_url || settings.company_logo_url || "/img/logo.png") %>',
+        badge: '<%= (settings.pwa_logo_url || settings.company_logo_url || "/img/logo.png") %>'
+      });
+      return true;
+    }
+  } catch {}
+  try {
+    new Notification(title, options || {});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function enableEwalletNotif() {
   if (!canNotify()) return updateNotifHint();
   try {
@@ -993,7 +1170,11 @@ async function enableEwalletNotif() {
     if (perm === 'granted') {
       setNotifEnabled(true);
       updateNotifHint();
-      try { new Notification('E-Wallet Monitor', { body: 'Notifikasi aktif.' }); } catch {}
+      await showBrowserNotification('E-Wallet Monitor', {
+        body: 'Notifikasi aktif.',
+        tag: 'ewallet-monitor-enabled',
+        data: { url: '/admin/settings#settings-monitoring' }
+      });
       return;
     }
     setNotifEnabled(false);
@@ -1006,7 +1187,42 @@ async function enableEwalletNotif() {
 
 let ewLastId = Number(localStorage.getItem('ew_last_id') || 0);
 let ewLiveTimer = null;
-let ewLiveActive = false;
+const ewLiveDefault = <%- JSON.stringify(Boolean(settings.ewallet_live_auto_start)) %>;
+const ewStoredLive = localStorage.getItem('ew_live_active');
+let ewLiveActive = ewStoredLive === null ? ewLiveDefault : ewStoredLive === '1';
+
+function setEwalletLivePref(v) {
+  localStorage.setItem('ew_live_active', v ? '1' : '0');
+  const input = document.getElementById('ew_live_pref_input');
+  if (input) input.value = v ? 'true' : 'false';
+}
+
+function syncEwalletLiveButton() {
+  const btn = document.getElementById('ew_live_btn');
+  if (!btn) return;
+  btn.className = ewLiveActive ? 'btn btn-d btn-sm' : 'btn btn-p btn-sm';
+  btn.replaceChildren();
+  const icon = document.createElement('i');
+  icon.className = ewLiveActive ? 'bi bi-stop-circle' : 'bi bi-broadcast';
+  btn.appendChild(icon);
+  btn.append(document.createTextNode(ewLiveActive ? ' Stop' : ' Live'));
+}
+
+function startEwalletLive() {
+  if (ewLiveTimer) {
+    clearInterval(ewLiveTimer);
+    ewLiveTimer = null;
+  }
+  loadEwalletLogs(true);
+  ewLiveTimer = setInterval(() => loadEwalletLogs(true), 5000);
+}
+
+function stopEwalletLive() {
+  if (ewLiveTimer) {
+    clearInterval(ewLiveTimer);
+    ewLiveTimer = null;
+  }
+}
 
 function showEwalletNotification(row) {
   if (!notifEnabled()) return;
@@ -1014,30 +1230,28 @@ function showEwalletNotification(row) {
   const svc = String(row?.service || 'E-Wallet');
   const amt = row?.parsed_ok ? `Rp ${(Number(row.parsed_amount) || 0).toLocaleString('id-ID')}` : 'Nominal tidak terdeteksi';
   const body = String(row?.content || '').replace(/\r?\n/g, ' ').slice(0, 140);
-  try {
-    new Notification(`${svc}: ${amt}`, { body });
-  } catch {}
+  showBrowserNotification(`${svc}: ${amt}`, {
+    body,
+    tag: `ewallet-log-${Number(row?.id || 0) || Date.now()}`,
+    data: { url: '/admin/settings#settings-monitoring' }
+  });
 }
 
 function toggleEwalletLive() {
   ewLiveActive = !ewLiveActive;
-  const btn = document.getElementById('ew_live_btn');
-  if (btn) {
-    btn.className = ewLiveActive ? 'btn btn-d btn-sm' : 'btn btn-p btn-sm';
-    btn.replaceChildren();
-    const icon = document.createElement('i');
-    icon.className = ewLiveActive ? 'bi bi-stop-circle' : 'bi bi-broadcast';
-    btn.appendChild(icon);
-    btn.append(document.createTextNode(ewLiveActive ? ' Stop' : ' Live'));
-  }
-  if (ewLiveTimer) {
-    clearInterval(ewLiveTimer);
-    ewLiveTimer = null;
-  }
+  setEwalletLivePref(ewLiveActive);
+  syncEwalletLiveButton();
   if (ewLiveActive) {
-    loadEwalletLogs(true);
-    ewLiveTimer = setInterval(() => loadEwalletLogs(true), 5000);
+    startEwalletLive();
+  } else {
+    stopEwalletLive();
   }
+}
+
+function saveEwalletLivePref() {
+  setEwalletLivePref(ewLiveActive);
+  const form = document.getElementById('ew_live_pref_form');
+  if (form) form.submit();
 }
 
 async function loadEwalletLogs() {
@@ -1049,9 +1263,44 @@ async function loadEwalletLogs() {
   body.replaceChildren();
   body.insertAdjacentHTML('beforeend', '<tr><td colspan="7" class="text-center text-muted">Memuat...</td></tr>');
   try {
-    const url = `/admin/api/webhook/payment-notif/logs?limit=${encodeURIComponent(limit)}&service=${encodeURIComponent(service)}&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const query = `limit=${encodeURIComponent(limit)}&service=${encodeURIComponent(service)}&q=${encodeURIComponent(q)}`;
+    const endpoints = [
+      `/admin/api/webhook/payment-notif/logs?${query}`,
+      `/api/webhook/payment-notif/logs?${query}`
+    ];
+    let res = null;
+    let data = null;
+    let lastError = null;
+    for (const url of endpoints) {
+      try {
+        const attempt = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin'
+        });
+        const contentType = String(attempt.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+          const raw = (await attempt.text()).slice(0, 160).replace(/\s+/g, ' ').trim();
+          if (attempt.status === 401 || attempt.redirected) {
+            throw new Error('Sesi admin berakhir. Silakan refresh halaman lalu login ulang.');
+          }
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
+            throw new Error('Endpoint log webhook membalas halaman HTML, bukan JSON. Biasanya route admin belum sinkron atau sesi login sedang dialihkan.');
+          }
+          throw new Error(raw ? `Respons tidak valid dari server: ${raw}` : 'Respons server tidak valid.');
+        }
+        const payload = await attempt.json();
+        res = attempt;
+        data = payload;
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!res || !data) throw lastError || new Error('Gagal memuat log webhook.');
     if (!res.ok || !data.ok) throw new Error(data.error || 'Gagal memuat log');
     const rows = Array.isArray(data.rows) ? data.rows : [];
     if (rows.length === 0) {
@@ -1074,7 +1323,7 @@ async function loadEwalletLogs() {
     body.insertAdjacentHTML('beforeend', rows.map(r => {
       const ok = Number(r.parsed_ok || 0) ? 'Y' : 'N';
       const amount = (r.parsed_amount != null && r.parsed_amount !== '') ? Number(r.parsed_amount).toLocaleString('id-ID') : '-';
-      const created = r.created_at ? escHtml(r.created_at) : '-';
+      const created = r.created_at_local ? escHtml(r.created_at_local) : (r.created_at ? escHtml(r.created_at) : '-');
       const svc = escHtml(r.service || '-');
       const content = escHtml((r.content || '').replace(/\r?\n/g, ' '));
       const okBadge = ok === 'Y' ? '<span class="badge s">OK</span>' : '<span class="badge w">-</span>';
@@ -1125,8 +1374,44 @@ async function loadEwalletLogs() {
 async function clearEwalletLogs() {
   if (!confirm('Hapus semua log e-wallet?')) return;
   try {
-    const res = await fetch('/admin/api/webhook/payment-notif/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const data = await res.json();
+    const endpoints = [
+      '/admin/api/webhook/payment-notif/clear',
+      '/api/webhook/payment-notif/clear'
+    ];
+    let res = null;
+    let data = null;
+    let lastError = null;
+    for (const url of endpoints) {
+      try {
+        const attempt = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin',
+          body: '{}'
+        });
+        const contentType = String(attempt.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.includes('application/json')) {
+          const raw = (await attempt.text()).slice(0, 160).replace(/\s+/g, ' ').trim();
+          if (attempt.status === 401 || attempt.redirected) throw new Error('Sesi admin berakhir. Silakan login ulang.');
+          if (raw.startsWith('<!DOCTYPE') || raw.startsWith('<html')) {
+            throw new Error('Endpoint hapus log membalas HTML, bukan JSON. Route admin kemungkinan belum sinkron.');
+          }
+          throw new Error(raw ? `Respons tidak valid dari server: ${raw}` : 'Respons server tidak valid.');
+        }
+        const payload = await attempt.json();
+        res = attempt;
+        data = payload;
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!res || !data) throw lastError || new Error('Gagal menghapus log webhook.');
     if (!res.ok || !data.ok) throw new Error(data.error || 'Gagal menghapus log');
     await loadEwalletLogs();
   } catch (e) {
@@ -1136,6 +1421,10 @@ async function clearEwalletLogs() {
 
 setTimeout(loadEwalletLogs, 200);
 setTimeout(updateNotifHint, 250);
+setTimeout(() => {
+  syncEwalletLiveButton();
+  if (ewLiveActive) startEwalletLive();
+}, 300);
 setTimeout(()=>document.querySelectorAll('.alert').forEach(a=>a.style.display='none'),5000);
 </script>
 </body>

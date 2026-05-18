@@ -12,10 +12,14 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#f6faff">
-  <link rel="apple-touch-icon" href="<%= logoSrc %>">
-  <link rel="icon" href="<%= logoSrc %>">
+  <%- include('partials/pwa_portal', {
+    portalKey: 'customer',
+    manifestPath: '/pwa/customer.webmanifest',
+    scope: '/customer/',
+    themeColor: '#f6faff',
+    appTitle: 'Portal Pelanggan',
+    installLabel: 'Install Pelanggan'
+  }) %>
   <style>
     :root {
       --bg-top: #ffffff;
@@ -249,6 +253,12 @@
       line-height: 1.55;
     }
 
+    .notice.success {
+      background: rgba(16, 163, 127, 0.10);
+      border: 1px solid rgba(16, 163, 127, 0.18);
+      color: #0f766e;
+    }
+
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -362,6 +372,16 @@
 </head>
 
 <body>
+  <%
+    const qrisBaseAmount = Number(invoice.amount || 0) || 0;
+    const qrisExactAmount = Number(exactAmount || invoice.qris_amount_unique || invoice.amount || 0) || 0;
+    const qrisUniqueCode = Number(qrisCode || invoice.qris_unique_code || 0) || 0;
+    const qrisUniqueDelta = qrisExactAmount > qrisBaseAmount ? (qrisExactAmount - qrisBaseAmount) : qrisUniqueCode;
+    const includePpn = Number(customer?.package_include_ppn || customer?.include_ppn || 0) === 1;
+    const ppnPercent = includePpn ? Math.max(0, Number(customer?.package_ppn_percent || customer?.ppn_percent || 0)) : 0;
+    const qrisNetAmount = includePpn && ppnPercent > 0 ? Math.round(qrisBaseAmount / (1 + (ppnPercent / 100))) : qrisBaseAmount;
+    const qrisPpnAmount = includePpn && ppnPercent > 0 ? Math.max(0, qrisBaseAmount - qrisNetAmount) : 0;
+  %>
   <div class="wrap">
     <section class="shell" style="margin-bottom:16px">
       <div class="brand-row">
@@ -381,7 +401,9 @@
       <div class="grid">
         <div class="panel">
           <div class="qr-box">
-            <% if (qrisPayload) { %>
+            <% if (qrisDataUrl) { %>
+              <img src="<%= qrisDataUrl %>" alt="QRIS dinamis <%= settings.company_header || 'Portal ISP' %>">
+            <% } else if (qrisPayload) { %>
               <canvas id="dynamicQrisCanvas" aria-label="QRIS dinamis <%= settings.company_header || 'Portal ISP' %>"></canvas>
             <% } else { %>
               <img src="<%= qrisUrl %>" alt="QRIS statik <%= settings.company_header || 'Portal ISP' %>">
@@ -390,7 +412,7 @@
 
           <div class="amount-card">
             <span>Nominal yang harus dibayar</span>
-            <strong>Rp <%= Number(exactAmount || 0).toLocaleString('id-ID') %></strong>
+            <strong>Rp <%= Number(qrisExactAmount || 0).toLocaleString('id-ID') %></strong>
             <% if (qrisCode) { %>
               <div class="code-badge">
                 <i class="bi bi-hash"></i>
@@ -413,9 +435,21 @@
               <span>INV-<%= invoice.id %> • Periode <%= invoice.period_month %>/<%= invoice.period_year %></span>
             </div>
             <div class="meta-card">
-              <strong>Tagihan dasar</strong>
-              <span>Rp <%= Number(invoice.amount || 0).toLocaleString('id-ID') %></span>
+              <strong>Total tagihan</strong>
+              <span>Rp <%= Number(qrisBaseAmount || 0).toLocaleString('id-ID') %></span>
             </div>
+            <% if (qrisPpnAmount > 0) { %>
+              <div class="meta-card">
+                <strong>Rincian PPN</strong>
+                <span>Dasar Rp <%= qrisNetAmount.toLocaleString('id-ID') %> + PPN <%= ppnPercent.toLocaleString('id-ID') %>% Rp <%= qrisPpnAmount.toLocaleString('id-ID') %></span>
+              </div>
+            <% } %>
+            <% if (qrisUniqueDelta > 0) { %>
+              <div class="meta-card">
+                <strong>Kode unik otomatis</strong>
+                <span>Rp <%= qrisBaseAmount.toLocaleString('id-ID') %> + <%= qrisUniqueDelta.toLocaleString('id-ID') %> = Rp <%= qrisExactAmount.toLocaleString('id-ID') %></span>
+              </div>
+            <% } %>
             <% if (customer?.package_name || invoice?.package_name) { %>
               <div class="meta-card">
                 <strong>Paket</strong>
@@ -430,6 +464,10 @@
             <% } else { %>
               Bayar sesuai nominal di atas, lalu tekan cek lagi setelah transfer selesai.
             <% } %>
+          </div>
+
+          <div id="paymentStateNotice" class="notice" style="margin-top:10px">
+            Sistem sedang memantau status pembayaran tagihan ini secara otomatis.
           </div>
 
           <div class="actions">
@@ -453,6 +491,8 @@
 
   <script>
     const dynamicQrisPayload = <%- JSON.stringify(qrisPayload || '') %>;
+    const statusUrl = <%- JSON.stringify(statusUrl || '') %>;
+    const backUrl = <%- JSON.stringify(backUrl || '') %>;
     if (dynamicQrisPayload && window.QRCode) {
       const canvas = document.getElementById('dynamicQrisCanvas');
       if (canvas) {
@@ -466,6 +506,42 @@
         }).catch(() => {});
       }
     }
+
+    const paymentStateNotice = document.getElementById('paymentStateNotice');
+    let paymentPollingTimer = null;
+    let paymentStateLocked = false;
+
+    async function pollQrisPaymentStatus() {
+      if (!statusUrl || paymentStateLocked) return;
+      try {
+        const res = await fetch(statusUrl, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store',
+          credentials: 'same-origin'
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || !data.ok) return;
+        if (String(data.status || '').toLowerCase() === 'paid') {
+          paymentStateLocked = true;
+          if (paymentStateNotice) {
+            paymentStateNotice.classList.add('success');
+            paymentStateNotice.innerHTML = '<strong>Pembayaran berhasil terverifikasi.</strong><br>Tagihan sudah lunas. Halaman akan kembali otomatis.';
+          }
+          if (paymentPollingTimer) {
+            clearInterval(paymentPollingTimer);
+            paymentPollingTimer = null;
+          }
+          setTimeout(() => {
+            if (backUrl) window.location.href = backUrl;
+            else window.location.reload();
+          }, 1800);
+        }
+      } catch (_) {}
+    }
+
+    pollQrisPaymentStatus();
+    paymentPollingTimer = setInterval(pollQrisPaymentStatus, 8000);
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

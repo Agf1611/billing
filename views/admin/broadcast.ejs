@@ -24,6 +24,20 @@
       font-size:12px;
       line-height:1.55;
     }
+    .wa-form-pending {
+      display:none;
+      align-items:center;
+      gap:10px;
+      margin-top:14px;
+      padding:11px 14px;
+      border-radius:14px;
+      border:1px solid rgba(96, 165, 250, 0.22);
+      background:rgba(59,130,246,0.10);
+      color:var(--text);
+      font-size:13px;
+      font-weight:700;
+    }
+    .wa-form-pending.show { display:flex; }
     @media (max-width: 1024px) {
       .wa-template-grid, .wa-inline-grid { grid-template-columns:1fr; }
     }
@@ -53,7 +67,7 @@
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-  <div class="page">
+<div class="page admin-shell-page">
     <% const waTab = 'broadcast'; %>
     <% const defaultBroadcastDelay = getSetting('whatsapp_broadcast_delay', 2); %>
     <% const defaultGroupLink = String(getSetting('whatsapp_group_invite_link', '') || '').trim(); %>
@@ -174,7 +188,7 @@
             </div>
           </div>
           <div class="card-bd wa-card-actions">
-            <button type="submit" class="btn btn-p"><i class="bi bi-save"></i> Simpan Pengingat</button>
+            <button type="submit" class="btn btn-p" data-submit-label="Simpan Pengingat"><i class="bi bi-save"></i> Simpan Pengingat</button>
           </div>
         </form>
       </div>
@@ -183,7 +197,7 @@
         <div class="card-hd">
           <h6><i class="bi bi-chat-square-heart"></i> Template Chat Pelanggan</h6>
         </div>
-        <form method="POST" action="/admin/whatsapp/templates" onsubmit="return confirm('Simpan template WhatsApp pelanggan?');">
+        <form method="POST" action="/admin/whatsapp/templates" data-wa-submit data-waiting-text="Sedang menyimpan template WhatsApp..." onsubmit="return confirm('Simpan template WhatsApp pelanggan?');">
           <div class="card-bd">
             <div class="fg" style="margin-bottom:16px;">
               <label class="fl">Link Grup WhatsApp Pelanggan</label>
@@ -244,8 +258,14 @@
               </div>
             </div>
           </div>
+          <div class="card-bd">
+            <div class="wa-form-pending" data-wa-pending>
+              <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              <span>Sedang menyimpan template WhatsApp...</span>
+            </div>
+          </div>
           <div class="card-bd wa-card-actions">
-            <button type="submit" class="btn btn-p"><i class="bi bi-save"></i> Simpan Template</button>
+            <button type="submit" class="btn btn-p" data-submit-label="Simpan Template"><i class="bi bi-save"></i> Simpan Template</button>
           </div>
         </form>
       </div>
@@ -254,7 +274,7 @@
         <div class="card-hd">
           <h6><i class="bi bi-envelope-paper-heart"></i> Test Message</h6>
         </div>
-        <form method="POST" action="/admin/whatsapp/test-template" onsubmit="return confirm('Kirim test message ke nomor WhatsApp yang sedang tertaut?');">
+        <form method="POST" action="/admin/whatsapp/test-template" data-wa-submit data-waiting-text="Sedang mengirim test message WhatsApp. Mohon tunggu beberapa saat..." onsubmit="return confirm('Kirim test message ke nomor test ini?');">
           <div class="card-bd">
             <div class="wa-inline-grid">
               <div class="fg">
@@ -268,13 +288,23 @@
                   <option value="reactivation">Aktif Kembali</option>
                 </select>
               </div>
+              <div class="fg">
+                <label class="fl">Nomor Test WA</label>
+                <input class="fc" name="test_phone" value="<%= getSetting('whatsapp_test_number', '') || '' %>" inputmode="tel" autocomplete="tel" placeholder="6281xxx">
+              </div>
               <div class="wa-muted-box">
-                Test message akan dikirim ke nomor WhatsApp yang sedang tertaut ke bot. Jika nomor tertaut tidak terbaca, sistem akan memakai nomor admin WhatsApp yang tersimpan.
+                Isi nomor tujuan test supaya aman. Jika kosong, sistem memakai Nomor Test WA dari pengaturan, lalu fallback ke nomor admin yang tersimpan.
               </div>
             </div>
           </div>
+          <div class="card-bd">
+            <div class="wa-form-pending" data-wa-pending>
+              <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              <span>Sedang mengirim test message WhatsApp. Mohon tunggu beberapa saat...</span>
+            </div>
+          </div>
           <div class="card-bd wa-card-actions">
-            <button type="submit" class="btn btn-p"><i class="bi bi-send-check"></i> Kirim Test Message</button>
+            <button type="submit" class="btn btn-p" data-submit-label="Kirim Test Message"><i class="bi bi-send-check"></i> Kirim Test Message</button>
           </div>
         </form>
       </div>
@@ -288,7 +318,8 @@ const I18N = {
   sendingText: "Sedang Mengirim...",
   donePrefix: "Selesai:",
   sentSuffix: "terkirim",
-  startBtn: "Mulai Broadcast"
+  startBtn: "Mulai Broadcast",
+  submitting: "Memproses..."
 };
 
 const templates = {
@@ -329,6 +360,19 @@ if (broadcastForm) {
     if (msg && !confirm(msg)) e.preventDefault();
   });
 }
+
+document.querySelectorAll('form[data-wa-submit]').forEach((form) => {
+  form.addEventListener('submit', () => {
+    const pendingBox = form.querySelector('[data-wa-pending]');
+    if (pendingBox) pendingBox.classList.add('show');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.dataset.originalHtml = submitBtn.innerHTML;
+      submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>${I18N.submitting}`;
+    }
+  });
+});
 
 async function checkBroadcastStatus() {
   try {

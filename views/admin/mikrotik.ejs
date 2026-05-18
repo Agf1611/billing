@@ -10,10 +10,47 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-    .monitor-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .monitor-toolbar .fc-sm { min-width: 200px; }
-    .monitor-toolbar .fs-sm { min-width: 150px; }
-    .monitor-sync { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:18px; padding:13px 16px; border:1px solid var(--border); border-radius:16px; }
+    .monitor-topbar-actions { display:flex; align-items:center; gap:12px; width:100%; }
+    .monitor-topbar-main { display:flex; align-items:center; gap:12px; flex:1 1 auto; min-width:0; }
+    .monitor-topbar-shortcuts { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+    .monitor-toolbar {
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:10px;
+      flex-wrap:nowrap;
+      width:100%;
+      min-width:0;
+    }
+    .monitor-toolbar-stack{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex:1 1 auto;
+      min-width:0;
+    }
+    .monitor-toolbar-actions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex:0 0 auto;
+    }
+    .monitor-toolbar .fc-sm {
+      min-width: 220px;
+      flex:1 1 auto;
+    }
+    .monitor-toolbar .fs-sm {
+      min-width: 160px;
+      flex:0 0 160px;
+    }
+    .monitor-toolbar .btn { white-space:nowrap; }
+    .monitor-filter-toggle{
+      display:none;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+    }
+    .monitor-sync { display:flex; justify-content:space-between; align-items:center; gap:14px; margin-bottom:16px; padding:12px 14px; border:1px solid var(--border); border-radius:16px; }
     .monitor-sync-meta { display:flex; flex-direction:column; gap:5px; }
     .monitor-sync-top { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .monitor-sync-title { font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
@@ -32,17 +69,33 @@
     .table-pager-actions { display:flex; align-items:center; gap:8px; }
     .table-pager-page { min-width:72px; text-align:center; font-size:12px; color:var(--muted); }
     .monitor-mobile-list { display:none; }
-    .monitor-mobile-card { border:1px solid var(--border); border-radius:16px; padding:11px 12px; }
-    .monitor-mobile-card + .monitor-mobile-card { margin-top:8px; }
-    .monitor-mobile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
-    .monitor-mobile-name { font-size:14px; font-weight:800; color:var(--text); line-height:1.25; }
-    .monitor-mobile-meta { font-size:11px; color:var(--muted); margin-top:2px; }
-    .monitor-mobile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .monitor-mobile-cell { padding:8px 9px; border-radius:12px; }
-    .monitor-mobile-label { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:3px; }
-    .monitor-mobile-value { font-size:11px; font-weight:700; color:var(--text); word-break:break-word; line-height:1.3; }
-    .monitor-mobile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:8px; }
-    .monitor-mobile-actions .btn { justify-content:center; padding:0; height:34px; min-height:34px; }
+    .monitor-mobile-card { border:1px solid var(--border); border-radius:16px; padding:9px 10px; }
+    .monitor-mobile-card + .monitor-mobile-card { margin-top:7px; }
+    .monitor-mobile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
+    .monitor-mobile-name { font-size:13px; font-weight:800; color:var(--text); line-height:1.2; }
+    .monitor-mobile-meta { font-size:10px; color:var(--muted); margin-top:1px; }
+    .monitor-mobile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+    .monitor-mobile-cell { padding:7px 8px; border-radius:11px; min-width:0; }
+    .monitor-mobile-cell.span-2 { grid-column:span 2; }
+    .monitor-mobile-label { font-size:9px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:2px; }
+    .monitor-mobile-value { font-size:10.5px; font-weight:700; color:var(--text); word-break:break-word; line-height:1.25; }
+    .monitor-mobile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:7px; }
+    .monitor-mobile-actions .btn { justify-content:center; padding:0; height:32px; min-height:32px; font-size:11px; }
+    .mikrotik-monitor-page .stat-grid { gap:10px !important; }
+    .mikrotik-monitor-page .stat-grid .sc { min-height:0; padding:14px 14px 12px; border-radius:18px; }
+    .mikrotik-monitor-page .stat-grid .sc-icon { width:42px; height:42px; font-size:18px; top:14px; right:14px; }
+    .mikrotik-monitor-page .stat-grid .sc-label { max-width:75%; font-size:10px; line-height:1.25; letter-spacing:.05em; }
+    .mikrotik-monitor-page .stat-grid .sc-val { font-size:19px; line-height:1.05; margin-top:10px; }
+    .mikrotik-monitor-page .stat-grid .sc-sub { margin-top:6px; font-size:10px; }
+    .mikrotik-monitor-page .card-hd { gap:10px; }
+    .mikrotik-monitor-page .monitor-card-hd{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:nowrap;
+    }
+    .mikrotik-monitor-page .card-hd h6 { margin:0; font-size:14px; line-height:1.25; }
     .monitor-mobile-empty { padding:18px 16px; text-align:center; color:var(--muted); border:1px dashed var(--border); border-radius:18px; }
     body[data-theme="light"] .monitor-sync,
     body[data-theme="light"] .monitor-mobile-card,
@@ -78,30 +131,186 @@
     }
     @media (max-width: 768px) {
       .topbar { align-items:flex-start; }
-      .topbar .tb-right { width:100%; flex-wrap:wrap; justify-content:flex-start; }
-      .router-selector { width:100%; justify-content:space-between; padding:10px 12px !important; border-radius:16px !important; }
+      .topbar .tb-right { width:100%; }
+      .monitor-topbar-actions {
+        display:grid;
+        grid-template-columns:minmax(0,1fr);
+        gap:8px;
+      }
+      .monitor-topbar-main {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+        gap:8px;
+      }
+      .monitor-topbar-shortcuts {
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+        width:100%;
+      }
+      .monitor-topbar-shortcuts .btn,
+      .monitor-topbar-shortcuts .adm-badge {
+        justify-content:center;
+        min-height:42px;
+        height:42px;
+      }
+      .router-selector { width:100%; justify-content:space-between; padding:10px 12px !important; border-radius:16px !important; margin:0; }
       .router-selector .fs { width:100% !important; }
-      .mtabs, .tabs { overflow:auto; padding-bottom:12px; scrollbar-width:none; }
+      .mtabs, .tabs { overflow:auto; padding-bottom:8px; scrollbar-width:none; margin-bottom:12px; }
       .mtabs::-webkit-scrollbar, .tabs::-webkit-scrollbar { display:none; }
       .mtab, .tab { white-space:nowrap; }
-      .monitor-sync { align-items:flex-start; flex-direction:column; }
-      .monitor-toolbar { width:100%; }
-      .monitor-toolbar .btn { width:100%; justify-content:center; }
-      .monitor-toolbar .fc-sm { min-width: 0; width:100%; }
-      .monitor-toolbar .fs-sm { min-width: 0; width:100%; }
-      .monitor-sync-row { align-items:flex-start; flex-direction:column; gap:8px; }
+      .mikrotik-monitor-page .mtabs{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+        border-bottom:none;
+        padding-bottom:0;
+      }
+      .mikrotik-monitor-page .mtab{
+        justify-content:center;
+        gap:6px;
+        padding:10px 12px;
+        border-radius:14px;
+        font-size:12px;
+        text-align:center;
+      }
+      .mikrotik-monitor-page .mtab i{
+        font-size:13px;
+      }
+      .monitor-sync {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:start;
+        gap:10px;
+        padding:10px 11px;
+      }
+      .monitor-sync-meta { gap:4px; min-width:0; }
+      .monitor-toolbar {
+        display:flex;
+        flex-direction:column;
+        align-items:stretch;
+        justify-content:flex-start;
+        gap:8px;
+        width:100%;
+      }
+      .monitor-toolbar-stack{
+        display:none;
+        width:100%;
+        grid-template-columns:1fr;
+        gap:8px;
+      }
+      .monitor-toolbar.is-open .monitor-toolbar-stack{ display:grid; }
+      .monitor-toolbar.monitor-toolbar-pppoe .monitor-toolbar-stack{ grid-template-columns:1fr; }
+      .monitor-toolbar.monitor-toolbar-simple .monitor-toolbar-stack{ grid-template-columns:1fr; }
+      .monitor-toolbar .fc-sm,
+      .monitor-toolbar .fs-sm {
+        min-width:0;
+        width:100%;
+        min-height:38px;
+      }
+      .monitor-toolbar-actions{
+        width:100%;
+        justify-content:space-between;
+      }
+      .monitor-toolbar .btn { justify-content:center; min-height:38px; height:38px; }
+      .monitor-toolbar-actions .btn{ flex:1 1 0; }
+      .monitor-filter-toggle{ display:inline-flex; }
+      .monitor-sync-row { align-items:center; flex-direction:row; gap:8px; }
       .monitor-sync-time { font-size:13px; }
-      .monitor-mobile-actions .btn { min-height:38px; height:38px; border-radius:12px; }
+      #monitor-refresh-btn { min-height:38px; height:38px; padding:0 12px; align-self:flex-start; }
+      .monitor-mobile-actions .btn { min-height:34px; height:34px; border-radius:11px; }
       .table-pager { align-items:stretch; }
       .table-pager-actions { width:100%; justify-content:space-between; }
       .table-pager-page { flex:1; }
       .tbl-wrap { display:none; }
       .monitor-mobile-list { display:block; }
+      .mikrotik-monitor-page .stat-grid {
+        display:grid;
+        grid-auto-flow:column;
+        grid-auto-columns:minmax(138px,1fr);
+        grid-template-columns:none !important;
+        overflow-x:auto;
+        overflow-y:hidden;
+        gap:8px !important;
+        margin-bottom:12px !important;
+        padding-bottom:4px;
+        scrollbar-width:none;
+      }
+      .mikrotik-monitor-page .stat-grid::-webkit-scrollbar { display:none; }
+      .mikrotik-monitor-page .stat-grid .sc { padding:10px 11px 9px; min-width:138px; }
+      .mikrotik-monitor-page .stat-grid .sc-icon { width:34px; height:34px; font-size:15px; top:12px; right:12px; }
+      .mikrotik-monitor-page .stat-grid .sc-val { font-size:16px; margin-top:7px; }
+      .mikrotik-monitor-page .stat-grid .sc-label { max-width:68%; font-size:9px; }
+      .mikrotik-monitor-page .card { border-radius:18px; }
+      .mikrotik-monitor-page .card-hd { flex-direction:column; align-items:stretch; }
+      .mikrotik-monitor-page .monitor-card-hd h6{ margin-bottom:0; }
+      .mikrotik-monitor-page .tabs {
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:8px;
+        border-bottom:none;
+        padding-bottom:0;
+        margin-bottom:12px;
+      }
+      .mikrotik-monitor-page .tab{
+        justify-content:center;
+        text-align:center;
+        padding:10px 12px;
+        border-radius:14px;
+        font-size:12px;
+        line-height:1.15;
+      }
     }
     @media (max-width: 520px) {
-      .monitor-mobile-grid { grid-template-columns:1fr; }
-      .monitor-mobile-head { flex-direction:column; }
+      .topbar { padding:12px 14px; border-radius:20px; }
+      .monitor-topbar-actions { gap:6px; }
+      .monitor-topbar-main { grid-template-columns:minmax(0,1fr) 42px; gap:6px; }
+      .monitor-topbar-shortcuts { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+      .monitor-topbar-shortcuts .btn,
+      .monitor-topbar-shortcuts .adm-badge { min-height:38px; height:38px; font-size:11px; }
+      .monitor-topbar-shortcuts .tb-theme-btn span,
+      .monitor-topbar-shortcuts .adm-badge { font-size:10px; }
+      .monitor-topbar-shortcuts .tb-theme-btn span { display:none; }
+      .monitor-topbar-shortcuts .tb-theme-btn { padding-inline:0; }
+      .monitor-topbar-shortcuts .btn i,
+      .monitor-topbar-shortcuts .adm-badge i { margin-right:0; }
+      .monitor-topbar-shortcuts .btn { gap:5px; }
+      .monitor-mobile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+      .monitor-mobile-card { padding:8px 9px; }
+      .monitor-mobile-head { gap:7px; margin-bottom:5px; }
+      .monitor-mobile-name { font-size:12.5px; }
+      .monitor-mobile-meta { font-size:9.5px; }
+      .monitor-mobile-cell { padding:6px 7px; border-radius:10px; }
+      .monitor-mobile-label { font-size:8.5px; margin-bottom:2px; }
+      .monitor-mobile-value { font-size:10px; line-height:1.2; }
       .monitor-mobile-actions { grid-template-columns:1fr 1fr; }
+      .monitor-sync { gap:8px; padding:9px 10px; }
+      .monitor-sync-title { font-size:10px; }
+      .monitor-sync-time-label { font-size:10px; }
+      .monitor-sync-detail { font-size:10px; line-height:1.35; }
+      #monitor-refresh-btn { min-height:36px; height:36px; padding:0 10px; font-size:11px; }
+      .mikrotik-monitor-page .stat-grid .sc { border-radius:16px; padding:9px 9px 8px; min-width:132px; }
+      .mikrotik-monitor-page .stat-grid .sc-label { font-size:9px; max-width:72%; }
+      .mikrotik-monitor-page .stat-grid .sc-val { font-size:14px; margin-top:6px; }
+      .mikrotik-monitor-page .stat-grid .sc-icon { width:30px; height:30px; font-size:13px; top:10px; right:10px; }
+      .mikrotik-monitor-page .mtabs { gap:6px; margin-bottom:10px; }
+      .mikrotik-monitor-page .mtab{
+        padding:9px 8px;
+        font-size:11px;
+        gap:4px;
+      }
+      .mikrotik-monitor-page .mtab i{font-size:12px}
+      .mikrotik-monitor-page .mtab span,
+      .mikrotik-monitor-page .mtab{line-height:1.1}
+      .mikrotik-monitor-page .tabs { gap:6px; margin-bottom:10px; }
+      .mikrotik-monitor-page .tab { font-size:11px; padding:9px 8px; }
+      .monitor-toolbar .fs-sm { min-width:0; font-size:11px; }
+      .monitor-toolbar .btn { font-size:11px; padding:0 10px; }
+      .monitor-sync-badge { font-size:9px; padding:3px 7px; }
+      .monitor-sync-time { font-size:12.5px; }
+      .router-selector { padding:9px 11px !important; }
+      .router-selector .fs { font-size:13px; }
     }
   </style>
 </head>
@@ -110,26 +319,33 @@
 <div class="mw">
   <div class="topbar">
     <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-router"></i> <%= t('admin.nav.mikrotik_monitoring', 'Monitoring MikroTik') %></div>
-    <div class="tb-right" style="display:flex;align-items:center;gap:15px">
-      <div class="router-selector">
-        <i class="bi bi-hdd-network small"></i>
-        <select id="global-router-id" class="fs" onchange="changeRouter()">
-          <option value="" style="color:black"><%= t('admin.mikrotik.default_router', '-- Default Router --') %></option>
-          <% routers.forEach(r => { %>
-            <option value="<%= r.id %>" style="color:black"><%= r.name %></option>
-          <% }) %>
-        </select>
+    <div class="tb-right">
+      <div class="monitor-topbar-actions">
+        <div class="monitor-topbar-main">
+          <div class="router-selector">
+            <i class="bi bi-hdd-network small"></i>
+            <% const defaultRouter = (routers || []).find(r => Number(r.is_active || 0) === 1) || (routers || [])[0] || null; %>
+            <select id="global-router-id" class="fs" data-default-router-id="<%= defaultRouter ? defaultRouter.id : '' %>" onchange="changeRouter()">
+              <option value="" style="color:black"><%= t('admin.mikrotik.default_router', '-- Default Router --') %></option>
+              <% routers.forEach(r => { %>
+                <option value="<%= r.id %>" style="color:black" <%= defaultRouter && String(defaultRouter.id) === String(r.id) ? 'selected' : '' %>><%= r.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+            <i class="bi bi-sun"></i>
+            <span>Terang</span>
+          </button>
+        </div>
+        <div class="monitor-topbar-shortcuts">
+          <a href="#" onclick="downloadBackup(event)" class="btn btn-p btn-sm"><i class="bi bi-download"></i> <span>Backup</span></a>
+          <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+          <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i> <span>Logout</span></a>
+        </div>
       </div>
-      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
-        <i class="bi bi-sun"></i>
-        <span>Terang</span>
-      </button>
-      <a href="#" onclick="downloadBackup(event)" class="btn btn-p btn-sm"><i class="bi bi-download"></i> <%= t('admin.mikrotik.backup_rsc', 'Backup RSC') %></a>
-      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
-      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-  <div class="page">
+<div class="page admin-shell-page mikrotik-monitor-page">
     <% const mTab = 'monitoring'; %>
 
     <div class="mtabs">
@@ -149,7 +365,7 @@
           <div class="monitor-sync-time" id="monitor-last-update">Belum dimuat</div>
           <div class="monitor-sync-status idle" id="monitor-sync-status"><i class="bi bi-pause-circle"></i><span>Menunggu</span></div>
         </div>
-        <div class="monitor-sync-detail" id="monitor-sync-detail">Saat pertama kali dibuka, data router dimuat lalu disimpan ke cache. Saat dibuka lagi, sistem menampilkan cache dulu agar lebih cepat. Gunakan refresh manual untuk update terbaru.</div>
+        <div class="monitor-sync-detail" id="monitor-sync-detail">Data cache tampil lebih dulu. Gunakan refresh manual untuk ambil data router terbaru.</div>
       </div>
       <button class="btn btn-p btn-sm" id="monitor-refresh-btn" onclick="refreshNow()"><i class="bi bi-arrow-clockwise"></i> Refresh Manual</button>
     </div>
@@ -172,17 +388,22 @@
     <!-- PPPoE Tab -->
     <div id="pppoe" class="tab-content active">
       <div class="card">
-        <div class="card-hd">
+        <div class="card-hd monitor-card-hd">
           <h6><i class="bi bi-ethernet"></i> <%= t('admin.mikrotik.pppoe.title', 'Daftar PPPoE Secrets') %></h6>
-          <div class="monitor-toolbar">
-            <input type="text" class="fc fc-sm" id="pppoe-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setSecretsSearch(this.value)">
-            <select class="fs fs-sm" id="pppoe-status-filter" onchange="setSecretsStatusFilter(this.value)">
-              <option value="all">Semua Status</option>
-              <option value="online">Online</option>
-              <option value="offline">Offline</option>
-              <option value="disabled">Disabled</option>
-            </select>
-            <button class="btn btn-p btn-sm" onclick="openAddSecret()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_secret', 'Tambah Secret') %></button>
+          <div class="monitor-toolbar monitor-toolbar-pppoe" id="pppoe-toolbar">
+            <div class="monitor-toolbar-stack">
+              <input type="text" class="fc fc-sm" id="pppoe-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setSecretsSearch(this.value)">
+              <select class="fs fs-sm" id="pppoe-status-filter" onchange="setSecretsStatusFilter(this.value)">
+                <option value="all">Semua Status</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('pppoe-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
+              <button class="btn btn-p btn-sm" onclick="openAddSecret()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_secret', 'Tambah Secret') %></button>
+            </div>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -212,11 +433,16 @@
     <!-- Hotspot Tab -->
     <div id="hotspot" class="tab-content">
       <div class="card">
-        <div class="card-hd">
+        <div class="card-hd monitor-card-hd">
           <h6><i class="bi bi-wifi"></i> <%= t('admin.mikrotik.hotspot.title', 'Daftar Hotspot Users') %></h6>
-          <div class="monitor-toolbar">
-            <input type="text" class="fc fc-sm" id="hotspot-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setHotspotSearch(this.value)">
-            <button class="btn btn-p btn-sm" onclick="openAddHotspot()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_user', 'Tambah User') %></button>
+          <div class="monitor-toolbar monitor-toolbar-simple" id="hotspot-toolbar">
+            <div class="monitor-toolbar-stack">
+              <input type="text" class="fc fc-sm" id="hotspot-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setHotspotSearch(this.value)">
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('hotspot-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
+              <button class="btn btn-p btn-sm" onclick="openAddHotspot()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_user', 'Tambah User') %></button>
+            </div>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -246,11 +472,16 @@
     <!-- PPPoE Profiles Tab -->
     <div id="pppoe-profiles" class="tab-content">
       <div class="card">
-        <div class="card-hd">
+        <div class="card-hd monitor-card-hd">
           <h6><i class="bi bi-file-earmark-text"></i> <%= t('admin.mikrotik.pppoe_profiles.title', 'Daftar PPPoE Profiles') %></h6>
-          <div class="monitor-toolbar">
-            <input type="text" class="fc fc-sm" id="pppoe-profiles-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setPppoeProfilesSearch(this.value)">
-            <button class="btn btn-p btn-sm" onclick="openAddPppoeProfile()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_profile', 'Tambah Profile') %></button>
+          <div class="monitor-toolbar monitor-toolbar-simple" id="pppoe-profiles-toolbar">
+            <div class="monitor-toolbar-stack">
+              <input type="text" class="fc fc-sm" id="pppoe-profiles-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setPppoeProfilesSearch(this.value)">
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('pppoe-profiles-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
+              <button class="btn btn-p btn-sm" onclick="openAddPppoeProfile()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_profile', 'Tambah Profile') %></button>
+            </div>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -280,11 +511,16 @@
     <!-- Hotspot Profiles Tab -->
     <div id="hotspot-profiles-tab" class="tab-content">
       <div class="card">
-        <div class="card-hd">
+        <div class="card-hd monitor-card-hd">
           <h6><i class="bi bi-file-earmark-text"></i> <%= t('admin.mikrotik.hotspot_profiles.title', 'Daftar Hotspot User Profiles') %></h6>
-          <div class="monitor-toolbar">
-            <input type="text" class="fc fc-sm" id="hotspot-profiles-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setHotspotProfilesSearch(this.value)">
-            <button class="btn btn-p btn-sm" onclick="openAddHotspotProfile()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_profile', 'Tambah Profile') %></button>
+          <div class="monitor-toolbar monitor-toolbar-simple" id="hotspot-profiles-toolbar">
+            <div class="monitor-toolbar-stack">
+              <input type="text" class="fc fc-sm" id="hotspot-profiles-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setHotspotProfilesSearch(this.value)">
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('hotspot-profiles-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
+              <button class="btn btn-p btn-sm" onclick="openAddHotspotProfile()"><i class="bi bi-plus-lg"></i> <%= t('admin.mikrotik.actions.add_profile', 'Tambah Profile') %></button>
+            </div>
           </div>
         </div>
         <div class="tbl-wrap">
@@ -468,6 +704,13 @@
     document.getElementById(id).classList.add('active');
   }
 
+  function toggleMonitorToolbar(toolbarId, trigger) {
+    const toolbar = document.getElementById(toolbarId);
+    if (!toolbar) return;
+    const isOpen = toolbar.classList.toggle('is-open');
+    if (trigger) trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  }
+
   function openModal(id){document.getElementById(id).classList.add('show')}
   function closeModal(id){document.getElementById(id).classList.remove('show')}
 
@@ -498,7 +741,7 @@
     pppoeProfiles: false,
     hotspotProfiles: false
   };
-  const MONITORING_CACHE_KEY = 'billing-admin-mikrotik-cache-v2';
+  const MONITORING_CACHE_KEY = 'billing-admin-mikrotik-cache-v4';
   const summaryState = {
     pppoeOnline: 0,
     hotspotOnline: 0,
@@ -515,16 +758,16 @@
   function readMonitoringCacheStore() {
     try {
       const raw = localStorage.getItem(MONITORING_CACHE_KEY);
-      if (!raw) return { version: 2, routers: {} };
+      if (!raw) return { version: 4, routers: {} };
       const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return { version: 2, routers: {} };
+      if (!parsed || typeof parsed !== 'object') return { version: 4, routers: {} };
       return {
-        version: 2,
+        version: 4,
         routers: parsed.routers && typeof parsed.routers === 'object' ? parsed.routers : {}
       };
     } catch (error) {
       console.error('Failed to read MikroTik cache:', error);
-      return { version: 2, routers: {} };
+      return { version: 4, routers: {} };
     }
   }
 
@@ -573,8 +816,27 @@
     return store.routers?.[routerKey] || null;
   }
 
+  function getDefaultRouterId() {
+    const select = document.getElementById('global-router-id');
+    if (!select) return '';
+    const preferred = String(select.dataset.defaultRouterId || '').trim();
+    if (preferred) return preferred;
+    const firstRealOption = Array.from(select.options || []).find((option) => String(option.value || '').trim());
+    return firstRealOption ? String(firstRealOption.value || '').trim() : '';
+  }
+
+  function ensureMonitoringRouterSelected() {
+    const select = document.getElementById('global-router-id');
+    if (!select) return '';
+    const current = String(select.value || '').trim();
+    if (current) return current;
+    const fallback = getDefaultRouterId();
+    if (fallback) select.value = fallback;
+    return String(select.value || '').trim();
+  }
+
   function getRouterId() {
-    return document.getElementById('global-router-id').value;
+    return ensureMonitoringRouterSelected();
   }
 
   function getActiveSecondaryTabId() {
@@ -853,7 +1115,7 @@
               <div class="monitor-mobile-label">Batas Aktif</div>
               <div class="monitor-mobile-value">${safeText(h.limitUptime || h['limit-uptime'])}</div>
             </div>
-            <div class="monitor-mobile-cell">
+            <div class="monitor-mobile-cell span-2">
               <div class="monitor-mobile-label">Catatan</div>
               <div class="monitor-mobile-value">${safeText(h.comment)}</div>
             </div>
@@ -911,16 +1173,16 @@
             <div class="monitor-mobile-meta">PPPoE Profile</div>
           </div>
         </div>
-        <div class="monitor-mobile-grid">
-          <div class="monitor-mobile-cell">
-            <div class="monitor-mobile-label">IP Lokal</div>
-            <div class="monitor-mobile-value">${safeText(p.localAddress)}</div>
-          </div>
-          <div class="monitor-mobile-cell">
-            <div class="monitor-mobile-label">IP Remote</div>
-            <div class="monitor-mobile-value">${safeText(p.remoteAddress)}</div>
-          </div>
-          <div class="monitor-mobile-cell">
+          <div class="monitor-mobile-grid">
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">IP Lokal</div>
+              <div class="monitor-mobile-value">${safeText(p.localAddress)}</div>
+            </div>
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">IP Remote</div>
+              <div class="monitor-mobile-value">${safeText(p.remoteAddress)}</div>
+            </div>
+          <div class="monitor-mobile-cell span-2">
             <div class="monitor-mobile-label">Limit Kecepatan</div>
             <div class="monitor-mobile-value">${safeText(p.rateLimit)}</div>
           </div>
@@ -984,10 +1246,10 @@
             <div class="monitor-mobile-meta">Hotspot Profile</div>
           </div>
         </div>
-        <div class="monitor-mobile-grid">
-          <div class="monitor-mobile-cell">
-            <div class="monitor-mobile-label"><%= t('admin.mikrotik.hotspot_profiles.price', 'Harga') %></div>
-            <div class="monitor-mobile-value">${safeText(price)}</div>
+          <div class="monitor-mobile-grid">
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label"><%= t('admin.mikrotik.hotspot_profiles.price', 'Harga') %></div>
+              <div class="monitor-mobile-value">${safeText(price)}</div>
           </div>
           <div class="monitor-mobile-cell">
             <div class="monitor-mobile-label"><%= t('admin.mikrotik.hotspot_profiles.duration', 'Durasi') %></div>
@@ -1001,7 +1263,7 @@
             <div class="monitor-mobile-label">User Bersama</div>
             <div class="monitor-mobile-value">${safeText(p.sharedUsers)}</div>
           </div>
-          <div class="monitor-mobile-cell">
+          <div class="monitor-mobile-cell span-2">
             <div class="monitor-mobile-label">Batas Aktif</div>
             <div class="monitor-mobile-value">${safeText(p.sessionTimeout)}</div>
           </div>
@@ -1019,6 +1281,17 @@
   function restoreMonitoringCacheForCurrentRouter() {
     const entry = getMonitoringCacheEntry();
     if (!entry || !entry.tableState) return false;
+    const cachedSummary = entry.summary || {};
+    const cachedPppoeItems = Array.isArray(entry.pppoe?.items) ? entry.pppoe.items : [];
+    const cachedHotspotItems = Array.isArray(entry.hotspot?.items) ? entry.hotspot.items : [];
+    const seemsBrokenEmptyState =
+      Number(cachedSummary.pppoeOnline || 0) === 0 &&
+      Number(cachedSummary.hotspotOnline || 0) === 0 &&
+      Number(cachedSummary.totalSecrets || 0) === 0 &&
+      Number(cachedSummary.totalHotspot || 0) === 0 &&
+      cachedPppoeItems.length === 0 &&
+      cachedHotspotItems.length === 0;
+    if (seemsBrokenEmptyState) return false;
 
     tableState.pppoe = { ...tableState.pppoe, ...(entry.tableState.pppoe || {}) };
     tableState.hotspot = { ...tableState.hotspot, ...(entry.tableState.hotspot || {}) };
@@ -1048,6 +1321,14 @@
     monitoringSync.lastSuccessAt = lastSuccessAt && !Number.isNaN(lastSuccessAt.getTime()) ? lastSuccessAt : null;
     setMonitoringSyncStatus('success', 'Menampilkan data MikroTik dari cache. Tekan Refresh Manual kalau ingin ambil data terbaru dari router.', monitoringSync.lastSuccessAt);
     return true;
+  }
+
+  function refreshMonitoringAfterCacheRestore(reason = 'auto') {
+    setMonitoringSyncStatus('syncing', 'Menampilkan cache tersimpan. Mengambil data terbaru dari router...');
+    queueMonitoringRefresh(false, reason).catch((error) => {
+      console.error('Background monitoring refresh failed:', error);
+      setMonitoringSyncStatus('error', `Muat data terbaru gagal: ${error.message || error}`);
+    });
   }
 
   function hasOpenModal() {
@@ -1248,6 +1529,7 @@
     tableState.hotspotProfiles.q = '';
     applySearchInputs();
     if (restoreMonitoringCacheForCurrentRouter()) {
+      refreshMonitoringAfterCacheRestore('router');
       return;
     }
     setMonitoringSyncStatus('idle', 'Router diganti. Data router baru sedang dimuat sekali, lalu akan disimpan ke cache.');
@@ -1374,9 +1656,6 @@
   async function refreshVisibleMonitoringData(force = false, reason = 'auto') {
     if (hasOpenModal()) return;
     const isManual = reason === 'manual';
-    const prepareMessage = isManual
-      ? 'Menyiapkan refresh manual data router...'
-      : 'Menyiapkan data router...';
     const waitingMessage = isManual
       ? 'Refresh manual dimulai. Tunggu sekitar 5 detik sebelum semua data diperbarui...'
       : 'Sedang mengambil data MikroTik untuk disimpan ke cache...';
@@ -1384,7 +1663,6 @@
       ? 'Sedang memperbarui semua data MikroTik dari router...'
       : 'Sedang memuat semua data MikroTik dari router...';
 
-    resetMonitoringView(prepareMessage);
     setMonitoringSyncStatus('syncing', waitingMessage);
     if (isManual) {
       await waitMs(5000);
@@ -1688,9 +1966,12 @@
     ta.value = buildMikhmonOnLoginScript(price, validity);
   }
 
+  ensureMonitoringRouterSelected();
   renderMonitoringSyncState();
   applySearchInputs();
-  if (!restoreMonitoringCacheForCurrentRouter()) {
+  if (restoreMonitoringCacheForCurrentRouter()) {
+    refreshMonitoringAfterCacheRestore('auto');
+  } else {
     resetMonitoringView('Memuat data router untuk pertama kali...');
     queueMonitoringRefresh(false, 'auto').catch((error) => {
       console.error('Auto monitoring load failed:', error);

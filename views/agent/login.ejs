@@ -3,57 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <%- include('../partials/pwa_portal', {
+    portalKey: 'agent',
+    manifestPath: '/pwa/agent.webmanifest',
+    scope: '/agent/',
+    themeColor: '#5b6dfb',
+    appTitle: 'Portal Agent'
+  }) %>
   <title><%= t('agent.login_title', 'Login Agent') %> - <%= company %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     :root{
-      --bg:#eef4ff;
-      --ink:#13233f;
-      --muted:#617594;
-      --card:#ffffff;
-      --line:rgba(91,109,251,.14);
-      --primary:#5b6dfb;
-      --primary-2:#3b82f6;
+      --bg:#eef5fb;
+      --ink:#10233f;
+      --muted:#64748b;
+      --card:rgba(255,255,255,.94);
+      --line:rgba(148,163,184,.18);
+      --primary:#0f766e;
+      --primary-2:#2563eb;
+      --soft:rgba(37,99,235,.08);
     }
     *{box-sizing:border-box}
     body{
       margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:18px;
       background:
-        radial-gradient(720px 340px at 0% 0%, rgba(91,109,251,.16), rgba(238,244,255,0) 55%),
-        radial-gradient(820px 380px at 100% 0%, rgba(59,130,246,.14), rgba(238,244,255,0) 58%),
-        linear-gradient(180deg, #f6f9ff 0%, var(--bg) 100%);
-      color:var(--ink);font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        radial-gradient(780px 360px at 0% 0%, rgba(15,118,110,.14), rgba(238,245,251,0) 55%),
+        radial-gradient(860px 400px at 100% 0%, rgba(37,99,235,.12), rgba(238,245,251,0) 58%),
+        linear-gradient(180deg, #f7fbff 0%, var(--bg) 100%);
+      color:var(--ink);font-family:"Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-    .login-shell{width:100%;max-width:390px}
+    .login-shell{width:100%;max-width:400px}
     .login-card{
-      background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:28px;
-      padding:24px 20px 20px;box-shadow:0 28px 64px rgba(44,72,122,.14);backdrop-filter:blur(10px);
+      background:var(--card);border:1px solid var(--line);border-radius:30px;
+      padding:24px 20px 20px;box-shadow:0 28px 64px rgba(57,84,124,.14);backdrop-filter:blur(10px);
     }
     .brand{
-      width:58px;height:58px;border-radius:20px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
-      background:linear-gradient(135deg, rgba(91,109,251,.15), rgba(59,130,246,.16));color:var(--primary);font-size:24px;
-      border:1px solid rgba(91,109,251,.20);
+      width:62px;height:62px;border-radius:22px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg, rgba(15,118,110,.14), rgba(37,99,235,.14));color:var(--primary);font-size:25px;
+      border:1px solid rgba(37,99,235,.16);
     }
     .title{font-size:24px;font-weight:900;letter-spacing:-.03em;text-align:center}
-    .subtitle{font-size:12px;color:var(--muted);text-align:center;margin:6px 0 18px}
+    .subtitle{font-size:12px;color:var(--muted);text-align:center;margin:6px 0 6px}
+    .tagline{
+      font-size:12px;
+      line-height:1.6;
+      color:var(--muted);
+      text-align:center;
+      margin:0 0 18px;
+    }
     .field{margin-bottom:12px}
     .label{font-size:12px;font-weight:800;color:#48617f;margin-bottom:7px}
-    .fc{
-      width:100%;border-radius:16px;border:1px solid rgba(148,163,184,.24);background:#f7faff;color:var(--ink);
-      padding:12px 13px;font-size:14px;outline:none;box-shadow:none;
+    .field-wrap{position:relative}
+    .field-wrap i{
+      position:absolute;
+      left:14px;
+      top:50%;
+      transform:translateY(-50%);
+      color:var(--muted);
+      font-size:15px;
+      pointer-events:none;
     }
-    .fc:focus{border-color:rgba(91,109,251,.48);background:#fff}
+    .fc{
+      width:100%;border-radius:18px;border:1px solid rgba(148,163,184,.22);background:#f8fbff;color:var(--ink);
+      padding:13px 14px 13px 42px;font-size:14px;outline:none;box-shadow:none;
+    }
+    .fc:focus{border-color:rgba(37,99,235,.36);background:#fff;box-shadow:0 0 0 4px rgba(37,99,235,.08)}
     .btn-login{
-      width:100%;border:none;border-radius:16px;padding:12px 14px;margin-top:6px;color:#fff;font-size:14px;font-weight:900;
-      background:linear-gradient(135deg, var(--primary), var(--primary-2));box-shadow:0 18px 34px rgba(59,130,246,.22);
+      width:100%;border:none;border-radius:18px;padding:13px 14px;margin-top:8px;color:#fff;font-size:14px;font-weight:900;
+      background:linear-gradient(135deg, var(--primary), var(--primary-2));box-shadow:0 18px 34px rgba(15,118,110,.18);
     }
     .helper{
-      margin-top:14px;text-align:center;font-size:11px;color:var(--muted);line-height:1.5
+      margin-top:14px;text-align:center;font-size:11px;color:var(--muted);line-height:1.6;
+      background:var(--soft);
+      border:1px solid rgba(37,99,235,.1);
+      border-radius:16px;
+      padding:10px 12px;
     }
     .alert-box{
       border-radius:16px;padding:11px 12px;margin-bottom:12px;font-size:13px;
       background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.20);color:#b91c1c
+    }
+    @media (max-width: 576px){
+      body{padding:14px}
+      .login-card{padding:22px 16px 16px;border-radius:26px}
+      .title{font-size:22px}
+      .tagline{font-size:11px}
+      .fc{font-size:16px}
     }
   </style>
 </head>
@@ -63,6 +102,7 @@
       <div class="brand"><i class="bi bi-person-badge"></i></div>
       <div class="title"><%= t('agent.portal_title', 'Portal Agent') %></div>
       <div class="subtitle"><%= company %></div>
+      <div class="tagline">Login cepat untuk cek saldo, bayar tagihan, dan buat voucher langsung dari HP.</div>
 
       <% if (error) { %>
         <div class="alert-box"><%= error %></div>
@@ -71,16 +111,22 @@
       <form method="POST" action="/agent/login">
         <div class="field">
           <div class="label"><%= t('agent.username', 'Username') %></div>
-          <input type="text" name="username" class="fc" required placeholder="<%= t('agent.username_placeholder', 'Masukkan username') %>">
+          <label class="field-wrap">
+            <i class="bi bi-person"></i>
+            <input type="text" name="username" class="fc" required placeholder="<%= t('agent.username_placeholder', 'Masukkan username') %>">
+          </label>
         </div>
         <div class="field">
           <div class="label"><%= t('agent.password', 'Password') %></div>
-          <input type="password" name="password" class="fc" required placeholder="<%= t('agent.password_placeholder', 'Masukkan password') %>">
+          <label class="field-wrap">
+            <i class="bi bi-shield-lock"></i>
+            <input type="password" name="password" class="fc" required placeholder="<%= t('agent.password_placeholder', 'Masukkan password') %>">
+          </label>
         </div>
         <button type="submit" class="btn-login"><i class="bi bi-box-arrow-in-right me-2"></i><%= t('agent.sign_in', 'Masuk') %></button>
       </form>
 
-      <div class="helper">Login dibuat selaras dengan portal lain dan tetap hemat ruang untuk layar mobile.</div>
+      <div class="helper">Tampilan login dibuat ringkas, ringan, dan tetap nyaman dipakai di layar mobile.</div>
     </div>
   </div>
 </body>

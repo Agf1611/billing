@@ -1,9 +1,34 @@
 <%- include('partials/header') %>
 
+<style>
+  .tech-create-hero{display:grid;gap:10px;padding:16px;background:linear-gradient(145deg, rgba(91,140,255,.16), rgba(39,193,131,.06)), var(--tech-panel)}
+  .tech-create-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .tech-create-title{font-size:23px;font-weight:900;letter-spacing:-.04em;line-height:1.06;margin:0}
+  .tech-create-desc{color:var(--tech-muted);font-size:13px;line-height:1.55}
+  .tech-upload-preview-row{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .tech-upload-preview-card{width:96px;min-height:96px;border-radius:18px;border:1px dashed rgba(148,163,184,.3);background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .tech-upload-preview-card img{width:100%;height:96px;object-fit:cover;display:block}
+  .tech-upload-preview-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px;color:#94a3b8;font-size:11px;text-align:center;line-height:1.35}
+  .tech-upload-preview-empty i{font-size:20px;color:#7c8cff}
+  .tech-upload-preview-meta{display:flex;flex-direction:column;gap:4px;max-width:190px}
+  .tech-upload-preview-name{font-size:11px;color:var(--tech-text);line-height:1.4;word-break:break-word}
+  .tech-upload-preview-state{font-size:10px;color:#94a3b8}
+  @media (max-width:576px){
+    .tech-create-hero{padding:14px}
+    .tech-create-title{font-size:21px}
+  }
+</style>
+
+<div class="t-card tech-create-hero">
+  <span class="tech-create-kicker"><i class="bi bi-person-plus"></i>Tambah Pelanggan</span>
+  <h2 class="tech-create-title">Pengajuan pelanggan baru langsung dari lapangan</h2>
+  <div class="tech-create-desc">Isi data pelanggan, akun internet, lokasi, dan ODP dengan lebih rapi dari tampilan mobile yang lebih fokus.</div>
+</div>
+
 <div class="t-card">
   <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
     <div>
-      <div class="fw-bold" style="font-size:16px;"><i class="bi bi-person-plus-fill text-primary me-2"></i>Pengajuan Pelanggan Baru</div>
+      <div class="fw-bold" style="font-size:16px;"><i class="bi bi-person-plus text-primary me-2"></i>Form Pengajuan Pelanggan</div>
       <div class="text-secondary small">Isi data sejelas mungkin. Admin akan review lebih cepat jika akun internet, alamat, dan lokasi sudah lengkap.</div>
     </div>
     <span class="badge-status badge-open" style="white-space:nowrap">Butuh approval admin</span>
@@ -57,11 +82,29 @@
     <div class="row g-2 mt-1">
       <div class="col-6">
         <label class="form-label text-secondary small">Foto Rumah</label>
-        <input name="house_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
+        <input name="house_photo_file" id="tech_house_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
+        <div class="tech-upload-preview-row">
+          <div class="tech-upload-preview-card" id="tech_house_preview">
+            <div class="tech-upload-preview-empty"><i class="bi bi-house-door"></i><span>Preview Rumah</span></div>
+          </div>
+          <div class="tech-upload-preview-meta">
+            <div class="tech-upload-preview-name" id="tech_house_preview_name">Belum ada file dipilih</div>
+            <div class="tech-upload-preview-state">Foto tampak depan atau patokan rumah</div>
+          </div>
+        </div>
       </div>
       <div class="col-6">
         <label class="form-label text-secondary small">Upload KTP</label>
-        <input name="ktp_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
+        <input name="ktp_photo_file" id="tech_ktp_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
+        <div class="tech-upload-preview-row">
+          <div class="tech-upload-preview-card" id="tech_ktp_preview">
+            <div class="tech-upload-preview-empty"><i class="bi bi-card-image"></i><span>Preview KTP</span></div>
+          </div>
+          <div class="tech-upload-preview-meta">
+            <div class="tech-upload-preview-name" id="tech_ktp_preview_name">Belum ada file dipilih</div>
+            <div class="tech-upload-preview-state">Pastikan foto jelas dan tidak blur</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="field-hint mt-2">NIK, NPWP, foto rumah, dan KTP sifatnya opsional, tapi sangat membantu admin saat verifikasi dan teknisi lain saat kunjungan ulang.</div>
@@ -275,6 +318,41 @@
     }
   }
 
+  function setTechUploadPreview(previewId, nameId, sourceUrl, emptyLabel, fileName = '') {
+    const preview = document.getElementById(previewId);
+    const nameEl = document.getElementById(nameId);
+    if (!preview || !nameEl) return;
+    preview.replaceChildren();
+    if (sourceUrl) {
+      const img = document.createElement('img');
+      img.src = sourceUrl;
+      img.alt = emptyLabel;
+      preview.appendChild(img);
+      nameEl.textContent = fileName || 'File siap diunggah';
+      return;
+    }
+    const empty = document.createElement('div');
+    empty.className = 'tech-upload-preview-empty';
+    empty.innerHTML = `<i class="bi ${/rumah/i.test(emptyLabel) ? 'bi-house-door' : 'bi-card-image'}"></i><span>${emptyLabel}</span>`;
+    preview.appendChild(empty);
+    nameEl.textContent = 'Belum ada file dipilih';
+  }
+
+  function bindTechUploadPreview(inputId, previewId, nameId, emptyLabel) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) {
+        setTechUploadPreview(previewId, nameId, '', emptyLabel);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => setTechUploadPreview(previewId, nameId, String(reader.result || ''), emptyLabel, file.name || 'File dipilih');
+      reader.readAsDataURL(file);
+    });
+  }
+
   function toggleSecretMode() {
     const createSecret = document.getElementById('create_pppoe_secret');
     const usernameInput = document.getElementById('pppoe_username');
@@ -390,6 +468,9 @@
       if (hint) hint.innerText = e.message;
     }
   }
+
+  bindTechUploadPreview('tech_house_photo_file', 'tech_house_preview', 'tech_house_preview_name', 'Preview Rumah');
+  bindTechUploadPreview('tech_ktp_photo_file', 'tech_ktp_preview', 'tech_ktp_preview_name', 'Preview KTP');
 
   async function loadPppoeProfiles() {
     const routerId = document.getElementById('router_id')?.value || '';

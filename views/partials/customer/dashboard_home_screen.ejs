@@ -4,7 +4,7 @@
       <h1>Selamat datang kembali,</h1>
       <div class="home-intro-line">
         <strong><%= customerName %></strong>
-        <span class="mini-status"><i class="bi bi-check-circle-fill"></i> <%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
+        <span class="mini-status"><i class="bi bi-check-circle-fill"></i> <%= portalAccountLabel || 'Aktif' %></span>
       </div>
       <div class="home-code-row">
         <span class="home-code"><%= customerCode %></span>
@@ -29,30 +29,36 @@
 
     <div class="hero-card home-hero-card">
       <div class="home-hero-grid">
-        <div class="home-hero-main">
-          <div class="hero-eyebrow">Paket Anda</div>
-          <div class="hero-package"><%= packageName %></div>
-          <div class="hero-sub home-hero-meta">
-            <span><i class="bi bi-speedometer2"></i> <%= liveDownloadCap %> Mbps / <%= liveUploadCap %> Mbps</span>
-            <span><i class="bi bi-wifi"></i> <%= isPppoeOnline ? 'Internet normal' : (pppoeStatusText || 'Status belum terbaca') %></span>
+        <div class="home-hero-top">
+          <div class="home-hero-main">
+            <div class="hero-eyebrow">Paket Anda</div>
+            <div class="hero-package"><%= packageName %></div>
+            <div class="hero-sub home-hero-meta">
+              <span><i class="bi bi-speedometer2"></i> <%= liveDownloadCap %>/<%= liveUploadCap %> Mbps</span>
+              <span><i class="bi bi-wifi"></i> <%= isPppoeOnline ? 'Internet normal' : (pppoeStatusText || 'Status belum terbaca') %></span>
+            </div>
           </div>
-          <div class="home-status-line">
-            <span class="home-bill-state <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'warn' : 'okay' %>">
-              <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'Belum Bayar' : 'Aman' %>
-            </span>
-            <span class="home-due-inline">
-              <small><%= latestInvoice ? 'Jatuh Tempo' : 'Status' %></small>
-              <strong><%= latestInvoice ? formatDate(new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month) - 1, Math.min(Number(latestInvoice.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month), 0).getDate()))) : 'Tidak ada tagihan' %></strong>
-            </span>
+          <div class="home-hero-side">
+            <span class="home-plan-state"><%= portalAccountLabel || 'Aktif' %></span>
           </div>
         </div>
-        <div class="home-hero-side">
-          <span class="home-plan-state"><%= String(profileData.status || customerData.status || 'active').toLowerCase() === 'suspended' ? 'Suspended' : 'Aktif' %></span>
-          <div class="home-amount-row">
-            <div class="home-amount-wrap">
-              <span>Nominal</span>
-              <strong><%= latestInvoice ? formatCurrency(latestInvoice.amount) : formatCurrency(monthlyPrice) %></strong>
+
+        <div class="home-hero-body">
+          <div class="home-hero-info-grid">
+            <div class="home-hero-info-box">
+              <small>Status Tagihan</small>
+              <strong class="home-bill-state <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'warn' : 'okay' %>">
+                <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'Belum Bayar' : 'Aman' %>
+              </strong>
             </div>
+            <div class="home-hero-info-box">
+              <small><%= latestInvoice ? 'Jatuh Tempo' : 'Status' %></small>
+              <strong><%= latestInvoice ? formatDate(new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month) - 1, Math.min(Number(latestInvoice.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month), 0).getDate()))) : 'Tidak ada tagihan' %></strong>
+            </div>
+          </div>
+          <div class="home-hero-payment-card">
+            <small>Nominal</small>
+            <strong><%= latestInvoice ? formatCurrency(latestInvoice.amount) : formatCurrency(monthlyPrice) %></strong>
             <button class="primary-button home-pay-button" type="button" onclick="openAppTab('billing')">
               <i class="bi bi-wallet2"></i> <%= latestInvoice ? 'Bayar' : 'Tagihan' %>
             </button>
@@ -64,11 +70,11 @@
 
       <div class="home-usage-grid">
         <div class="home-usage-card upload">
-          <small>Download</small>
+          <small>Upload</small>
           <strong><%= formatBytes(uploadBytes) %></strong>
         </div>
         <div class="home-usage-card download">
-          <small>Upload</small>
+          <small>Download</small>
           <strong><%= formatBytes(downloadBytes) %></strong>
         </div>
       </div>

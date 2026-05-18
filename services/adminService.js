@@ -1,6 +1,11 @@
 const db = require('../config/database');
 const { hashPassword, validateNewPassword, verifyPassword } = require('../config/passwords');
 const OPERATIONAL_PASSWORD_MIN_LENGTH = 4;
+const MANAGED_ACCOUNT_ROLES = {
+  technician: 'technicians',
+  cashier: 'cashiers',
+  collector: 'collectors'
+};
 
 function sanitizeUserRow(row) {
   if (!row) return null;
@@ -177,6 +182,94 @@ function authenticateCollector(username, password) {
   return authenticateFromTable('collectors', username, password);
 }
 
+function resolveManagedAccountTable(role) {
+  const key = String(role || '').trim().toLowerCase();
+  const table = MANAGED_ACCOUNT_ROLES[key];
+  if (!table) throw new Error('Role akun tidak valid');
+  return { key, table };
+}
+
+function mapManagedAccountRow(role, row) {
+  if (!row) return null;
+  return {
+    ...sanitizeUserRow(row),
+    role,
+    role_label: role === 'technician' ? 'Teknisi' : role === 'cashier' ? 'Kasir' : 'Kolektor',
+    area: row.area || ''
+  };
+}
+
+function listManagedAccounts(role = 'all') {
+  const rows = [];
+  if (role === 'all' || role === 'technician') {
+    rows.push(...getAllTechnicians().map((row) => mapManagedAccountRow('technician', row)));
+  }
+  if (role === 'all' || role === 'cashier') {
+    rows.push(...getAllCashiers().map((row) => mapManagedAccountRow('cashier', row)));
+  }
+  if (role === 'all' || role === 'collector') {
+    rows.push(...getAllCollectors().map((row) => mapManagedAccountRow('collector', row)));
+  }
+  return rows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+function createManagedAccount(role, data) {
+  const { key } = resolveManagedAccountTable(role);
+  if (key === 'technician') return createTechnician(data);
+  if (key === 'cashier') return createCashier(data);
+  return createCollector(data);
+}
+
+function updateManagedAccount(currentRole, id, data) {
+  const current = resolveManagedAccountTable(currentRole);
+  const next = resolveManagedAccountTable(data.role || currentRole);
+  if (current.key === next.key) {
+    if (current.key === 'technician') return updateTechnician(id, data);
+    if (current.key === 'cashier') return updateCashier(id, data);
+    return updateCollector(id, data);
+  }
+
+  const existing = getUserById(current.table, id);
+  if (!existing) throw new Error('Akun tidak ditemukan');
+
+  const passwordHash = resolveNextPasswordHash(data, existing, `Password ${next.key === 'technician' ? 'teknisi' : next.key === 'cashier' ? 'kasir' : 'kolektor'}`);
+  const payload = {
+    username: String(data.username || '').trim(),
+    password: '',
+    password_hash: passwordHash,
+    name: String(data.name || '').trim(),
+    phone: String(data.phone || '').trim(),
+    area: next.key === 'technician' ? String(data.area || '').trim() : '',
+    is_active: data.is_active ? 1 : 0
+  };
+
+  const run = db.transaction(() => {
+    if (next.key === 'technician') {
+      db.prepare('INSERT INTO technicians (username, password, password_hash, name, phone, area, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        payload.username, '', payload.password_hash, payload.name, payload.phone, payload.area, payload.is_active
+      );
+    } else if (next.key === 'cashier') {
+      db.prepare('INSERT INTO cashiers (username, password, password_hash, name, phone, is_active) VALUES (?, ?, ?, ?, ?, ?)').run(
+        payload.username, '', payload.password_hash, payload.name, payload.phone, payload.is_active
+      );
+    } else {
+      db.prepare('INSERT INTO collectors (username, password, password_hash, name, phone, is_active) VALUES (?, ?, ?, ?, ?, ?)').run(
+        payload.username, '', payload.password_hash, payload.name, payload.phone, payload.is_active
+      );
+    }
+    db.prepare(`DELETE FROM ${current.table} WHERE id = ?`).run(id);
+  });
+
+  return run();
+}
+
+function deleteManagedAccount(role, id) {
+  const { key } = resolveManagedAccountTable(role);
+  if (key === 'technician') return deleteTechnician(id);
+  if (key === 'cashier') return deleteCashier(id);
+  return deleteCollector(id);
+}
+
 module.exports = {
   getAllTechnicians,
   createTechnician,
@@ -191,5 +284,9 @@ module.exports = {
   createCollector,
   updateCollector,
   deleteCollector,
-  authenticateCollector
+  authenticateCollector,
+  listManagedAccounts,
+  createManagedAccount,
+  updateManagedAccount,
+  deleteManagedAccount
 };

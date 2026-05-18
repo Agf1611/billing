@@ -12,13 +12,14 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/style.css">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#f4f8ff">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="apple-touch-icon" href="<%= logoSrc %>">
-  <link rel="icon" href="<%= logoSrc %>">
+  <%- include('partials/pwa_portal', {
+    portalKey: 'customer',
+    manifestPath: '/pwa/customer.webmanifest',
+    scope: '/customer/',
+    themeColor: '#f4f8ff',
+    appTitle: 'Portal Pelanggan',
+    installLabel: 'Install Pelanggan'
+  }) %>
   <style>
     :root {
       --page-bg: #f4f8ff;
@@ -540,7 +541,12 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js', { scope: '/customer/' }).catch(() => {});
+        navigator.serviceWorker.register('/sw.js', {
+          scope: '/customer/',
+          updateViaCache: 'none'
+        }).then((registration) => {
+          registration.update().catch(() => {});
+        }).catch(() => {});
       });
     }
 

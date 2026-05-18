@@ -29,7 +29,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     trySendWhatsappPayment,
     redirectBack,
     resolvePaidByName,
-    sendPaidWhatsappNotification
+    sendPaidWhatsappNotification,
+    usageSvc
   } = deps;
 
   const CUSTOMER_IMAGE_FIELDS = [
@@ -64,9 +65,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
   }
 
   router.get('/customers', requireAdminSession, (req, res) => {
+    const statusQueryProvided = Object.prototype.hasOwnProperty.call(req.query || {}, 'status');
     const {
       search = '',
-      status: filterStatus = '',
+      status: rawFilterStatus = '',
       billingDayStart = '',
       billingDayEnd = '',
       month: rawMonth = '',
@@ -82,6 +84,9 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
     const monthKey = String(selectedMonth).padStart(2, '0');
     const yearKey = String(selectedYear);
+    const normalizedFilterStatus = statusQueryProvided
+      ? (String(rawFilterStatus || '').trim().toLowerCase() === 'all' ? '' : String(rawFilterStatus || '').trim().toLowerCase())
+      : 'active';
     const customers = customerSvc.getAllCustomers(search);
     const stats = customerSvc.getCustomerStats();
     const packages = customerSvc.getAllPackages();
@@ -89,8 +94,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const olts = oltSvc.getAllOlts();
     const odps = odpSvc.getAllOdps();
 
-    let filteredCustomers = filterStatus
-      ? customers.filter((customer) => customer.status === filterStatus)
+    let filteredCustomers = normalizedFilterStatus
+      ? customers.filter((customer) => customer.status === normalizedFilterStatus)
       : customers;
 
     if (normalizedBillingDayStart || normalizedBillingDayEnd) {
@@ -115,9 +120,11 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       WHERE strftime('%m', created_at) = ? AND strftime('%Y', created_at) = ?
     `).get(monthKey, yearKey);
     const unpaidInvoices = db.prepare(`
-      SELECT COUNT(DISTINCT customer_id) AS count, COALESCE(SUM(amount), 0) AS total
-      FROM invoices
-      WHERE period_month = ? AND period_year = ? AND status = 'unpaid'
+      SELECT COUNT(DISTINCT i.customer_id) AS count, COALESCE(SUM(i.amount), 0) AS total
+      FROM invoices i
+      JOIN customers c ON c.id = i.customer_id
+      WHERE i.period_month = ? AND i.period_year = ? AND i.status = 'unpaid'
+        AND COALESCE(c.status, 'active') <> 'suspended'
     `).get(selectedMonth, selectedYear);
     const paidInvoices = db.prepare(`
       SELECT COUNT(DISTINCT customer_id) AS count, COALESCE(SUM(amount), 0) AS total
@@ -177,7 +184,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       olts,
       odps,
       search,
-      filterStatus,
+      filterStatus: normalizedFilterStatus,
+      statusQueryProvided,
       selectedMonth,
       selectedYear,
       customerOverview,
@@ -195,15 +203,18 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
   router.get('/api/customers/:id/detail', requireAdminSession, async (req, res) => {
     try {
       const year = parseInt(req.query.year || new Date().getFullYear(), 10);
-      const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year });
+      const forceNetworkRefresh = String(req.query.refreshNetwork || '') === '1';
+      const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year, forceNetworkRefresh });
       res.json(detail);
     } catch (e) {
+      logger.error(`[AdminCustomers] Gagal memuat detail pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
       res.status(500).json({ error: e.message || String(e) });
     }
   });
 
   router.post('/customers', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
     try {
+      req.body = req.body || {};
       const housePhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'house_photo_file'), 'admin-house-photo');
       const ktpPhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'ktp_photo_file'), 'admin-ktp-photo');
       req.body.nik = String(req.body.nik || '').trim();
@@ -298,6 +309,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       const warningText = syncWarnings.length ? ` Catatan: ${syncWarnings.join(' | ')}` : '';
       req.session._msg = { type: 'success', text: `Pelanggan "${req.body.name}" berhasil ditambahkan.${warningText}` };
     } catch (e) {
+      logger.error(`[AdminCustomers] Gagal menambahkan pelanggan: ${e.stack || e.message || e}`);
       req.session._msg = { type: 'error', text: 'Gagal menambahkan pelanggan: ' + e.message };
     }
     res.redirect('/admin/customers');
@@ -305,6 +317,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
   router.post('/customers/:id/update', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
     try {
+      req.body = req.body || {};
       const housePhotoFile = getUploadedFile(req, 'house_photo_file');
       const ktpPhotoFile = getUploadedFile(req, 'ktp_photo_file');
       req.body.nik = String(req.body.nik || '').trim();
@@ -358,6 +371,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
       req.session._msg = { type: 'success', text: 'Data pelanggan berhasil diperbarui.' };
     } catch (e) {
+      logger.error(`[AdminCustomers] Gagal memperbarui pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
       req.session._msg = { type: 'error', text: 'Gagal memperbarui: ' + e.message };
     }
     res.redirect('/admin/customers');
@@ -368,6 +382,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       await customerSvc.deleteCustomer(req.params.id);
       req.session._msg = { type: 'success', text: 'Pelanggan berhasil dihapus.' };
     } catch (e) {
+      logger.error(`[AdminCustomers] Gagal menghapus pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
       req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
     }
     res.redirect('/admin/customers');
@@ -458,7 +473,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         'Longitude',
         'Catatan'
       ];
-      const rows = customers.map((customer) => ([
+      const mapCustomerRow = (customer) => ([
         customer.id,
         customer.name,
         customer.phone,
@@ -477,12 +492,20 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         customer.lat || '',
         customer.lng || '',
         customer.notes
-      ]));
-
-      const wsData = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      wsData['!cols'] = headers.map((header) => ({ wch: Math.max(String(header).length + 4, 14) }));
+      ]);
+      const buildCustomerSheet = (rows) => {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(mapCustomerRow)]);
+        ws['!cols'] = headers.map((header) => ({ wch: Math.max(String(header).length + 4, 14) }));
+        return ws;
+      };
+      const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
+      const activeCustomers = customers.filter((customer) => normalizeStatus(customer.status) === 'active');
+      const inactiveCustomers = customers.filter((customer) => normalizeStatus(customer.status) === 'inactive');
+      const suspendedCustomers = customers.filter((customer) => normalizeStatus(customer.status) === 'suspended');
       const wb = buildCustomerImportTemplateWorkbook();
-      XLSX.utils.book_append_sheet(wb, wsData, 'Data Pelanggan');
+      XLSX.utils.book_append_sheet(wb, buildCustomerSheet(activeCustomers), 'Pelanggan Aktif');
+      XLSX.utils.book_append_sheet(wb, buildCustomerSheet(inactiveCustomers), 'Pelanggan Nonaktif');
+      XLSX.utils.book_append_sheet(wb, buildCustomerSheet(suspendedCustomers), 'Pelanggan Isolir');
 
       const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
       res.setHeader('Content-Disposition', 'attachment; filename=daftar_pelanggan.xlsx');
@@ -624,6 +647,74 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       }
     } catch (e) {
       req.session._msg = { type: 'error', text: e.message || String(e) };
+    }
+    return redirectBack(res, '/admin/customers');
+  });
+
+  router.post('/customers/:id/usage/reset', requireAdminSession, restrictToAdmin, async (req, res) => {
+    try {
+      const customer = customerSvc.getCustomerById(req.params.id);
+      if (!customer) throw new Error('Pelanggan tidak ditemukan.');
+
+      let baselineIn = 0;
+      let baselineOut = 0;
+      let sessionId = '';
+      let uptime = '';
+      let baselineNote = 'Usage reset by admin without live baseline';
+
+      if (customer.router_id && customer.pppoe_username) {
+        try {
+          const activeSessions = await mikrotikService.getPppoeActive(Number(customer.router_id));
+          const username = String(customer.pppoe_username || '').trim().toLowerCase();
+          const active = (Array.isArray(activeSessions) ? activeSessions : []).find((row) => {
+            return String(row?.name || '').trim().toLowerCase() === username;
+          });
+          if (active) {
+            baselineIn = Math.max(
+              0,
+              Number(
+                active['bytes-in']
+                ?? active.bytesIn
+                ?? active.bytes_in
+                ?? active.rxBytes
+                ?? 0
+              ) || 0
+            );
+            baselineOut = Math.max(
+              0,
+              Number(
+                active['bytes-out']
+                ?? active.bytesOut
+                ?? active.bytes_out
+                ?? active.txBytes
+                ?? 0
+              ) || 0
+            );
+            sessionId = String(active['session-id'] ?? active.sessionId ?? active['.id'] ?? active.id ?? '').trim();
+            uptime = String(active.uptime || active['uptime'] || '').trim();
+            baselineNote = 'Usage reset by admin with live MikroTik baseline';
+          }
+        } catch (mikrotikErr) {
+          logger.warn(`[AdminCustomers] Reset usage baseline live gagal untuk customer ${customer.id}: ${mikrotikErr.message}`);
+        }
+      }
+
+      usageSvc.resetUsageForCurrentPeriod(customer.id, baselineIn, baselineOut, new Date(), {
+        sessionId,
+        uptime,
+        note: baselineNote
+      });
+
+      const liveNote = baselineIn > 0 || baselineOut > 0
+        ? ' Baseline live MikroTik ikut disimpan agar akumulasi berikutnya lanjut dari posisi sekarang.'
+        : ' Baseline live tidak ditemukan, jadi usage bulan ini direset ke nol.';
+      req.session._msg = {
+        type: 'success',
+        text: `Penggunaan data bulan ini untuk "${customer.name}" berhasil direset.${liveNote}`
+      };
+    } catch (e) {
+      logger.error(`[AdminCustomers] Gagal reset usage pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
+      req.session._msg = { type: 'error', text: `Gagal reset penggunaan data: ${e.message || String(e)}` };
     }
     return redirectBack(res, '/admin/customers');
   });

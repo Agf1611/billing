@@ -26,7 +26,35 @@ function company() {
   return getSetting('company_header', 'ISP App');
 }
 
+router.get('/manifest.webmanifest', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.type('application/manifest+json');
+  return res.json({
+    id: '/agent/',
+    name: 'Portal Agent',
+    short_name: 'Agent',
+    description: `Portal Agent ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    start_url: '/agent/login?source=pwa',
+    scope: '/agent/',
+    display: 'standalone',
+    display_override: ['standalone', 'minimal-ui'],
+    orientation: 'portrait',
+    background_color: '#0f172a',
+    theme_color: '#1e293b',
+    icons: [
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  });
+});
+
 router.get('/login', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   if (req.session && req.session.isAgent) return res.redirect('/agent');
   res.render('agent/login', { title: 'Login Agent', company: company(), error: null });
 });
@@ -50,6 +78,9 @@ router.get('/logout', (req, res) => {
 });
 
 router.get('/', requireAgentSession, (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   const agentId = req.session.agentId;
   const agent = agentSvc.getAgentById(agentId);
   const q = String(req.query.q || '').trim();
@@ -72,6 +103,18 @@ router.get('/', requireAgentSession, (req, res) => {
       return ap.localeCompare(bp);
     });
   const txs = agentSvc.listAgentTransactions({ agentId, limit: 40 });
+  const profit = (Array.isArray(txs) ? txs : []).reduce((sum, tx) => {
+    const type = String(tx?.type || '').toLowerCase();
+    if (type === 'voucher_sale' || type === 'pulsa') {
+      const gross = Number(tx?.amount_sell || 0);
+      const cost = Number(tx?.amount_buy || 0);
+      return sum + Math.max(0, gross - cost);
+    }
+    if (type === 'invoice_payment') {
+      return sum + Math.max(0, Number(tx?.fee || 0));
+    }
+    return sum;
+  }, 0);
 
   res.render('agent/dashboard', {
     title: 'Dashboard Agent',
@@ -81,6 +124,7 @@ router.get('/', requireAgentSession, (req, res) => {
     invoices: visibleInvoices,
     prices,
     txs,
+    profit,
     msg: flashMsg(req),
     receipt: popReceipt(req)
   });
@@ -149,13 +193,13 @@ router.post('/sell-voucher', requireAgentSession, express.urlencoded({ extended:
         const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
         if (whatsappStatus.connection === 'open') {
           const msg =
-            `🎫 *VOUCHER HOTSPOT*\n\n` +
-            `📦 *Paket:* ${result.receipt.profile}\n` +
-            `${result.receipt.validity ? `⏱️ *Masa Aktif:* ${result.receipt.validity}\n` : ''}` +
-            `👤 *User:* ${result.receipt.code}\n` +
-            `🔑 *Pass:* ${result.receipt.password}\n` +
-            `💰 *Harga:* Rp ${Number(result.receipt.sell_price || 0).toLocaleString('id-ID')}\n\n` +
-            `Simpan voucher ini.`;
+            `*Voucher WiFi*\n\n` +
+            `${result.receipt.profile ? `Paket: ${result.receipt.profile}\n` : ''}` +
+            `Kode Voucher: ${result.receipt.code}\n` +
+            `${result.receipt.password && result.receipt.password !== result.receipt.code ? `Password: ${result.receipt.password}\n` : ''}` +
+            `Masa Aktif: ${result.receipt.validity || '-'}\n` +
+            `Harga: Rp ${Number(result.receipt.sell_price || 0).toLocaleString('id-ID')}\n\n` +
+            `Silakan simpan voucher ini.`;
           await sendWA(buyerPhone, msg);
           waSent = true;
         }

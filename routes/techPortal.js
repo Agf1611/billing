@@ -14,6 +14,31 @@ const path = require('path');
 const multer = require('multer');
 const techUpload = multer({ storage: multer.memoryStorage() });
 
+router.get('/manifest.webmanifest', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.type('application/manifest+json');
+  return res.json({
+    id: '/tech/',
+    name: 'Portal Teknisi',
+    short_name: 'Teknisi',
+    description: `Portal Teknisi ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    start_url: '/tech/login?source=pwa',
+    scope: '/tech/',
+    display: 'standalone',
+    display_override: ['standalone', 'minimal-ui'],
+    orientation: 'portrait',
+    background_color: '#0f172a',
+    theme_color: '#0f172a',
+    icons: [
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  });
+});
+
 function requireTechSession(req, res, next) {
   if (req.session && req.session.isTechnician && req.session.techId) {
     return next();
@@ -199,6 +224,18 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
     const techId = req.session.techId;
     
     techSvc.updateTicketStatus(ticketId, techId, status);
+    const ticketSvc = require('../services/ticketService');
+    const customerSvc = require('../services/customerService');
+    const ticket = ticketSvc.getTicketById(ticketId);
+    if (ticket?.customer_id) {
+      const statusLabel = String(status || 'open').replace(/_/g, ' ').toUpperCase();
+      customerSvc.addPortalNotification(ticket.customer_id, {
+        kind: 'ticket',
+        tab: 'ticketing',
+        title: `Update tiket #${ticket.id}`,
+        body: `${ticket.subject || 'Keluhan pelanggan'} - Status ${statusLabel}`
+      }, { dedupeWindowMs: 5 * 60 * 1000 });
+    }
     req.session._msg = { type: 'success', text: 'Status keluhan berhasil diperbarui.' };
 
     // --- WHATSAPP NOTIFICATION FOR RESOLVED TICKET ---
@@ -209,9 +246,6 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
         
         if (settings.whatsapp_enabled) {
           const { sendWA } = await import('../services/whatsappBot.mjs');
-          const ticketSvc = require('../services/ticketService');
-          const ticket = ticketSvc.getTicketById(ticketId);
-          
           if (ticket) {
             const waMsg = `✅ *TIKET KELUHAN SELESAI*\n\n` +
                          `🎫 *ID Tiket:* #${ticket.id}\n` +
@@ -441,7 +475,8 @@ router.get('/api/odps/:id/ports', requireTechSession, (req, res) => {
 router.get('/api/customers/:id/detail', requireTechSession, async (req, res) => {
   try {
     const year = Number(req.query.year || new Date().getFullYear()) || new Date().getFullYear();
-    const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year });
+    const forceNetworkRefresh = String(req.query.refreshNetwork || '') === '1';
+    const detail = await customerDetailSvc.buildCustomerDetail(req.params.id, { year, forceNetworkRefresh });
     res.json(detail);
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });

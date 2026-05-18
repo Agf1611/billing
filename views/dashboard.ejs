@@ -14,7 +14,22 @@
   const manualPaymentAccountName = String(settings?.manual_payment_account_name || '').trim();
   const manualPaymentNotes = String(settings?.manual_payment_notes || '').trim();
   const hasManualPayment = Boolean(manualPaymentBank && manualPaymentAccountNumber);
-  const customerCode = String(profileData.genieacs_tag || profileData.pppoe_username || profileData.phone || customerData.phone || profileData.id || '-').trim();
+  function isSafePortalIdentity(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw === '-') return false;
+    if (/@/.test(raw)) return false;
+    if (/pppoe/i.test(raw)) return false;
+    return true;
+  }
+  const customerCode = String(
+    [
+      profileData.customer_code,
+      profileData.genieacs_tag,
+      /^\d{6,}$/.test(String(profileData.phone || '').trim()) ? profileData.phone : '',
+      /^\d{6,}$/.test(String(customerData.phone || '').trim()) ? customerData.phone : '',
+      profileData.id ? `ID ${profileData.id}` : ''
+    ].find((value) => isSafePortalIdentity(value)) || '-'
+  ).trim();
   const customerName = profileData.name || customerData.name || 'Pelanggan';
   const packageName = profileData.package_name || customerData.package_name || 'Paket Internet';
   const customerPhone = profileData.phone || customerData.phone || '-';
@@ -23,8 +38,8 @@
   const customerIdLabel = customerCode || String(profileData.id || '-');
   const routerDisplayName = profileData.router_name || customerData.model || customerData.productClass || '-';
   const monthlyPrice = Number(profileData.package_price || 0);
-  const uploadBytes = Math.max(0, Number(profileData.bytes_out || 0));
-  const downloadBytes = Math.max(0, Number(profileData.bytes_in || 0));
+  const downloadBytes = Math.max(0, Number(profileData.bytes_out || 0));
+  const uploadBytes = Math.max(0, Number(profileData.bytes_in || 0));
   const totalBytes = uploadBytes + downloadBytes;
   const useFup = Number(profileData.use_fup || 0) === 1 && Number(profileData.fup_limit_gb || 0) > 0;
   const quotaLimitBytes = useFup ? Number(profileData.fup_limit_gb || 0) * 1024 * 1024 * 1024 : 0;
@@ -43,6 +58,8 @@
   const activeTickets = (tickets || []).filter((ticket) => !['resolved', 'closed', 'done'].includes(String(ticket.status || '').toLowerCase()));
   const pppoeStatusText = String(customerData.pppoeStatusText || profileData.pppoe_status || '').trim();
   const isPppoeOnline = /online|connected|aktif/i.test(pppoeStatusText);
+  const portalAccountStatus = String(profileData.status || customerData.status || 'active').trim().toLowerCase();
+  const portalAccountLabel = portalAccountStatus === 'suspended' ? 'Isolir' : portalAccountStatus === 'inactive' ? 'Nonaktif' : 'Aktif';
   const hasRouterPortalAccess = Boolean(
     (customerData.ssid && customerData.ssid !== '-') ||
     (customerData.serialNumber && customerData.serialNumber !== '-') ||
@@ -155,13 +172,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#2f6bff">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="apple-touch-icon" href="<%= companyLogoUrl %>">
-  <link rel="icon" href="<%= companyLogoUrl %>">
+  <%- include('partials/pwa_portal', {
+    portalKey: 'customer',
+    manifestPath: '/pwa/customer.webmanifest',
+    scope: '/customer/',
+    themeColor: '#2f6bff',
+    appTitle: 'Portal Pelanggan',
+    installLabel: 'Install Pelanggan'
+  }) %>
+  <script>
+    (function () {
+      try {
+        var savedTheme = localStorage.getItem('customer-portal-theme');
+        var theme = savedTheme === 'dark' || savedTheme === 'light'
+          ? savedTheme
+          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+        document.body && document.body.setAttribute('data-theme', theme);
+      } catch (_) {}
+    })();
+  </script>
   <style>
     :root {
       --app-bg: #eef4ff;
@@ -180,6 +210,23 @@
       --shell-width: min(100vw, 430px);
     }
 
+    html[data-theme="dark"],
+    body[data-theme="dark"] {
+      --app-bg: #07111f;
+      --app-surface: rgba(17, 27, 45, 0.92);
+      --app-surface-strong: #111d31;
+      --app-line: rgba(146, 176, 230, 0.14);
+      --app-text: #edf4ff;
+      --app-text-soft: #9aa9c8;
+      --app-blue: #69a5ff;
+      --app-blue-deep: #3c7df0;
+      --app-blue-soft: rgba(105, 165, 255, 0.14);
+      --app-danger: #ff6e7e;
+      --app-success: #33ca84;
+      --app-warning: #ffb25f;
+      --app-shadow: 0 30px 70px rgba(0, 0, 0, 0.38);
+    }
+
     * {
       box-sizing: border-box;
     }
@@ -196,6 +243,15 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    html[data-theme="dark"],
+    body[data-theme="dark"] {
+      background:
+        radial-gradient(circle at top left, rgba(60, 125, 240, 0.22) 0%, rgba(60, 125, 240, 0) 34%),
+        radial-gradient(circle at top right, rgba(43, 177, 255, 0.12) 0%, rgba(43, 177, 255, 0) 30%),
+        linear-gradient(180deg, #06111f 0%, #0c1628 100%);
+      color: var(--app-text);
+    }
+
     body::before {
       content: "";
       position: fixed;
@@ -206,6 +262,14 @@
       background-size: 26px 26px;
       pointer-events: none;
       opacity: 0.45;
+    }
+
+    html[data-theme="dark"] body::before,
+    body[data-theme="dark"]::before {
+      background-image:
+        linear-gradient(rgba(105, 165, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(105, 165, 255, 0.05) 1px, transparent 1px);
+      opacity: 0.22;
     }
 
     body.pwa-body {
@@ -219,6 +283,13 @@
     body.android-webview {
       background:
         linear-gradient(180deg, #f6faff 0%, #edf4ff 100%);
+    }
+
+    html[data-theme="dark"] body.android-webview,
+    body[data-theme="dark"].android-webview {
+      background:
+        linear-gradient(180deg, #06111f 0%, #0c1628 100%);
+      color: var(--app-text);
     }
 
     body.android-webview::before {
@@ -236,6 +307,11 @@
       box-shadow: var(--app-shadow);
     }
 
+    html[data-theme="dark"] .app-shell,
+    body[data-theme="dark"] .app-shell {
+      background: linear-gradient(180deg, rgba(7, 17, 31, 0.9) 0%, rgba(11, 23, 41, 0.96) 100%);
+    }
+
     .app-shell::before {
       content: "";
       position: absolute;
@@ -244,6 +320,13 @@
         radial-gradient(380px 180px at 50% -20%, rgba(47, 107, 255, 0.18), transparent 72%),
         radial-gradient(280px 180px at 90% 18%, rgba(80, 180, 255, 0.12), transparent 70%);
       pointer-events: none;
+    }
+
+    html[data-theme="dark"] .app-shell::before,
+    body[data-theme="dark"] .app-shell::before {
+      background:
+        radial-gradient(380px 180px at 50% -20%, rgba(56, 126, 255, 0.2), transparent 72%),
+        radial-gradient(280px 180px at 90% 18%, rgba(43, 177, 255, 0.12), transparent 70%);
     }
 
     .app-splash {
@@ -257,6 +340,13 @@
         linear-gradient(180deg, #f8fbff 0%, #e9f1ff 100%);
       z-index: 1400;
       transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+
+    html[data-theme="dark"] .app-splash,
+    body[data-theme="dark"] .app-splash {
+      background:
+        radial-gradient(circle at 50% 22%, rgba(74, 131, 255, 0.34), rgba(74, 131, 255, 0) 42%),
+        linear-gradient(180deg, #081120 0%, #0d1729 100%);
     }
 
     .app-splash.is-hidden {
@@ -358,11 +448,26 @@
       padding: 8px 10px;
     }
 
+    .brand-chip {
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
+    }
+
     .topbar-left,
     .topbar-right {
       display: flex;
       align-items: center;
       gap: 10px;
+    }
+
+    .topbar-left {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .topbar-right {
+      flex: 0 0 auto;
     }
 
     .header-menu,
@@ -411,6 +516,404 @@
       box-shadow: 0 22px 40px rgba(44, 79, 146, 0.18);
       display: none;
       z-index: 1100;
+    }
+
+    html[data-theme="dark"] .app-topbar,
+    body[data-theme="dark"] .app-topbar,
+    html[data-theme="dark"] .brand-chip,
+    body[data-theme="dark"] .brand-chip,
+    html[data-theme="dark"] .header-action,
+    body[data-theme="dark"] .header-action,
+    html[data-theme="dark"] .page-title,
+    body[data-theme="dark"] .page-title,
+    html[data-theme="dark"] .account-menu,
+    body[data-theme="dark"] .account-menu,
+    html[data-theme="dark"] .app-menu-sheet,
+    body[data-theme="dark"] .app-menu-sheet,
+    html[data-theme="dark"] .app-menu-tile,
+    body[data-theme="dark"] .app-menu-tile,
+    html[data-theme="dark"] .quick-card,
+    body[data-theme="dark"] .quick-card,
+    html[data-theme="dark"] .content-card,
+    body[data-theme="dark"] .content-card,
+    html[data-theme="dark"] .traffic-panel,
+    body[data-theme="dark"] .traffic-panel,
+    html[data-theme="dark"] .traffic-period-item,
+    body[data-theme="dark"] .traffic-period-item,
+    html[data-theme="dark"] .app-bottom-nav,
+    body[data-theme="dark"] .app-bottom-nav,
+    html[data-theme="dark"] .modal-content.app-modal,
+    body[data-theme="dark"] .modal-content.app-modal,
+    html[data-theme="dark"] .billing-item,
+    body[data-theme="dark"] .billing-item,
+    html[data-theme="dark"] .profile-highlight,
+    body[data-theme="dark"] .profile-highlight,
+    html[data-theme="dark"] .portal-package-item,
+    body[data-theme="dark"] .portal-package-item,
+    html[data-theme="dark"] .notification-item,
+    body[data-theme="dark"] .notification-item,
+    html[data-theme="dark"] .speedtest-frame.light-embed,
+    body[data-theme="dark"] .speedtest-frame.light-embed {
+      background: var(--app-surface) !important;
+      color: var(--app-text);
+      border-color: var(--app-line) !important;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .soft-muted,
+    body[data-theme="dark"] .soft-muted,
+    html[data-theme="dark"] .page-title small,
+    body[data-theme="dark"] .page-title small,
+    html[data-theme="dark"] .brand-meta span,
+    body[data-theme="dark"] .brand-meta span,
+    html[data-theme="dark"] .traffic-panel-title p,
+    body[data-theme="dark"] .traffic-panel-title p,
+    html[data-theme="dark"] .portal-package-desc,
+    body[data-theme="dark"] .portal-package-desc,
+    html[data-theme="dark"] .item-meta,
+    body[data-theme="dark"] .item-meta,
+    html[data-theme="dark"] .account-menu-head span,
+    body[data-theme="dark"] .account-menu-head span {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] .notification-summary-card,
+    body[data-theme="dark"] .notification-summary-card {
+      background: rgba(18, 31, 53, 0.92);
+      border-color: rgba(126, 168, 239, 0.12);
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .notification-summary-card strong,
+    body[data-theme="dark"] .notification-summary-card strong,
+    html[data-theme="dark"] .notification-item strong,
+    body[data-theme="dark"] .notification-item strong {
+      color: var(--app-text);
+    }
+
+    html[data-theme="dark"] .notification-summary-card span,
+    body[data-theme="dark"] .notification-summary-card span,
+    html[data-theme="dark"] .notification-summary-card small,
+    body[data-theme="dark"] .notification-summary-card small,
+    html[data-theme="dark"] .notification-item p,
+    body[data-theme="dark"] .notification-item p,
+    html[data-theme="dark"] .notification-time,
+    body[data-theme="dark"] .notification-time {
+      color: var(--app-text-soft);
+    }
+
+    html[data-theme="dark"] .notification-arrow,
+    body[data-theme="dark"] .notification-arrow {
+      background: rgba(105, 165, 255, 0.12);
+      color: #7fb1ff;
+    }
+
+    html[data-theme="dark"] .brand-meta strong,
+    body[data-theme="dark"] .brand-meta strong,
+    html[data-theme="dark"] .account-menu-head strong,
+    body[data-theme="dark"] .account-menu-head strong,
+    html[data-theme="dark"] .app-menu-head strong,
+    body[data-theme="dark"] .app-menu-head strong,
+    html[data-theme="dark"] .app-menu-tile strong,
+    body[data-theme="dark"] .app-menu-tile strong,
+    html[data-theme="dark"] .home-intro-line strong,
+    body[data-theme="dark"] .home-intro-line strong,
+    html[data-theme="dark"] .home-quick-title,
+    body[data-theme="dark"] .home-quick-title,
+    html[data-theme="dark"] .quick-card h4,
+    body[data-theme="dark"] .quick-card h4,
+    html[data-theme="dark"] .status-banner strong,
+    body[data-theme="dark"] .status-banner strong,
+    html[data-theme="dark"] .status-banner p,
+    body[data-theme="dark"] .status-banner p,
+    html[data-theme="dark"] .android-nav button,
+    body[data-theme="dark"] .android-nav button,
+    html[data-theme="dark"] .portal-package-price strong,
+    body[data-theme="dark"] .portal-package-price strong,
+    html[data-theme="dark"] .portal-package-top strong,
+    body[data-theme="dark"] .portal-package-top strong,
+    html[data-theme="dark"] .billing-amount,
+    body[data-theme="dark"] .billing-amount,
+    html[data-theme="dark"] .profile-highlight h4,
+    body[data-theme="dark"] .profile-highlight h4 {
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] .home-intro h1,
+    body[data-theme="dark"] .home-intro h1,
+    html[data-theme="dark"] .app-menu-head span,
+    body[data-theme="dark"] .app-menu-head span,
+    html[data-theme="dark"] .app-menu-tile span,
+    body[data-theme="dark"] .app-menu-tile span,
+    html[data-theme="dark"] .quick-card p,
+    body[data-theme="dark"] .quick-card p,
+    html[data-theme="dark"] .status-banner p,
+    body[data-theme="dark"] .status-banner p,
+    html[data-theme="dark"] .portal-package-price span,
+    body[data-theme="dark"] .portal-package-price span,
+    html[data-theme="dark"] .profile-highlight p,
+    body[data-theme="dark"] .profile-highlight p {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] .home-code,
+    body[data-theme="dark"] .home-code,
+    html[data-theme="dark"] .mini-status,
+    body[data-theme="dark"] .mini-status,
+    html[data-theme="dark"] .status-detail,
+    body[data-theme="dark"] .status-detail,
+    html[data-theme="dark"] .header-action,
+    body[data-theme="dark"] .header-action,
+    html[data-theme="dark"] .app-menu-tile i,
+    body[data-theme="dark"] .app-menu-tile i {
+      color: var(--app-text);
+    }
+
+    html[data-theme="dark"] .home-code,
+    body[data-theme="dark"] .home-code,
+    html[data-theme="dark"] .status-banner,
+    body[data-theme="dark"] .status-banner,
+    html[data-theme="dark"] .page-title,
+    body[data-theme="dark"] .page-title {
+      background: rgba(17, 27, 45, 0.82) !important;
+    }
+
+    html[data-theme="dark"] .home-code-copy,
+    body[data-theme="dark"] .home-code-copy,
+    html[data-theme="dark"] .header-menu,
+    body[data-theme="dark"] .header-menu,
+    html[data-theme="dark"] .app-menu-close,
+    body[data-theme="dark"] .app-menu-close {
+      background: rgba(105, 165, 255, 0.12) !important;
+      color: #dce9ff !important;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .topbar-row .brand-chip,
+    body[data-theme="dark"] .topbar-row .brand-chip,
+    html[data-theme="dark"] .topbar-row .header-action,
+    body[data-theme="dark"] .topbar-row .header-action,
+    html[data-theme="dark"] .topbar-row .header-menu,
+    body[data-theme="dark"] .topbar-row .header-menu {
+      background: rgba(17, 27, 45, 0.96) !important;
+      border: 1px solid rgba(146, 176, 230, 0.12);
+      color: #edf4ff !important;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+    }
+
+    html[data-theme="dark"] .topbar-row .brand-chip img,
+    body[data-theme="dark"] .topbar-row .brand-chip img {
+      filter: saturate(1.02) contrast(1.02);
+    }
+
+    html[data-theme="dark"] .app-menu-backdrop.is-open,
+    body[data-theme="dark"] .app-menu-backdrop.is-open {
+      background: rgba(2, 8, 20, 0.62);
+    }
+
+    html[data-theme="dark"] .home-hero-card,
+    body[data-theme="dark"] .home-hero-card {
+      background: linear-gradient(135deg, #1f5fde 0%, #2f7fff 46%, #1d4fcc 100%) !important;
+      box-shadow: 0 26px 52px rgba(7, 18, 42, 0.38);
+    }
+
+    html[data-theme="dark"] .home-hero-info-box,
+    body[data-theme="dark"] .home-hero-info-box,
+    html[data-theme="dark"] .home-hero-payment-card,
+    body[data-theme="dark"] .home-hero-payment-card {
+      background: rgba(10, 22, 46, 0.18) !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    html[data-theme="dark"] .home-pay-button,
+    body[data-theme="dark"] .home-pay-button {
+      background: #f8fbff !important;
+      color: #215df4 !important;
+      box-shadow: 0 10px 22px rgba(7, 18, 42, 0.24);
+    }
+
+    html[data-theme="dark"] .home-bill-state.okay,
+    body[data-theme="dark"] .home-bill-state.okay {
+      background: rgba(32, 178, 107, 0.24) !important;
+      color: #f2fff8 !important;
+    }
+
+    html[data-theme="dark"] .home-bill-state.warn,
+    body[data-theme="dark"] .home-bill-state.warn {
+      background: rgba(242, 72, 91, 0.96) !important;
+      color: #fff5f7 !important;
+    }
+
+    html[data-theme="dark"] .hero-sub,
+    body[data-theme="dark"] .hero-sub,
+    html[data-theme="dark"] .home-plan-state,
+    body[data-theme="dark"] .home-plan-state,
+    html[data-theme="dark"] .home-due-inline small,
+    body[data-theme="dark"] .home-due-inline small,
+    html[data-theme="dark"] .home-amount-wrap span,
+    body[data-theme="dark"] .home-amount-wrap span {
+      color: rgba(237, 244, 255, 0.78) !important;
+    }
+
+    html[data-theme="dark"] .home-hero-meta span,
+    body[data-theme="dark"] .home-hero-meta span,
+    html[data-theme="dark"] .home-due-inline strong,
+    body[data-theme="dark"] .home-due-inline strong,
+    html[data-theme="dark"] .home-amount-wrap strong,
+    body[data-theme="dark"] .home-amount-wrap strong,
+    html[data-theme="dark"] .home-usage-card small,
+    body[data-theme="dark"] .home-usage-card small,
+    html[data-theme="dark"] .home-usage-card strong,
+    body[data-theme="dark"] .home-usage-card strong,
+    html[data-theme="dark"] .hero-package,
+    body[data-theme="dark"] .hero-package,
+    html[data-theme="dark"] .hero-eyebrow,
+    body[data-theme="dark"] .hero-eyebrow {
+      color: #ffffff !important;
+    }
+
+    html[data-theme="dark"] .traffic-gauge-card,
+    body[data-theme="dark"] .traffic-gauge-card,
+    html[data-theme="dark"] .traffic-period-item,
+    body[data-theme="dark"] .traffic-period-item {
+      background: rgba(10, 18, 32, 0.42) !important;
+    }
+
+    html[data-theme="dark"] .traffic-gauge-card,
+    body[data-theme="dark"] .traffic-gauge-card {
+      --gauge-face-bg: radial-gradient(circle at 50% 38%, #16284b 0%, #0d1830 60%, #07101f 100%);
+      --gauge-face-shadow: inset 0 0 0 1px rgba(170, 204, 255, 0.08), inset 0 16px 28px rgba(255,255,255,0.015);
+      --gauge-ring-muted: rgba(112, 143, 194, 0.2);
+      --gauge-dash-color: rgba(133, 162, 214, 0.2);
+      --gauge-center-bg: transparent;
+      --gauge-center-shadow: none;
+      --gauge-needle-base: #f8fbff;
+      --gauge-needle-ring: rgba(180, 215, 255, 0.22);
+      --gauge-value-color: #f8fbff;
+      --gauge-unit-color: rgba(219, 234, 254, 0.82);
+      --gauge-label-color: rgba(191, 219, 254, 0.72);
+    }
+
+    html[data-theme="dark"] .quick-green,
+    body[data-theme="dark"] .quick-green { background: linear-gradient(180deg, rgba(34, 133, 89, 0.26), rgba(27, 92, 63, 0.2)); color: #73e0a8; }
+    html[data-theme="dark"] .quick-cyan,
+    body[data-theme="dark"] .quick-cyan { background: linear-gradient(180deg, rgba(26, 118, 181, 0.28), rgba(20, 79, 122, 0.2)); color: #7ad7ff; }
+    html[data-theme="dark"] .quick-lilac,
+    body[data-theme="dark"] .quick-lilac { background: linear-gradient(180deg, rgba(92, 80, 240, 0.3), rgba(58, 48, 150, 0.22)); color: #b7adff; }
+    html[data-theme="dark"] .quick-rose,
+    body[data-theme="dark"] .quick-rose { background: linear-gradient(180deg, rgba(190, 84, 133, 0.28), rgba(110, 45, 75, 0.2)); color: #ffb7d1; }
+    html[data-theme="dark"] .quick-gold,
+    body[data-theme="dark"] .quick-gold { background: linear-gradient(180deg, rgba(178, 121, 34, 0.3), rgba(110, 75, 20, 0.22)); color: #ffd08d; }
+    html[data-theme="dark"] .quick-sky,
+    body[data-theme="dark"] .quick-sky { background: linear-gradient(180deg, rgba(59, 109, 215, 0.3), rgba(35, 62, 128, 0.22)); color: #9fc1ff; }
+
+    html[data-theme="dark"] .splash-card,
+    body[data-theme="dark"] .splash-card {
+      background: rgba(12, 22, 40, 0.82);
+      color: var(--app-text);
+      border-color: var(--app-line);
+    }
+
+    html[data-theme="dark"] .android-nav,
+    body[data-theme="dark"] .android-nav {
+      background: rgba(17, 27, 45, 0.96);
+      border-color: var(--app-line);
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.32);
+    }
+
+    html[data-theme="dark"] .android-nav button.is-active,
+    body[data-theme="dark"] .android-nav button.is-active {
+      color: #cfe0ff;
+      background: rgba(105, 165, 255, 0.14);
+    }
+
+    html[data-theme="dark"] .detail-item,
+    body[data-theme="dark"] .detail-item,
+    html[data-theme="dark"] .device-item,
+    body[data-theme="dark"] .device-item,
+    html[data-theme="dark"] .ticket-item,
+    body[data-theme="dark"] .ticket-item,
+    html[data-theme="dark"] .empty-card,
+    body[data-theme="dark"] .empty-card,
+    html[data-theme="dark"] .business-card,
+    body[data-theme="dark"] .business-card {
+      background: rgba(20, 31, 50, 0.96) !important;
+      border-color: rgba(120, 150, 210, 0.14) !important;
+      color: var(--app-text) !important;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .detail-item strong,
+    body[data-theme="dark"] .detail-item strong,
+    html[data-theme="dark"] .device-item strong,
+    body[data-theme="dark"] .device-item strong,
+    html[data-theme="dark"] .ticket-item strong,
+    body[data-theme="dark"] .ticket-item strong,
+    html[data-theme="dark"] .empty-card strong,
+    body[data-theme="dark"] .empty-card strong,
+    html[data-theme="dark"] .business-card h5,
+    body[data-theme="dark"] .business-card h5,
+    html[data-theme="dark"] .business-card strong,
+    body[data-theme="dark"] .business-card strong {
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] .detail-item span,
+    body[data-theme="dark"] .detail-item span,
+    html[data-theme="dark"] .device-item span,
+    body[data-theme="dark"] .device-item span,
+    html[data-theme="dark"] .ticket-item p,
+    body[data-theme="dark"] .ticket-item p,
+    html[data-theme="dark"] .ticket-meta span,
+    body[data-theme="dark"] .ticket-meta span,
+    html[data-theme="dark"] .empty-card div,
+    body[data-theme="dark"] .empty-card div,
+    html[data-theme="dark"] .business-card,
+    body[data-theme="dark"] .business-card {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] .payment-method-chip,
+    body[data-theme="dark"] .payment-method-chip,
+    html[data-theme="dark"] .billing-badge,
+    body[data-theme="dark"] .billing-badge,
+    html[data-theme="dark"] .status-detail,
+    body[data-theme="dark"] .status-detail {
+      background: rgba(105, 165, 255, 0.14) !important;
+      color: #cfe0ff !important;
+      border-color: transparent !important;
+    }
+
+    html[data-theme="dark"] .billing-badge.status-unpaid,
+    body[data-theme="dark"] .billing-badge.status-unpaid {
+      background: rgba(255, 178, 95, 0.14) !important;
+      color: #ffd08d !important;
+    }
+
+    html[data-theme="dark"] .billing-badge.status-paid,
+    body[data-theme="dark"] .billing-badge.status-paid {
+      background: rgba(51, 202, 132, 0.14) !important;
+      color: #7de5b0 !important;
+    }
+
+    html[data-theme="dark"] .ticket-trigger,
+    body[data-theme="dark"] .ticket-trigger {
+      background: rgba(105, 165, 255, 0.12) !important;
+      color: #cfe0ff !important;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .notification-icon,
+    body[data-theme="dark"] .notification-icon,
+    html[data-theme="dark"] .detail-item i,
+    body[data-theme="dark"] .detail-item i,
+    html[data-theme="dark"] .device-item i,
+    body[data-theme="dark"] .device-item i,
+    html[data-theme="dark"] .empty-card i,
+    body[data-theme="dark"] .empty-card i {
+      color: #7fb1ff !important;
+      background: rgba(105, 165, 255, 0.12) !important;
     }
 
     .account-menu.is-open {
@@ -468,24 +971,31 @@
       width: 18px;
       height: 18px;
       object-fit: contain;
+      flex: 0 0 auto;
     }
 
     .brand-meta {
       display: flex;
       flex-direction: column;
       line-height: 1.05;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .brand-meta strong {
       font-size: 12px;
       font-weight: 800;
       letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .brand-meta span {
       font-size: 10px;
       color: var(--app-text-soft);
       font-weight: 700;
+      white-space: nowrap;
     }
 
     .page-title {
@@ -1405,11 +1915,11 @@
       background: currentColor;
     }
 
-    .usage-breakdown-item.upload small {
+    .usage-breakdown-item.download small {
       color: #2f6bff;
     }
 
-    .usage-breakdown-item.download small {
+    .usage-breakdown-item.upload small {
       color: #20b26b;
     }
 
@@ -1422,123 +1932,272 @@
     .traffic-gauge-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
+      gap: 12px;
+      align-items: stretch;
     }
 
     .traffic-gauge-card {
+      --gauge-face-bg: radial-gradient(circle at 50% 38%, #ffffff 0%, #f4f8ff 62%, #d9e6fb 100%);
+      --gauge-face-shadow: inset 0 0 0 1px rgba(86, 116, 170, 0.08), inset 0 16px 24px rgba(255,255,255,0.75);
+      --gauge-ring-muted: rgba(126, 146, 186, 0.18);
+      --gauge-dash-color: rgba(124, 146, 192, 0.22);
+      --gauge-center-bg: transparent;
+      --gauge-center-shadow: none;
+      --gauge-needle-base: #f7fbff;
+      --gauge-needle-shadow: rgba(47, 107, 255, 0.18);
+      --gauge-needle-ring: rgba(18, 30, 56, 0.14);
+      --gauge-value-color: #0d1a30;
+      --gauge-unit-color: #5f6f89;
+      --gauge-label-color: #6f7f98;
       display: grid;
-      justify-items: center;
-      gap: 10px;
-      padding: 8px 4px 4px;
+      gap: 12px;
+      padding: 16px 14px 14px;
+      border-radius: 24px;
+      border: 1px solid rgba(104, 129, 182, 0.14);
+      background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.78) 0%, rgba(246, 249, 255, 0.92) 58%, rgba(235, 241, 252, 0.98) 100%);
+      min-width: 0;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
     }
 
-    .traffic-gauge {
+    .traffic-gauge-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .traffic-gauge-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .traffic-gauge-label i {
+      font-size: 18px;
+    }
+
+    .traffic-gauge-label h5 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .traffic-gauge-cap {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--app-text-soft);
+      white-space: nowrap;
+    }
+
+    .traffic-gauge-meter {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .traffic-gauge-dial {
       position: relative;
-      width: 154px;
-      height: 92px;
-      overflow: hidden;
+      width: 156px;
+      height: 156px;
+      display: grid;
+      place-items: center;
     }
 
     .traffic-gauge-arc {
+      --gauge-fill: 8;
+      --gauge-color: #2f6bff;
       position: absolute;
       inset: 0;
-      border: 12px solid #e8edf6;
-      border-bottom: 0;
-      border-radius: 154px 154px 0 0;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 220deg,
+          var(--gauge-color) 0deg,
+          var(--gauge-color) calc(var(--gauge-fill) * 1deg),
+          var(--gauge-ring-muted) calc(var(--gauge-fill) * 1deg),
+          var(--gauge-ring-muted) 280deg,
+          transparent 280deg 360deg);
+      filter: drop-shadow(0 6px 12px var(--gauge-needle-shadow));
+    }
+
+    .traffic-gauge-arc::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border-radius: 50%;
+      background: var(--gauge-face-bg);
+      box-shadow: var(--gauge-face-shadow);
+    }
+
+    .traffic-gauge-arc::after {
+      content: "";
+      position: absolute;
+      inset: 22px;
+      border-radius: 50%;
+      border: 2px dashed var(--gauge-dash-color);
     }
 
     .traffic-gauge-needle {
+      --needle-angle: -130deg;
       position: absolute;
-      left: 50%;
-      bottom: 0;
-      width: 4px;
-      height: 74px;
-      transform-origin: center bottom;
-      transform: translateX(-50%) rotate(var(--gauge-rotate, -90deg));
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      transform: rotate(var(--needle-angle));
       transition: transform 0.35s ease;
     }
 
     .traffic-gauge-needle::before {
       content: "";
-      position: absolute;
-      left: 50%;
-      top: 10px;
-      width: 3px;
-      height: 58px;
-      border-radius: 999px;
-      background: #243042;
-      transform: translateX(-50%);
-      box-shadow: 0 0 0 1px rgba(36, 48, 66, 0.02);
+      width: 76px;
+      height: 12px;
+      background: linear-gradient(90deg, var(--gauge-needle-base) 0%, var(--gauge-color) 88%);
+      clip-path: polygon(0 50%, 12% 0, 100% 50%, 12% 100%);
+      transform-origin: 6px center;
+      transform: translateX(24px);
+      box-shadow:
+        0 3px 10px rgba(8, 18, 35, 0.18);
     }
 
     .traffic-gauge-needle::after {
       content: "";
       position: absolute;
-      left: 50%;
-      bottom: -1px;
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      background: #243042;
-      transform: translateX(-50%);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--gauge-color);
+      box-shadow:
+        0 0 0 6px var(--gauge-needle-ring),
+        0 0 0 1px rgba(255,255,255,0.16);
     }
 
     .traffic-gauge-center {
-      position: absolute;
-      left: 50%;
-      bottom: 8px;
-      transform: translateX(-50%);
-      min-width: 96px;
-      padding: 12px 10px 10px;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 12px 22px rgba(54, 86, 152, 0.08);
+      position: relative;
+      z-index: 2;
+      min-width: 88px;
+      padding: 0;
+      border-radius: 0;
+      background: var(--gauge-center-bg);
+      box-shadow: var(--gauge-center-shadow);
+      display: grid;
+      gap: 3px;
+      justify-items: center;
       text-align: center;
     }
 
     .traffic-gauge-center strong {
-      display: block;
-      font-size: 18px;
+      font-size: 22px;
       line-height: 1;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.06em;
       font-weight: 800;
-      color: #20b26b;
+      color: var(--gauge-value-color);
+      text-shadow: 0 1px 0 rgba(255,255,255,0.22);
     }
 
     .traffic-gauge-center span {
-      display: block;
-      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--gauge-unit-color);
+    }
+
+    .traffic-gauge-center small {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gauge-label-color);
+    }
+
+    .traffic-gauge-readout {
+      display: grid;
+      justify-items: center;
+      gap: 2px;
+      margin-top: -2px;
+      text-align: center;
+    }
+
+    .traffic-gauge-readout strong {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      margin: 0;
+      color: var(--gauge-value-color);
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .traffic-gauge-readout strong span {
+      font-size: 20px;
+    }
+
+    .traffic-gauge-readout strong small {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--gauge-unit-color);
+      letter-spacing: 0;
+    }
+
+    .traffic-gauge-readout > span {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--gauge-label-color);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .traffic-gauge-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
       font-size: 11px;
       font-weight: 700;
       color: var(--app-text-soft);
+      width: 100%;
     }
 
-    .traffic-gauge-card h5 {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      color: #263247;
+    .traffic-gauge-meta span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.07);
+      border: 1px solid rgba(104, 129, 182, 0.12);
+      white-space: nowrap;
     }
 
-    .traffic-gauge-card.upload-tone .traffic-gauge-arc {
-      border-color: rgba(32, 178, 107, 0.26);
-      border-bottom: 0;
-    }
-
-    .traffic-gauge-card.upload-tone .traffic-gauge-center strong,
-    .traffic-gauge-card.upload-tone h5 {
+    .traffic-gauge-card.upload-tone .traffic-gauge-label i,
+    .traffic-gauge-card.upload-tone .traffic-gauge-label h5,
+    .traffic-gauge-card.upload-tone .traffic-gauge-center strong {
       color: #20b26b;
     }
 
-    .traffic-gauge-card.download-tone .traffic-gauge-arc {
-      border-color: rgba(47, 107, 255, 0.22);
-      border-bottom: 0;
+    .traffic-gauge-card.upload-tone .traffic-gauge-arc,
+    .traffic-gauge-card.upload-tone .traffic-gauge-needle {
+      --gauge-color: #20b26b;
+      --gauge-needle-shadow: rgba(32, 178, 107, 0.2);
     }
 
-    .traffic-gauge-card.download-tone .traffic-gauge-center strong,
-    .traffic-gauge-card.download-tone h5 {
+    .traffic-gauge-card.download-tone .traffic-gauge-label i,
+    .traffic-gauge-card.download-tone .traffic-gauge-label h5,
+    .traffic-gauge-card.download-tone .traffic-gauge-center strong {
       color: #2f6bff;
+    }
+
+    .traffic-gauge-card.download-tone .traffic-gauge-arc,
+    .traffic-gauge-card.download-tone .traffic-gauge-needle {
+      --gauge-color: #2f6bff;
+      --gauge-needle-shadow: rgba(47, 107, 255, 0.2);
     }
 
     .traffic-period-grid {
@@ -1807,8 +2466,14 @@
       position: relative;
       z-index: 1;
       display: grid;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .home-hero-top {
+      display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
+      gap: 10px;
       align-items: start;
     }
 
@@ -1819,7 +2484,7 @@
     }
 
     .home-hero-main {
-      gap: 3px;
+      gap: 4px;
       min-width: 0;
     }
 
@@ -1845,17 +2510,76 @@
     }
 
     .home-hero-meta {
-      gap: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
       margin-top: 0;
       font-size: 9px;
     }
 
-    .home-status-line {
-      display: flex;
+    .home-hero-meta span {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 5px;
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      white-space: nowrap;
+    }
+
+    .home-hero-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(132px, .85fr);
       gap: 8px;
-      margin-top: 1px;
+    }
+
+    .home-hero-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .home-hero-info-box,
+    .home-hero-payment-card {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 9px 10px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    .home-hero-info-box small,
+    .home-hero-payment-card small {
+      font-size: 8px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.76);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      line-height: 1.1;
+    }
+
+    .home-hero-info-box strong,
+    .home-hero-payment-card strong {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .home-hero-payment-card {
+      align-content: space-between;
+    }
+
+    .home-hero-payment-card strong {
+      font-size: 16px;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .home-bill-state {
@@ -1882,58 +2606,11 @@
       background: rgba(32, 178, 107, 0.24);
     }
 
-    .home-due-inline {
-      display: grid;
-      justify-items: end;
-      gap: 1px;
-      min-width: 0;
-    }
-
-    .home-due-inline small {
-      font-size: 8px;
-      font-weight: 700;
-      color: rgba(255, 255, 255, 0.84);
-      line-height: 1;
-    }
-
-    .home-due-inline strong {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      color: #ffffff;
-      line-height: 1;
-      text-align: right;
-    }
-
-    .home-amount-row {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .home-amount-wrap span {
-      display: block;
-      font-size: 8px;
-      font-weight: 700;
-      color: rgba(255, 255, 255, 0.84);
-      margin-bottom: 2px;
-    }
-
-    .home-amount-wrap strong {
-      display: block;
-      font-size: 15px;
-      font-weight: 800;
-      color: #ffffff;
-      line-height: 1;
-      letter-spacing: -0.05em;
-      white-space: nowrap;
-    }
-
     .home-pay-button {
+      width: 100%;
       min-width: 0;
-      min-height: 32px;
-      padding: 7px 10px;
+      min-height: 40px;
+      padding: 8px 12px;
       font-size: 10px;
       white-space: nowrap;
     }
@@ -1949,37 +2626,36 @@
     .home-usage-grid {
       position: relative;
       z-index: 1;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
     .home-usage-card {
-      flex: 1 1 0;
       min-width: 0;
-      padding: 6px 8px;
+      padding: 8px 10px;
       border-radius: 12px;
       background: rgba(255, 255, 255, 0.12);
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
+      display: grid;
+      gap: 4px;
     }
 
-    .home-usage-card.upload {
+    .home-usage-card.download {
       background: rgba(47, 107, 255, 0.16);
       border-color: rgba(120, 160, 255, 0.22);
     }
 
-    .home-usage-card.download {
+    .home-usage-card.upload {
       background: rgba(32, 178, 107, 0.18);
       border-color: rgba(101, 219, 160, 0.2);
     }
 
     .home-usage-card small {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       margin-bottom: 0;
       color: rgba(255, 255, 255, 0.82);
       font-size: 8px;
@@ -1991,12 +2667,12 @@
 
     .home-usage-card strong {
       display: inline-block;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 800;
       color: #ffffff;
       line-height: 1;
       letter-spacing: -0.04em;
-      text-align: right;
+      text-align: left;
     }
 
     .home-quick-section {
@@ -2283,69 +2959,305 @@
       letter-spacing: -0.03em;
     }
 
+    .notification-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .notification-summary-card {
+      padding: 12px 13px;
+      border-radius: 16px;
+      border: 1px solid rgba(47, 107, 255, 0.09);
+      background: rgba(255, 255, 255, 0.86);
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      text-align: left;
+    }
+
+    .notification-summary-card small {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--app-text-soft);
+    }
+
+    .notification-summary-card strong {
+      font-size: 22px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--app-text);
+    }
+
+    .notification-summary-card span {
+      font-size: 11px;
+      line-height: 1.4;
+      font-weight: 700;
+      color: var(--app-text-soft);
+    }
+
+    .notification-summary-card.kind-announcement { background: linear-gradient(180deg, rgba(59, 130, 246, 0.09) 0%, rgba(59, 130, 246, 0.04) 100%); }
+    .notification-summary-card.kind-offline { background: linear-gradient(180deg, rgba(239, 68, 68, 0.09) 0%, rgba(239, 68, 68, 0.04) 100%); }
+    .notification-summary-card.kind-password { background: linear-gradient(180deg, rgba(16, 185, 129, 0.09) 0%, rgba(16, 185, 129, 0.04) 100%); }
+    .notification-summary-card.kind-billing { background: linear-gradient(180deg, rgba(245, 158, 11, 0.09) 0%, rgba(245, 158, 11, 0.04) 100%); }
+
     .notification-list {
       display: grid;
-      gap: 12px;
+      gap: 10px;
+    }
+
+    .notification-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .notification-header-action {
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--app-blue);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .notification-filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .notification-filter-chip {
+      border: 1px solid rgba(47, 107, 255, 0.12);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--app-text-soft);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .notification-filter-chip.is-active {
+      background: linear-gradient(135deg, #2f6bff 0%, #6f7cff 100%);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 12px 24px rgba(47, 107, 255, 0.22);
+    }
+
+    .notification-empty-filter {
+      padding: 20px 14px;
+      border-radius: 18px;
+      border: 1px dashed rgba(47, 107, 255, 0.14);
+      background: rgba(255, 255, 255, 0.7);
+      text-align: center;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .notification-item {
       position: relative;
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 12px;
       align-items: start;
+      width: 100%;
       padding: 14px;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.86);
       border: 1px solid rgba(47, 107, 255, 0.08);
+      text-align: left;
+      overflow: hidden;
     }
 
     .notification-item.unread::after {
       content: "";
       position: absolute;
-      top: 14px;
-      right: 14px;
-      width: 10px;
-      height: 10px;
+      top: 13px;
+      right: 13px;
+      width: 9px;
+      height: 9px;
       border-radius: 999px;
       background: #ff4d5f;
-      box-shadow: 0 0 0 6px rgba(255, 77, 95, 0.12);
+      box-shadow: 0 0 0 5px rgba(255, 77, 95, 0.12);
     }
 
-    .notification-item i {
-      width: 42px;
-      height: 42px;
+    .notification-icon {
+      width: 44px;
+      height: 44px;
       border-radius: 15px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      font-size: 18px;
+      flex: 0 0 auto;
       background: rgba(47, 107, 255, 0.09);
       color: var(--app-blue);
-      font-size: 18px;
+    }
+
+    .notification-item.kind-announcement .notification-icon {
+      background: rgba(59, 130, 246, 0.12);
+      color: #2563eb;
+    }
+
+    .notification-item.kind-password .notification-icon {
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
+    }
+
+    .notification-item.kind-wifi-offline .notification-icon,
+    .notification-item.kind-suspension .notification-icon {
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+    }
+
+    .notification-item.kind-invoice .notification-icon {
+      background: rgba(245, 158, 11, 0.12);
+      color: #d97706;
+    }
+
+    .notification-item.kind-ticket .notification-icon {
+      background: rgba(139, 92, 246, 0.12);
+      color: #7c3aed;
+    }
+
+    .notification-content {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .notification-topline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-right: 12px;
+    }
+
+    .notification-kind-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+    }
+
+    .notification-kind-badge.kind-announcement { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+    .notification-kind-badge.kind-password { background: rgba(16, 185, 129, 0.12); color: #059669; }
+    .notification-kind-badge.kind-wifi-offline,
+    .notification-kind-badge.kind-suspension { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+    .notification-kind-badge.kind-invoice { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+    .notification-kind-badge.kind-ticket { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+
+    .notification-time {
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
     }
 
     .notification-item strong {
       display: block;
       font-size: 13px;
       font-weight: 800;
-      margin-bottom: 5px;
       letter-spacing: -0.02em;
+      color: var(--app-text);
     }
 
     .notification-item p {
       margin: 0;
       color: var(--app-text-soft);
       font-size: 12px;
-      line-height: 1.45;
+      line-height: 1.48;
       font-weight: 700;
     }
 
-    .notification-item span {
+    .notification-arrow {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      margin-top: 2px;
+      flex: 0 0 auto;
+    }
+
+    .app-notification-toast-wrap {
+      position: fixed;
+      left: 50%;
+      bottom: calc(108px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 1200;
+      width: min(92vw, 360px);
+      pointer-events: none;
+    }
+
+    .app-notification-toast {
+      opacity: 0;
+      transform: translateY(12px) scale(.98);
+      transition: opacity .22s ease, transform .22s ease;
+      border-radius: 20px;
+      background: rgba(11, 23, 41, 0.96);
+      color: #f8fbff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px rgba(5, 10, 24, 0.28);
+      padding: 14px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .app-notification-toast.is-visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .app-notification-toast i {
+      font-size: 18px;
+      color: #8bb4ff;
+      margin-top: 1px;
+    }
+
+    .app-notification-toast strong {
       display: block;
-      margin-top: 7px;
-      color: var(--app-text-soft);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 800;
+      margin-bottom: 3px;
+    }
+
+    .app-notification-toast span {
+      display: block;
+      font-size: 11px;
+      line-height: 1.45;
+      color: rgba(236, 243, 255, 0.78);
+      font-weight: 700;
     }
 
     .soft-muted {
@@ -2557,6 +3469,43 @@
     .settings-field textarea:focus {
       border-color: rgba(47, 107, 255, 0.36);
       box-shadow: 0 0 0 4px rgba(47, 107, 255, 0.12);
+    }
+
+    .password-input-wrap {
+      position: relative;
+    }
+
+    .password-input-wrap input {
+      padding-right: 50px;
+    }
+
+    .password-toggle-btn {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 12px;
+      background: rgba(47, 107, 255, 0.1);
+      color: var(--app-blue);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .settings-field-note,
+    .settings-inline-note {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--app-text-soft);
+    }
+
+    .settings-inline-note {
+      padding: 12px 14px 0;
     }
 
     .settings-submit {
@@ -2920,6 +3869,33 @@
       gap: 14px;
     }
 
+    .business-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .business-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .business-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
     .business-head {
       display: flex;
       align-items: center;
@@ -2953,6 +3929,49 @@
       font-weight: 700;
     }
 
+    .business-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .business-info-card {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px 13px;
+      border-radius: 18px;
+      background: rgba(248, 251, 255, 0.92);
+      border: 1px solid rgba(104, 129, 182, 0.12);
+      min-width: 0;
+    }
+
+    .business-info-card i {
+      color: var(--app-blue);
+      font-size: 17px;
+      margin-top: 2px;
+    }
+
+    .business-info-card strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--app-text-soft);
+      margin-bottom: 5px;
+    }
+
+    .business-info-card span {
+      display: block;
+      font-size: 13px;
+      line-height: 1.45;
+      font-weight: 700;
+      color: var(--app-text);
+      word-break: break-word;
+    }
+
     .manual-payment-box {
       padding: 14px;
       border-radius: 18px;
@@ -2975,20 +3994,37 @@
       color: var(--app-blue-deep);
     }
 
+    .manual-payment-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
     .manual-payment-line {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
+      display: grid;
+      gap: 4px;
       color: var(--app-text-soft);
       font-size: 12px;
       line-height: 1.5;
       font-weight: 700;
+      min-width: 0;
     }
 
     .manual-payment-line strong {
       color: var(--app-text);
-      min-width: 84px;
+      min-width: 0;
       font-weight: 800;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .manual-payment-line span {
+      word-break: break-word;
+    }
+
+    .manual-payment-line.full {
+      grid-column: 1 / -1;
     }
 
     @media (min-width: 600px) {
@@ -3014,19 +4050,43 @@
       .hero-card { padding: 10px 10px; border-radius: 18px; }
       .hero-package { font-size: 18px; }
       .home-hero-grid { grid-template-columns: 1fr; }
+      .home-hero-top { grid-template-columns: 1fr auto; gap: 8px; }
       .home-hero-side { justify-items: start; text-align: left; }
-      .home-amount-row { width: 100%; justify-content: space-between; }
-      .home-amount-wrap strong { font-size: 14px; white-space: nowrap; }
-      .home-pay-button { width: auto; min-width: 0; }
+      .home-hero-body { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+      .home-hero-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+      .home-hero-info-box,
+      .home-hero-payment-card { padding: 8px 9px; }
+      .home-hero-payment-card strong { font-size: 14px; }
+      .home-pay-button { width: 100%; min-width: 0; min-height: 38px; }
+      .home-usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .home-usage-card { padding: 7px 9px; }
+      .home-usage-card strong { font-size: 13px; }
       .customer-focus-grid { grid-template-columns: 1fr; }
       .focus-card { padding: 13px 12px; }
-      .detail-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .business-info-grid,
+      .manual-payment-grid { grid-template-columns: 1fr; }
       .router-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       .router-detail-grid .detail-item {
         grid-template-columns: 1fr;
         gap: 8px;
         padding: 12px;
         border-radius: 18px;
+      }
+      .detail-item {
+        min-width: 0;
+        padding: 12px;
+        border-radius: 18px;
+      }
+      .detail-item div {
+        min-width: 0;
+      }
+      .detail-item strong,
+      .detail-item span {
+        word-break: break-word;
+      }
+      .detail-item i {
+        font-size: 16px;
       }
       .router-detail-grid .detail-item i {
         margin-top: 0;
@@ -3066,9 +4126,55 @@
       .portal-package-price { text-align: left; }
       .portal-package-form { justify-content: stretch; }
       .portal-package-form .settings-submit { width: 100%; }
-      .traffic-gauge-grid { grid-template-columns: 1fr; }
-      .traffic-gauge { width: 146px; height: 88px; }
-      .traffic-period-grid { grid-template-columns: 1fr; }
+      .traffic-gauge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .traffic-gauge-card { padding: 10px 10px 12px; border-radius: 18px; gap: 8px; }
+      .traffic-gauge-top { gap: 8px; }
+      .traffic-gauge-label { gap: 7px; }
+      .traffic-gauge-label i { font-size: 15px; }
+      .traffic-gauge-label h5 { font-size: 10px; }
+      .traffic-gauge-cap { font-size: 9px; }
+      .traffic-gauge-dial { width: 104px; height: 104px; }
+      .traffic-gauge-arc::before { inset: 8px; }
+      .traffic-gauge-arc::after { inset: 15px; border-width: 1.5px; }
+      .traffic-gauge-center { min-width: 58px; padding: 0; border-radius: 0; gap: 2px; }
+      .traffic-gauge-center strong { font-size: 15px; }
+      .traffic-gauge-center span { font-size: 8.5px; }
+      .traffic-gauge-center small { font-size: 7px; }
+      .traffic-gauge-needle::before { width: 50px; height: 10px; transform: translateX(16px); }
+      .traffic-gauge-needle::after { width: 16px; height: 16px; box-shadow: 0 0 0 4px var(--gauge-needle-ring), 0 0 0 1px rgba(255,255,255,0.16); }
+      .traffic-gauge-readout { gap: 1px; margin-top: -1px; }
+      .traffic-gauge-readout strong span { font-size: 15px; }
+      .traffic-gauge-readout strong small { font-size: 8px; }
+      .traffic-gauge-readout > span { font-size: 8px; }
+      .traffic-gauge-meta { gap: 5px; font-size: 8px; }
+      .traffic-gauge-meta span { min-height: 22px; padding: 0 8px; }
+      .notification-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .notification-toolbar { gap: 8px; }
+      .notification-filter-row { gap: 6px; }
+      .notification-summary-card { padding: 10px 11px; border-radius: 15px; }
+      .notification-summary-card strong { font-size: 19px; }
+      .notification-summary-card span { font-size: 10px; }
+      .notification-item {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        padding: 12px;
+      }
+      .notification-icon { width: 40px; height: 40px; border-radius: 14px; font-size: 16px; }
+      .notification-arrow { display: none; }
+      .notification-topline { padding-right: 0; }
+      .notification-item strong { font-size: 12px; }
+      .notification-item p { font-size: 11px; }
+      .notification-time,
+      .notification-kind-badge { font-size: 9px; }
+      .app-notification-toast-wrap {
+        bottom: calc(96px + env(safe-area-inset-bottom));
+        width: min(94vw, 340px);
+      }
+      .traffic-period-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .traffic-period-item { padding: 10px 9px; border-radius: 14px; }
+      .traffic-period-item small { font-size: 9px; margin-bottom: 6px; }
+      .traffic-period-item strong { gap: 6px; font-size: 11px; line-height: 1.25; }
+      .traffic-period-item strong i { font-size: 14px; }
       .speedtest-panel { border-radius: 24px; padding: 16px; }
       .speedtest-head { flex-direction: column; }
       .speedtest-frame-wrap { min-height: 460px; }
@@ -3119,12 +4225,28 @@
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(244, 249, 255, 0.98) 100%);
       }
 
+      html[data-theme="dark"] body.android-webview .app-shell,
+      body[data-theme="dark"].android-webview .app-shell {
+        background: linear-gradient(180deg, rgba(7, 17, 31, 0.98) 0%, rgba(11, 23, 41, 0.99) 100%) !important;
+      }
+
       body.android-webview .app-topbar {
         padding-top: calc(env(safe-area-inset-top) + 4px);
       }
 
+      html[data-theme="dark"] body.android-webview .app-topbar,
+      body[data-theme="dark"].android-webview .app-topbar {
+        background: linear-gradient(180deg, rgba(9, 18, 34, 0.98) 0%, rgba(11, 23, 41, 0.9) 100%) !important;
+        border-bottom-color: rgba(146, 176, 230, 0.1);
+      }
+
       body.android-webview .app-main {
         padding-bottom: calc(142px + env(safe-area-inset-bottom));
+      }
+
+      html[data-theme="dark"] body.android-webview .app-main,
+      body[data-theme="dark"].android-webview .app-main {
+        color: var(--app-text);
       }
 
       body.android-webview .app-menu-sheet {
@@ -3184,6 +4306,7 @@
         liveUploadCap,
         isPppoeOnline,
         pppoeStatusText,
+        portalAccountLabel,
         latestInvoice,
         monthlyPrice,
         uploadBytes,
@@ -3215,11 +4338,11 @@
             </div>
             <div class="usage-breakdown">
               <div class="usage-breakdown-item upload">
-                <small>Download</small>
+                <small>Upload</small>
                 <strong id="usageUploadDisplay"><%= formatUsageGb(uploadBytes) %> GB</strong>
               </div>
               <div class="usage-breakdown-item download">
-                <small>Upload</small>
+                <small>Download</small>
                 <strong id="usageDownloadDisplay"><%= formatUsageGb(downloadBytes) %> GB</strong>
               </div>
             </div>
@@ -3231,36 +4354,57 @@
                 <span class="traffic-panel-icon warning"><i class="bi bi-lightning-charge"></i></span>
                 <div>
                   <h4>Penggunaan Traffic</h4>
-                  <p>Kecepatan realtime mengikuti pembacaan PPPoE aktif di MikroTik.</p>
                 </div>
               </div>
               <span class="live-pill"><i class="bi bi-circle-fill"></i> Live</span>
             </div>
             <div class="traffic-gauge-grid">
               <div class="traffic-gauge-card upload-tone">
-                <div class="traffic-gauge" id="downloadGauge" style="--gauge-rotate:-90deg;">
-                  <div class="traffic-gauge-arc"></div>
-                  <div class="traffic-gauge-needle"></div>
-                  <div class="traffic-gauge-center">
-                    <strong id="liveRxValue">0.00</strong>
-                    <span>Mbps</span>
+                <div class="traffic-gauge-top">
+                  <div class="traffic-gauge-label">
+                    <i class="bi bi-arrow-up-circle-fill"></i>
+                    <h5>Upload</h5>
+                  </div>
+                  <span class="traffic-gauge-cap">Live</span>
+                </div>
+                <div class="traffic-gauge-meter">
+                  <div class="traffic-gauge-dial">
+                    <div class="traffic-gauge-arc" id="uploadGaugeFill"></div>
+                    <div class="traffic-gauge-needle" id="uploadGaugeNeedle"></div>
+                  </div>
+                  <div class="traffic-gauge-readout">
+                    <strong><span id="liveTxValue">0.00</span><small>Mbps</small></strong>
+                    <span>Upload</span>
+                  </div>
+                  <div class="traffic-gauge-meta">
+                    <span id="uploadGaugeCap">Max <%= liveUploadCap %> Mbps</span>
                   </div>
                 </div>
-                <h5>UPLOAD</h5>
               </div>
               <div class="traffic-gauge-card download-tone">
-                <div class="traffic-gauge" id="uploadGauge" style="--gauge-rotate:-90deg;">
-                  <div class="traffic-gauge-arc"></div>
-                  <div class="traffic-gauge-needle"></div>
-                  <div class="traffic-gauge-center">
-                    <strong id="liveTxValue">0.00</strong>
-                    <span>Mbps</span>
+                <div class="traffic-gauge-top">
+                  <div class="traffic-gauge-label">
+                    <i class="bi bi-arrow-down-circle-fill"></i>
+                    <h5>Download</h5>
+                  </div>
+                  <span class="traffic-gauge-cap">Live</span>
+                </div>
+                <div class="traffic-gauge-meter">
+                  <div class="traffic-gauge-dial">
+                    <div class="traffic-gauge-arc" id="downloadGaugeFill"></div>
+                    <div class="traffic-gauge-needle" id="downloadGaugeNeedle"></div>
+                  </div>
+                  <div class="traffic-gauge-readout">
+                    <strong><span id="liveRxValue">0.00</span><small>Mbps</small></strong>
+                    <span>Download</span>
+                  </div>
+                  <div class="traffic-gauge-meta">
+                    <span id="downloadGaugeCap">Max <%= liveDownloadCap %> Mbps</span>
                   </div>
                 </div>
-                <h5>DOWNLOAD</h5>
               </div>
             </div>
-            <div class="soft-muted" id="trafficStatusText" style="margin-top:10px;">Menyiapkan pembacaan traffic live...</div>
+            <div class="soft-muted" id="trafficStatusText" style="display:none;margin-top:10px;"></div>
           </div>
 
           <div class="traffic-panel">
@@ -3626,7 +4770,7 @@
           <div class="billing-card-head">
             <div>
               <h4>Router & WiFi</h4>
-              <div class="soft-muted">WiFi, status internet, dan perangkat yang terhubung.</div>
+              <div class="soft-muted">Informasi penting WiFi pelanggan dan perangkat yang sedang terhubung.</div>
             </div>
           </div>
 
@@ -3650,27 +4794,6 @@
               <div>
                 <strong>Nama WiFi (SSID)</strong>
                 <span><%= customerData.ssid || '-' %></span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <i class="bi bi-globe2"></i>
-              <div>
-                <strong>PPPoE Username</strong>
-                <span><%= customerData.pppoeUsername || profileData.pppoe_username || '-' %></span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <i class="bi bi-hdd-network"></i>
-              <div>
-                <strong>IP Internet</strong>
-                <span><%= customerData.pppoeIP || profileData.static_ip || '-' %></span>
-              </div>
-            </div>
-            <div class="detail-item">
-              <i class="bi bi-upc-scan"></i>
-              <div>
-                <strong>Serial Number</strong>
-                <span><%= customerData.serialNumber || '-' %></span>
               </div>
             </div>
             <div class="detail-item">
@@ -3703,12 +4826,30 @@
             <form class="settings-form" method="POST" action="/customer/change-password">
               <div class="settings-field">
                 <label for="wifiPasswordField">Password WiFi Baru</label>
-                <input id="wifiPasswordField" type="password" name="password" placeholder="Minimal 8 karakter" minlength="8" required>
+                <div class="password-input-wrap">
+                  <input id="wifiPasswordField" type="password" name="password" placeholder="Minimal 8 karakter" minlength="8" required>
+                  <button class="password-toggle-btn" type="button" aria-label="Lihat password" onclick="togglePasswordVisibility('wifiPasswordField', this)">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                </div>
+                <div class="settings-field-note">Jika password belum berubah di perangkat setelah disimpan, coba restart modem / router Anda.</div>
               </div>
               <button class="settings-submit" type="submit">
                 <i class="bi bi-shield-lock"></i> Update Password
               </button>
             </form>
+          </div>
+
+          <div class="stack-actions" style="margin-top:14px;">
+            <form method="POST" action="/customer/reboot" onsubmit="return confirm('Reboot perangkat pelanggan sekarang?')">
+              <button class="settings-submit secondary" type="submit" style="width:100%;">
+                <i class="bi bi-arrow-repeat"></i> Reboot Perangkat
+              </button>
+            </form>
+          </div>
+
+          <div class="settings-inline-note">
+            Untuk keamanan, akun PPPoE, IP internet, dan serial perangkat tidak ditampilkan di aplikasi pelanggan.
           </div>
         </div>
 
@@ -3733,7 +4874,7 @@
                   <i class="bi bi-phone"></i>
                   <div>
                     <strong><%= user.hostname || 'Unknown Device' %></strong>
-                    <span><%= user.ip || '-' %> / <%= user.mac || '-' %> / <%= user.iface || '-' %></span>
+                    <span><%= user.iface || 'Perangkat WiFi pelanggan' %></span>
                     <div class="ticket-meta">
                       <span class="status-dot <%= String(user.status || '').toLowerCase() === 'online' ? 'closed' : 'pending' %>">
                         <i class="bi <%= String(user.status || '').toLowerCase() === 'online' ? 'bi-wifi' : 'bi-wifi-off' %>"></i>
@@ -3751,17 +4892,11 @@
           <div class="billing-card-head">
             <div>
               <h4>Aksi Router</h4>
-              <div class="soft-muted">Perintah cepat untuk perangkat.</div>
+              <div class="soft-muted">Bantuan cepat untuk akun pelanggan dan akses kontak admin.</div>
             </div>
           </div>
 
           <div class="stack-actions">
-            <form method="POST" action="/customer/reboot" onsubmit="return confirm('Reboot perangkat pelanggan sekarang?')">
-              <button class="settings-submit secondary" type="submit" style="width:100%;">
-                <i class="bi bi-arrow-repeat"></i> Reboot Perangkat
-              </button>
-            </form>
-
             <a class="settings-submit secondary" href="<%= supportUrl %>" target="_blank" rel="noopener" style="text-decoration:none;">
               <i class="bi bi-headset"></i> Hubungi Admin
             </a>
@@ -3880,11 +5015,15 @@
         <div class="modal-header">
           <div>
             <h5 class="modal-title mb-1">Notifikasi</h5>
-            <div class="soft-muted"><%= notificationUnread %> notifikasi perlu perhatian</div>
+            <div class="soft-muted" id="notificationModalHint"><%= notificationUnread %> notifikasi perlu perhatian</div>
           </div>
+          <button type="button" class="notification-header-action" id="markAllNotificationsBtn" onclick="markNotificationsRead()">
+            <i class="bi bi-check2-all"></i> Tandai dibaca
+          </button>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
         </div>
         <div class="modal-body">
+          <div id="notificationModalBodyContent">
           <% if (!notificationItems.length) { %>
             <div class="empty-card">
               <i class="bi bi-bell-slash"></i>
@@ -3892,27 +5031,100 @@
               <div>Info tagihan dan update tiket akan muncul di sini.</div>
             </div>
           <% } else { %>
+            <%
+              const notificationGroups = {
+                announcement: notificationItems.filter((item) => item.kind === 'announcement').length,
+                offline: notificationItems.filter((item) => item.kind === 'wifi-offline' || item.kind === 'suspension').length,
+                password: notificationItems.filter((item) => item.kind === 'password').length,
+                billing: notificationItems.filter((item) => item.kind === 'invoice' || item.kind === 'ticket').length
+              };
+              function notificationKindLabel(kind) {
+                if (kind === 'announcement') return 'Pengumuman';
+                if (kind === 'password') return 'Password';
+                if (kind === 'wifi-offline') return 'Offline';
+                if (kind === 'suspension') return 'Isolir';
+                if (kind === 'reactivation') return 'Aktif';
+                if (kind === 'invoice' || kind === 'due-reminder') return 'Tagihan';
+                if (kind === 'ticket') return 'Tiket';
+                return 'Info';
+              }
+            %>
+            <div class="notification-filter-row" id="notificationFilterRow">
+              <button type="button" class="notification-filter-chip is-active" data-notification-filter="all"><i class="bi bi-grid"></i> Semua</button>
+              <button type="button" class="notification-filter-chip" data-notification-filter="billing"><i class="bi bi-receipt-cutoff"></i> Tagihan</button>
+              <button type="button" class="notification-filter-chip" data-notification-filter="ticket"><i class="bi bi-life-preserver"></i> Tiket</button>
+              <button type="button" class="notification-filter-chip" data-notification-filter="offline"><i class="bi bi-wifi-off"></i> Status</button>
+              <button type="button" class="notification-filter-chip" data-notification-filter="announcement"><i class="bi bi-megaphone"></i> Info</button>
+            </div>
+            <div class="notification-summary-grid">
+              <div class="notification-summary-card kind-announcement">
+                <small>Pengumuman</small>
+                <strong><%= notificationGroups.announcement %></strong>
+                <span>Update dan info terbaru dari admin.</span>
+              </div>
+              <div class="notification-summary-card kind-offline">
+                <small>Offline / Isolir</small>
+                <strong><%= notificationGroups.offline %></strong>
+                <span>Perlu cek koneksi atau status layanan.</span>
+              </div>
+              <div class="notification-summary-card kind-password">
+                <small>Password</small>
+                <strong><%= notificationGroups.password %></strong>
+                <span>Riwayat perubahan password WiFi.</span>
+              </div>
+              <div class="notification-summary-card kind-billing">
+                <small>Tagihan / Tiket</small>
+                <strong><%= notificationGroups.billing %></strong>
+                <span>Tagihan jatuh tempo dan update bantuan.</span>
+              </div>
+            </div>
             <div class="notification-list">
               <% notificationItems.forEach((item) => { %>
-                <button type="button" class="notification-item <%= item.unread ? 'unread' : '' %>" onclick='goToNotification(<%- JSON.stringify(item.tab || "home") %>)'>
-                  <i class="bi <%= item.kind === 'invoice' ? 'bi-receipt-cutoff' : item.kind === 'ticket' ? 'bi-life-preserver' : 'bi-info-circle' %>"></i>
-                  <div>
+                <button type="button" class="notification-item kind-<%= item.kind || 'system' %> <%= item.unread ? 'unread' : '' %>" onclick='goToNotification(<%- JSON.stringify(item.tab || "home") %>)'>
+                  <span class="notification-icon">
+                    <i class="bi <%= item.kind === 'invoice' || item.kind === 'due-reminder' ? 'bi-receipt-cutoff' : item.kind === 'ticket' ? 'bi-life-preserver' : item.kind === 'announcement' ? 'bi-megaphone' : item.kind === 'password' ? 'bi-shield-lock' : item.kind === 'wifi-offline' ? 'bi-wifi-off' : item.kind === 'suspension' ? 'bi-pause-circle' : item.kind === 'reactivation' ? 'bi-check-circle' : 'bi-info-circle' %>"></i>
+                  </span>
+                  <div class="notification-content">
+                    <div class="notification-topline">
+                      <span class="notification-kind-badge kind-<%= item.kind || 'system' %>"><%= notificationKindLabel(item.kind) %></span>
+                      <span class="notification-time"><%= formatDateTime(item.time) %></span>
+                    </div>
                     <strong><%= item.title %></strong>
                     <p><%= item.body %></p>
-                    <span><%= formatDateTime(item.time) %></span>
                   </div>
+                  <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
                 </button>
               <% }) %>
             </div>
           <% } %>
+          </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-notification-toast-wrap" aria-live="polite" aria-atomic="true">
+    <div class="app-notification-toast" id="appNotificationToast">
+      <i class="bi bi-bell-fill"></i>
+      <div>
+        <strong id="appNotificationToastTitle">Notifikasi baru</strong>
+        <span id="appNotificationToastBody">Info terbaru akan tampil di sini.</span>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    const NOTIFICATION_UNREAD = <%- JSON.stringify(notificationUnread) %>;
+    const INITIAL_NOTIFICATION_UNREAD = <%- JSON.stringify(notificationUnread) %>;
+    const INITIAL_NOTIFICATION_ITEMS = <%- JSON.stringify(notificationItems) %>;
+    let notificationState = {
+      unreadCount: Number(INITIAL_NOTIFICATION_UNREAD || 0) || 0,
+      items: Array.isArray(INITIAL_NOTIFICATION_ITEMS) ? INITIAL_NOTIFICATION_ITEMS : []
+    };
+    let notificationFilter = 'all';
+    let notificationPollTimer = null;
+    let notificationToastTimer = null;
+    let knownNotificationSignatures = new Set((notificationState.items || []).map((item) => `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`));
     const PUSH_FEATURE_ENABLED = <%- JSON.stringify(pushFeatureEnabled) %>;
     const CUSTOMER_PUSH_EXTERNAL_ID = <%- JSON.stringify(customerPushExternalId) %>;
     const TAB_META = {
@@ -3951,6 +5163,41 @@
       rx: <%- JSON.stringify(liveDownloadCap) %>,
       tx: <%- JSON.stringify(liveUploadCap) %>
     };
+
+    function applyPortalTheme(theme, persist = true) {
+      const nextTheme = theme === 'dark' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      document.body?.setAttribute('data-theme', nextTheme);
+      const themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) {
+        themeMeta.setAttribute('content', nextTheme === 'dark' ? '#0b1628' : '#2f6bff');
+      }
+      const themeIcon = document.getElementById('portalThemeToggleIcon');
+      const themeButton = document.getElementById('portalThemeToggle');
+      if (themeIcon) {
+        themeIcon.className = `bi ${nextTheme === 'dark' ? 'bi-sun-fill' : 'bi-moon-stars'}`;
+      }
+      if (themeButton) {
+        const label = nextTheme === 'dark' ? 'Pakai mode terang' : 'Pakai mode gelap';
+        themeButton.setAttribute('title', label);
+        themeButton.setAttribute('aria-label', label);
+      }
+      if (persist) {
+        try {
+          localStorage.setItem('customer-portal-theme', nextTheme);
+        } catch (_) {}
+      }
+      return nextTheme;
+    }
+
+    function getPortalTheme() {
+      return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    function togglePortalTheme() {
+      const nextTheme = getPortalTheme() === 'dark' ? 'light' : 'dark';
+      applyPortalTheme(nextTheme, true);
+    }
 
     function setPushStatus(message) {
       const node = document.getElementById('pushStatusText');
@@ -4098,21 +5345,260 @@
       sheet?.setAttribute('aria-hidden', 'true');
     }
 
+    function escapeNotificationHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function notificationKindLabel(kind) {
+      if (kind === 'announcement') return 'Pengumuman';
+      if (kind === 'password') return 'Password';
+      if (kind === 'wifi-offline') return 'Offline';
+      if (kind === 'suspension') return 'Isolir';
+      if (kind === 'reactivation') return 'Aktif';
+      if (kind === 'invoice' || kind === 'due-reminder') return 'Tagihan';
+      if (kind === 'ticket') return 'Tiket';
+      return 'Info';
+    }
+
+    function notificationKindIcon(kind) {
+      if (kind === 'invoice' || kind === 'due-reminder') return 'bi-receipt-cutoff';
+      if (kind === 'ticket') return 'bi-life-preserver';
+      if (kind === 'announcement') return 'bi-megaphone';
+      if (kind === 'password') return 'bi-shield-lock';
+      if (kind === 'wifi-offline') return 'bi-wifi-off';
+      if (kind === 'suspension') return 'bi-pause-circle';
+      if (kind === 'reactivation') return 'bi-check-circle';
+      return 'bi-info-circle';
+    }
+
+    function mapNotificationFilter(kind) {
+      if (kind === 'invoice' || kind === 'due-reminder') return 'billing';
+      if (kind === 'ticket') return 'ticket';
+      if (kind === 'wifi-offline' || kind === 'suspension' || kind === 'reactivation' || kind === 'password') return 'status';
+      return 'info';
+    }
+
+    function buildNotificationGroups(items) {
+      const list = Array.isArray(items) ? items : [];
+      return {
+        announcement: list.filter((item) => item.kind === 'announcement').length,
+        offline: list.filter((item) => item.kind === 'wifi-offline' || item.kind === 'suspension' || item.kind === 'reactivation').length,
+        password: list.filter((item) => item.kind === 'password').length,
+        billing: list.filter((item) => item.kind === 'invoice' || item.kind === 'ticket' || item.kind === 'due-reminder').length
+      };
+    }
+
+    function renderNotificationBadge() {
+      const wrap = document.querySelector('.header-icon-wrap .header-action[aria-label="Notifikasi"]')?.parentElement;
+      if (!wrap) return;
+      let badge = document.getElementById('notificationBadge');
+      const unread = Math.max(0, Number(notificationState.unreadCount || 0) || 0);
+      if (unread <= 0) {
+        badge?.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.id = 'notificationBadge';
+        badge.className = 'notif-badge';
+        wrap.appendChild(badge);
+      }
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+    }
+
+    function bindNotificationFilterButtons() {
+      document.querySelectorAll('.notification-filter-chip[data-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const nextFilter = button.dataset.filter || 'all';
+          if (notificationFilter === nextFilter) return;
+          notificationFilter = nextFilter;
+          renderNotificationModalContent();
+        });
+      });
+    }
+
+    function showNotificationToast(newItems) {
+      const toast = document.getElementById('appNotificationToast');
+      const titleNode = document.getElementById('appNotificationToastTitle');
+      const bodyNode = document.getElementById('appNotificationToastBody');
+      if (!toast || !titleNode || !bodyNode || !Array.isArray(newItems) || !newItems.length) return;
+
+      const latest = newItems[0] || {};
+      titleNode.textContent = latest.title || 'Notifikasi baru';
+      bodyNode.textContent = latest.body || 'Ada info terbaru untuk akun Anda.';
+      toast.classList.add('is-visible');
+      if (notificationToastTimer) {
+        clearTimeout(notificationToastTimer);
+      }
+      notificationToastTimer = window.setTimeout(() => {
+        toast.classList.remove('is-visible');
+      }, 3800);
+    }
+
+    function renderNotificationModalContent() {
+      const container = document.getElementById('notificationModalBodyContent');
+      const hint = document.getElementById('notificationModalHint');
+      const markAllButton = document.getElementById('markAllNotificationsBtn');
+      if (!container) return;
+
+      const items = Array.isArray(notificationState.items) ? notificationState.items : [];
+      const unread = Math.max(0, Number(notificationState.unreadCount || 0) || 0);
+      if (hint) hint.textContent = `${unread} notifikasi perlu perhatian`;
+      if (markAllButton) markAllButton.hidden = unread <= 0;
+
+      if (!items.length) {
+        container.innerHTML = `
+          <div class="empty-card">
+            <i class="bi bi-bell-slash"></i>
+            <strong>Belum ada notifikasi</strong>
+            <div>Info tagihan dan update tiket akan muncul di sini.</div>
+          </div>
+        `;
+        bindNotificationFilterButtons();
+        return;
+      }
+
+      const groups = buildNotificationGroups(items);
+      const filteredItems = notificationFilter === 'all'
+        ? items
+        : items.filter((item) => mapNotificationFilter(item.kind) === notificationFilter);
+      const summaryHtml = `
+        <div class="notification-summary-grid">
+          <div class="notification-summary-card kind-announcement">
+            <small>Pengumuman</small>
+            <strong>${groups.announcement}</strong>
+            <span>Update dan info terbaru dari admin.</span>
+          </div>
+          <div class="notification-summary-card kind-offline">
+            <small>Offline / Isolir</small>
+            <strong>${groups.offline}</strong>
+            <span>Perlu cek koneksi atau status layanan.</span>
+          </div>
+          <div class="notification-summary-card kind-password">
+            <small>Password</small>
+            <strong>${groups.password}</strong>
+            <span>Riwayat perubahan password WiFi.</span>
+          </div>
+          <div class="notification-summary-card kind-billing">
+            <small>Tagihan / Tiket</small>
+            <strong>${groups.billing}</strong>
+            <span>Tagihan jatuh tempo dan update bantuan.</span>
+          </div>
+        </div>
+      `;
+
+      const filterHtml = `
+        <div class="notification-filter-row">
+          <button type="button" class="notification-filter-chip ${notificationFilter === 'all' ? 'is-active' : ''}" data-filter="all">Semua</button>
+          <button type="button" class="notification-filter-chip ${notificationFilter === 'billing' ? 'is-active' : ''}" data-filter="billing">Tagihan</button>
+          <button type="button" class="notification-filter-chip ${notificationFilter === 'ticket' ? 'is-active' : ''}" data-filter="ticket">Tiket</button>
+          <button type="button" class="notification-filter-chip ${notificationFilter === 'status' ? 'is-active' : ''}" data-filter="status">Status</button>
+          <button type="button" class="notification-filter-chip ${notificationFilter === 'info' ? 'is-active' : ''}" data-filter="info">Info</button>
+        </div>
+      `;
+
+      const listHtml = filteredItems.map((item) => `
+        <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-tab="${escapeNotificationHtml(item.tab || 'home')}">
+          <span class="notification-icon">
+            <i class="bi ${notificationKindIcon(item.kind)}"></i>
+          </span>
+          <div class="notification-content">
+            <div class="notification-topline">
+              <span class="notification-kind-badge kind-${escapeNotificationHtml(item.kind || 'system')}">${escapeNotificationHtml(notificationKindLabel(item.kind))}</span>
+              <span class="notification-time">${escapeNotificationHtml(formatDateTime(item.time))}</span>
+            </div>
+            <strong>${escapeNotificationHtml(item.title || 'Info pelanggan')}</strong>
+            <p>${escapeNotificationHtml(item.body || '')}</p>
+          </div>
+          <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
+        </button>
+      `).join('');
+
+      const bodyHtml = filteredItems.length
+        ? `<div class="notification-list">${listHtml}</div>`
+        : `
+          <div class="empty-card notification-empty-filter">
+            <i class="bi bi-funnel"></i>
+            <strong>Belum ada notifikasi di kategori ini</strong>
+            <div>Coba pilih kategori lain untuk melihat info terbaru.</div>
+          </div>
+        `;
+
+      container.innerHTML = `${summaryHtml}${filterHtml}${bodyHtml}`;
+      bindNotificationFilterButtons();
+      container.querySelectorAll('[data-notification-tab]').forEach((button) => {
+        button.addEventListener('click', () => goToNotification(button.dataset.notificationTab || 'home'));
+      });
+    }
+
+    function renderNotificationUI() {
+      renderNotificationBadge();
+      renderNotificationModalContent();
+    }
+
+    async function fetchNotificationState() {
+      try {
+        const response = await fetch('/customer/api/notifications', {
+          headers: { 'x-requested-with': 'fetch' }
+        });
+        const data = await response.json();
+        if (!data || data.ok === false) return false;
+        const incomingItems = Array.isArray(data.items) ? data.items : [];
+        const incomingSignatures = incomingItems.map((item) => `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`);
+        const freshItems = incomingItems.filter((item) => {
+          const signature = `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`;
+          return !knownNotificationSignatures.has(signature);
+        });
+        notificationState = {
+          unreadCount: Math.max(0, Number(data.unreadCount || 0) || 0),
+          items: incomingItems
+        };
+        knownNotificationSignatures = new Set(incomingSignatures);
+        renderNotificationUI();
+        if (freshItems.length) {
+          showNotificationToast(freshItems);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function scheduleNotificationPolling() {
+      if (notificationPollTimer) {
+        clearInterval(notificationPollTimer);
+        notificationPollTimer = null;
+      }
+      fetchNotificationState();
+      notificationPollTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        fetchNotificationState();
+      }, 45000);
+    }
+
     async function markNotificationsRead() {
-      if (!NOTIFICATION_UNREAD) return;
+      if (!(Number(notificationState.unreadCount || 0) > 0)) return;
       try {
         await fetch('/customer/notifications/read', {
           method: 'POST',
           headers: { 'x-requested-with': 'fetch' }
         });
-        const badge = document.getElementById('notificationBadge');
-        if (badge) badge.remove();
+        notificationState = {
+          ...notificationState,
+          unreadCount: 0,
+          items: (notificationState.items || []).map((item) => ({ ...item, unread: false }))
+        };
+        renderNotificationUI();
       } catch {}
     }
 
     async function openNotificationsPanel() {
       closeAccountMenu();
-      await markNotificationsRead();
       if (notificationModal) {
         notificationModal.show();
         return;
@@ -4134,6 +5620,17 @@
       }).catch(() => {});
     }
 
+    function togglePasswordVisibility(inputId, trigger) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const nextType = input.type === 'password' ? 'text' : 'password';
+      input.type = nextType;
+      const icon = trigger?.querySelector('i');
+      if (icon) {
+        icon.className = nextType === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+      }
+    }
+
     function quickReboot() {
       const ok = window.confirm('Reboot perangkat pelanggan sekarang? Koneksi akan terputus beberapa menit.');
       if (!ok) return;
@@ -4151,18 +5648,25 @@
       const valueNode = document.getElementById(kind === 'rx' ? 'liveRxValue' : 'liveTxValue');
       const polyline = document.getElementById(kind === 'rx' ? 'rxSparklinePath' : 'txSparklinePath');
       const dot = document.getElementById(kind === 'rx' ? 'rxSparklineDot' : 'txSparklineDot');
-      const gauge = document.getElementById(kind === 'rx' ? 'downloadGauge' : 'uploadGauge');
+      const gaugeFill = document.getElementById(kind === 'rx' ? 'downloadGaugeFill' : 'uploadGaugeFill');
+      const needle = document.getElementById(kind === 'rx' ? 'downloadGaugeNeedle' : 'uploadGaugeNeedle');
       const cap = Math.max(1, Number(kind === 'rx' ? LIVE_CAPS.rx : LIVE_CAPS.tx) || 1);
       const mbps = Math.max(0, Number(rawValue || 0));
       const ratio = Math.max(0, Math.min(1, mbps / cap));
-      const degree = -90 + (ratio * 180);
 
       if (valueNode) {
         valueNode.textContent = mbps.toFixed(2);
       }
 
-      if (gauge) {
-        gauge.style.setProperty('--gauge-rotate', `${degree}deg`);
+      if (gaugeFill) {
+        const fillDeg = mbps > 0 ? Math.max(4, Math.round(ratio * 280)) : 0;
+        gaugeFill.style.setProperty('--gauge-fill', String(fillDeg));
+      }
+
+      if (needle) {
+        const fillDeg = mbps > 0 ? Math.max(4, Math.round(ratio * 280)) : 0;
+        const angle = 130 + fillDeg;
+        needle.style.setProperty('--needle-angle', `${angle}deg`);
       }
 
       const nextHistory = [...(trafficHistory[kind] || []), mbps].slice(-8);
@@ -4191,12 +5695,21 @@
 
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4500);
+        const timeout = setTimeout(() => controller.abort(), 6500);
         const response = await fetch('/customer/api/pppoe-traffic', {
-          headers: { 'x-requested-with': 'fetch' },
+          headers: {
+            'x-requested-with': 'fetch',
+            'cache-control': 'no-store'
+          },
+          credentials: 'same-origin',
+          cache: 'no-store',
           signal: controller.signal
         });
         clearTimeout(timeout);
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!response.ok || !contentType.includes('application/json')) {
+          throw new Error(response.status === 401 ? 'unauthorized' : `bad-response-${response.status}`);
+        }
         const data = await response.json();
 
         if (!data || data.ok === false) {
@@ -4206,16 +5719,16 @@
           return;
         }
 
-        const customerDownloadMbps = Number(data.downloadMbps ?? data.rxMbps ?? data.txMbps ?? 0) || 0;
-        const customerUploadMbps = Number(data.uploadMbps ?? data.txMbps ?? data.rxMbps ?? 0) || 0;
+        const customerDownloadMbps = Number(data.downloadMbps ?? data.txMbps ?? data.rxMbps ?? 0) || 0;
+        const customerUploadMbps = Number(data.uploadMbps ?? data.rxMbps ?? data.txMbps ?? 0) || 0;
         setSpeedMeter('rx', customerDownloadMbps);
         setSpeedMeter('tx', customerUploadMbps);
 
         const usageTotalNode = document.getElementById('usageTotalDisplay');
         const usageDownloadNode = document.getElementById('usageDownloadDisplay');
         const usageUploadNode = document.getElementById('usageUploadDisplay');
-        const usageDownBytes = Number(data.usageDownloadBytes ?? data.usageBytesIn ?? data.usageBytesOut ?? 0) || 0;
-        const usageUpBytes = Number(data.usageUploadBytes ?? data.usageBytesOut ?? data.usageBytesIn ?? 0) || 0;
+        const usageDownBytes = Number(data.usageDownloadBytes ?? data.usageBytesOut ?? data.usageBytesIn ?? 0) || 0;
+        const usageUpBytes = Number(data.usageUploadBytes ?? data.usageBytesIn ?? data.usageBytesOut ?? 0) || 0;
         const usageTotalBytes = usageDownBytes + usageUpBytes;
         const formatUsageGb = (bytes) => ((Math.max(0, Number(bytes || 0)) / (1024 * 1024 * 1024))).toFixed(2);
         if (usageTotalNode) usageTotalNode.textContent = formatUsageGb(usageTotalBytes);
@@ -4237,8 +5750,8 @@
           return;
         }
 
-        const ifaceInfo = data.iface ? ` • ${data.iface}` : '';
-        if (statusText) statusText.textContent = `Traffic live aktif${ifaceInfo}${data.uptime ? ` • uptime ${data.uptime}` : ''}`;
+        const ifaceInfo = data.iface ? ` - ${data.iface}` : '';
+        if (statusText) statusText.textContent = `Traffic live aktif${ifaceInfo}${data.uptime ? ` - uptime ${data.uptime}` : ''}`;
       } catch (error) {
         setSpeedMeter('rx', 0);
         setSpeedMeter('tx', 0);
@@ -4260,85 +5773,123 @@
       }, 12000);
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));
-      ticketModal = new bootstrap.Modal(document.getElementById('ticketModal'));
-      notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
-
-      ['paymentModal', 'ticketModal', 'notificationModal'].forEach((modalId) => {
-        const modalEl = document.getElementById(modalId);
-        if (!modalEl) return;
-        modalEl.addEventListener('shown.bs.modal', () => document.body.classList.add('modal-open'));
-        modalEl.addEventListener('hidden.bs.modal', () => {
-          const anyOpen = Array.from(document.querySelectorAll('.modal.show')).length > 0;
-          document.body.classList.toggle('modal-open', anyOpen);
-        });
-      });
-
-      document.querySelectorAll('[data-nav-tab]').forEach((button) => {
-        button.addEventListener('click', () => openAppTab(button.dataset.navTab));
-      });
-
-      document.addEventListener('click', (event) => {
-        const menu = document.getElementById('accountMenu');
-        if (!menu) return;
-        const wrap = event.target.closest('.header-icon-wrap');
-        if (!wrap || !wrap.contains(menu)) {
-          if (!event.target.closest('[aria-label="Akun"]')) closeAccountMenu();
-        }
-      });
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          closeAccountMenu();
-          closeAppMenu();
-        }
-      });
-
-      const isAndroidLike = /android/i.test(navigator.userAgent || '') || window.matchMedia('(display-mode: standalone)').matches;
-      if (isAndroidLike) {
-        document.body.classList.add('android-webview');
+    function hideAppSplash(forceRemember = true) {
+      const splash = document.getElementById('appSplash');
+      splash?.classList.add('is-hidden');
+      if (forceRemember) {
+        try {
+          sessionStorage.setItem('customer-pwa-splash', '1');
+        } catch (_) {}
       }
+    }
 
-      setSpeedMeter('rx', 0);
-      setSpeedMeter('tx', 0);
+    window.addEventListener('error', () => {
+      hideAppSplash(true);
+    });
 
-      const initialTab = getTabFromHash();
-      openAppTab(initialTab, true);
+    window.addEventListener('unhandledrejection', () => {
+      hideAppSplash(true);
+    });
 
+    document.addEventListener('DOMContentLoaded', () => {
       const splash = document.getElementById('appSplash');
       const seenBefore = sessionStorage.getItem('customer-pwa-splash') === '1';
       window.setTimeout(() => {
-        splash?.classList.add('is-hidden');
-        sessionStorage.setItem('customer-pwa-splash', '1');
+        hideAppSplash(true);
       }, seenBefore ? 120 : 420);
 
-      window.addEventListener('hashchange', () => {
-        openAppTab(getTabFromHash(), false);
-      });
+      try {
+        applyPortalTheme(getPortalTheme(), false);
 
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js', { scope: '/customer/' }).catch(() => {});
-        });
-      }
+        if (window.bootstrap?.Modal) {
+          paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));
+          ticketModal = new bootstrap.Modal(document.getElementById('ticketModal'));
+          notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
 
-      document.querySelectorAll('form[action="/customer/logout"]').forEach((form) => {
-        form.addEventListener('submit', () => {
-          try {
-            if (window.median?.onesignal?.logout) window.median.onesignal.logout();
-          } catch (_) {}
-        });
-      });
-
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-          const active = document.querySelector('.app-screen.is-active');
-          if (active) scheduleTrafficRefresh(active.dataset.tab);
+          ['paymentModal', 'ticketModal', 'notificationModal'].forEach((modalId) => {
+            const modalEl = document.getElementById(modalId);
+            if (!modalEl) return;
+            modalEl.addEventListener('shown.bs.modal', () => document.body.classList.add('modal-open'));
+            modalEl.addEventListener('hidden.bs.modal', () => {
+              const anyOpen = Array.from(document.querySelectorAll('.modal.show')).length > 0;
+              document.body.classList.toggle('modal-open', anyOpen);
+            });
+          });
         }
-      });
 
-      refreshCustomerPushStatus();
+        document.querySelectorAll('[data-nav-tab]').forEach((button) => {
+          button.addEventListener('click', () => openAppTab(button.dataset.navTab));
+        });
+
+        document.addEventListener('click', (event) => {
+          const menu = document.getElementById('accountMenu');
+          if (!menu) return;
+          const wrap = event.target.closest('.header-icon-wrap');
+          if (!wrap || !wrap.contains(menu)) {
+            if (!event.target.closest('[aria-label="Akun"]')) closeAccountMenu();
+          }
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeAccountMenu();
+            closeAppMenu();
+          }
+        });
+
+        const isAndroidLike = /android/i.test(navigator.userAgent || '') || window.matchMedia('(display-mode: standalone)').matches;
+        if (isAndroidLike) {
+          document.body.classList.add('android-webview');
+        }
+
+        setSpeedMeter('rx', 0);
+        setSpeedMeter('tx', 0);
+        renderNotificationUI();
+        scheduleNotificationPolling();
+
+        const initialTab = getTabFromHash();
+        openAppTab(initialTab, true);
+
+        window.addEventListener('hashchange', () => {
+          openAppTab(getTabFromHash(), false);
+        });
+
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', {
+              scope: '/customer/',
+              updateViaCache: 'none'
+            }).then((registration) => {
+              registration.update().catch(() => {});
+            }).catch(() => {});
+          });
+        }
+
+        document.querySelectorAll('form[action="/customer/logout"]').forEach((form) => {
+          form.addEventListener('submit', () => {
+            try {
+              if (window.median?.onesignal?.logout) window.median.onesignal.logout();
+            } catch (_) {}
+          });
+        });
+
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) {
+            const active = document.querySelector('.app-screen.is-active');
+            if (active) scheduleTrafficRefresh(active.dataset.tab);
+            fetchNotificationState();
+          }
+        });
+
+        refreshCustomerPushStatus();
+      } catch (error) {
+        console.error('Portal bootstrap failed', error);
+        hideAppSplash(true);
+      } finally {
+        if (!splash?.classList.contains('is-hidden')) {
+          window.setTimeout(() => hideAppSplash(true), 900);
+        }
+      }
     });
   </script>
 </body>

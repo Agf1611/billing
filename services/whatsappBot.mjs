@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 
 const require = createRequire(import.meta.url);
 const { logger } = require('../config/logger.js');
@@ -652,6 +652,21 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function withTimeout(promise, timeoutMs, label = 'operasi') {
+  const ms = Math.max(1000, Number(timeoutMs) || 10000);
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timeout setelah ${ms}ms`)), ms);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function waitForWhatsappOpen(maxWaitMs = 20000, pollMs = 1000) {
   const deadline = Date.now() + Math.max(1000, Number(maxWaitMs) || 20000);
   while (Date.now() < deadline) {
@@ -695,7 +710,7 @@ export async function sendWA(to, text) {
     return true;
   }
 
-  const ready = await ensureWhatsAppReady(20000);
+  const ready = await ensureWhatsAppReady(10000);
   if (!ready || !currentSock || whatsappStatus.connection !== 'open') {
     logger.warn('WhatsApp: Gagal kirim pesan, bot belum terhubung.');
     return false;
@@ -704,11 +719,77 @@ export async function sendWA(to, text) {
   recentOutgoingMessages.set(dedupeKey, now);
   try {
     const jid = String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`;
-    await currentSock.sendMessage(jid, { text: messageText });
+    await withTimeout(
+      currentSock.sendMessage(jid, { text: messageText }),
+      getSetting('whatsapp_send_timeout_ms', 12000),
+      'kirim pesan WhatsApp'
+    );
     return true;
   } catch (e) {
     recentOutgoingMessages.delete(dedupeKey);
-    logger.error('Gagal kirim WA:', e.message);
+    const errorMessage = String(e && (e.message || e) || 'unknown');
+    logger.error('Gagal kirim WA:', errorMessage);
+    if (/(timeout|connection|stream|closed|replaced|socket)/i.test(errorMessage)) {
+      setTimeout(() => {
+        restartWhatsAppBot().catch((restartError) => {
+          logger.warn(`[WA] Gagal restart otomatis setelah send error: ${restartError.message || restartError}`);
+        });
+      }, 0);
+    }
+    return false;
+  }
+}
+
+export async function sendWAImage(to, imageBuffer, caption = '') {
+  const captionText = String(caption || '').trim();
+  let digits = String(to || '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (digits.startsWith('0')) {
+    digits = '62' + digits.slice(1);
+  }
+
+  const buffer = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer || []);
+  if (!buffer.length) return sendWA(to, captionText);
+
+  const now = Date.now();
+  pruneRecentOutgoingMessages(now);
+  const dedupeKey = `${digits}|image|${buffer.length}|${captionText}`;
+  const existing = Number(recentOutgoingMessages.get(dedupeKey) || 0);
+  if (existing && (now - existing) < OUTGOING_MESSAGE_DEDUPE_TTL_MS) {
+    logger.warn(`WhatsApp: Duplikat gambar dicegah ke ${digits}.`);
+    return true;
+  }
+
+  const ready = await ensureWhatsAppReady(10000);
+  if (!ready || !currentSock || whatsappStatus.connection !== 'open') {
+    logger.warn('WhatsApp: Gagal kirim gambar, bot belum terhubung.');
+    return false;
+  }
+
+  recentOutgoingMessages.set(dedupeKey, now);
+  try {
+    const jid = String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`;
+    await withTimeout(
+      currentSock.sendMessage(jid, {
+        image: buffer,
+        mimetype: 'image/png',
+        caption: captionText
+      }),
+      getSetting('whatsapp_send_timeout_ms', 12000),
+      'kirim gambar WhatsApp'
+    );
+    return true;
+  } catch (e) {
+    recentOutgoingMessages.delete(dedupeKey);
+    const errorMessage = String(e && (e.message || e) || 'unknown');
+    logger.error('Gagal kirim gambar WA:', errorMessage);
+    if (/(timeout|connection|stream|closed|replaced|socket)/i.test(errorMessage)) {
+      setTimeout(() => {
+        restartWhatsAppBot().catch((restartError) => {
+          logger.warn(`[WA] Gagal restart otomatis setelah send image error: ${restartError.message || restartError}`);
+        });
+      }, 0);
+    }
     return false;
   }
 }
@@ -762,11 +843,11 @@ export async function startWhatsAppBot(options = {}) {
       version,
       auth: state,
       printQRInTerminal: false,
-      browser: ['Portal Billing ISP', 'Chrome', '1.0.0'],
+      browser: Browsers.ubuntu('Chrome'),
       syncFullHistory: false,
       markOnlineOnConnect: false,
       generateHighQualityLinkPreview: false,
-      getMessage: true,
+      getMessage: async () => undefined,
       connectTimeoutMs: 60000,
       keepAliveIntervalMs: 30000,
       defaultQueryTimeoutMs: 60000,

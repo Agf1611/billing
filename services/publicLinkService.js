@@ -158,19 +158,17 @@ function defaultBillingWhatsappTemplate(companyName = getSetting('company_header
   return [
     'Halo {{nama}},',
     '',
-    'Kami ingin mengingatkan bahwa masih ada tagihan layanan internet Anda.',
-    '',
+    'Tagihan internet Anda sudah tersedia.',
     'Paket: {{paket}}',
-    'Total tagihan: Rp {{tagihan}}',
     'Periode: {{rincian}}',
     'Jatuh tempo: {{jatuh_tempo}}',
+    'Total: Rp {{tagihan}}',
+    '{{payment_guide}}',
+    '',
+    'Invoice: {{invoice_link}}',
     'Cek tagihan: {{link}}',
-    'Lihat invoice: {{invoice_link}}',
     '',
-    'Jika pembayaran sudah dilakukan, Anda dapat mengabaikan pesan ini atau konfirmasi ke admin kami.',
-    '',
-    `Terima kasih,`,
-    companyName
+    `Terima kasih, ${companyName}`
   ].join('\n');
 }
 
@@ -178,19 +176,17 @@ function defaultDueReminderWhatsappTemplate(companyName = getSetting('company_he
   return [
     'Halo {{nama}},',
     '',
-    'Kami ingin mengingatkan bahwa tagihan internet Anda akan segera jatuh tempo.',
-    '',
+    'Pengingat jatuh tempo tagihan internet.',
     'Paket: {{paket}}',
-    'Total tagihan: Rp {{tagihan}}',
     'Periode: {{rincian}}',
     'Jatuh tempo: {{jatuh_tempo}}',
+    'Total: Rp {{tagihan}}',
+    '{{payment_guide}}',
+    '',
+    'Invoice: {{invoice_link}}',
     'Cek tagihan: {{link}}',
-    'Lihat invoice: {{invoice_link}}',
     '',
-    'Silakan lakukan pembayaran sebelum layanan terisolir. Jika sudah membayar, Anda dapat mengabaikan pesan ini.',
-    '',
-    `Terima kasih,`,
-    companyName
+    `Terima kasih, ${companyName}`
   ].join('\n');
 }
 

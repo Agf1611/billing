@@ -7,44 +7,57 @@
   const customerDetailPaymentApiBase = typeof paymentApiBase !== 'undefined' ? String(paymentApiBase) : customerDetailApiBase;
 %>
 <style>
-  .customer-detail-overlay{position:fixed;inset:0;background:rgba(2,6,23,.58);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:1400;padding:16px}
+  .customer-detail-overlay{position:fixed;inset:0;background:rgba(2,6,23,.58);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;z-index:1400;padding:16px}
   .customer-detail-overlay.show{display:flex}
-  .customer-detail-shell{width:min(920px,100%);max-height:calc(100vh - 32px);overflow:auto;border-radius:24px;border:1px solid rgba(148,163,184,.18);background:var(--bg2, #111827);box-shadow:0 30px 80px rgba(15,23,42,.32)}
+  .customer-detail-shell{
+    width:min(920px,100%);
+    max-height:calc(100vh - 32px);
+    overflow:auto;
+    border-radius:28px;
+    border:1px solid var(--border, var(--tech-border, rgba(148,163,184,.18)));
+    background:var(--bg2, var(--tech-bg-soft, #111827));
+    box-shadow:0 34px 88px rgba(15,23,42,.34);
+    overscroll-behavior:contain
+  }
   .customer-detail-shell::-webkit-scrollbar{width:10px}
   .customer-detail-shell::-webkit-scrollbar-thumb{background:rgba(148,163,184,.35);border-radius:999px}
-  .customer-detail-hero{position:relative;padding:18px;background:linear-gradient(135deg,#1f2f73 0%,#2f8fe8 55%,#0ea5e9 100%);color:#fff;min-height:0}
+  .customer-detail-hero{position:relative;padding:20px 20px 16px;background:linear-gradient(135deg,#1f2f73 0%,#2f8fe8 55%,#0ea5e9 100%);color:#fff;min-height:0}
   .customer-detail-hero.has-photo{background-size:cover;background-position:center}
   .customer-detail-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,23,42,.18),rgba(15,23,42,.74))}
   .customer-detail-hero > *{position:relative;z-index:1}
-  .customer-detail-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-  .customer-detail-title h3{margin:0;font-size:24px;font-weight:900;line-height:1.08}
-  .customer-hero-kicker{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.78;margin-bottom:6px}
+  .customer-detail-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;position:relative}
+  .customer-detail-title{flex:1;min-width:0}
+  .customer-detail-title h3{margin:0;font-size:23px;font-weight:900;line-height:1.02;letter-spacing:-.03em}
+  .customer-hero-kicker{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.72;margin-bottom:5px}
   .customer-detail-title .sub{margin-top:6px;font-size:13px;opacity:.92}
-  .customer-hero-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-  .customer-hero-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.14);font-size:11px;font-weight:700}
-  .customer-detail-close{border:0;background:rgba(255,255,255,.14);color:#fff;width:40px;height:40px;border-radius:14px;font-size:20px;flex:0 0 auto}
-  .customer-detail-summary-grid,.customer-detail-network-grid,.customer-detail-data-grid{display:grid;gap:10px}
+  .customer-hero-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .customer-hero-pill{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;min-height:38px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.14);font-size:10px;font-weight:700}
+  .customer-detail-close{border:0;background:rgba(255,255,255,.18);color:#fff;width:38px;height:38px;border-radius:14px;font-size:18px;flex:0 0 auto;box-shadow:0 14px 24px rgba(15,23,42,.14)}
+  .customer-detail-summary-grid,.customer-detail-network-grid,.customer-detail-data-grid{display:grid;gap:8px}
   .customer-detail-summary-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
-  .customer-detail-network-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .customer-detail-data-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .customer-detail-body{padding:16px;background:var(--bg, #0f172a)}
-  .customer-detail-section{background:var(--bg2, #111827);border:1px solid var(--border, rgba(148,163,184,.16));border-radius:20px;padding:14px 14px 12px;margin-bottom:12px}
-  .customer-detail-section h4{margin:0 0 12px;font-size:15px;font-weight:900;display:flex;align-items:center;gap:8px}
-  .customer-detail-cell{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(148,163,184,.12)}
+  .customer-detail-network-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .customer-detail-body{padding:16px;background:var(--bg, var(--tech-bg, #0f172a))}
+  .customer-detail-section{background:var(--bg2, var(--tech-bg-soft, #111827));border:1px solid var(--border, var(--tech-border, rgba(148,163,184,.16)));border-radius:18px;padding:12px 12px 10px;margin-bottom:10px;box-shadow:0 10px 26px rgba(15,23,42,.08)}
+  .customer-detail-section h4{margin:0 0 10px;font-size:14px;font-weight:900;display:flex;align-items:center;gap:8px}
+  .customer-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+  .customer-section-head h4{margin:0}
+  .customer-inline-action{border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.06);color:inherit;border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;display:inline-flex;align-items:center;gap:6px}
+  .customer-detail-cell{padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(148,163,184,.12)}
   .customer-detail-cell.emphasis{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16)}
-  .customer-detail-cell .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted, #94a3b8);margin-bottom:4px}
-  .customer-detail-cell .value{font-size:13px;font-weight:700;line-height:1.4;word-break:break-word}
+  .customer-detail-cell .label{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, var(--tech-muted, #94a3b8));margin-bottom:3px}
+  .customer-detail-cell .value{font-size:12px;font-weight:700;line-height:1.32;word-break:break-word}
   .customer-detail-cell .value.status-chip{display:flex;align-items:flex-start}
-  .customer-detail-cell.emphasis .value{font-size:15px;font-weight:900}
+  .customer-detail-cell.emphasis .value{font-size:14px;font-weight:900}
   .customer-span-2{grid-column:span 2}
   .customer-span-3{grid-column:span 3}
-  .customer-detail-cell.compact{padding:10px 11px}
+  .customer-detail-cell.compact{padding:8px 9px}
   .customer-detail-cell.compact .label{margin-bottom:3px}
-  .customer-detail-cell.compact .value{font-size:12.5px}
+  .customer-detail-cell.compact .value{font-size:11.5px}
   .customer-docs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .customer-doc-card{border-radius:18px;border:1px solid rgba(148,163,184,.14);padding:10px;background:rgba(255,255,255,.03)}
   .customer-doc-card img{width:100%;height:160px;object-fit:cover;border-radius:14px;display:block}
-  .customer-doc-empty{height:160px;border-radius:14px;border:1px dashed rgba(148,163,184,.24);display:grid;place-items:center;color:var(--muted,#94a3b8);font-size:12px}
+  .customer-doc-empty{height:160px;border-radius:14px;border:1px dashed rgba(148,163,184,.24);display:grid;place-items:center;color:var(--muted,var(--tech-muted,#94a3b8));font-size:12px}
   .customer-billing-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
   .customer-live-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(16,185,129,.18);border:1px solid rgba(52,211,153,.22);font-size:11px;font-weight:800;color:#bbf7d0}
   .customer-collapsible{padding:0}
@@ -61,32 +74,57 @@
   .billing-month .status.paid{background:rgba(34,197,94,.14);color:#22c55e}
   .billing-month .status.unpaid{background:rgba(245,158,11,.14);color:#f59e0b}
   .billing-month .status.isolated{background:rgba(239,68,68,.14);color:#ef4444}
-  .billing-month .status.missing{background:rgba(148,163,184,.14);color:var(--muted,#94a3b8)}
-  .billing-month .meta{font-size:11px;color:var(--muted,#94a3b8);line-height:1.45}
-  .billing-pay-btn{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:var(--primary,#3b82f6);color:#fff;font-size:12px;font-weight:800}
+  .billing-month .status.missing{background:rgba(148,163,184,.14);color:var(--muted,var(--tech-muted,#94a3b8))}
+  .billing-month .meta{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));line-height:1.45}
+  .billing-pay-btn{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:var(--primary,var(--tech-primary,#3b82f6));color:#fff;font-size:12px;font-weight:800}
   .device-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
   .device-action-card{padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.035)}
-  .device-action-card label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#94a3b8);margin-bottom:6px}
+  .device-action-card label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,var(--tech-muted,#94a3b8));margin-bottom:6px}
   .device-action-card input{width:100%;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.06);color:inherit;padding:10px 11px}
   .device-action-card button{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:rgba(59,130,246,.18);color:inherit;font-weight:800}
-  .customer-detail-muted{color:var(--muted,#94a3b8)}
+  .customer-detail-muted{color:var(--muted,var(--tech-muted,#94a3b8))}
   .customer-mobile-secondary{display:block}
-  .customer-avatar{width:70px;height:70px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18);font-size:32px;overflow:hidden;flex:0 0 auto}
+  .customer-avatar{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18);font-size:28px;overflow:hidden;flex:0 0 auto}
   .customer-avatar img{width:100%;height:100%;object-fit:cover}
-  .customer-hero-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
-  .customer-hero-identity{display:flex;gap:14px;align-items:center;min-width:0}
+  .customer-detail-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-left:auto;flex:0 0 auto}
+  .customer-hero-main{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .customer-hero-identity{display:flex;gap:10px;align-items:center;min-width:0;flex:1}
   .customer-hero-meta{min-width:0}
-  .customer-hero-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .customer-hero-name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .customer-hero-name-row h3{margin:0}
-  .customer-hero-contact{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;font-size:13px;opacity:.96}
-  .customer-code-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:#3ea3ff;color:#fff;font-size:12px;font-weight:800;box-shadow:0 10px 24px rgba(59,130,246,.26)}
-  .customer-hero-traffic{display:grid;gap:8px;justify-items:end;text-align:right}
-  .customer-traffic-rate{font-size:13px;font-weight:800;line-height:1.35}
-  .customer-traffic-total{font-size:12px;opacity:.9}
-  .customer-rate-down{color:#86efac}
-  .customer-rate-up{color:#93c5fd}
-  .customer-detail-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:var(--bg2,#111827);border:1px solid var(--border,rgba(148,163,184,.16));border-radius:18px;padding:4px;margin:14px 0 0}
-  .customer-tab-btn{border:0;background:transparent;color:var(--muted,#94a3b8);padding:10px 6px;border-radius:14px;font-size:12px;font-weight:800;font-family:inherit}
+  .customer-hero-contact{display:flex;flex-wrap:wrap;gap:7px;margin-top:5px;font-size:12px;opacity:.9}
+  .customer-hero-bottom-row{display:flex;gap:8px;align-items:stretch;justify-content:flex-start;margin-top:7px;min-width:0}
+  .customer-code-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;min-height:38px;border-radius:999px;background:#3ea3ff;color:#fff;font-size:10px;font-weight:800;box-shadow:0 10px 24px rgba(59,130,246,.22)}
+  .customer-hero-traffic{
+    display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;min-width:86px;min-height:38px;
+    padding:0;background:transparent;border:0;text-align:right;box-shadow:none;margin-left:auto;flex:0 0 auto
+  }
+  .customer-traffic-rate{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:10.5px;font-weight:800;line-height:1.1}
+  .customer-traffic-total{font-size:9px;font-weight:800;opacity:.82;text-align:right}
+  .customer-rate-row{
+    display:flex;align-items:center;justify-content:flex-end;gap:6px;max-width:100%;
+    padding:0;border-radius:0;background:transparent;border:0
+  }
+  .customer-rate-row i{font-size:10px;flex:0 0 auto}
+  .customer-rate-row span{display:block;white-space:nowrap}
+  .customer-rate-down{color:#60a5fa}
+  .customer-rate-up{color:#4ade80}
+  .customer-hero-pills{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px;
+    margin-top:6px
+  }
+  .customer-hero-pills .customer-hero-pill{
+    min-width:0;
+    justify-content:center;
+    padding:5px 8px;
+    font-size:9.5px;
+    line-height:1.2;
+    text-align:center
+  }
+  .customer-detail-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:3px;margin:6px 0 0;backdrop-filter:blur(8px);width:100%}
+  .customer-tab-btn{border:0;background:transparent;color:rgba(255,255,255,.78);padding:7px 4px;border-radius:11px;font-size:10px;font-weight:800;font-family:inherit;text-align:center;justify-content:center}
   .customer-tab-btn.active{background:rgba(59,130,246,.16);color:#fff;box-shadow:inset 0 -2px 0 rgba(255,255,255,.08)}
   .customer-tab-panel{display:none}
   .customer-tab-panel.active{display:block}
@@ -108,57 +146,245 @@
   .customer-detail-cardline{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .customer-detail-cardline .value{margin-top:0!important}
   .customer-traffic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .customer-traffic-card{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.04)}
-  .customer-traffic-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#94a3b8)}
+  .customer-traffic-card{padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.04);min-width:0}
+  .customer-traffic-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,var(--tech-muted,#94a3b8))}
   .customer-traffic-card .value{font-size:18px;font-weight:900;line-height:1.1;margin-top:6px}
-  .customer-traffic-card .sub{font-size:11px;color:var(--muted,#94a3b8);margin-top:4px}
-  .customer-traffic-card.download .value{color:#86efac}
-  .customer-traffic-card.upload .value{color:#93c5fd}
+  .customer-traffic-card .sub{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));margin-top:4px}
+  .customer-traffic-card.download .value{color:#60a5fa}
+  .customer-traffic-card.upload .value{color:#4ade80}
   .customer-list-rows{display:grid;gap:10px}
   .customer-list-row{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
   .customer-list-row .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
   .customer-list-row .title{font-size:13px;font-weight:800}
-  .customer-list-row .meta{font-size:11px;color:var(--muted,#94a3b8);margin-top:4px;line-height:1.45}
+  .customer-list-row .meta{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));margin-top:4px;line-height:1.45}
+  .customer-tech-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:800}
+  .customer-tech-status.open{background:rgba(245,158,11,.14);color:#f59e0b}
+  .customer-tech-status.in_progress{background:rgba(59,130,246,.14);color:#60a5fa}
+  .customer-tech-status.resolved{background:rgba(34,197,94,.14);color:#22c55e}
+  .customer-tech-status.closed{background:rgba(100,116,139,.14);color:#94a3b8}
   .customer-doc-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
   .customer-note-box{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
   .customer-note-box .big{font-size:13px;font-weight:700;line-height:1.5}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-overlay{background:rgba(94,112,146,.22)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-shell{
+    background:#f8fbff;
+    border-color:rgba(170,186,215,.36);
+    box-shadow:0 34px 88px rgba(98,112,148,.22)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-hero{
+    background:linear-gradient(145deg,#f9fbff 0%,#e9f3ff 46%,#d6e8ff 100%);
+    color:#1d2c46;
+    border-bottom:1px solid rgba(163,180,214,.28)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-hero.has-photo::after{
+    background:linear-gradient(180deg,rgba(255,255,255,.34),rgba(233,243,255,.92))
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-hero:not(.has-photo)::after{
+    background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02))
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-body{background:linear-gradient(180deg,#f8fbff 0%,#eef4ff 52%,#edf3ff 100%)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-section,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-cell,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-doc-card,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-traffic-card,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-list-row,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-note-box,
+  :is(body[data-theme="light"], html[data-theme="light"]) .billing-month{
+    background:rgba(255,255,255,.95);
+    border-color:rgba(178,191,219,.36);
+    box-shadow:0 10px 28px rgba(129,145,180,.08)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-section{
+    box-shadow:0 14px 34px rgba(141,156,189,.12)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-cell{
+    background:linear-gradient(180deg,rgba(255,255,255,.96),rgba(248,250,255,.92));
+    border-color:rgba(182,196,223,.34)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-cell.emphasis{background:linear-gradient(180deg,rgba(233,241,255,.92),rgba(225,236,255,.84));border-color:rgba(115,148,220,.24)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-cell .value,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-section h4,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-note-box .big{color:var(--text,var(--tech-text,#1f2940))}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-cell .label,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-traffic-card .label{color:rgba(74,92,128,.72)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-tab-btn{color:rgba(76,91,122,.84)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-tab-btn.active{
+    color:#19304f;
+    background:linear-gradient(180deg,#ffffff 0%,#eef4ff 100%);
+    box-shadow:0 8px 18px rgba(129,145,180,.16)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-tabs{
+    background:rgba(255,255,255,.72);
+    border-color:rgba(182,196,223,.42)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-tab-btn{color:rgba(76,91,122,.84)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-hero-pill{
+    background:rgba(255,255,255,.52);
+    border-color:rgba(255,255,255,.68);
+    color:#23406b;
+    box-shadow:0 8px 20px rgba(165,184,218,.18)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-close{
+    background:rgba(255,255,255,.72);
+    color:#284266;
+    border:1px solid rgba(176,193,224,.38);
+    box-shadow:0 12px 28px rgba(138,155,190,.16)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-code-pill{
+    background:linear-gradient(135deg,#3f85ff 0%,#5aa0ff 100%);
+    box-shadow:0 12px 26px rgba(63,133,255,.24)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-hero-traffic{
+    color:#1b3153;
+    background:transparent;
+    border:0;
+    box-shadow:none
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-network-status.online{background:rgba(34,197,94,.12);color:#15803d;border-color:rgba(34,197,94,.16)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-network-status.offline{background:rgba(239,68,68,.12);color:#dc2626;border-color:rgba(239,68,68,.16)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-network-status.warn{background:rgba(245,158,11,.12);color:#d97706;border-color:rgba(245,158,11,.16)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-state-banner{
+    background:linear-gradient(135deg,#eefcf4 0%,#ddf8e8 100%);
+    border-color:rgba(74,222,128,.28);
+    color:#166534;
+    box-shadow:0 12px 30px rgba(135,170,144,.14)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-state-banner.unpaid{
+    background:linear-gradient(135deg,#fff7ea 0%,#ffefdb 100%);
+    border-color:rgba(251,191,36,.28);
+    color:#b45309
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-state-banner.suspended{
+    background:linear-gradient(135deg,#fff1f2 0%,#ffe4e6 100%);
+    border-color:rgba(248,113,113,.28);
+    color:#be123c
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-traffic-total,
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-muted{color:rgba(31,41,64,.72)!important}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-doc-empty{background:rgba(255,255,255,.72);border-color:rgba(148,163,184,.22)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .customer-inline-action{background:rgba(255,255,255,.78);border-color:rgba(178,191,219,.42);box-shadow:0 8px 18px rgba(141,156,189,.1)}
+  :is(body[data-theme="light"], html[data-theme="light"]) .device-action-card{
+    background:rgba(255,255,255,.94);
+    border-color:rgba(182,196,223,.34);
+    box-shadow:0 10px 24px rgba(141,156,189,.1)
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .device-action-card input{
+    background:#f8fbff;
+    border-color:rgba(182,196,223,.42);
+    color:#1f2940
+  }
+  :is(body[data-theme="light"], html[data-theme="light"]) .device-action-card button{
+    background:linear-gradient(180deg,#edf4ff 0%,#e1edff 100%);
+    color:#24416d
+  }
   @media (max-width: 860px){
     .customer-detail-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .customer-detail-network-grid,.customer-detail-data-grid,.customer-docs,.device-actions{grid-template-columns:1fr}
+    .customer-docs,.device-actions{grid-template-columns:1fr}
   }
   @media (max-width: 560px){
     .customer-detail-overlay{padding:0;align-items:flex-end}
-    .customer-detail-shell{width:100%;max-height:92vh;border-radius:24px 24px 0 0;border-bottom:0}
-    .customer-detail-hero{padding:14px}
-    .customer-detail-topbar{margin-bottom:10px}
-    .customer-detail-title h3{font-size:20px}
+    .customer-detail-shell{width:100%;max-height:94vh;border-radius:26px 26px 0 0;border-bottom:0}
+    .customer-detail-hero{padding:12px 10px 8px 10px}
+    .customer-detail-topbar{margin-bottom:5px;align-items:flex-start}
+    .customer-detail-title h3{font-size:17px}
     .customer-detail-title .sub{font-size:12px}
-    .customer-hero-pills{gap:6px}
-    .customer-hero-pill{font-size:10px;padding:6px 9px}
-    .customer-detail-close{width:38px;height:38px;border-radius:12px}
+    .customer-hero-pills{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:6px}
+    .customer-hero-pill{font-size:9.5px;padding:5px 8px;min-height:36px}
+    .customer-hero-bottom-row{gap:6px;margin-top:6px}
+    .customer-detail-close{
+      position:static;
+      width:34px;
+      height:34px;
+      border-radius:12px;
+      flex:0 0 auto
+    }
     .customer-detail-body{padding:12px}
-    .customer-detail-section{padding:12px 12px 10px;border-radius:18px}
+    .customer-detail-section{padding:10px 10px 8px;border-radius:16px;margin-bottom:9px}
     .customer-detail-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .customer-detail-network-grid,.customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .customer-detail-cell{padding:9px 10px}
-    .customer-detail-cell .value{font-size:12px;line-height:1.32}
+    .customer-detail-network-grid,.customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:7px}
+    .customer-detail-cell{padding:8px 9px;border-radius:14px}
+    .customer-detail-cell .value{font-size:11.5px;line-height:1.28}
     .customer-detail-cell.emphasis .value{font-size:14px}
     .customer-mobile-secondary{display:none}
     .customer-span-2,.customer-span-3{grid-column:span 2}
     .customer-doc-card img,.customer-doc-empty{height:132px}
     .customer-billing-months{grid-template-columns:1fr}
-    .customer-collapsible summary{padding:12px 12px 10px}
-    .customer-collapsible-body{padding:0 12px 10px}
-    .customer-hero-main{flex-direction:column}
+    .customer-collapsible summary{padding:10px 10px 8px}
+    .customer-collapsible-body{padding:0 10px 8px}
+    .customer-hero-main{display:flex;justify-content:space-between;gap:8px}
     .customer-hero-identity{align-items:flex-start}
-    .customer-avatar{width:58px;height:58px;font-size:28px}
-    .customer-hero-contact{font-size:12px;gap:8px}
-    .customer-code-pill{font-size:11px;padding:6px 10px}
-    .customer-hero-traffic{width:100%;justify-items:start;text-align:left}
-    .customer-detail-tabs{margin-top:12px}
-    .customer-tab-btn{font-size:10.5px;padding:9px 4px}
+    .customer-hero-name-row{gap:8px}
+    .customer-avatar{width:48px;height:48px;font-size:22px}
+    .customer-hero-contact{font-size:11px;gap:5px}
+    .customer-code-pill{font-size:10px;padding:4px 8px;min-height:36px}
+    .customer-detail-actions{gap:6px}
+    .customer-hero-traffic{align-self:stretch;min-width:88px;min-height:36px;gap:3px;padding:0 0 0 4px;margin-top:0}
+    .customer-traffic-rate{gap:3px;font-size:10px}
+    .customer-rate-row{gap:4px}
+    .customer-rate-row i{font-size:9.5px}
+    .customer-traffic-total{
+      font-size:9px;
+      margin-top:0
+    }
+    .customer-detail-tabs{margin-top:8px}
+    .customer-tab-btn{font-size:9.5px;padding:7px 4px}
     .customer-state-banner{font-size:14px;padding:14px 12px}
-    .customer-traffic-grid{grid-template-columns:1fr}
+    .customer-traffic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .customer-traffic-card{padding:10px 10px;border-radius:14px}
+    .customer-traffic-card .label{font-size:9px}
+    .customer-traffic-card .value{font-size:15px;margin-top:5px}
+    .customer-traffic-card .sub{font-size:10px}
+    .customer-hero-pills .customer-hero-pill{width:100%;justify-content:center;padding:6px 8px}
+    .customer-billing-toolbar{display:grid;grid-template-columns:1fr;align-items:stretch;gap:8px}
+    .customer-billing-toolbar > div{width:100%;justify-content:space-between}
+    .customer-billing-toolbar .customer-live-badge{justify-content:center}
+    .customer-billing-toolbar select{min-width:92px;max-width:120px}
+    .billing-month,.customer-list-row,.customer-note-box{padding:10px 10px;border-radius:14px}
+    .billing-month .head,.customer-list-row .top{align-items:flex-start}
+    .billing-month .meta,.customer-list-row .meta{font-size:10.5px;line-height:1.4}
+    .billing-pay-btn{padding:8px 9px;border-radius:11px;font-size:11px}
+  }
+  @media (max-width: 430px){
+    .customer-detail-overlay{backdrop-filter:blur(6px)}
+    .customer-detail-shell{max-height:96vh;border-radius:24px 24px 0 0}
+    .customer-detail-hero{padding:11px 9px 8px 9px}
+    .customer-detail-title h3{font-size:16px}
+    .customer-hero-identity{gap:8px}
+    .customer-avatar{width:44px;height:44px;font-size:20px}
+    .customer-hero-contact{display:grid;grid-template-columns:1fr;gap:4px;margin-top:5px}
+    .customer-hero-pills{margin-top:6px}
+    .customer-detail-actions{gap:5px}
+    .customer-hero-bottom-row{gap:5px}
+    .customer-hero-pill{min-height:34px}
+    .customer-code-pill{min-height:34px}
+    .customer-hero-traffic{gap:3px;padding:0;min-height:34px;min-width:82px}
+    .customer-traffic-rate{font-size:9.5px}
+    .customer-rate-row span{max-width:72px;overflow:hidden;text-overflow:ellipsis}
+    .customer-detail-summary-grid{grid-template-columns:1fr}
+    .customer-detail-network-grid,.customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:6px}
+    .customer-span-2,.customer-span-3{grid-column:span 2}
+    .customer-detail-cell,.customer-detail-cell.compact{padding:8px 9px;border-radius:13px}
+    .customer-traffic-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+    .customer-traffic-card{padding:9px 9px;border-radius:13px}
+    .customer-traffic-card .label{font-size:8.5px}
+    .customer-traffic-card .value{font-size:14px}
+    .customer-traffic-card .sub{font-size:9.5px}
+    .customer-hero-pills{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+    .customer-hero-pills .customer-hero-pill{font-size:9px;padding:4px 6px}
+    .customer-detail-tabs{grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;padding:3px}
+    .customer-tab-btn{font-size:9.25px;padding:7px 4px;white-space:nowrap}
+    .customer-billing-toolbar{display:grid;grid-template-columns:1fr;align-items:stretch;gap:7px}
+    .customer-billing-toolbar > div{width:100%;justify-content:space-between}
+    .customer-billing-toolbar .customer-live-badge{justify-content:center}
+    .customer-billing-toolbar select{min-width:84px;max-width:108px;padding:7px 8px !important}
+    .billing-month,.customer-list-row,.customer-note-box{padding:9px 9px;border-radius:13px}
+    .billing-month .name,.customer-list-row .title{font-size:11.5px}
+    .billing-month .meta,.customer-list-row .meta{font-size:10px;line-height:1.38}
+    .billing-pay-btn{padding:7px 8px;border-radius:10px;font-size:10.5px}
+    .customer-section-head{align-items:flex-start}
+    .customer-state-banner{font-size:13px;padding:12px 10px}
+    .customer-section-head h4{font-size:14px}
+    .customer-inline-action{padding:6px 9px;font-size:10px}
   }
 </style>
 
@@ -177,7 +403,7 @@
     deviceApiBase: <%- JSON.stringify(customerDetailDeviceApiBase) %>,
     paymentApiBase: <%- JSON.stringify(customerDetailPaymentApiBase) %>
   };
-  let customerDetailState = { customerId: null, year: new Date().getFullYear(), data: null, activeTab: 'detail', refreshTimer: null };
+  let customerDetailState = { customerId: null, year: new Date().getFullYear(), data: null, activeTab: 'detail', refreshTimer: null, pendingController: null, loading: false };
   const customerTrafficHistory = new Map();
 
   function escapeCustomerDetailHtml(value) {
@@ -247,8 +473,24 @@
     return kbPerSecond.toFixed(1) + ' kb/s';
   }
 
+  function customerDetailFormatThroughput(mbps) {
+    const value = Number(mbps || 0) || 0;
+    if (value <= 0) return '0 kb/s';
+    if (value < 1) return `${(value * 1024).toFixed(value * 1024 >= 100 ? 0 : 1)} kb/s`;
+    return `${value.toFixed(value >= 10 ? 0 : 1)} Mb/s`;
+  }
+
   function customerDetailComputeTrafficState(detail) {
     const usage = detail?.usage || {};
+    const network = detail?.network || {};
+    const directDownMbps = Number(network.txMbps || 0) || 0;
+    const directUpMbps = Number(network.rxMbps || 0) || 0;
+    if (directDownMbps > 0 || directUpMbps > 0) {
+      return {
+        downRateText: customerDetailFormatThroughput(directDownMbps),
+        upRateText: customerDetailFormatThroughput(directUpMbps)
+      };
+    }
     const now = Date.now();
     const key = String(customerDetailState.customerId || '0');
     const currentDown = Number(usage.liveDownloadBytes || usage.downloadBytes || 0) || 0;
@@ -310,13 +552,24 @@
     customerDetailState.refreshTimer = setInterval(() => {
       if (!document.getElementById('customerDetailOverlay')?.classList.contains('show')) return;
       if (!customerDetailState.customerId) return;
-      loadCustomerDetail(customerDetailState.year);
+      if (customerDetailState.loading) return;
+      loadCustomerDetail(customerDetailState.year, true);
     }, 3000);
   }
 
   function openCustomerDetail(customerId, year = null) {
+    if (customerDetailState.refreshTimer) {
+      clearInterval(customerDetailState.refreshTimer);
+      customerDetailState.refreshTimer = null;
+    }
+    if (customerDetailState.pendingController) {
+      try { customerDetailState.pendingController.abort(); } catch {}
+      customerDetailState.pendingController = null;
+    }
+    customerDetailState.loading = false;
     customerDetailState.customerId = Number(customerId || 0) || 0;
     customerDetailState.year = Number(year || new Date().getFullYear()) || new Date().getFullYear();
+    customerDetailState.data = null;
     customerDetailState.activeTab = customerDetailState.activeTab || 'detail';
     const overlay = document.getElementById('customerDetailOverlay');
     const content = document.getElementById('customerDetailContent');
@@ -324,8 +577,7 @@
     overlay.classList.add('show');
     content.replaceChildren();
     content.insertAdjacentHTML('afterbegin', '<div class="customer-detail-hero"><div class="customer-detail-title"><h3>Memuat detail pelanggan...</h3><div class="sub">Mohon tunggu sebentar</div></div></div>');
-    customerDetailStartPolling();
-    loadCustomerDetail();
+    loadCustomerDetail(customerDetailState.year, false);
   }
 
   function closeCustomerDetailModal() {
@@ -333,6 +585,11 @@
       clearInterval(customerDetailState.refreshTimer);
       customerDetailState.refreshTimer = null;
     }
+    if (customerDetailState.pendingController) {
+      try { customerDetailState.pendingController.abort(); } catch {}
+      customerDetailState.pendingController = null;
+    }
+    customerDetailState.loading = false;
     document.getElementById('customerDetailOverlay')?.classList.remove('show');
   }
 
@@ -350,15 +607,25 @@
     throw new Error('Server tidak mengirim detail pelanggan yang valid.');
   }
 
-  async function loadCustomerDetail(year = null) {
+  async function loadCustomerDetail(year = null, forceNetworkRefresh = false) {
     const customerId = customerDetailState.customerId;
     const targetYear = Number(year || customerDetailState.year || new Date().getFullYear()) || new Date().getFullYear();
     customerDetailState.year = targetYear;
     const content = document.getElementById('customerDetailContent');
     if (!customerId || !content) return;
-    const url = `${CUSTOMER_DETAIL_OPTIONS.detailApiBase}/${encodeURIComponent(String(customerId))}/detail?year=${encodeURIComponent(String(targetYear))}`;
+    if (customerDetailState.pendingController) {
+      try { customerDetailState.pendingController.abort(); } catch {}
+      customerDetailState.pendingController = null;
+    }
+    customerDetailState.loading = false;
+    const params = new URLSearchParams({ year: String(targetYear) });
+    if (forceNetworkRefresh) params.set('refreshNetwork', '1');
+    const url = `${CUSTOMER_DETAIL_OPTIONS.detailApiBase}/${encodeURIComponent(String(customerId))}/detail?${params.toString()}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const hadExistingData = Boolean(customerDetailState.data);
+    customerDetailState.pendingController = controller;
+    customerDetailState.loading = true;
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
     try {
       const res = await fetch(url, {
         headers: {
@@ -372,7 +639,31 @@
       if (!res.ok) throw new Error(json?.error || 'Gagal memuat detail pelanggan');
       customerDetailState.data = json;
       renderCustomerDetail(json);
+      const shouldAutoRefreshNetwork = !forceNetworkRefresh &&
+        Boolean(json?.customer?.pppoeUsername) &&
+        (
+          String(json?.network?.remoteAddress || '-').trim() === '-' ||
+          (
+            String(json?.network?.status || '').toLowerCase() === 'offline' &&
+            String(json?.network?.lastOnlineAt || '').trim() === ''
+          ) ||
+          (
+            json?.usage?.isLive &&
+            !(Number(json?.network?.rxMbps || 0) || Number(json?.network?.txMbps || 0))
+          )
+        );
+      if (shouldAutoRefreshNetwork) {
+        window.setTimeout(() => {
+          const overlay = document.getElementById('customerDetailOverlay');
+          if (!overlay?.classList.contains('show')) return;
+          if (customerDetailState.customerId !== customerId) return;
+          if (customerDetailState.loading) return;
+          loadCustomerDetail(targetYear, true);
+        }, 350);
+      }
+      customerDetailStartPolling();
     } catch (error) {
+      if (hadExistingData) return;
       const message = error?.name === 'AbortError'
         ? 'Memuat detail terlalu lama. Silakan coba lagi.'
         : (error.message || String(error));
@@ -380,7 +671,16 @@
       content.insertAdjacentHTML('afterbegin', `<div class="customer-detail-hero"><div class="customer-detail-title"><h3>Gagal memuat detail</h3><div class="sub">${escapeCustomerDetailHtml(message)}</div></div></div>`);
     } finally {
       clearTimeout(timeoutId);
+      if (customerDetailState.pendingController === controller) {
+        customerDetailState.pendingController = null;
+      }
+      customerDetailState.loading = false;
     }
+  }
+
+  async function customerDetailRefreshNetwork() {
+    if (!customerDetailState.customerId || customerDetailState.loading) return;
+    await loadCustomerDetail(customerDetailState.year, true);
   }
 
   function renderCustomerDetail(detail) {
@@ -392,28 +692,37 @@
     const device = detail?.device || null;
     const currentInvoice = detail?.currentInvoice || null;
     const billing = detail?.billing || { months: [], year: new Date().getFullYear() };
+    const technicianHistory = Array.isArray(detail?.technicianHistory) ? detail.technicianHistory : [];
     const invoiceStatus = customerDetailInvoiceStatus(currentInvoice);
     const banner = customerDetailBanner(invoiceStatus, currentInvoice, network);
     const heroClass = customer.housePhotoUrl ? 'customer-detail-hero has-photo' : 'customer-detail-hero';
     const heroStyle = customer.housePhotoUrl ? ` style="background-image:url('${escapeCustomerDetailHtml(customer.housePhotoUrl)}')"` : '';
-    const heroSubtitle = [customer.phone || '-', customer.address || ''].filter(Boolean).join(' • ');
     const packageSpeedText = customer.speedDown
       ? `${Math.round(Number(customer.speedDown || 0) / 1000)} / ${Math.round(Number(customer.speedUp || 0) / 1000)} Mbps`
       : '-';
     const routerText = customer.routerName || customer.oltName || 'Tanpa router';
     const trafficLabel = usage?.isLive ? 'Traffic Live' : 'Traffic Tersimpan';
     const trafficHint = usage?.isLive ? 'Data sesi aktif dari MikroTik' : 'Data terakhir tersimpan';
+    const sessionPillText = usage?.isLive ? 'Live MikroTik' : 'Data tersimpan';
     const monthlyTrafficText = customerDetailBytesToGb(usage.storedTotalBytes || usage.totalBytes);
     const trafficState = customerDetailComputeTrafficState(detail);
     const showPayTab = CUSTOMER_DETAIL_OPTIONS.allowPayment;
     const codeLabel = customerDetailCurrentCode(customer);
     const activeTab = customerDetailState.activeTab || 'detail';
+    const hasLocation = Boolean(customer.lat && customer.lng);
+    const locationHref = hasLocation
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(String(customer.lat).trim())},${encodeURIComponent(String(customer.lng).trim())}`
+      : '';
+    const locationLabel = hasLocation
+      ? `${escapeCustomerDetailHtml(String(customer.lat).trim())}, ${escapeCustomerDetailHtml(String(customer.lng).trim())}`
+      : 'Belum ada titik GPS';
+    const duePillText = currentInvoice ? `JT tgl ${currentInvoice.dueDay || 10}` : 'Belum ada invoice';
 
     content.replaceChildren();
     content.insertAdjacentHTML('afterbegin', `
       <div class="${heroClass}"${heroStyle}>
         <div class="customer-detail-topbar">
-          <div class="customer-detail-title" style="width:100%">
+          <div class="customer-detail-title">
             <div class="customer-hero-kicker">Detail Pelanggan</div>
             <div class="customer-hero-main">
               <div class="customer-hero-identity">
@@ -429,29 +738,36 @@
                     <span><i class="bi bi-telephone-fill"></i> ${escapeCustomerDetailHtml(customer.phone || '-')}</span>
                     <span><i class="bi bi-box-seam"></i> ${escapeCustomerDetailHtml(customer.packageName || '-')}</span>
                   </div>
-                  <div class="customer-hero-pills" style="margin-top:8px">
+                  <div class="customer-hero-bottom-row">
                     <span class="customer-code-pill">ID Pel : ${escapeCustomerDetailHtml(codeLabel)}</span>
                     <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(routerText)}</span>
+                    <div class="customer-hero-traffic">
+                      <div class="customer-traffic-rate">
+                        <div class="customer-rate-row customer-rate-up" title="Upload sekarang">
+                          <i class="bi bi-arrow-up"></i>
+                          <span>${escapeCustomerDetailHtml(trafficState.upRateText)}</span>
+                        </div>
+                        <div class="customer-rate-row customer-rate-down" title="Download sekarang">
+                          <i class="bi bi-arrow-down"></i>
+                          <span>${escapeCustomerDetailHtml(trafficState.downRateText)}</span>
+                        </div>
+                      </div>
+                      <div class="customer-traffic-total">${customerDetailBytesToGb(usage.totalBytes)}</div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="customer-hero-traffic">
-                <div class="customer-traffic-rate">
-                  <div class="customer-rate-down"><i class="bi bi-arrow-down"></i> ${escapeCustomerDetailHtml(trafficState.downRateText)}</div>
-                  <div class="customer-rate-up"><i class="bi bi-arrow-up"></i> ${escapeCustomerDetailHtml(trafficState.upRateText)}</div>
-                </div>
-                <div class="customer-traffic-total">${customerDetailBytesToGb(usage.totalBytes)}</div>
-                <div class="customer-detail-muted" style="font-size:11px;color:rgba(255,255,255,.8)">${escapeCustomerDetailHtml(trafficHint)}</div>
-              </div>
-            </div>
-            <div class="customer-detail-tabs">
-              <button type="button" class="customer-tab-btn ${activeTab === 'detail' ? 'active' : ''}" data-customer-tab="detail" onclick="customerDetailSwitchTab('detail')">Detail</button>
-              <button type="button" class="customer-tab-btn ${activeTab === 'month' ? 'active' : ''}" data-customer-tab="month" onclick="customerDetailSwitchTab('month')">Bulan</button>
-              ${showPayTab ? `<button type="button" class="customer-tab-btn ${activeTab === 'pay' ? 'active' : ''}" data-customer-tab="pay" onclick="customerDetailSwitchTab('pay')">Bayar</button>` : ''}
-              <button type="button" class="customer-tab-btn ${activeTab === 'tech' ? 'active' : ''}" data-customer-tab="tech" onclick="customerDetailSwitchTab('tech')">H. Teknis</button>
             </div>
           </div>
-          <button type="button" class="customer-detail-close" onclick="closeCustomerDetailModal()">&times;</button>
+          <div class="customer-detail-actions">
+            <button type="button" class="customer-detail-close" onclick="closeCustomerDetailModal()">&times;</button>
+          </div>
+        </div>
+        <div class="customer-detail-tabs">
+          <button type="button" class="customer-tab-btn ${activeTab === 'detail' ? 'active' : ''}" data-customer-tab="detail" onclick="customerDetailSwitchTab('detail')">Detail</button>
+          <button type="button" class="customer-tab-btn ${activeTab === 'month' ? 'active' : ''}" data-customer-tab="month" onclick="customerDetailSwitchTab('month')">Bulan</button>
+          ${showPayTab ? `<button type="button" class="customer-tab-btn ${activeTab === 'pay' ? 'active' : ''}" data-customer-tab="pay" onclick="customerDetailSwitchTab('pay')">Bayar</button>` : ''}
+          <button type="button" class="customer-tab-btn ${activeTab === 'tech' ? 'active' : ''}" data-customer-tab="tech" onclick="customerDetailSwitchTab('tech')">H. Teknis</button>
         </div>
         <div class="customer-detail-summary-grid" style="display:none">
           <div class="customer-detail-cell emphasis">
@@ -471,11 +787,11 @@
             <div class="value">${customerDetailBytesToGb(usage.uploadBytes)}</div>
           </div>
         </div>
-        <div class="customer-hero-pills" style="margin-top:10px">
-          <span class="customer-hero-pill"><i class="bi bi-calendar-check"></i>${currentInvoice ? `Jatuh tempo tgl ${currentInvoice.dueDay || 10}` : 'Belum ada invoice'}</span>
+        <div class="customer-hero-pills">
+          <span class="customer-hero-pill"><i class="bi bi-calendar-check"></i>${duePillText}</span>
           <span class="customer-hero-pill"><i class="bi bi-speedometer2"></i>${escapeCustomerDetailHtml(packageSpeedText)}</span>
           <span class="customer-hero-pill"><i class="bi bi-bar-chart-line"></i>${customerDetailBytesToGb(usage.totalBytes)}</span>
-          <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(trafficHint)}</span>
+          <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(sessionPillText)}</span>
         </div>
       </div>
       <div class="customer-detail-body">
@@ -485,7 +801,10 @@
             <span>${escapeCustomerDetailHtml(banner.text)}</span>
           </div>
           <div class="customer-detail-section">
-            <h4><i class="bi bi-router"></i> Rincian Jaringan</h4>
+            <div class="customer-section-head">
+              <h4><i class="bi bi-router"></i> Rincian Jaringan</h4>
+              <button type="button" class="customer-inline-action" onclick="customerDetailRefreshNetwork()"><i class="bi bi-arrow-clockwise"></i>Refresh</button>
+            </div>
             <div class="customer-detail-network-grid">
               <div class="customer-detail-cell compact">
                 <div class="label">Akun PPPoE</div>
@@ -516,14 +835,6 @@
                 <div class="value">${escapeCustomerDetailHtml(customer.odpName || 'Belum ada ODP')}</div>
                 <div class="customer-detail-muted" style="font-size:11px;margin-top:6px">${escapeCustomerDetailHtml(customer.ponPort || 'PON belum diisi')}</div>
               </div>
-              <div class="customer-detail-cell compact">
-                <div class="label">Interface</div>
-                <div class="value">${escapeCustomerDetailHtml(network.interface || '-')}</div>
-              </div>
-              <div class="customer-detail-cell compact">
-                <div class="label">IP Lokal</div>
-                <div class="value">${escapeCustomerDetailHtml(network.localAddress || '-')}</div>
-              </div>
               <div class="customer-detail-cell compact customer-mobile-secondary">
                 <div class="label">PPPoE / Modem</div>
                 <div class="value">${escapeCustomerDetailHtml((network.username || '-') + ' - ' + (device?.model || customer.macAddress || '-'))}</div>
@@ -537,28 +848,12 @@
           </div>
 
           <div class="customer-detail-section">
-            <h4><i class="bi bi-bar-chart-line"></i> Monitoring Trafik</h4>
-            <div class="customer-traffic-grid">
-              <div class="customer-traffic-card download">
-                <div class="label">Download Sekarang</div>
-                <div class="value">${escapeCustomerDetailHtml(trafficState.downRateText)}</div>
-                <div class="sub">Akumulasi ${customerDetailBytesToGb(usage.downloadBytes)}</div>
-              </div>
-              <div class="customer-traffic-card upload">
-                <div class="label">Upload Sekarang</div>
-                <div class="value">${escapeCustomerDetailHtml(trafficState.upRateText)}</div>
-                <div class="sub">Akumulasi ${customerDetailBytesToGb(usage.uploadBytes)}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="customer-detail-section">
             <h4><i class="bi bi-person-vcard"></i> Rincian Data</h4>
             <div class="customer-detail-data-grid">
               <div class="customer-detail-cell compact"><div class="label">Tanggal Daftar</div><div class="value">${escapeCustomerDetailHtml(customerDetailDate(customer.createdAt || customer.installDate, '-'))}</div></div>
               <div class="customer-detail-cell compact"><div class="label">Tagihan Tanggal</div><div class="value">${escapeCustomerDetailHtml(String(currentInvoice?.dueDay || customer.isolateDay || '-'))}</div></div>
               <div class="customer-detail-cell compact"><div class="label">Tanggal Isolir</div><div class="value">${escapeCustomerDetailHtml(String(customer.isolateDay || currentInvoice?.dueDay || '-'))}</div></div>
-              <div class="customer-detail-cell compact"><div class="label">Lokasi</div><div class="value">${customer.lat && customer.lng ? `${escapeCustomerDetailHtml(customer.lat)}, ${escapeCustomerDetailHtml(customer.lng)}` : 'Klik buka lokasi'}</div></div>
+              <div class="customer-detail-cell compact"><div class="label">Lokasi GPS / Rute</div><div class="value">${hasLocation ? `<a href="${locationHref}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;font-weight:800">${locationLabel}</a>` : 'Belum ada titik GPS'}</div></div>
               <div class="customer-detail-cell compact customer-span-2"><div class="label">Alamat</div><div class="value">${escapeCustomerDetailHtml(customer.address || '-')}</div></div>
               <div class="customer-detail-cell compact customer-mobile-secondary"><div class="label">Password App</div><div class="value">${escapeCustomerDetailHtml(customer.phone ? 'Kirim Password Pelanggan' : '-')}</div></div>
             </div>
@@ -644,7 +939,36 @@
 
         <section class="customer-tab-panel ${activeTab === 'tech' ? 'active' : ''}" data-customer-panel="tech">
           <div class="customer-detail-section">
-            <h4><i class="bi bi-wifi"></i> Modem & Teknis</h4>
+            <h4><i class="bi bi-tools"></i> Histori Perbaikan Teknisi</h4>
+            ${technicianHistory.length ? `
+              <div class="customer-list-rows">
+                ${technicianHistory.map((item) => `
+                  <div class="customer-list-row">
+                    <div class="top">
+                      <div>
+                        <div class="title">${escapeCustomerDetailHtml(item.subject || 'Laporan teknisi')}</div>
+                        <div class="meta">${escapeCustomerDetailHtml(customerDetailDateTime(item.createdAt, '-'))}${item.technicianName ? ` • ${escapeCustomerDetailHtml(item.technicianName)}` : ''}</div>
+                      </div>
+                      <span class="customer-tech-status ${escapeCustomerDetailHtml(item.status || 'open')}">${escapeCustomerDetailHtml(
+                        item.status === 'resolved' ? 'Selesai' :
+                        item.status === 'in_progress' ? 'Dikerjakan' :
+                        item.status === 'closed' ? 'Ditutup' : 'Baru'
+                      )}</span>
+                    </div>
+                    <div class="meta" style="margin-top:8px">${escapeCustomerDetailHtml(item.message || 'Tidak ada catatan pekerjaan.')}</div>
+                    ${item.updatedAt ? `<div class="customer-detail-muted" style="font-size:11px;margin-top:8px">Update terakhir ${escapeCustomerDetailHtml(customerDetailDateTime(item.updatedAt, '-'))}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="customer-note-box">
+                <div class="big">Belum ada histori perbaikan teknisi untuk pelanggan ini.</div>
+              </div>
+            `}
+          </div>
+
+          <div class="customer-detail-section">
+            <h4><i class="bi bi-wifi"></i> Modem & Perangkat</h4>
             ${device ? `
               <div class="customer-detail-network-grid" style="margin-bottom:10px">
                 <div class="customer-detail-cell"><div class="label">Tag / Token</div><div class="value">${escapeCustomerDetailHtml(device.token || customer.genieacsTag || '-')}</div></div>

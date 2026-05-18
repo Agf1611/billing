@@ -1,35 +1,61 @@
 <%- include('partials/header') %>
 
 <style>
-  .tech-customer-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .tech-customer-hero{display:grid;gap:14px;padding:16px;background:linear-gradient(145deg, rgba(91,140,255,.16), rgba(91,140,255,.05)), var(--tech-panel)}
+  .tech-customer-hero-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .tech-customer-hero-copy h2{font-size:22px;font-weight:900;letter-spacing:-.04em;line-height:1.05;margin:0 0 6px}
+  .tech-customer-hero-copy p{margin:0;color:var(--tech-muted);font-size:13px;line-height:1.55}
+  .tech-customer-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .tech-customer-add-btn{min-height:48px;padding:0 16px;border-radius:16px;font-weight:800;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+  .tech-customer-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 132px 48px 48px;gap:8px;align-items:center;margin-bottom:12px}
   .tech-customer-toolbar .form-control,
   .tech-customer-toolbar .form-select{background:var(--tech-input-bg);color:var(--tech-text);border-color:var(--tech-border)}
+  .tech-customer-toolbar .btn{height:48px;border-radius:16px}
   .tech-customer-list{display:grid;gap:8px}
-  .tech-customer-card{display:grid;gap:7px;padding:9px}
+  .tech-customer-card{display:grid;gap:8px;padding:11px}
   .tech-customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-  .tech-customer-name{font-size:14px;font-weight:900;line-height:1.12}
-  .tech-customer-sub{font-size:10px;color:var(--tech-muted);margin-top:3px;line-height:1.3}
+  .tech-customer-name{font-size:15px;font-weight:900;line-height:1.15}
+  .tech-customer-sub{font-size:11px;color:var(--tech-muted);margin-top:4px;line-height:1.4}
   .tech-customer-chip-row{display:flex;gap:6px;flex-wrap:wrap}
   .tech-customer-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .tech-customer-cell{padding:7px 8px;border-radius:12px;background:var(--tech-bg-soft-2);border:1px solid var(--tech-border);min-height:58px}
+  .tech-customer-cell{padding:9px;border-radius:16px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);min-height:62px}
   .tech-customer-cell .label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--tech-muted);margin-bottom:3px}
   .tech-customer-cell .value{font-size:11px;font-weight:800;line-height:1.28;word-break:break-word}
   .tech-customer-address{display:flex;align-items:flex-start;gap:6px;font-size:10px;color:var(--tech-muted);line-height:1.28}
   .tech-customer-address span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
   .tech-customer-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-  .tech-customer-actions .btn{border-radius:12px;min-height:46px;font-weight:800;padding:6px 4px}
+  .tech-customer-actions .btn{border-radius:15px;min-height:48px;font-weight:800;padding:6px 4px}
   .tech-action-mini{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1}
   .tech-action-mini i{font-size:14px}
   .tech-action-mini small{font-size:9px;font-weight:800;letter-spacing:.02em}
   @media (max-width: 576px){
+    .tech-customer-hero{padding:14px}
+    .tech-customer-hero-head{flex-direction:column;align-items:stretch}
+    .tech-customer-hero-copy h2{font-size:20px}
+    .tech-customer-add-btn{width:100%;justify-content:center}
+    .tech-customer-toolbar{grid-template-columns:minmax(0,1fr) 112px 44px 44px}
     .tech-customer-meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-    .tech-customer-card{padding:8px;gap:6px}
-    .tech-customer-cell{padding:6px 7px;min-height:54px}
+    .tech-customer-card{padding:10px;gap:7px}
+    .tech-customer-cell{padding:8px;min-height:56px}
     .tech-customer-cell .value{font-size:10.5px}
     .tech-customer-actions .btn{min-height:44px}
     .tech-customer-name{font-size:13px}
   }
 </style>
+
+<div class="t-card tech-customer-hero">
+  <div class="tech-customer-hero-head">
+    <div class="tech-customer-hero-copy">
+      <span class="tech-customer-kicker"><i class="bi bi-people"></i>Menu Pelanggan</span>
+      <h2>Data Pelanggan</h2>
+      <p>Lihat status pelanggan, buka detail, langsung kirim WhatsApp, dan tambah pengajuan pelanggan baru dari satu layar mobile yang lebih simpel.</p>
+    </div>
+    <a href="/tech/customers/new" class="btn btn-primary tech-customer-add-btn">
+      <i class="bi bi-plus-lg"></i>
+      <span>Tambah Pelanggan</span>
+    </a>
+  </div>
+</div>
 
 <div class="t-card">
   <form class="tech-customer-toolbar" method="GET" action="/tech/customers">
@@ -52,6 +78,7 @@
     <div class="t-card text-center text-secondary">Belum ada pelanggan yang cocok.</div>
   <% } %>
   <% (customers || []).forEach((c) => { %>
+    <% const techRouteHref = (c.lat && c.lng) ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${c.lat},${c.lng}`)}` : ''; %>
     <div class="t-card tech-customer-card">
       <div class="tech-customer-head">
         <div>
@@ -110,7 +137,15 @@
         <% } else { %>
           <button type="button" class="btn btn-outline-secondary" disabled title="WhatsApp"><span class="tech-action-mini"><i class="bi bi-whatsapp"></i><small>WA</small></span></button>
         <% } %>
-        <a class="btn btn-outline-info" href="/tech/map" title="Peta"><span class="tech-action-mini"><i class="bi bi-geo-alt"></i><small>Peta</small></span></a>
+        <% if (techRouteHref) { %>
+          <a class="btn btn-outline-info" href="<%= techRouteHref %>" target="_blank" rel="noopener" title="Rute">
+            <span class="tech-action-mini"><i class="bi bi-sign-turn-right"></i><small>Rute</small></span>
+          </a>
+        <% } else { %>
+          <button type="button" class="btn btn-outline-secondary" disabled title="Rute">
+            <span class="tech-action-mini"><i class="bi bi-sign-turn-right"></i><small>Rute</small></span>
+          </button>
+        <% } %>
       </div>
     </div>
   <% }) %>

@@ -1,0 +1,31 @@
+{
+  "id": "/collector/",
+  "name": "Portal Kolektor",
+  "short_name": "Kolektor",
+  "description": "Portal Kolektor SICKAS WIFI",
+  "start_url": "/collector/login?source=pwa",
+  "scope": "/collector/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#08111f",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/img/logo.png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/img/logo.png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/img/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

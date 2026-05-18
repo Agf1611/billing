@@ -1,39 +1,86 @@
   </div> <!-- End container -->
 
   <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 }; %>
+  <% const currentTechPage = typeof activePage !== 'undefined' ? activePage : ''; %>
+  <% const isMoreActive = ['create_customer', 'map', 'monitoring', 'history'].includes(currentTechPage); %>
 
   <nav class="bottom-nav">
-    <a href="/tech" class="nav-item <%= activePage === 'dashboard' ? 'active' : '' %>">
-      <i class="bi bi-briefcase-fill"></i>
-      <span>Beranda</span>
+    <a href="/tech/customers" class="nav-item <%= currentTechPage === 'customers' ? 'active' : '' %>">
+      <i class="bi bi-people"></i>
+      <span class="nav-item-label">Pelanggan</span>
     </a>
-    <a href="/tech/customers" class="nav-item <%= activePage === 'customers' ? 'active' : '' %>">
-      <i class="bi bi-people-fill"></i>
-      <span>Pelanggan</span>
-    </a>
-    <a href="/tech/tasks" class="nav-item <%= activePage === 'tasks' ? 'active' : '' %>">
-      <i class="bi bi-clipboard-check-fill"></i>
+    <a href="/tech/tasks" class="nav-item <%= currentTechPage === 'tasks' ? 'active' : '' %>">
+      <i class="bi bi-clipboard2-check"></i>
       <% if (safeTechNav.assignedTasks > 0) { %><span class="nav-count"><%= safeTechNav.assignedTasks > 99 ? '99+' : safeTechNav.assignedTasks %></span><% } %>
-      <span>Job</span>
+      <span class="nav-item-label">Job</span>
     </a>
-    <a href="/tech/pool" class="nav-item <%= activePage === 'pool' ? 'active' : '' %>">
-      <i class="bi bi-inbox-fill"></i>
+    <a href="/tech" class="nav-item nav-item--center <%= currentTechPage === 'dashboard' ? 'active' : '' %>">
+      <i class="bi bi-grid-1x2"></i>
+      <span class="nav-item-label">Dashboard</span>
+    </a>
+    <a href="/tech/pool" class="nav-item <%= currentTechPage === 'pool' ? 'active' : '' %>">
+      <i class="bi bi-broadcast-pin"></i>
       <% if (safeTechNav.openTickets > 0) { %><span class="nav-count"><%= safeTechNav.openTickets > 99 ? '99+' : safeTechNav.openTickets %></span><% } %>
-      <span><%= t('tech.nav.new_tickets', 'Tiket') %></span>
+      <span class="nav-item-label"><%= t('tech.nav.new_tickets', 'Tiket') %></span>
     </a>
-    <a href="/tech/map" class="nav-item <%= activePage === 'map' ? 'active' : '' %>">
-      <i class="bi bi-map-fill"></i>
-      <span><%= t('tech.nav.map', 'Peta') %></span>
-    </a>
-    <a href="/tech/monitoring" class="nav-item <%= activePage === 'monitoring' ? 'active' : '' %>">
-      <i class="bi bi-display-fill"></i>
-      <span><%= t('tech.nav.monitor', 'Monitor') %></span>
-    </a>
-    <a href="/tech/history" class="nav-item <%= activePage === 'history' ? 'active' : '' %>">
-      <i class="bi bi-clock-history"></i>
-      <span><%= t('tech.nav.history', 'Riwayat') %></span>
-    </a>
+    <button type="button" class="nav-item-trigger <%= isMoreActive ? 'active' : '' %>" data-bs-toggle="offcanvas" data-bs-target="#techMoreMenu" aria-controls="techMoreMenu">
+      <i class="bi bi-grid-3x3-gap"></i>
+      <span class="nav-item-label">Menu</span>
+    </button>
   </nav>
+
+  <div class="offcanvas offcanvas-bottom tech-menu-sheet" tabindex="-1" id="techMoreMenu" aria-labelledby="techMoreMenuLabel" style="height:auto;">
+    <div class="offcanvas-header pb-2">
+      <div>
+        <div class="tech-menu-title" id="techMoreMenuLabel">Menu Teknisi</div>
+        <div class="tech-menu-subtitle">Akses cepat untuk halaman tambahan dan aksi lapangan.</div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body pt-1">
+      <div class="tech-menu-grid">
+        <a href="/tech/customers/new" class="tech-menu-link">
+          <i class="bi bi-person-plus"></i>
+          <div>
+            <strong>Tambah Pelanggan</strong>
+            <span>Input calon pelanggan baru dari lapangan.</span>
+          </div>
+        </a>
+        <a href="/tech/monitoring" class="tech-menu-link">
+          <i class="bi bi-display"></i>
+          <div>
+            <strong>Monitoring ONU</strong>
+            <span>Lihat status perangkat dan jalur online.</span>
+          </div>
+        </a>
+        <a href="/tech/map" class="tech-menu-link">
+          <i class="bi bi-pin-map"></i>
+          <div>
+            <strong>Peta Pelanggan</strong>
+            <span>Buka titik lokasi pelanggan di lapangan.</span>
+          </div>
+        </a>
+        <a href="/tech/history" class="tech-menu-link">
+          <i class="bi bi-clock-history"></i>
+          <div>
+            <strong>Riwayat Kerja</strong>
+            <span>Cek pekerjaan yang pernah ditangani.</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="tech-menu-secondary">
+        <a href="/tech/customers">
+          <span><i class="bi bi-people me-2"></i>Daftar Pelanggan</span>
+          <i class="bi bi-chevron-right"></i>
+        </a>
+        <a href="/tech/logout" onclick="return confirm('<%= t('tech.logout_confirm', 'Apakah Anda yakin ingin logout?') %>')">
+          <span><i class="bi bi-box-arrow-right me-2"></i>Logout</span>
+          <i class="bi bi-chevron-right"></i>
+        </a>
+      </div>
+    </div>
+  </div>
 
   <script>
     (function () {
@@ -45,13 +92,13 @@
         if (btn) {
           btn.replaceChildren();
           const icon = document.createElement('i');
-          icon.className = isLight ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+          icon.className = isLight ? 'bi bi-sun' : 'bi bi-moon-stars';
           const label = document.createElement('span');
           label.textContent = isLight ? 'Terang' : 'Gelap';
           btn.appendChild(icon);
           btn.appendChild(label);
         }
-        if (meta) meta.setAttribute('content', isLight ? '#f5f7fb' : '#0f172a');
+        if (meta) meta.setAttribute('content', isLight ? '#eef4ff' : '#07111f');
       };
 
       syncThemeButton();

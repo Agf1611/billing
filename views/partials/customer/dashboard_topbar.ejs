@@ -14,7 +14,14 @@
   const viewerCustomer = typeof customer !== 'undefined' ? customer : {};
   const resolvedCustomerName = String(viewerProfile.name || viewerCustomer.name || 'Pelanggan');
   const resolvedCustomerCode = String(
-    viewerProfile.genieacs_tag || viewerProfile.pppoe_username || viewerProfile.phone || viewerCustomer.phone || viewerProfile.id || viewerCustomer.id || '-'
+    (typeof customerCode !== 'undefined' && customerCode) ||
+    viewerProfile.customer_code ||
+    viewerProfile.genieacs_tag ||
+    (/^\d{6,}$/.test(String(viewerProfile.phone || '').trim()) ? viewerProfile.phone : '') ||
+    (/^\d{6,}$/.test(String(viewerCustomer.phone || '').trim()) ? viewerCustomer.phone : '') ||
+    (viewerProfile.id ? `ID ${viewerProfile.id}` : '') ||
+    (viewerCustomer.id ? `ID ${viewerCustomer.id}` : '') ||
+    '-'
   ).trim();
   const resolvedRouterAccess = typeof hasRouterPortalAccess !== 'undefined'
     ? Boolean(hasRouterPortalAccess)
@@ -43,6 +50,11 @@
     </div>
     <div class="topbar-right">
       <div class="header-icon-wrap">
+        <button type="button" class="header-action" id="portalThemeToggle" aria-label="Ganti tema" title="Ganti tema" onclick="togglePortalTheme()">
+          <i class="bi bi-moon-stars" id="portalThemeToggleIcon"></i>
+        </button>
+      </div>
+      <div class="header-icon-wrap">
         <button type="button" class="header-action" aria-label="Refresh halaman" title="Refresh halaman" onclick="window.location.reload()">
           <i class="bi bi-arrow-clockwise"></i>
         </button>
@@ -66,6 +78,9 @@
           </div>
           <button type="button" onclick="openAppTab('profile'); closeAccountMenu();">
             <i class="bi bi-person-badge"></i> Profil pelanggan
+          </button>
+          <button type="button" onclick="togglePortalTheme(); closeAccountMenu();">
+            <i class="bi bi-circle-half"></i> Ganti tema
           </button>
           <% if (resolvedRouterAccess) { %>
             <button type="button" onclick="openAppTab('settings'); closeAccountMenu();">

@@ -184,12 +184,26 @@ db.exec(`
     router_id INTEGER REFERENCES routers(id) ON DELETE CASCADE,
     username TEXT NOT NULL,
     is_online INTEGER NOT NULL DEFAULT 0,
+    profile_name TEXT,
+    remote_address TEXT,
+    session_uptime TEXT,
     last_online_at DATETIME,
     offline_since DATETIME,
     last_logout_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (router_key, username)
+  );
+
+  CREATE TABLE IF NOT EXISTS customer_portal_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'system',
+    tab TEXT NOT NULL DEFAULT 'home',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    payload_json TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS routers (
@@ -589,6 +603,9 @@ try { db.exec("UPDATE packages SET price_before_tax = price WHERE COALESCE(price
 try { db.exec("ALTER TABLE customers ADD COLUMN normal_pppoe_profile TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE customers ADD COLUMN promo_cycles_used INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE customers ADD COLUMN portal_notifications_seen_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_session_id TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_uptime_seconds INTEGER DEFAULT 0"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_customer_portal_notifications_customer_created ON customer_portal_notifications(customer_id, created_at DESC)"); } catch (e) {}
 
 // Tabel untuk Tracking Pemakaian (Usage) Pelanggan
 db.exec(`
@@ -607,6 +624,39 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_usage_customer ON customer_usage(customer_id);
   CREATE INDEX IF NOT EXISTS idx_usage_period ON customer_usage(period_month, period_year);
 `);
+
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS customer_usage_runtime (
+      customer_id INTEGER PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+      last_total_bytes_in INTEGER DEFAULT 0,
+      last_total_bytes_out INTEGER DEFAULT 0,
+      last_session_id TEXT DEFAULT '',
+      last_uptime_seconds INTEGER DEFAULT 0,
+      last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  CREATE INDEX IF NOT EXISTS idx_usage_runtime_seen ON customer_usage_runtime(last_seen_at);
+  `);
+
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS usage_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      period_month INTEGER NOT NULL,
+      period_year INTEGER NOT NULL,
+      event_type TEXT NOT NULL DEFAULT 'sync',
+      stored_bytes_in INTEGER DEFAULT 0,
+      stored_bytes_out INTEGER DEFAULT 0,
+      observed_bytes_in INTEGER DEFAULT 0,
+      observed_bytes_out INTEGER DEFAULT 0,
+      delta_bytes_in INTEGER DEFAULT 0,
+      delta_bytes_out INTEGER DEFAULT 0,
+      note TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_usage_audit_customer_period ON usage_audit_logs(customer_id, period_year, period_month);
+    CREATE INDEX IF NOT EXISTS idx_usage_audit_created ON usage_audit_logs(created_at);
+  `);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS bookkeeping_entries (
@@ -760,6 +810,9 @@ try { db.exec("ALTER TABLE package_change_requests ADD COLUMN cancelled_at DATET
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN applied_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN reviewed_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN last_logout_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN profile_name TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN remote_address TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN session_uptime TEXT"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_customer ON package_change_requests(customer_id)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at)"); } catch (e) {}

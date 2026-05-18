@@ -129,6 +129,11 @@
        : (settings?.company_logo_url || '/img/logo.png'); %>
   <% if (companyLegalName || companyAddressText || companyPhoneText || companyEmailText || hasManualPayment) { %>
     <div class="business-card">
+      <div class="business-topline">
+        <h4 class="business-title">Informasi Perusahaan</h4>
+        <span class="business-chip"><i class="bi bi-building"></i> Resmi</span>
+      </div>
+
       <div class="business-head">
         <img src="<%= pageCompanyLogoUrl %>" alt="Logo Usaha" onerror="this.onerror=null;this.src='/img/logo.png'">
         <div>
@@ -137,9 +142,9 @@
         </div>
       </div>
 
-      <div class="detail-grid">
+      <div class="business-info-grid">
         <% if (companyAddressText) { %>
-          <div class="detail-item">
+          <div class="business-info-card">
             <i class="bi bi-geo-alt"></i>
             <div>
               <strong>Alamat Usaha</strong>
@@ -148,7 +153,7 @@
           </div>
         <% } %>
         <% if (companyPhoneText) { %>
-          <div class="detail-item">
+          <div class="business-info-card">
             <i class="bi bi-telephone"></i>
             <div>
               <strong>Kontak</strong>
@@ -157,7 +162,7 @@
           </div>
         <% } %>
         <% if (companyEmailText) { %>
-          <div class="detail-item">
+          <div class="business-info-card">
             <i class="bi bi-envelope"></i>
             <div>
               <strong>Email</strong>
@@ -166,7 +171,7 @@
           </div>
         <% } %>
         <% if (safeUpstreamProviderName) { %>
-          <div class="detail-item">
+          <div class="business-info-card">
             <i class="bi bi-hdd-network"></i>
             <div>
               <strong>Sumber Internet</strong>
@@ -180,13 +185,24 @@
         <div class="manual-payment-box">
           <h5>Transfer Manual</h5>
           <div class="manual-payment-bank"><%= manualPaymentBank %></div>
-          <div class="manual-payment-line"><strong>No. Rek</strong><span><%= manualPaymentAccountNumber %></span></div>
-          <% if (manualPaymentAccountName) { %>
-            <div class="manual-payment-line"><strong>Atas Nama</strong><span><%= manualPaymentAccountName %></span></div>
-          <% } %>
-          <% if (manualPaymentNotes) { %>
-            <div class="manual-payment-line"><strong>Catatan</strong><span><%= manualPaymentNotes %></span></div>
-          <% } %>
+          <div class="manual-payment-grid">
+            <div class="manual-payment-line">
+              <strong>No. Rek</strong>
+              <span><%= manualPaymentAccountNumber %></span>
+            </div>
+            <% if (manualPaymentAccountName) { %>
+              <div class="manual-payment-line">
+                <strong>Atas Nama</strong>
+                <span><%= manualPaymentAccountName %></span>
+              </div>
+            <% } %>
+            <% if (manualPaymentNotes) { %>
+              <div class="manual-payment-line full">
+                <strong>Catatan</strong>
+                <span><%= manualPaymentNotes %></span>
+              </div>
+            <% } %>
+          </div>
         </div>
       <% } %>
     </div>

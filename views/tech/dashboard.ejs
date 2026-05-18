@@ -27,6 +27,107 @@
 %>
 
 <style>
+  .tech-hero-card {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    background:
+      linear-gradient(145deg, rgba(91, 140, 255, .16), rgba(39, 193, 131, .08)),
+      var(--tech-panel);
+  }
+
+  .tech-hero-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -48px -62px auto;
+    width: 164px;
+    height: 164px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(91, 140, 255, .2) 0%, rgba(91, 140, 255, 0) 72%);
+    pointer-events: none;
+  }
+
+  .tech-hero-copy {
+    position: relative;
+    z-index: 1;
+  }
+
+  .tech-hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .12);
+    color: var(--tech-primary);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .tech-hero-title {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -.04em;
+    line-height: 1.05;
+    margin-bottom: 6px;
+  }
+
+  .tech-hero-text {
+    color: var(--tech-muted);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 34rem;
+  }
+
+  .tech-shortcut-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tech-shortcut-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 13px 12px;
+    border-radius: 18px;
+    border: 1px solid var(--tech-border);
+    background: rgba(255, 255, 255, .06);
+    min-height: 100px;
+  }
+
+  .tech-shortcut-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, .12);
+    color: var(--tech-text);
+    font-size: 18px;
+  }
+
+  .tech-shortcut-title {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .tech-shortcut-desc {
+    color: var(--tech-muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
   .dash-section-head {
     display: flex;
     align-items: center;
@@ -229,6 +330,41 @@
   }
 
   @media (max-width: 576px) {
+    .tech-hero-card {
+      padding: 14px;
+      gap: 12px;
+    }
+
+    .tech-hero-title {
+      font-size: 21px;
+    }
+
+    .tech-shortcut-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .tech-shortcut-card {
+      min-height: 92px;
+      padding: 12px 10px;
+      border-radius: 16px;
+    }
+
+    .tech-shortcut-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+
+    .tech-shortcut-title {
+      font-size: 12px;
+    }
+
+    .tech-shortcut-desc {
+      font-size: 10px;
+    }
+
     .dash-task-card {
       padding: 10px 11px;
     }
@@ -250,25 +386,49 @@
   }
 </style>
 
-<div class="mb-4">
-  <div class="text-secondary small"><%= t('tech.dashboard.greeting', 'Halo, Selamat Bekerja!') %></div>
-  <div class="fs-5 fw-bold"><i class="bi bi-person-badge text-primary me-2"></i><%= techName %></div>
+<div class="t-card tech-hero-card">
+  <div class="tech-hero-copy">
+    <span class="tech-hero-kicker"><i class="bi bi-lightning-charge"></i>Kerja lapangan</span>
+    <div class="tech-hero-title">Halo, <%= techName %></div>
+    <div class="tech-hero-text">Pantau job, cek pelanggan, dan buka alat bantu teknisi dari satu dashboard yang lebih ringkas untuk penggunaan mobile.</div>
+  </div>
+  <div class="tech-shortcut-grid">
+    <a href="/tech/customers/new" class="tech-shortcut-card">
+      <span class="tech-shortcut-icon"><i class="bi bi-person-plus"></i></span>
+      <span class="tech-shortcut-title">Tambah Pelanggan</span>
+      <span class="tech-shortcut-desc">Input pengajuan baru dari lokasi.</span>
+    </a>
+    <a href="/tech/monitoring" class="tech-shortcut-card">
+      <span class="tech-shortcut-icon"><i class="bi bi-display"></i></span>
+      <span class="tech-shortcut-title">Monitoring</span>
+      <span class="tech-shortcut-desc">Cek status ONU dan koneksi.</span>
+    </a>
+    <a href="/tech/map" class="tech-shortcut-card">
+      <span class="tech-shortcut-icon"><i class="bi bi-pin-map"></i></span>
+      <span class="tech-shortcut-title">Peta</span>
+      <span class="tech-shortcut-desc">Buka titik pelanggan di lapangan.</span>
+    </a>
+  </div>
 </div>
 
 <div class="stat-grid">
-  <div class="stat-box" style="border-left: 3px solid #3b82f6;">
+  <div class="stat-box">
+    <span class="stat-icon"><i class="bi bi-clipboard2-check"></i></span>
     <div class="lbl">Job Ditugaskan</div>
     <div class="val text-primary"><%= stats.taskAssigned || 0 %></div>
   </div>
-  <div class="stat-box" style="border-left: 3px solid #f59e0b;">
+  <div class="stat-box">
+    <span class="stat-icon" style="color:var(--tech-warning)"><i class="bi bi-tools"></i></span>
     <div class="lbl"><%= t('tech.dashboard.in_progress', 'Sedang Dikerjakan') %></div>
     <div class="val text-warning"><%= stats.inProgress %></div>
   </div>
-  <div class="stat-box" style="border-left: 3px solid #10b981;">
+  <div class="stat-box">
+    <span class="stat-icon" style="color:var(--tech-success)"><i class="bi bi-check2-circle"></i></span>
     <div class="lbl"><%= t('tech.dashboard.resolved_today', 'Selesai Hari Ini') %></div>
     <div class="val text-success"><%= stats.resolved %></div>
   </div>
-  <div class="stat-box" style="border-left: 3px solid #ef4444;">
+  <div class="stat-box">
+    <span class="stat-icon" style="color:var(--tech-danger)"><i class="bi bi-alarm"></i></span>
     <div class="lbl">Deadline Hari Ini</div>
     <div class="val text-danger"><%= stats.taskDueToday || 0 %></div>
   </div>

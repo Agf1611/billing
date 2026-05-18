@@ -12,6 +12,30 @@ const {
   fillWhatsappTemplate
 } = require('./publicLinkService');
 
+let portalNotificationsSchemaReady = false;
+
+function ensurePortalNotificationsSchema() {
+  if (portalNotificationsSchemaReady) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS customer_portal_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'system',
+      tab TEXT NOT NULL DEFAULT 'home',
+      title TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      payload_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_customer_portal_notifications_customer_created
+    ON customer_portal_notifications(customer_id, created_at DESC);
+  `);
+  try {
+    db.exec('ALTER TABLE customers ADD COLUMN portal_notifications_seen_at DATETIME');
+  } catch (_) {}
+  portalNotificationsSchemaReady = true;
+}
+
 async function trySendLifecycleWhatsapp(phone, message) {
   try {
     if (!getSetting('whatsapp_enabled', false)) return false;
@@ -197,10 +221,83 @@ function updateCustomerCablePath(id, path) {
 }
 
 function markPortalNotificationsSeen(customerId, seenAt = null) {
+  ensurePortalNotificationsSchema();
   const id = Number(customerId);
   if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
   const ts = seenAt || new Date().toISOString();
   return db.prepare('UPDATE customers SET portal_notifications_seen_at = ? WHERE id = ?').run(ts, id);
+}
+
+function getPortalNotifications(customerId, limit = 20) {
+  ensurePortalNotificationsSchema();
+  const id = Number(customerId);
+  if (!Number.isFinite(id) || id <= 0) return [];
+  const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
+  return db.prepare(`
+    SELECT id, customer_id, kind, tab, title, body, payload_json, created_at
+    FROM customer_portal_notifications
+    WHERE customer_id = ?
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ${safeLimit}
+  `).all(id);
+}
+
+function addPortalNotification(customerId, data = {}, options = {}) {
+  ensurePortalNotificationsSchema();
+  const id = Number(customerId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const kind = String(data.kind || 'system').trim() || 'system';
+  const tab = String(data.tab || 'home').trim() || 'home';
+  const title = String(data.title || '').trim();
+  const body = String(data.body || '').trim();
+  if (!title) return null;
+
+  const dedupeWindowMs = Math.max(0, Number(options.dedupeWindowMs || 0) || 0);
+  if (dedupeWindowMs > 0) {
+    const existing = db.prepare(`
+      SELECT id, created_at
+      FROM customer_portal_notifications
+      WHERE customer_id = ? AND kind = ? AND title = ? AND body = ?
+      ORDER BY datetime(created_at) DESC, id DESC
+      LIMIT 1
+    `).get(id, kind, title, body);
+    if (existing?.created_at) {
+      const ageMs = Date.now() - new Date(existing.created_at).getTime();
+      if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < dedupeWindowMs) {
+        return existing;
+      }
+    }
+  }
+
+  const payloadJson = data.payload == null ? null : JSON.stringify(data.payload);
+  const result = db.prepare(`
+    INSERT INTO customer_portal_notifications (customer_id, kind, tab, title, body, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, kind, tab, title, body, payloadJson);
+  return db.prepare(`
+    SELECT id, customer_id, kind, tab, title, body, payload_json, created_at
+    FROM customer_portal_notifications
+    WHERE id = ?
+  `).get(result.lastInsertRowid);
+}
+
+function addPortalNotificationsBulk(customerIds = [], data = {}, options = {}) {
+  ensurePortalNotificationsSchema();
+  const ids = Array.from(new Set((Array.isArray(customerIds) ? customerIds : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0)));
+  if (!ids.length) return 0;
+
+  const tx = db.transaction((resolvedIds) => {
+    let inserted = 0;
+    resolvedIds.forEach((customerId) => {
+      const row = addPortalNotification(customerId, data, options);
+      if (row?.id) inserted += 1;
+    });
+    return inserted;
+  });
+
+  return tx(ids);
 }
 
 async function deleteCustomer(id) {
@@ -469,12 +566,27 @@ function findCustomerByAny(val) {
   const cleanVal = val.toString().trim();
   
   // 1. Try Phone (Priority for Login)
-  const phoneDigits = cleanVal.replace(/\D/g, '');
-  if (phoneDigits.length >= 8) {
-    // Cari yang 8-10 digit terakhirnya sama (lebih akurat untuk 08 vs 62)
-    const suffix = phoneDigits.slice(-9);
-    const p1 = db.prepare('SELECT id FROM customers WHERE phone LIKE ?').get(`%${suffix}`);
+  const normalizedPhone = normalizePhoneDigits(cleanVal);
+  const rawPhoneDigits = cleanVal.replace(/\D/g, '');
+  const phoneCandidates = Array.from(new Set([
+    normalizedPhone,
+    rawPhoneDigits,
+    normalizedPhone ? normalizedPhone.slice(-12) : '',
+    normalizedPhone ? normalizedPhone.slice(-11) : '',
+    normalizedPhone ? normalizedPhone.slice(-10) : '',
+    normalizedPhone ? normalizedPhone.slice(-9) : ''
+  ].filter(Boolean)));
+
+  for (const candidate of phoneCandidates) {
+    const p1 = db.prepare('SELECT id FROM customers WHERE phone = ?').get(candidate);
     if (p1) return getCustomerById(p1.id);
+  }
+
+  if (phoneCandidates.length) {
+    for (const candidate of phoneCandidates) {
+      const p2 = db.prepare('SELECT id FROM customers WHERE phone LIKE ?').get(`%${candidate}`);
+      if (p2) return getCustomerById(p2.id);
+    }
   }
 
   // 2. Try GenieACS Tag atau PPPoE Username (Exact Match)
@@ -517,6 +629,12 @@ async function suspendCustomer(id) {
       }
     }
   }
+  addPortalNotification(id, {
+    kind: 'suspension',
+    tab: 'billing',
+    title: 'Layanan diisolir sementara',
+    body: 'Masih ada tagihan yang belum lunas. Silakan cek tagihan atau hubungi admin untuk bantuan.'
+  }, { dedupeWindowMs: 6 * 60 * 60 * 1000 });
   return true;
 }
 
@@ -560,6 +678,12 @@ async function activateCustomer(id) {
     });
     await trySendLifecycleWhatsapp(customer.phone, message);
   }
+  addPortalNotification(id, {
+    kind: 'reactivation',
+    tab: 'home',
+    title: 'Layanan aktif kembali',
+    body: 'Pembayaran atau aktivasi Anda sudah kami terima. Internet bisa dipakai kembali seperti biasa.'
+  }, { dedupeWindowMs: 6 * 60 * 60 * 1000 });
   return true;
 }
 
@@ -567,5 +691,5 @@ module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
   getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
   suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath,
-  resetPromoCyclesUsed, markPortalNotificationsSeen, getCustomerSearchSuggestions
+  resetPromoCyclesUsed, markPortalNotificationsSeen, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk, getCustomerSearchSuggestions
 };

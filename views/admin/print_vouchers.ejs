@@ -31,8 +31,24 @@
     .pw b { color: #0f172a; }
     .foot { font-size: 9.5px; color: #334155; margin-top: 4px; line-height: 1.15; }
     .muted { color: #64748b; }
+    .thermal-stack{ display:grid; gap:8px; max-width:58mm; margin:0 auto; }
+    .thermal-ticket{
+      border:1px dashed #1e293b;
+      border-radius:10px;
+      padding:7px 7px 10px;
+      text-align:center;
+      break-inside:avoid;
+      page-break-inside:avoid;
+    }
+    .thermal-company{ font-size:10px; font-weight:900; line-height:1.1; }
+    .thermal-meta{ font-size:9px; color:#334155; margin-top:3px; line-height:1.2; }
+    .thermal-code{ font-size:24px; font-weight:900; letter-spacing:2px; margin:8px 0 4px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .thermal-pass{ font-size:11px; font-weight:800; margin-top:4px; }
+    .thermal-price{ font-size:11px; font-weight:900; margin-top:6px; }
+    .thermal-foot{ font-size:9px; color:#334155; margin-top:5px; line-height:1.2; }
     @media print {
       .no-print { display:none; }
+      html, body { width: 58mm; }
     }
   </style>
 </head>
@@ -55,7 +71,23 @@
       <b>Template Print:</b> <%= templateError %>
     </div>
   <% } %>
-  <% if (style === 'template' && renderedHtml) { %>
+  <% if (style === 'thermal') { %>
+    <div class="thermal-stack">
+      <% vouchers.forEach(v => { %>
+        <div class="thermal-ticket">
+          <div class="thermal-company"><%= settings.company_header || company %></div>
+          <div class="thermal-meta"><%= batch.profile_name || v.profile_name || '-' %></div>
+          <div class="thermal-code"><%= v.code %></div>
+          <% if (v.code !== v.password) { %>
+            <div class="thermal-pass">PASS: <%= v.password %></div>
+          <% } %>
+          <div class="thermal-price">Rp <%= Number(batch.price || 0).toLocaleString('id-ID') %></div>
+          <div class="thermal-foot"><%= formatValidity(batch.validity) %></div>
+          <div class="thermal-foot"><%= t('admin.print_vouchers.contact_label', 'Telp/WA') %>: <%= (settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0) ? '+' + settings.whatsapp_admin_numbers[0] : (settings.company_phone || '-') %></div>
+        </div>
+      <% }) %>
+    </div>
+  <% } else if (style === 'template' && renderedHtml) { %>
     <div class="tpl"><%- renderedHtml %></div>
   <% } else { %>
     <div class="grid">
