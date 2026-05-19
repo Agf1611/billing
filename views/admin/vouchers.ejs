@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
+    <%- include('partials/mikrotik_suite_styles') %>
     .kv { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
     .kv .fg { margin:0; min-width: 180px; flex: 1; }
     .kv .fg.w120 { min-width: 120px; flex: 0 0 120px; }
@@ -29,15 +30,19 @@
     .voucher-mobile-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
     .voucher-mobile-actions .btn { flex:1 1 140px; justify-content:center; }
     .voucher-empty { padding:18px 16px; text-align:center; color:var(--muted); border:1px dashed var(--border); border-radius:18px; }
+    body[data-theme="light"] .suite-card,
+    body[data-theme="light"] .voucher-mobile-card,
+    body[data-theme="light"] .voucher-empty{
+      background:rgba(255,255,255,.92);
+      box-shadow:0 14px 30px rgba(165,162,211,.12);
+    }
+    body[data-theme="light"] .voucher-mobile-cell{
+      background:rgba(105,88,255,.04);
+      border:1px solid rgba(148,163,184,.18);
+    }
     @media (max-width: 768px) {
-      .topbar { align-items:flex-start; }
-      .topbar .tb-right { width:100%; flex-wrap:wrap; justify-content:flex-start; gap:10px !important; }
-      .router-selector { width:100%; justify-content:space-between; padding:10px 12px !important; border-radius:16px !important; }
+      .router-selector { width:100%; justify-content:space-between; padding:10px 12px !important; border-radius:16px !important; margin:0; }
       .router-selector .fs { width:100% !important; }
-      .mtabs { overflow:auto; padding-bottom:12px; scrollbar-width:none; }
-      .mtabs::-webkit-scrollbar { display:none; }
-      .mtab { white-space:nowrap; }
-      .stat-grid[style] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
       .kv .fg,
       .kv .fg.w120,
       .kv .fg.w160 { min-width:0; flex:1 1 100%; }
@@ -47,12 +52,13 @@
       .voucher-mobile-actions .btn { width:100%; min-height:40px; }
       .tbl-wrap { display:none; }
       .voucher-mobile-list { display:block; }
+      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media (max-width: 520px) {
-      .stat-grid[style] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
       .voucher-mobile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .voucher-mobile-head { flex-direction:column; }
       .voucher-mobile-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
     }
   </style>
 </head>
@@ -61,34 +67,52 @@
 <div class="mw">
   <div class="topbar">
     <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-ticket-perforated"></i> <%= t('admin.nav.voucher_hotspot', 'Voucher Hotspot') %></div>
-    <div class="tb-right" style="display:flex;align-items:center;gap:15px">
-      <div class="router-selector">
-        <i class="bi bi-hdd-network small"></i>
-        <select id="global-router-id" class="fs" onchange="reloadAll()">
-          <option value="" style="color:black"><%= t('admin.vouchers.default_router', '-- Default Router --') %></option>
-          <% routers.forEach(r => { %>
-            <option value="<%= r.id %>" style="color:black"><%= r.name %></option>
-          <% }) %>
-        </select>
+    <div class="tb-right">
+      <div class="suite-topbar-actions">
+        <div class="suite-topbar-main">
+          <div class="router-selector">
+            <i class="bi bi-hdd-network small"></i>
+            <select id="global-router-id" class="fs" onchange="reloadAll()">
+              <option value="" style="color:black"><%= t('admin.vouchers.default_router', '-- Default Router --') %></option>
+              <% routers.forEach(r => { %>
+                <option value="<%= r.id %>" style="color:black"><%= r.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+            <i class="bi bi-sun"></i>
+            <span>Terang</span>
+          </button>
+        </div>
+        <div class="suite-topbar-shortcuts">
+          <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+          <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i> <span>Logout</span></a>
+        </div>
       </div>
-      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
-        <i class="bi bi-sun"></i>
-        <span>Terang</span>
-      </button>
-      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
-      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
     </div>
   </div>
-<div class="page admin-shell-page">
+<div class="page admin-shell-page mikrotik-suite-page">
     <% const mTab = 'vouchers'; %>
     <% if (msg) { %>
       <div class="alert <%= msg.type === 'success' ? 's' : (msg.type === 'error' ? 'd' : 'w') %>"><%= msg.text %></div>
     <% } %>
 
     <div class="mtabs">
-      <a href="/admin/mikrotik" class="mtab <%= mTab==='monitoring' ? 'active' : '' %>"><i class="bi bi-router"></i> Monitoring</a>
-      <a href="/admin/vouchers" class="mtab <%= mTab==='vouchers' ? 'active' : '' %>"><i class="bi bi-ticket-perforated"></i> Voucher Hotspot</a>
+      <a href="/admin/mikrotik" class="mtab <%= mTab==='monitoring' ? 'active' : '' %>"><i class="bi bi-router"></i> Data MikroTik</a>
+      <a href="/admin/vouchers" class="mtab <%= mTab==='vouchers' ? 'active' : '' %>"><i class="bi bi-ticket-perforated"></i> Voucher</a>
       <a href="/admin/routers" class="mtab <%= mTab==='routers' ? 'active' : '' %>"><i class="bi bi-hdd-network"></i> Router</a>
+    </div>
+
+    <div class="suite-intro">
+      <div class="suite-intro-copy">
+        <div class="suite-overline">Suite MikroTik</div>
+        <h1 class="suite-intro-title">Voucher hotspot yang konsisten, nyaman, dan ringkas di mobile.</h1>
+        <p class="suite-intro-desc">Halaman voucher sekarang mengikuti bahasa visual yang sama dengan Monitoring dan Router, jadi perpindahan menu terasa lebih mulus dan lebih ringan dipakai dari layar kecil.</p>
+      </div>
+      <div class="suite-intro-tags">
+        <span class="suite-note"><i class="bi bi-ticket-perforated"></i> <strong id="suite-tag-batches">0</strong> batch</span>
+        <span class="suite-note"><i class="bi bi-printer"></i> print, sync, dan detail dalam satu alur</span>
+      </div>
     </div>
 
     <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
@@ -98,7 +122,7 @@
       <div class="sc d"><i class="bi bi-circle sc-icon"></i><div class="sc-label"><%= t('admin.vouchers.stats.unused', 'Belum') %></div><div class="sc-val" id="stat-unused">0</div></div>
     </div>
 
-    <div class="card admin-compact-card" style="margin-bottom:14px">
+    <div class="card admin-compact-card suite-card suite-card-accent" style="margin-bottom:14px">
       <div class="card-hd">
         <h6><i class="bi bi-plus-circle"></i> <%= t('admin.vouchers.create.title', 'Buat Voucher Batch') %></h6>
         <div class="pill"><i class="bi bi-building"></i> <b><%= settings.company_header || company %></b></div>
@@ -153,7 +177,7 @@
       </div>
     </div>
 
-    <div class="card admin-compact-card">
+    <div class="card admin-compact-card suite-card">
       <div class="card-hd">
         <h6><i class="bi bi-list-check"></i> <%= t('admin.vouchers.batches.title', 'Batch Voucher') %></h6>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -628,6 +652,8 @@
     document.getElementById('stat-vouchers').innerText = totalV;
     document.getElementById('stat-used').innerText = used;
     document.getElementById('stat-unused').innerText = unused;
+    const introBatchEl = document.getElementById('suite-tag-batches');
+    if (introBatchEl) introBatchEl.innerText = totalBatches;
   }
 
   async function openDetail(id) {

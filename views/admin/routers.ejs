@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
+    <%- include('partials/mikrotik_suite_styles') %>
     .router-mobile-list { display:none; }
     .router-mobile-card { border:1px solid var(--border); border-radius:16px; padding:11px 12px; }
     .router-mobile-card + .router-mobile-card { margin-top:8px; }
@@ -22,15 +23,22 @@
     .router-mobile-actions form { flex:none; }
     .router-mobile-actions form .btn { width:100%; justify-content:center; padding:0; height:34px; min-height:34px; }
     .router-mobile-actions .btn { justify-content:center; padding:0; height:34px; min-height:34px; }
+    body[data-theme="light"] .suite-card,
+    body[data-theme="light"] .router-mobile-card{
+      background:rgba(255,255,255,.92);
+      box-shadow:0 14px 30px rgba(165,162,211,.12);
+    }
+    body[data-theme="light"] .router-mobile-cell{
+      background:rgba(105,88,255,.04);
+      border:1px solid rgba(148,163,184,.18);
+    }
     @media (max-width: 768px) {
-      .mtabs { overflow:auto; padding-bottom:12px; scrollbar-width:none; }
-      .mtabs::-webkit-scrollbar { display:none; }
-      .mtab { white-space:nowrap; }
       .tbl-wrap { display:none; }
       .router-mobile-list { display:block; }
-      .topbar .tb-right { gap:10px; }
       .router-mobile-actions .btn,
       .router-mobile-actions form .btn { min-height:36px; }
+      .suite-topbar-main{grid-template-columns:minmax(0,1fr)}
+      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media (max-width: 520px) {
       .router-mobile-grid { grid-template-columns:1fr; }
@@ -40,24 +48,35 @@
       .router-mobile-actions form .btn { height:36px; min-height:36px; }
       .card-hd > div { width:100%; }
       .card-hd .btn { width:100%; justify-content:center; }
+      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
     }
   </style>
 </head>
 <body>
 <%- include('partials/sidebar', { activePage: 'mikrotik', company }) %>
 <div class="mw">
-    <div class="topbar">
+  <% const totalRouters = Array.isArray(routers) ? routers.length : 0; %>
+  <% const activeRouters = Array.isArray(routers) ? routers.filter((r) => Number(r.is_active || 0) === 1).length : 0; %>
+  <% const inactiveRouters = Math.max(0, totalRouters - activeRouters); %>
+  <div class="topbar">
     <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-hdd-network"></i> <%= t('admin.nav.router_management', 'Manajemen Router') %></div>
     <div class="tb-right">
-      <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
-        <i class="bi bi-sun"></i>
-        <span>Terang</span>
-      </button>
-      <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
-      <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i></a>
+      <div class="suite-topbar-actions">
+        <div class="suite-topbar-main">
+          <span class="suite-pill"><i class="bi bi-hdd-network"></i> <strong><%= totalRouters %></strong> router terdaftar</span>
+        </div>
+        <div class="suite-topbar-shortcuts">
+          <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
+            <i class="bi bi-sun"></i>
+            <span>Terang</span>
+          </button>
+          <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
+          <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i> <span>Logout</span></a>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="page">
+  <div class="page admin-shell-page mikrotik-suite-page">
     <% const mTab = 'routers'; %>
 
     <% if (msg) { %>
@@ -67,12 +86,30 @@
     <% } %>
 
     <div class="mtabs">
-      <a href="/admin/mikrotik" class="mtab <%= mTab==='monitoring' ? 'active' : '' %>"><i class="bi bi-router"></i> Monitoring</a>
-      <a href="/admin/vouchers" class="mtab <%= mTab==='vouchers' ? 'active' : '' %>"><i class="bi bi-ticket-perforated"></i> Voucher Hotspot</a>
+      <a href="/admin/mikrotik" class="mtab <%= mTab==='monitoring' ? 'active' : '' %>"><i class="bi bi-router"></i> Data MikroTik</a>
+      <a href="/admin/vouchers" class="mtab <%= mTab==='vouchers' ? 'active' : '' %>"><i class="bi bi-ticket-perforated"></i> Voucher</a>
       <a href="/admin/routers" class="mtab <%= mTab==='routers' ? 'active' : '' %>"><i class="bi bi-hdd-network"></i> Router</a>
     </div>
 
-    <div class="card">
+    <div class="suite-intro">
+      <div class="suite-intro-copy">
+        <div class="suite-overline">Suite MikroTik</div>
+        <h1 class="suite-intro-title">Manajemen router yang konsisten dengan menu MikroTik lainnya.</h1>
+        <p class="suite-intro-desc">Tampilan router sekarang memakai pola layout, jarak, dan ritme visual yang sama dengan Monitoring dan Voucher supaya lebih nyaman dibaca, terutama di layar mobile.</p>
+      </div>
+      <div class="suite-intro-tags">
+        <span class="suite-pill"><i class="bi bi-broadcast-pin"></i> <strong><%= activeRouters %></strong> aktif</span>
+        <span class="suite-pill"><i class="bi bi-pause-circle"></i> <strong><%= inactiveRouters %></strong> nonaktif</span>
+      </div>
+    </div>
+
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+      <div class="sc p"><i class="bi bi-hdd-stack sc-icon"></i><div class="sc-label">Total Router</div><div class="sc-val"><%= totalRouters %></div></div>
+      <div class="sc s"><i class="bi bi-broadcast-pin sc-icon"></i><div class="sc-label">Router Aktif</div><div class="sc-val"><%= activeRouters %></div></div>
+      <div class="sc d"><i class="bi bi-pause-circle sc-icon"></i><div class="sc-label">Router Nonaktif</div><div class="sc-val"><%= inactiveRouters %></div></div>
+    </div>
+
+    <div class="card suite-card">
       <div class="card-hd">
         <h6><i class="bi bi-hdd-network"></i> <%= t('admin.routers.list_title', 'Daftar Router MikroTik') %> (<%= routers.length %>)</h6>
         <div style="display:flex;gap:8px;flex-wrap:wrap">

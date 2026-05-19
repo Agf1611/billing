@@ -1,32 +1,60 @@
 const axios = require('axios');
 require('dotenv').config();
 const { logger } = require('./logger');
+const { getSettingsWithCache, getSetting } = require('./settingsManager');
 // const { sendTechnicianMessage } = require('./sendMessage');
 // const mikrotik = require('./mikrotik');
 // const { getMikrotikConnection } = require('./mikrotik');
 
 // Konfigurasi GenieACS API
-const GENIEACS_URL = process.env.GENIEACS_URL || 'http://localhost:7557';
+const GENIEACS_URL = process.env.GENIEACS_URL || '';
 const GENIEACS_USERNAME = process.env.GENIEACS_USERNAME;
 const GENIEACS_PASSWORD = process.env.GENIEACS_PASSWORD;
 
-// Buat instance axios dengan konfigurasi default
-const axiosInstance = axios.create({
-    baseURL: GENIEACS_URL,
-    auth: {
-        username: GENIEACS_USERNAME,
-        password: GENIEACS_PASSWORD
-    },
-    headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }
-});
+function getGenieAcsRuntimeConfig() {
+    const settings = getSettingsWithCache();
+    const baseURL = String(settings.genieacs_url || GENIEACS_URL || '').trim();
+    const username = String(settings.genieacs_username || GENIEACS_USERNAME || '').trim();
+    const password = String(settings.genieacs_password || GENIEACS_PASSWORD || '').trim();
+    return { baseURL, username, password };
+}
 
+function buildAxiosInstance(timeout = 10000) {
+    const runtime = getGenieAcsRuntimeConfig();
+    return axios.create({
+        baseURL: runtime.baseURL,
+        auth: runtime.username || runtime.password
+            ? { username: runtime.username, password: runtime.password }
+            : undefined,
+        timeout,
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    });
+}
+
+function ensureRuntimeConfig() {
+    const runtime = getGenieAcsRuntimeConfig();
+    if (!runtime.baseURL) {
+        const error = new Error('GenieACS URL belum dikonfigurasi');
+        error.code = 'GENIEACS_NOT_CONFIGURED';
+        throw error;
+    }
+    return runtime;
+}
+
+function shouldRunBackgroundMonitoring() {
+    const envFlag = String(process.env.GENIEACS_BACKGROUND_MONITORING_ENABLED || '').trim().toLowerCase();
+    if (envFlag === 'true' || envFlag === '1' || envFlag === 'yes') return true;
+    return Boolean(getSetting('genieacs_background_monitoring_enabled', false));
+}
 // GenieACS API wrapper
 const genieacsApi = {
     async getDevices() {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(8000);
             logger.debug('[GenieACS] Getting all devices...');
             const response = await axiosInstance.get('/devices');
             logger.debug(`[GenieACS] Found ${response.data?.length || 0} devices`);
@@ -39,6 +67,8 @@ const genieacsApi = {
 
     async findDeviceByPhoneNumber(phoneNumber) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(8000);
             // Mencari device berdasarkan tag yang berisi nomor telepon
             const response = await axiosInstance.get('/devices', {
                 params: {
@@ -71,6 +101,8 @@ const genieacsApi = {
 
     async getDevice(deviceId) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(10000);
             const response = await axiosInstance.get(`/devices/${encodeURIComponent(deviceId)}`);
             return response.data;
         } catch (error) {
@@ -81,6 +113,8 @@ const genieacsApi = {
 
     async setParameterValues(deviceId, parameters) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(15000);
             logger.debug(`[GenieACS] Setting parameters for device: ${deviceId}`);
 
             // Format parameter values untuk GenieACS
@@ -149,6 +183,8 @@ const genieacsApi = {
 
     async reboot(deviceId) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(10000);
             const task = {
                 name: "reboot",
                 timestamp: new Date().toISOString()
@@ -166,6 +202,8 @@ const genieacsApi = {
 
     async factoryReset(deviceId) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(10000);
             const task = {
                 name: "factoryReset",
                 timestamp: new Date().toISOString()
@@ -183,6 +221,8 @@ const genieacsApi = {
 
     async getDeviceParameters(deviceId, parameterNames) {
         try {
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(10000);
             const queryString = parameterNames.map(name => `query=${encodeURIComponent(name)}`).join('&');
             const response = await axiosInstance.get(`/devices/${encodeURIComponent(deviceId)}?${queryString}`);
             return response.data;
@@ -195,14 +235,9 @@ const genieacsApi = {
     async getDeviceInfo(deviceId) {
         try {
             logger.debug(`[GenieACS] Getting device info for device ID: ${deviceId}`);
-            
-            // Mendapatkan device detail
-            const deviceResponse = await axios.get(`${GENIEACS_URL}/devices/${encodeURIComponent(deviceId)}`, {
-                auth: {
-                    username: GENIEACS_USERNAME,
-                    password: GENIEACS_PASSWORD
-                }
-            });
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(10000);
+            const deviceResponse = await axiosInstance.get(`/devices/${encodeURIComponent(deviceId)}`);
 
             if (!deviceResponse.data) {
                 logger.warn('[GenieACS] No device data found');
@@ -272,17 +307,13 @@ const genieacsApi = {
                 'VirtualParameters.gettemp'
             ];
 
-            // Menggunakan tasks endpoint untuk mendapatkan parameter values
-            const response = await axios.post(`${GENIEACS_URL}/tasks`, [{
+            ensureRuntimeConfig();
+            const axiosInstance = buildAxiosInstance(15000);
+            const response = await axiosInstance.post('/tasks', [{
                 name: "getParameterValues",
                 parameterNames: virtualParams,
                 device: deviceId
-            }], {
-                auth: {
-                    username: GENIEACS_USERNAME,
-                    password: GENIEACS_PASSWORD
-                }
-            });
+            }]);
 
             logger.debug('[GenieACS] Virtual parameters retrieved successfully');
             return response.data;
@@ -588,6 +619,10 @@ async function monitorOfflineDevices(thresholdHours = 24) {
 
 // Jadwalkan monitoring setiap 6 jam
 function scheduleMonitoring() {
+    if (!shouldRunBackgroundMonitoring()) {
+        logger.info('[GenieACS] Background monitoring disabled. Skipping scheduled RX power/offline checks.');
+        return;
+    }
     // Jalankan sekali saat startup
     setTimeout(async () => {
         console.log('Menjalankan pemantauan RXPower awal...');

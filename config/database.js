@@ -28,6 +28,8 @@ let db;
 try {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
+  db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
 } catch (err) {
   console.error('[DB] Gagal membuka database:', err.message);
@@ -186,6 +188,22 @@ db.exec(`
     is_online INTEGER NOT NULL DEFAULT 0,
     profile_name TEXT,
     remote_address TEXT,
+    session_uptime TEXT,
+    last_online_at DATETIME,
+    offline_since DATETIME,
+    last_logout_at DATETIME,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (router_key, username)
+  );
+
+  CREATE TABLE IF NOT EXISTS hotspot_monitoring_state (
+    router_key TEXT NOT NULL,
+    router_id INTEGER REFERENCES routers(id) ON DELETE CASCADE,
+    username TEXT NOT NULL,
+    is_online INTEGER NOT NULL DEFAULT 0,
+    profile_name TEXT,
+    session_address TEXT,
     session_uptime TEXT,
     last_online_at DATETIME,
     offline_since DATETIME,

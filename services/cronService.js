@@ -171,6 +171,26 @@ function addMessageVariation(message, index) {
   return message + suffix;
 }
 
+function isSqliteBusyError(error) {
+  const msg = String(error?.message || error || '').toLowerCase();
+  return msg.includes('database is locked') || msg.includes('sqlite_busy');
+}
+
+async function syncUsageTotalsWithRetry(customerId, totalIn, totalOut, at, meta, retries = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return usageSvc.syncUsageTotals(customerId, totalIn, totalOut, at, meta);
+    } catch (error) {
+      lastError = error;
+      if (!isSqliteBusyError(error) || attempt >= retries) throw error;
+      const waitMs = 150 * attempt;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError || new Error('sync usage failed');
+}
+
 function startCronJobs() {
   cron.schedule('10,40 * * * *', async () => {
     try {
@@ -497,7 +517,7 @@ function startCronJobs() {
 
             const totalIn = Number(s['bytes-in'] ?? s.bytesIn ?? s.bytes_in ?? 0) || 0;
             const totalOut = Number(s['bytes-out'] ?? s.bytesOut ?? s.bytes_out ?? 0) || 0;
-            usageSvc.syncUsageTotals(cust.id, totalIn, totalOut, new Date(), {
+            await syncUsageTotalsWithRetry(cust.id, totalIn, totalOut, new Date(), {
               sessionId: String(s['session-id'] ?? s.sessionId ?? s['.id'] ?? s.id ?? '').trim(),
               uptime: String(s.uptime ?? '').trim(),
               source: `cron-router-${r.id}`

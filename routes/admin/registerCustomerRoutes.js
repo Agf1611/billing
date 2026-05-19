@@ -664,35 +664,48 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
       if (customer.router_id && customer.pppoe_username) {
         try {
-          const activeSessions = await mikrotikService.getPppoeActive(Number(customer.router_id));
-          const username = String(customer.pppoe_username || '').trim().toLowerCase();
-          const active = (Array.isArray(activeSessions) ? activeSessions : []).find((row) => {
-            return String(row?.name || '').trim().toLowerCase() === username;
-          });
-          if (active) {
-            baselineIn = Math.max(
-              0,
-              Number(
-                active['bytes-in']
-                ?? active.bytesIn
-                ?? active.bytes_in
-                ?? active.rxBytes
-                ?? 0
-              ) || 0
-            );
-            baselineOut = Math.max(
-              0,
-              Number(
-                active['bytes-out']
-                ?? active.bytesOut
-                ?? active.bytes_out
-                ?? active.txBytes
-                ?? 0
-              ) || 0
-            );
-            sessionId = String(active['session-id'] ?? active.sessionId ?? active['.id'] ?? active.id ?? '').trim();
-            uptime = String(active.uptime || active['uptime'] || '').trim();
-            baselineNote = 'Usage reset by admin with live MikroTik baseline';
+          const liveTraffic = await customerDetailSvc.resolvePppoeTrafficLive(
+            String(customer.pppoe_username || '').trim(),
+            Number(customer.router_id || 0) || null
+          );
+
+          if (liveTraffic && liveTraffic.online) {
+            baselineIn = Math.max(0, Number(liveTraffic.bytesIn || 0) || 0);
+            baselineOut = Math.max(0, Number(liveTraffic.bytesOut || 0) || 0);
+            sessionId = String(liveTraffic.sessionId || '').trim();
+            uptime = String(liveTraffic.uptime || '').trim();
+            baselineNote = `Usage reset by admin with live baseline (${String(liveTraffic.source || 'live')})`;
+          } else {
+            const activeSessions = await mikrotikService.getPppoeActive(Number(customer.router_id));
+            const username = String(customer.pppoe_username || '').trim().toLowerCase();
+            const active = (Array.isArray(activeSessions) ? activeSessions : []).find((row) => {
+              return String(row?.name || '').trim().toLowerCase() === username;
+            });
+            if (active) {
+              baselineIn = Math.max(
+                0,
+                Number(
+                  active['bytes-in']
+                  ?? active.bytesIn
+                  ?? active.bytes_in
+                  ?? active.rxBytes
+                  ?? 0
+                ) || 0
+              );
+              baselineOut = Math.max(
+                0,
+                Number(
+                  active['bytes-out']
+                  ?? active.bytesOut
+                  ?? active.bytes_out
+                  ?? active.txBytes
+                  ?? 0
+                ) || 0
+              );
+              sessionId = String(active['session-id'] ?? active.sessionId ?? active['.id'] ?? active.id ?? '').trim();
+              uptime = String(active.uptime || active['uptime'] || '').trim();
+              baselineNote = 'Usage reset by admin with PPP active baseline';
+            }
           }
         } catch (mikrotikErr) {
           logger.warn(`[AdminCustomers] Reset usage baseline live gagal untuk customer ${customer.id}: ${mikrotikErr.message}`);

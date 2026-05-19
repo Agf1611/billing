@@ -6,20 +6,38 @@ const { getSettingsWithCache } = require('../config/settingsManager');
 const auditTrail = require('./auditTrailService');
 const { logger } = require('../config/logger');
 
-async function findDeviceByTag(tag, options = {}) {
+function getGenieacsRuntimeConfig() {
   const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const username = settings.genieacs_username || '';
-  const password = settings.genieacs_password || '';
+  const baseURL = String(settings.genieacs_url || process.env.GENIEACS_URL || '').trim();
+  const username = String(settings.genieacs_username || process.env.GENIEACS_USERNAME || '').trim();
+  const password = String(settings.genieacs_password || process.env.GENIEACS_PASSWORD || '').trim();
+  return { baseURL, username, password };
+}
+
+function getGenieacsRequestOptions(options = {}) {
+  const runtime = getGenieacsRuntimeConfig();
+  if (!runtime.baseURL) return null;
   const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 10000);
+  return {
+    baseURL: runtime.baseURL,
+    auth: runtime.username || runtime.password
+      ? { username: runtime.username, password: runtime.password }
+      : undefined,
+    timeout: timeoutMs
+  };
+}
+
+async function findDeviceByTag(tag, options = {}) {
+  const requestOptions = getGenieacsRequestOptions(options);
+  if (!requestOptions) return null;
   try {
-    const response = await axios.get(`${genieacsUrl}/devices`, {
+    const response = await axios.get(`${requestOptions.baseURL}/devices`, {
       params: {
         query: JSON.stringify({ $or: [{ _id: tag }, { _tags: tag }] }),
         projection: '_id,_tags'
       },
-      auth: { username, password },
-      timeout: timeoutMs
+      auth: requestOptions.auth,
+      timeout: requestOptions.timeout
     });
     if (response.data && response.data.length > 0) {
       return response.data[0];
@@ -31,11 +49,8 @@ async function findDeviceByTag(tag, options = {}) {
 }
 
 async function findDeviceByPppoe(pppoeUser, options = {}) {
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const username = settings.genieacs_username || '';
-  const password = settings.genieacs_password || '';
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 10000);
+  const requestOptions = getGenieacsRequestOptions(options);
+  if (!requestOptions) return null;
   try {
     const query = {
       $or: [
@@ -47,13 +62,13 @@ async function findDeviceByPppoe(pppoeUser, options = {}) {
         { "Device.PPP.Interface.1.Username._value": pppoeUser }
       ]
     };
-    const response = await axios.get(`${genieacsUrl}/devices`, {
+    const response = await axios.get(`${requestOptions.baseURL}/devices`, {
       params: {
         query: JSON.stringify(query),
         projection: '_id,_tags'
       },
-      auth: { username, password },
-      timeout: timeoutMs
+      auth: requestOptions.auth,
+      timeout: requestOptions.timeout
     });
     if (response.data && response.data.length > 0) {
       return response.data[0];
@@ -65,16 +80,13 @@ async function findDeviceByPppoe(pppoeUser, options = {}) {
 }
 
 async function fetchFullDevice(tag, options = {}) {
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const username = settings.genieacs_username || '';
-  const password = settings.genieacs_password || '';
-  const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 15000);
+  const requestOptions = getGenieacsRequestOptions({ timeoutMs: Number(options.timeoutMs) || 15000 });
+  if (!requestOptions) return null;
   try {
-    const response = await axios.get(`${genieacsUrl}/devices`, {
+    const response = await axios.get(`${requestOptions.baseURL}/devices`, {
       params: { query: JSON.stringify({ $or: [{ _id: tag }, { _tags: tag }] }) },
-      auth: { username, password },
-      timeout: timeoutMs
+      auth: requestOptions.auth,
+      timeout: requestOptions.timeout
     });
     if (response.data && response.data.length > 0) {
       return response.data[0];
@@ -422,11 +434,9 @@ async function requestDeviceRefresh(tag, options = {}) {
     const device = await resolveDeviceToken(tag, options);
     if (!device || !device._id) return { ok: false, message: 'device-not-found' };
 
-    const settings = getSettingsWithCache();
-    const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-    const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
-    const timeoutMs = Math.max(1000, Number(options.timeoutMs) || 8000);
-    const tasksUrl = `${genieacsUrl}/devices/${encodeURIComponent(device._id)}/tasks`;
+    const requestOptions = getGenieacsRequestOptions({ timeoutMs: Number(options.timeoutMs) || 8000 });
+    if (!requestOptions) return { ok: false, message: 'genieacs-not-configured' };
+    const tasksUrl = `${requestOptions.baseURL}/devices/${encodeURIComponent(device._id)}/tasks`;
     const refreshTargets = [
       'InternetGatewayDevice.LANDevice.1.WLANConfiguration',
       'InternetGatewayDevice.LANDevice.1.Hosts',
@@ -439,7 +449,10 @@ async function requestDeviceRefresh(tag, options = {}) {
 
     for (const objectName of refreshTargets) {
       try {
-        await axios.post(tasksUrl, { name: 'refreshObject', objectName }, { auth, timeout: timeoutMs });
+        await axios.post(tasksUrl, { name: 'refreshObject', objectName }, {
+          auth: requestOptions.auth,
+          timeout: requestOptions.timeout
+        });
       } catch (error) {
         logger.debug(`[GenieACS] refreshObject gagal untuk ${objectName}: ${error.message}`);
       }
@@ -524,17 +537,16 @@ async function updateSSID(tag, newSSID, actor = null) {
     const device = await resolveDeviceToken(tag);
     if (!device) return false;
     const deviceId = encodeURIComponent(device._id);
-    const settings = getSettingsWithCache();
-    const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-    const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
-    const tasksUrl = `${genieacsUrl}/devices/${deviceId}/tasks`;
+    const requestOptions = getGenieacsRequestOptions({ timeoutMs: 15000 });
+    if (!requestOptions) return false;
+    const tasksUrl = `${requestOptions.baseURL}/devices/${deviceId}/tasks`;
 
     const trySet = async (path, value) => {
       try {
         await axios.post(tasksUrl, {
           name: 'setParameterValues',
           parameterValues: [[path, value, 'xsd:string']]
-        }, { auth, timeout: 15000 });
+        }, { auth: requestOptions.auth, timeout: requestOptions.timeout });
         return true;
       } catch (e) {
         return false;
@@ -557,10 +569,16 @@ async function updateSSID(tag, newSSID, actor = null) {
     ok = (await trySet('Device.WiFi.SSID.2.SSID', newSSID5G)) || ok;
 
     try {
-      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration' }, { auth, timeout: 15000 });
+      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration' }, {
+        auth: requestOptions.auth,
+        timeout: requestOptions.timeout
+      });
     } catch (e) {}
     try {
-      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'Device.WiFi.SSID' }, { auth, timeout: 15000 });
+      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'Device.WiFi.SSID' }, {
+        auth: requestOptions.auth,
+        timeout: requestOptions.timeout
+      });
     } catch (e) {}
 
     // Catat audit trail jika berhasil
@@ -599,10 +617,9 @@ async function updatePassword(tag, newPassword, actor = null) {
       return false;
     }
     const deviceId = encodeURIComponent(device._id);
-    const settings = getSettingsWithCache();
-    const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-    const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
-    const tasksUrl = `${genieacsUrl}/devices/${deviceId}/tasks`;
+    const requestOptions = getGenieacsRequestOptions({ timeoutMs: 15000 });
+    if (!requestOptions) return false;
+    const tasksUrl = `${requestOptions.baseURL}/devices/${deviceId}/tasks`;
 
     logger.info(`[updatePassword] Setting password for device ${deviceId}, tag ${tag}`);
 
@@ -611,7 +628,7 @@ async function updatePassword(tag, newPassword, actor = null) {
         await axios.post(tasksUrl, {
           name: 'setParameterValues',
           parameterValues: [[path, newPassword, 'xsd:string']]
-        }, { auth, timeout: 15000 });
+        }, { auth: requestOptions.auth, timeout: requestOptions.timeout });
         return true;
       } catch (e) {
         return false;
@@ -645,10 +662,16 @@ async function updatePassword(tag, newPassword, actor = null) {
 
     // Refresh object
     try {
-      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration' }, { auth, timeout: 15000 });
+      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration' }, {
+        auth: requestOptions.auth,
+        timeout: requestOptions.timeout
+      });
     } catch (e) {}
     try {
-      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'Device.WiFi.AccessPoint' }, { auth, timeout: 15000 });
+      await axios.post(tasksUrl, { name: 'refreshObject', objectName: 'Device.WiFi.AccessPoint' }, {
+        auth: requestOptions.auth,
+        timeout: requestOptions.timeout
+      });
     } catch (e) {}
 
     // Catat audit trail jika berhasil
@@ -678,14 +701,13 @@ async function updatePassword(tag, newPassword, actor = null) {
 async function requestReboot(tag, actor = null) {
   const device = await resolveDeviceToken(tag);
   if (!device || !device._id) return { ok: false, message: 'Perangkat tidak ditemukan.' };
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
+  const requestOptions = getGenieacsRequestOptions({ timeoutMs: 10000 });
+  if (!requestOptions) return { ok: false, message: 'GenieACS belum dikonfigurasi.' };
   try {
     await axios.post(
-      `${genieacsUrl}/devices/${encodeURIComponent(device._id)}/tasks`,
+      `${requestOptions.baseURL}/devices/${encodeURIComponent(device._id)}/tasks`,
       { name: 'reboot', timestamp: new Date().toISOString() },
-      { auth }
+      { auth: requestOptions.auth, timeout: requestOptions.timeout }
     );
 
     // Catat audit trail jika berhasil
@@ -713,9 +735,8 @@ async function requestReboot(tag, actor = null) {
 
 /** Daftar perangkat yang punya minimal satu tag (untuk admin WA). */
 async function listDevicesWithTags(limit = 250) {
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
+  const requestOptions = getGenieacsRequestOptions({ timeoutMs: 45000 });
+  if (!requestOptions) return { ok: false, devices: [], message: 'GenieACS belum dikonfigurasi.' };
   const queries = [
     { _tags: { $exists: true, $ne: [] } },
     { _tags: { $exists: true, $not: { $size: 0 } } },
@@ -733,14 +754,14 @@ async function listDevicesWithTags(limit = 250) {
   ].join(',');
   for (const query of queries) {
     try {
-      const response = await axios.get(`${genieacsUrl}/devices`, {
+      const response = await axios.get(`${requestOptions.baseURL}/devices`, {
         params: {
           query: JSON.stringify(query),
           limit: Math.max(1, Math.min(parseInt(limit, 10) || 250, 500)),
           projection
         },
-        auth,
-        timeout: 45000
+        auth: requestOptions.auth,
+        timeout: requestOptions.timeout
       });
       const rows = Array.isArray(response.data) ? response.data : [];
       if (rows.length > 0) {
@@ -755,17 +776,16 @@ async function listDevicesWithTags(limit = 250) {
 
 /** Mengambil semua perangkat tanpa melihat tag. */
 async function listAllDevices(limit = 500) {
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
+  const requestOptions = getGenieacsRequestOptions({ timeoutMs: 45000 });
+  if (!requestOptions) return { ok: false, devices: [], message: 'GenieACS belum dikonfigurasi.' };
   try {
-    const response = await axios.get(`${genieacsUrl}/devices`, {
+    const response = await axios.get(`${requestOptions.baseURL}/devices`, {
       params: {
         limit,
         projection: '_id,_tags,_lastInform,DeviceID.SerialNumber,VirtualParameters,InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username,InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.2.Username,InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress,Device.PPP.Interface.1.Username,Device.PPP.Interface.1.ExternalIPAddress,InternetGatewayDevice.DeviceInfo.ModelName,InternetGatewayDevice.DeviceInfo.SoftwareVersion,InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID,InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations,InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations,InternetGatewayDevice.LANDevice.1.Hosts.HostNumberOfEntries,Device.WiFi.AccessPoint.1.AssociatedDeviceNumberOfEntries,Device.Hosts.HostNumberOfEntries,InternetGatewayDevice.LANDevice.1.Hosts.Host,Device.Hosts.Host'
       },
-      auth,
-      timeout: 45000
+      auth: requestOptions.auth,
+      timeout: requestOptions.timeout
     });
     const rows = Array.isArray(response.data) ? response.data : [];
     return { ok: true, devices: rows.slice(0, limit) };
@@ -777,16 +797,15 @@ async function listAllDevices(limit = 500) {
 async function updateCustomerTag(oldTag, newTag) {
   const device = await findDeviceByTag(oldTag);
   if (!device || !device._id) return { ok: false, message: 'Perangkat tidak ditemukan.' };
-  const settings = getSettingsWithCache();
-  const genieacsUrl = settings.genieacs_url || 'http://localhost:7557';
-  const auth = { username: settings.genieacs_username || '', password: settings.genieacs_password || '' };
+  const requestOptions = getGenieacsRequestOptions({ timeoutMs: 10000 });
+  if (!requestOptions) return { ok: false, message: 'GenieACS belum dikonfigurasi.' };
   try {
     const tags = Array.isArray(device._tags) ? device._tags.filter((t) => t !== oldTag) : [];
     tags.push(newTag);
     await axios.put(
-      `${genieacsUrl}/devices/${encodeURIComponent(device._id)}`,
+      `${requestOptions.baseURL}/devices/${encodeURIComponent(device._id)}`,
       { _id: device._id, _tags: tags },
-      { auth }
+      { auth: requestOptions.auth, timeout: requestOptions.timeout }
     );
     return { ok: true };
   } catch (e) {

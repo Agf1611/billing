@@ -1,7 +1,7 @@
 <%
   const pwaPortalKey = typeof portalKey !== 'undefined' ? String(portalKey || '').trim() : 'customer';
   const pwaManifestBaseHref = typeof manifestPath !== 'undefined' && manifestPath ? String(manifestPath) : (pwaPortalKey === 'customer' ? '/manifest.webmanifest' : `/${pwaPortalKey}/manifest.webmanifest`);
-  const pwaAssetVersion = '20260516-pwa2';
+  const pwaAssetVersion = '20260519-pwa3';
   const pwaManifestHref = `${pwaManifestBaseHref}${pwaManifestBaseHref.includes('?') ? '&' : '?'}v=${pwaAssetVersion}`;
   const pwaScope = typeof scope !== 'undefined' && scope ? String(scope) : (pwaPortalKey === 'customer' ? '/customer/' : `/${pwaPortalKey}/`);
   const pwaThemeColor = typeof themeColor !== 'undefined' && themeColor ? String(themeColor) : '#0f172a';
@@ -87,6 +87,7 @@
 <script>
   (function () {
     if (!('serviceWorker' in navigator)) return;
+    var portalKey = <%- JSON.stringify(pwaPortalKey) %>;
     var installLabel = <%- JSON.stringify(pwaInstallLabel) %>;
     var installButton = null;
     function isStandaloneMode() {
@@ -150,7 +151,33 @@
       }));
     });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/sw.js?v=' + <%- JSON.stringify(pwaAssetVersion) %>, { scope: window.__pwaPortal.scope }).catch(function () {});
+      if (portalKey !== 'customer') {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            try {
+              var scope = String(registration.scope || '');
+              if (scope.indexOf(window.location.origin + '/admin/') === 0 ||
+                  scope.indexOf(window.location.origin + '/tech/') === 0 ||
+                  scope.indexOf(window.location.origin + '/agent/') === 0 ||
+                  scope.indexOf(window.location.origin + '/collector/') === 0 ||
+                  scope === (window.location.origin + '/')) {
+                registration.unregister().catch(function () {});
+              }
+            } catch (_) {}
+          });
+        }).catch(function () {});
+        if (window.caches && typeof window.caches.keys === 'function') {
+          window.caches.keys().then(function (keys) {
+            keys.forEach(function (key) {
+              if (String(key || '').indexOf('billing-pwa-') === 0) {
+                window.caches.delete(key).catch(function () {});
+              }
+            });
+          }).catch(function () {});
+        }
+      } else {
+        navigator.serviceWorker.register('/sw.js?v=' + <%- JSON.stringify(pwaAssetVersion) %>, { scope: window.__pwaPortal.scope }).catch(function () {});
+      }
       ensureInstallButton();
       updateInstallButton();
     });

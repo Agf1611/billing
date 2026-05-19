@@ -5719,39 +5719,51 @@
           return;
         }
 
-        const customerDownloadMbps = Number(data.downloadMbps ?? data.txMbps ?? data.rxMbps ?? 0) || 0;
-        const customerUploadMbps = Number(data.uploadMbps ?? data.rxMbps ?? data.txMbps ?? 0) || 0;
+        const liveData = data.live && typeof data.live === 'object' ? data.live : {};
+        const usageData = data.usage && typeof data.usage === 'object' ? data.usage : {};
+        const customerDownloadMbps = Number(
+          liveData.downloadMbps ?? liveData.txMbps ?? data.downloadMbps ?? data.txMbps ?? data.rxMbps ?? 0
+        ) || 0;
+        const customerUploadMbps = Number(
+          liveData.uploadMbps ?? liveData.rxMbps ?? data.uploadMbps ?? data.rxMbps ?? data.txMbps ?? 0
+        ) || 0;
         setSpeedMeter('rx', customerDownloadMbps);
         setSpeedMeter('tx', customerUploadMbps);
 
         const usageTotalNode = document.getElementById('usageTotalDisplay');
         const usageDownloadNode = document.getElementById('usageDownloadDisplay');
         const usageUploadNode = document.getElementById('usageUploadDisplay');
-        const usageDownBytes = Number(data.usageDownloadBytes ?? data.usageBytesOut ?? data.usageBytesIn ?? 0) || 0;
-        const usageUpBytes = Number(data.usageUploadBytes ?? data.usageBytesIn ?? data.usageBytesOut ?? 0) || 0;
+        const usageDownBytes = Number(
+          usageData.storedDownloadBytes ?? data.usageDownloadBytes ?? data.usageBytesOut ?? data.usageBytesIn ?? 0
+        ) || 0;
+        const usageUpBytes = Number(
+          usageData.storedUploadBytes ?? data.usageUploadBytes ?? data.usageBytesIn ?? data.usageBytesOut ?? 0
+        ) || 0;
         const usageTotalBytes = usageDownBytes + usageUpBytes;
         const formatUsageGb = (bytes) => ((Math.max(0, Number(bytes || 0)) / (1024 * 1024 * 1024))).toFixed(2);
         if (usageTotalNode) usageTotalNode.textContent = formatUsageGb(usageTotalBytes);
         if (usageDownloadNode) usageDownloadNode.textContent = `${formatUsageGb(usageDownBytes)} GB`;
         if (usageUploadNode) usageUploadNode.textContent = `${formatUsageGb(usageUpBytes)} GB`;
 
-        if (data.available === false) {
+        if (data.available === false || liveData.available === false) {
           if (statusText) statusText.textContent = 'PPPoE belum terdeteksi untuk akun ini.';
           return;
         }
 
-        if (data.online === false) {
-          if (statusText) statusText.textContent = 'PPPoE sedang offline.';
+        if (liveData.online === false || data.online === false) {
+          if (statusText) statusText.textContent = 'Traffic live tidak tersedia. Pemakaian paket menampilkan data tersimpan terakhir.';
           return;
         }
 
-        if (data.warmup) {
+        if (liveData.warmup || data.warmup) {
           if (statusText) statusText.textContent = 'Traffic live sedang kalibrasi. Coba lagi beberapa detik.';
           return;
         }
 
-        const ifaceInfo = data.iface ? ` - ${data.iface}` : '';
-        if (statusText) statusText.textContent = `Traffic live aktif${ifaceInfo}${data.uptime ? ` - uptime ${data.uptime}` : ''}`;
+        const ifaceName = liveData.interface || liveData.iface || data.iface || '';
+        const uptimeText = liveData.uptime || data.uptime || '';
+        const ifaceInfo = ifaceName ? ` - ${ifaceName}` : '';
+        if (statusText) statusText.textContent = `Traffic live aktif${ifaceInfo}${uptimeText ? ` - uptime ${uptimeText}` : ''}`;
       } catch (error) {
         setSpeedMeter('rx', 0);
         setSpeedMeter('tx', 0);

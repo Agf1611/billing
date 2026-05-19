@@ -10,27 +10,87 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.Editable/1.2.0/Leaflet.Editable.js"></script>
   <style>
-    #map { height: calc(100vh - 200px); border-radius: 8px; margin-top: 10px; z-index: 1; background: #e5e7eb; }
+    .mw,.page,.map-stats,.legend-grid,.odps-panel{min-width:0}
+    #map { height: calc(100vh - 200px); min-height: 460px; border-radius: 18px; margin-top: 10px; z-index: 1; background: #e5e7eb; border: 1px solid var(--border); box-shadow: var(--shadow-soft); }
     .map-controls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
     .legend { background: rgba(255, 255, 255, 0.98); padding: 12px 15px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-size: 13px; line-height: 2.2; font-weight: 700; color: #1e293b; border: 2px solid #cbd5e1; backdrop-filter: blur(5px); }
     .legend i { width: 16px; height: 16px; display: inline-block; margin-right: 12px; border-radius: 50%; vertical-align: middle; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
     /* Stats Cards on Map */
-    .map-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
-    .msc { padding: 12px; border-radius: 16px; background: var(--surface-strong); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-soft); }
-    .msc-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .map-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .msc { padding: 12px; border-radius: 18px; background: var(--surface-strong); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-soft); min-width: 0; }
+    .msc-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex: 0 0 42px; }
     .msc-p { background: #eff6ff; color: #3b82f6; }
     .msc-s { background: #f0fdf4; color: #10b981; }
     .msc-d { background: #fef2f2; color: #ef4444; }
     .msc-w { background: #fff7ed; color: #f59e0b; }
+    .msc-info { min-width: 0; }
     .msc-info .val { font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--text); }
-    .msc-info .lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; }
+    .msc-info .lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; line-height: 1.25; }
 
     /* Legend Cards */
     .legend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
     .lc { background: var(--surface-strong); border: 1px solid var(--border); padding: 10px 12px; border-radius: 14px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-soft); }
     .lc i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
     .lc span { font-size: 12px; font-weight: 700; color: var(--text); }
-    
+
+    .odp-box-icon,
+    .odp-legend-icon{
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      background: linear-gradient(180deg, #ffd56a 0%, #f59e0b 100%);
+      border: 1px solid rgba(146, 64, 14, 0.55);
+      box-shadow: 0 8px 16px rgba(245, 158, 11, 0.32), inset 0 1px 0 rgba(255,255,255,0.58);
+      color: #78350f;
+    }
+    .odp-box-icon::before,
+    .odp-legend-icon::before{
+      content:'';
+      position:absolute;
+      top:-3px;
+      left:4px;
+      right:4px;
+      height:5px;
+      border-radius:999px;
+      background: linear-gradient(180deg, #fff2c6 0%, #fbbf24 100%);
+      border: 1px solid rgba(146, 64, 14, 0.35);
+    }
+    .odp-box-icon::after,
+    .odp-legend-icon::after{
+      content:'';
+      position:absolute;
+      left:50%;
+      bottom:4px;
+      width:11px;
+      height:4px;
+      transform:translateX(-50%);
+      border-radius:999px;
+      background: rgba(120, 53, 15, 0.25);
+      box-shadow: -7px 0 0 rgba(120, 53, 15, 0.2), 7px 0 0 rgba(120, 53, 15, 0.2);
+    }
+    .odp-box-icon{
+      width: 24px;
+      height: 20px;
+      font-size: 11px;
+    }
+    .odp-box-icon i{
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+      transform: translateY(1px);
+    }
+    .odp-legend-icon{
+      width: 18px;
+      height: 14px;
+      flex: 0 0 18px;
+    }
+    .odp-stat-icon{
+      width: 24px;
+      height: 20px;
+    }
+
     .odps-panel { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-soft); margin-bottom: 12px; overflow: hidden; }
     .odps-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 12px; border-bottom: 1px solid var(--border); }
     .odps-title { font-weight: 900; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
@@ -57,8 +117,8 @@
     .odps-card-actions { display:flex; gap:8px; margin-top:12px; }
     .odps-card-actions .btn { flex:1; justify-content:center; }
     @media (max-width: 768px) {
-      #map { height: 62vh; min-height: 360px; }
-      .topbar { align-items:flex-start; }
+      #map { height: 56vh; min-height: 320px; border-radius: 16px; }
+      .topbar { align-items:flex-start; gap: 10px; }
       .topbar .tb-right { width:100%; }
       .topbar .tb-right .btn { width:100%; justify-content:center; }
       .legend-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -68,6 +128,28 @@
       .odps-hide-sm { display: none; }
       .odps-table-wrap { display:none; }
       .odps-mobile-list { display:block; }
+      .odps-card-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .odps-card-actions .btn { width:100%; justify-content:center; }
+      .leaflet-control-layers { max-width: calc(100vw - 48px); }
+      .cust-popup { width: min(280px, calc(100vw - 60px)); max-width: min(280px, calc(100vw - 60px)); }
+      .cp-head { align-items: flex-start; }
+      .cp-traffic-grid { grid-template-columns: 1fr; }
+      .cp-chart { padding: 9px; }
+    }
+    @media (max-width: 540px) {
+      .page.admin-shell-page { padding-left: 0; padding-right: 0; }
+      .map-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .msc { padding: 11px 10px; gap: 10px; border-radius: 16px; }
+      .msc-icon { width: 38px; height: 38px; flex-basis: 38px; font-size: 17px; }
+      .msc-info .val { font-size: 17px; }
+      .msc-info .lbl { font-size: 10px; }
+      .legend-grid { grid-template-columns: 1fr; gap: 8px; }
+      .lc { padding: 10px 11px; border-radius: 12px; }
+      .odps-panel { border-radius: 16px; }
+      .odps-head { padding: 11px; }
+      .odps-mobile-list { padding: 11px; }
+      .odps-card { padding: 13px; border-radius: 14px; }
+      .odps-meta-grid { grid-template-columns: 1fr; }
     }
 
     /* Editable Handles Visibility */
@@ -103,9 +185,9 @@
     #picker-map { height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; z-index: 1; }
     #edit-picker-map { height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; z-index: 1; }
     #cable-drawing-map { height: 450px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1; background: #e5e7eb; }
-    .picker-icon-odp { color: #f59e0b; font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); display: block; width: 24px; height: 24px; text-align: center; line-height: 24px; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .picker-icon-odp { display:block; width:24px; height:20px; }
 
-    .marker-odp { color: #f59e0b; font-size: 18px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .marker-odp { display:block; width:24px; height:20px; }
     .marker-cust-active { color: #3b82f6; font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
     .marker-cust-suspended { color: #ef4444; font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
     .popup-content { font-size: 13px; }
@@ -169,7 +251,7 @@
 
     <div class="map-stats">
         <div class="msc">
-            <div class="msc-icon msc-w"><i class="bi bi-box-seam-fill"></i></div>
+            <div class="msc-icon msc-w"><span class="odp-box-icon odp-stat-icon"><i class="bi bi-hdd-rack-fill"></i></span></div>
             <div class="msc-info">
                 <div class="val"><%= odps.length %></div>
                 <div class="lbl"><%= t('admin.map.stats.total_odp', 'Total ODP') %></div>
@@ -193,7 +275,7 @@
 
     <div class="legend-grid">
         <div class="lc">
-            <i style="background: #f59e0b;"></i>
+            <span class="odp-legend-icon" aria-hidden="true"></span>
             <span><%= t('admin.map.legend.odp', 'ODP (Box)') %></span>
         </div>
         <div class="lc">
@@ -210,7 +292,7 @@
     
     <div class="odps-panel" style="margin-top: 12px;">
       <div class="odps-head">
-        <div class="odps-title"><i class="bi bi-box-seam-fill"></i> <span><%= t('admin.map.odp_list.title', 'Daftar ODP') %></span></div>
+        <div class="odps-title"><span class="odp-legend-icon" aria-hidden="true"></span> <span><%= t('admin.map.odp_list.title', 'Daftar ODP') %></span></div>
         <input id="odpSearch" class="odps-search" type="text" placeholder="<%= t('admin.map.odp_list.search', 'Cari ODP...') %>">
       </div>
       <div class="odps-table-wrap">
@@ -417,16 +499,21 @@
   }
 
   // Add ODP Markers
+  function renderOdpBoxIcon(className = '') {
+    const extra = className ? ` ${className}` : '';
+    return `<span class="odp-box-icon${extra}"><i class="bi bi-hdd-rack-fill"></i></span>`;
+  }
+
   const odpMarkers = {}; // Store ODP coordinates for line mapping
   odps.forEach(odp => {
     if (odp.lat && odp.lng) {
       odpMarkers[odp.id] = [parseFloat(odp.lat), parseFloat(odp.lng)];
       const marker = L.marker([odp.lat, odp.lng], {
         icon: L.divIcon({
-          html: '<i class="bi bi-box-seam-fill marker-odp"></i>',
+          html: renderOdpBoxIcon('marker-odp'),
           className: 'custom-div-icon',
-          iconSize: [18, 18],
-          iconAnchor: [9, 9]
+          iconSize: [24, 20],
+          iconAnchor: [12, 10]
         })
       }).addTo(map);
       
@@ -684,10 +771,10 @@
       }).addTo(pickerMap);
       
       const odpIcon = L.divIcon({
-        html: '<i class="bi bi-box-seam-fill picker-icon-odp"></i>',
+        html: renderOdpBoxIcon('picker-icon-odp'),
         className: 'custom-div-icon',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconSize: [24, 20],
+        iconAnchor: [12, 10]
       });
 
       pickerMarker = L.marker([lat, lng], { 
@@ -721,10 +808,10 @@
       }).addTo(editPickerMap);
       
       const odpIcon = L.divIcon({
-        html: '<i class="bi bi-box-seam-fill picker-icon-odp"></i>',
+        html: renderOdpBoxIcon('picker-icon-odp'),
         className: 'custom-div-icon',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconSize: [24, 20],
+        iconAnchor: [12, 10]
       });
 
       editPickerMarker = L.marker([lat, lng], { 

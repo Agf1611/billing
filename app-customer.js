@@ -28,6 +28,13 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error(`Unhandled Rejection: ${errorMsg}`);
 });
 
+// Keep the app alive if external libraries emit uncaught runtime errors
+// during transient MikroTik connectivity failures.
+process.on('uncaughtException', (err) => {
+  const errorMsg = err instanceof Error ? err.stack : String(err);
+  logger.error(`uncaughtException: ${errorMsg}`);
+});
+
 // Settings Management
 const session = require('express-session');
 const { getSetting, getSettingsWithCache } = require('./config/settingsManager');
@@ -796,6 +803,10 @@ if (getSetting('telegram_enabled', false)) {
 // Mulai cron jobs (generate tagihan otomatis, dll)
 const { startCronJobs } = require('./services/cronService');
 startCronJobs();
+
+// Mulai collector snapshot MikroTik agar dashboard memakai sumber data yang konsisten.
+const monitoringCollectorSvc = require('./services/monitoringCollectorService');
+monitoringCollectorSvc.startCollectorService();
 
 // Mulai auto backup
 scheduleAutoBackup();

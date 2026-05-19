@@ -5,20 +5,19 @@
       var root = document.documentElement;
       root.setAttribute('data-admin-theme', theme);
       root.style.colorScheme = theme === 'light' ? 'light' : 'dark';
-      root.classList.add('admin-theme-loading');
-
       var applyTheme = function() {
-        if (!document.body) {
-          requestAnimationFrame(applyTheme);
-          return;
+        if (document.body) {
+          document.body.dataset.theme = theme;
         }
-        document.body.dataset.theme = theme;
-        root.classList.remove('admin-theme-loading');
       };
 
-      applyTheme();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyTheme, { once: true });
+      } else {
+        applyTheme();
+      }
     } catch (error) {
-      document.documentElement.classList.remove('admin-theme-loading');
+      // Keep the portal visible even if localStorage or theme sync fails.
     }
   })();
 </script>
@@ -29,8 +28,3 @@
   themeColor: '#0f172a',
   appTitle: 'Admin'
 }) %>
-<style>
-  html.admin-theme-loading body {
-    opacity: 0;
-  }
-</style>

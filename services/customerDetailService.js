@@ -8,15 +8,73 @@ const billingSvc = require('./billingService');
 const customerDevice = require('./customerDeviceService');
 const mikrotikService = require('./mikrotikService');
 const ticketSvc = require('./ticketService');
+const usageSvc = require('./usageService');
 const pppoeTrafficSamples = new Map();
+const PPPOE_TRAFFIC_SAMPLE_RETENTION_MS = 2 * 60 * 1000;
+const PPPOE_TRAFFIC_MIN_WINDOW_MS = 4500;
+const PPPOE_TRAFFIC_TARGET_WINDOW_MS = 12000;
+const PPPOE_TRAFFIC_MAX_SAMPLES = 6;
 
 function prunePppoeTrafficSamples(now = Date.now()) {
-  const maxAgeMs = 2 * 60 * 1000;
   for (const [key, value] of pppoeTrafficSamples.entries()) {
-    if (!value || !value.t || now - value.t > maxAgeMs) {
+    if (!value) {
+      pppoeTrafficSamples.delete(key);
+      continue;
+    }
+    const lastTs = Number(value.t || value.lastTs || 0);
+    if (!lastTs || now - lastTs > PPPOE_TRAFFIC_SAMPLE_RETENTION_MS) {
       pppoeTrafficSamples.delete(key);
     }
   }
+}
+
+function readTrafficSamples(key) {
+  const state = pppoeTrafficSamples.get(key);
+  if (!state || typeof state !== 'object') return { history: [], lastRate: null };
+  const history = Array.isArray(state.history) ? state.history : [];
+  return {
+    history,
+    lastRate: state.lastRate && typeof state.lastRate === 'object' ? state.lastRate : null
+  };
+}
+
+function writeTrafficSamples(key, sessionId, sample, nextRate = null) {
+  const current = readTrafficSamples(key);
+  const history = current.history
+    .filter((entry) => entry && entry.sessionId === sessionId)
+    .concat(sample)
+    .slice(-PPPOE_TRAFFIC_MAX_SAMPLES);
+  pppoeTrafficSamples.set(key, {
+    t: sample.t,
+    lastTs: sample.t,
+    history,
+    lastRate: nextRate || current.lastRate || null
+  });
+}
+
+function computeTrafficRateFromHistory(history = [], sessionId) {
+  const rows = (Array.isArray(history) ? history : []).filter((entry) => entry && entry.sessionId === sessionId);
+  if (rows.length < 2) return null;
+  const newest = rows[rows.length - 1];
+  let candidate = null;
+  for (let i = rows.length - 2; i >= 0; i -= 1) {
+    const row = rows[i];
+    const dtMs = Number(newest.t || 0) - Number(row.t || 0);
+    if (dtMs >= PPPOE_TRAFFIC_MIN_WINDOW_MS) {
+      candidate = row;
+      if (dtMs >= PPPOE_TRAFFIC_TARGET_WINDOW_MS) break;
+    }
+  }
+  if (!candidate) return null;
+  const dtMs = Math.max(1, Number(newest.t || 0) - Number(candidate.t || 0));
+  const dIn = Number(newest.rxBytes || 0) - Number(candidate.rxBytes || 0);
+  const dOut = Number(newest.txBytes || 0) - Number(candidate.txBytes || 0);
+  if (dIn < 0 || dOut < 0) return null;
+  return {
+    rxMbps: (dIn * 8) / (dtMs / 1000) / 1e6,
+    txMbps: (dOut * 8) / (dtMs / 1000) / 1e6,
+    dtMs
+  };
 }
 
 function meaningfulText(...values) {
@@ -137,7 +195,7 @@ async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
 
     const session = sessions[0];
     let iface = strField(session, ['interface', 'interface-name', 'interfaceName', 'ifname', 'if-name', 'pppInterface']) || null;
-    const baseSessionId = strField(session, ['.id', 'id', 'sessionId', 'session-id']) || normalizedUsername;
+    const baseSessionId = strField(session, ['session-id', 'sessionId', '.id', 'id']) || normalizedUsername;
     const bytesIn = numField(session, ['bytesIn', 'bytes-in', 'bytes_in']);
     const bytesOut = numField(session, ['bytesOut', 'bytes-out', 'bytes_out']);
     const uptime = strField(session, ['uptime']) || null;
@@ -160,12 +218,13 @@ async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
 
     const sessionId = `${baseSessionId}${iface ? `|${iface}` : ''}`;
     const key = `${routerId || 'default'}:${normalizedUsername}`;
-    const prev = pppoeTrafficSamples.get(key);
+    const currentSampleState = readTrafficSamples(key);
     let rxBytes = bytesIn;
     let txBytes = bytesOut;
     let source = 'ppp-active';
     let rxMbps = 0;
     let txMbps = 0;
+    let warmup = false;
 
     if (iface) {
       try {
@@ -198,16 +257,35 @@ async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
       } catch {}
     }
 
-    pppoeTrafficSamples.set(key, { t: now, sessionId, rxBytes, txBytes, source });
-
-    if ((!rxMbps && !txMbps) && prev && prev.sessionId === sessionId && prev.t) {
-      const dtMs = Math.max(1, now - prev.t);
-      const dIn = rxBytes - numField(prev, ['rxBytes']);
-      const dOut = txBytes - numField(prev, ['txBytes']);
-      if (dIn >= 0 && dOut >= 0) {
-        rxMbps = (dIn * 8) / (dtMs / 1000) / 1e6;
-        txMbps = (dOut * 8) / (dtMs / 1000) / 1e6;
+    if (!rxMbps && !txMbps) {
+      const sample = { t: now, sessionId, rxBytes, txBytes, source };
+      const computed = computeTrafficRateFromHistory(currentSampleState.history.concat(sample), sessionId);
+      if (computed) {
+        rxMbps = computed.rxMbps;
+        txMbps = computed.txMbps;
+      } else {
+        warmup = true;
+        rxMbps = Number(currentSampleState.lastRate?.rxMbps || 0) || 0;
+        txMbps = Number(currentSampleState.lastRate?.txMbps || 0) || 0;
       }
+      writeTrafficSamples(
+        key,
+        sessionId,
+        sample,
+        computed
+          ? {
+              rxMbps: Number.isFinite(computed.rxMbps) ? computed.rxMbps : 0,
+              txMbps: Number.isFinite(computed.txMbps) ? computed.txMbps : 0,
+              source
+            }
+          : currentSampleState.lastRate
+      );
+    } else {
+      writeTrafficSamples(key, sessionId, { t: now, sessionId, rxBytes, txBytes, source }, {
+        rxMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
+        txMbps: Number.isFinite(txMbps) ? txMbps : 0,
+        source
+      });
     }
 
     return {
@@ -222,6 +300,7 @@ async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
       bytesOut: txBytes,
       rxMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
       txMbps: Number.isFinite(txMbps) ? txMbps : 0,
+      warmup,
       statusText: 'Online',
       source
     };
@@ -647,34 +726,69 @@ async function buildCustomerDetail(customerId, options = {}) {
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const usageBytesIn = Number(customer.bytes_in || 0) || 0;
-  const usageBytesOut = Number(customer.bytes_out || 0) || 0;
+  const usageMeta = usageSvc.getUsageSnapshotMeta(id, now);
+  const usageRow = usageMeta?.usage || null;
+  const usageBytesIn = Number(usageRow?.bytes_in ?? customer.bytes_in ?? 0) || 0;
+  const usageBytesOut = Number(usageRow?.bytes_out ?? customer.bytes_out ?? 0) || 0;
 
-  const currentInvoice = db.prepare(`
-    SELECT *
-    FROM invoices
-    WHERE customer_id = ? AND period_month = ? AND period_year = ?
-    ORDER BY id DESC
-    LIMIT 1
-  `).get(id, currentMonth, currentYear) || null;
+  let currentInvoice = null;
+  try {
+    currentInvoice = db.prepare(`
+      SELECT *
+      FROM invoices
+      WHERE customer_id = ? AND period_month = ? AND period_year = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(id, currentMonth, currentYear) || null;
+  } catch (error) {
+    console.error('[CustomerDetail] currentInvoice gagal dimuat:', error?.message || error);
+  }
 
-  const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(id);
-  const billingYear = billingSvc.getCustomerBillingYearSummary(id, year);
-  const monthlyBilling = buildMonthlyBilling(customer, billingYear?.invoices || [], year);
-  const tickets = ticketSvc.getTicketsByCustomerId(id);
+  let unpaidInvoices = [];
+  try {
+    unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(id) || [];
+  } catch (error) {
+    console.error('[CustomerDetail] unpaidInvoices gagal dimuat:', error?.message || error);
+  }
+
+  let billingYear = { invoices: [] };
+  try {
+    billingYear = billingSvc.getCustomerBillingYearSummary(id, year) || { invoices: [] };
+  } catch (error) {
+    console.error('[CustomerDetail] billingYear gagal dimuat:', error?.message || error);
+  }
+
+  let monthlyBilling = [];
+  try {
+    monthlyBilling = buildMonthlyBilling(customer, billingYear?.invoices || [], year);
+  } catch (error) {
+    console.error('[CustomerDetail] monthlyBilling gagal dibangun:', error?.message || error);
+  }
+
+  let tickets = [];
+  try {
+    tickets = ticketSvc.getTicketsByCustomerId(id) || [];
+  } catch (error) {
+    console.error('[CustomerDetail] tickets gagal dimuat:', error?.message || error);
+  }
 
   let pppoeState = null;
   const username = String(customer.pppoe_username || '').trim();
   const deviceToken = String(customer.genieacs_tag || customer.pppoe_username || '').trim();
 
   if (username) {
-    pppoeState = resolveBestPppoeState(username, customer.router_id || null);
+    try {
+      pppoeState = resolveBestPppoeState(username, customer.router_id || null);
+    } catch (error) {
+      console.error('[CustomerDetail] pppoeState gagal dimuat:', error?.message || error);
+      pppoeState = null;
+    }
   }
 
   const liveState = await withTimeout(
     resolveCustomerLiveState(customer, username, deviceToken, pppoeState, {
       forceNetworkRefresh: Boolean(options.forceNetworkRefresh),
-      disableTrafficProbe: true
+      disableTrafficProbe: false
     }),
     options.forceNetworkRefresh ? 8500 : 6000,
     {
@@ -710,13 +824,17 @@ async function buildCustomerDetail(customerId, options = {}) {
   }
 
   if (network && username) {
-    Promise.resolve(
-      mikrotikService.syncPppoeMonitoringState(
-        snapshotRouterId,
-        [{ name: username }],
-        network.online ? [{ name: username }] : []
-      )
-    ).catch(() => {});
+    try {
+      Promise.resolve(
+        mikrotikService.syncPppoeMonitoringState(
+          snapshotRouterId,
+          [{ name: username }],
+          network.online ? [{ name: username }] : []
+        )
+      ).catch(() => {});
+    } catch (error) {
+      console.error('[CustomerDetail] syncPppoeMonitoringState gagal:', error?.message || error);
+    }
   }
 
   const usesPppoe = Boolean(username);
@@ -783,7 +901,12 @@ async function buildCustomerDetail(customerId, options = {}) {
       liveTotalBytes: liveDownloadBytes + liveUploadBytes,
       isLive: hasLiveTraffic,
       snapshotSource: liveState?.source || '',
-      snapshotUpdatedAt: pppoeState?.updated_at || ''
+      snapshotUpdatedAt: pppoeState?.updated_at || '',
+      updatedAt: usageMeta?.updatedAt || '',
+      freshnessSeconds: Number(usageMeta?.freshnessSeconds || 0) || 0,
+      usageLagSeconds: Number(usageMeta?.usageLagSeconds || 0) || 0,
+      usageSource: String(usageMeta?.usageSource || 'database').trim() || 'database',
+      isAuthoritative: usageMeta?.isAuthoritative !== false
     },
     currentInvoice: currentInvoice ? {
       id: currentInvoice.id,
@@ -794,15 +917,23 @@ async function buildCustomerDetail(customerId, options = {}) {
       paidAt: currentInvoice.paid_at || '',
       dueDay: Number(currentInvoice.due_day_snapshot || customer.isolate_day || 10) || 10
     } : null,
-    unpaidInvoices: (Array.isArray(unpaidInvoices) ? unpaidInvoices : []).map((invoice) => ({
-      id: invoice.id,
-      amount: Number(invoice.amount || 0) || 0,
-      periodMonth: Number(invoice.period_month || 0) || 0,
-      periodYear: Number(invoice.period_year || 0) || 0,
-      status: String(invoice.status || '').toLowerCase(),
-      dueDate: normalizeIsoDate(billingSvc.getInvoiceDueDate(invoice, customer.isolate_day)),
-      packageName: invoice.package_name || ''
-    })),
+    unpaidInvoices: (Array.isArray(unpaidInvoices) ? unpaidInvoices : []).map((invoice) => {
+      let dueDate = '';
+      try {
+        dueDate = normalizeIsoDate(billingSvc.getInvoiceDueDate(invoice, customer.isolate_day));
+      } catch (error) {
+        console.error('[CustomerDetail] dueDate invoice gagal dihitung:', error?.message || error);
+      }
+      return {
+        id: invoice.id,
+        amount: Number(invoice.amount || 0) || 0,
+        periodMonth: Number(invoice.period_month || 0) || 0,
+        periodYear: Number(invoice.period_year || 0) || 0,
+        status: String(invoice.status || '').toLowerCase(),
+        dueDate,
+        packageName: invoice.package_name || ''
+      };
+    }),
     network: {
       username: username,
       profile: meaningfulText(network?.profile, pppoeState?.profile_name, customer.normal_pppoe_profile, customer.package_pppoe_profile, customer.package_name) || '',

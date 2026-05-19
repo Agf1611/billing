@@ -1,4 +1,4 @@
-const CACHE_NAME = 'billing-pwa-v6';
+const CACHE_NAME = 'billing-pwa-v7';
 const PRECACHE_URLS = [
   '/css/style.css',
   '/css/admin.css',
@@ -67,6 +67,20 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   const path = url.pathname;
+
+  const isPortalNavigation =
+    req.mode === 'navigate' &&
+    (
+      path.startsWith('/admin') ||
+      path.startsWith('/tech') ||
+      path.startsWith('/agent') ||
+      path.startsWith('/collector')
+    );
+
+  if (isPortalNavigation) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
 
   if (path.startsWith('/customer/api/')) {
     event.respondWith((async () => {

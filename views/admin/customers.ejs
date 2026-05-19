@@ -340,12 +340,10 @@
       .mobile-add-customer .btn{width:min(100%,340px);border-radius:18px;min-height:54px;font-size:16px;box-shadow:0 18px 36px rgba(31,47,115,.25)}
       .card-hd{align-items:flex-start}
       .card-hd h6{line-height:1.35}
-      .page-tools{width:100%;display:grid;grid-template-columns:46px 46px minmax(0,1fr);gap:8px}
+      .page-tools{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(46px,1fr));gap:8px}
       .page-tools .btn{justify-content:center;min-width:0}
-      .page-tools .btn:nth-child(1),
-      .page-tools .btn:nth-child(2){padding-inline:0}
-      .page-tools .btn:nth-child(1) .tool-label,
-      .page-tools .btn:nth-child(2) .tool-label{display:none}
+      .page-tools .btn{padding-inline:0}
+      .page-tools .btn .tool-label{display:none}
       .location-input-group{flex-wrap:wrap}
       .location-action-btn{flex:1}
       .srow{align-items:stretch}
@@ -456,7 +454,7 @@
         font-weight:700;
         letter-spacing:.01em;
       }
-      .page-tools{grid-template-columns:42px 42px minmax(0,1fr);gap:6px}
+      .page-tools{grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:6px}
       .page-tools .btn{min-height:42px}
       .upload-preview-card{width:92px;min-height:92px}
       .upload-preview-card img{height:92px}
@@ -758,6 +756,7 @@
           <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
           <a href="/admin/customers/export" class="btn btn-g btn-sm" aria-label="<%= t('admin.customers.export_excel', 'Export Excel') %>"><i class="bi bi-file-earmark-excel"></i> <span class="tool-label"><%= t('admin.customers.export_excel', 'Export Excel') %></span></a>
           <button class="btn btn-g btn-sm" onclick="openModal('importModal')" aria-label="<%= t('admin.customers.import_excel', 'Import Excel') %>"><i class="bi bi-file-earmark-arrow-up"></i> <span class="tool-label"><%= t('admin.customers.import_excel', 'Import Excel') %></span></button>
+          <a href="/admin/usage-audit" class="btn btn-g btn-sm" aria-label="Audit Usage"><i class="bi bi-clipboard2-pulse"></i> <span class="tool-label">Audit Usage</span></a>
           <button class="btn btn-p btn-sm" onclick="openModal('addModal')"><i class="bi bi-plus-lg"></i> <span class="tool-label"><%= t('admin.customers.add', 'Tambah Pelanggan') %></span></button>
           <% } %>
         </div>

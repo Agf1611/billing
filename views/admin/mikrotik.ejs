@@ -7,12 +7,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
   <style>
+    <%- include('partials/mikrotik_suite_styles') %>
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     .status-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; }
-    .monitor-topbar-actions { display:flex; align-items:center; gap:12px; width:100%; }
-    .monitor-topbar-main { display:flex; align-items:center; gap:12px; flex:1 1 auto; min-width:0; }
-    .monitor-topbar-shortcuts { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
     .monitor-toolbar {
       display:flex;
       align-items:center;
@@ -81,10 +79,10 @@
     .monitor-mobile-value { font-size:10.5px; font-weight:700; color:var(--text); word-break:break-word; line-height:1.25; }
     .monitor-mobile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:7px; }
     .monitor-mobile-actions .btn { justify-content:center; padding:0; height:32px; min-height:32px; font-size:11px; }
-    .mikrotik-monitor-page .stat-grid { gap:10px !important; }
-    .mikrotik-monitor-page .stat-grid .sc { min-height:0; padding:14px 14px 12px; border-radius:18px; }
-    .mikrotik-monitor-page .stat-grid .sc-icon { width:42px; height:42px; font-size:18px; top:14px; right:14px; }
-    .mikrotik-monitor-page .stat-grid .sc-label { max-width:75%; font-size:10px; line-height:1.25; letter-spacing:.05em; }
+    .mikrotik-monitor-page .stat-grid .sc { min-height:0; }
+    .mikrotik-monitor-page .stat-grid .sc.is-actionable { cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+    .mikrotik-monitor-page .stat-grid .sc.is-actionable:hover { transform:translateY(-2px); }
+    .mikrotik-monitor-page .stat-grid .sc.is-active { box-shadow:0 0 0 2px rgba(123, 97, 255, .55) inset; border-color:rgba(123, 97, 255, .55); }
     .mikrotik-monitor-page .stat-grid .sc-val { font-size:19px; line-height:1.05; margin-top:10px; }
     .mikrotik-monitor-page .stat-grid .sc-sub { margin-top:6px; font-size:10px; }
     .mikrotik-monitor-page .card-hd { gap:10px; }
@@ -130,43 +128,11 @@
       color:#6f7d98;
     }
     @media (max-width: 768px) {
-      .topbar { align-items:flex-start; }
-      .topbar .tb-right { width:100%; }
-      .monitor-topbar-actions {
-        display:grid;
-        grid-template-columns:minmax(0,1fr);
-        gap:8px;
-      }
-      .monitor-topbar-main {
-        display:grid;
-        grid-template-columns:minmax(0,1fr) auto;
-        align-items:center;
-        gap:8px;
-      }
-      .monitor-topbar-shortcuts {
-        display:grid;
-        grid-template-columns:repeat(3,minmax(0,1fr));
-        gap:8px;
-        width:100%;
-      }
-      .monitor-topbar-shortcuts .btn,
-      .monitor-topbar-shortcuts .adm-badge {
-        justify-content:center;
-        min-height:42px;
-        height:42px;
-      }
       .router-selector { width:100%; justify-content:space-between; padding:10px 12px !important; border-radius:16px !important; margin:0; }
       .router-selector .fs { width:100% !important; }
       .mtabs, .tabs { overflow:auto; padding-bottom:8px; scrollbar-width:none; margin-bottom:12px; }
       .mtabs::-webkit-scrollbar, .tabs::-webkit-scrollbar { display:none; }
       .mtab, .tab { white-space:nowrap; }
-      .mikrotik-monitor-page .mtabs{
-        display:grid;
-        grid-template-columns:repeat(3,minmax(0,1fr));
-        gap:8px;
-        border-bottom:none;
-        padding-bottom:0;
-      }
       .mikrotik-monitor-page .mtab{
         justify-content:center;
         gap:6px;
@@ -225,23 +191,7 @@
       .table-pager-page { flex:1; }
       .tbl-wrap { display:none; }
       .monitor-mobile-list { display:block; }
-      .mikrotik-monitor-page .stat-grid {
-        display:grid;
-        grid-auto-flow:column;
-        grid-auto-columns:minmax(138px,1fr);
-        grid-template-columns:none !important;
-        overflow-x:auto;
-        overflow-y:hidden;
-        gap:8px !important;
-        margin-bottom:12px !important;
-        padding-bottom:4px;
-        scrollbar-width:none;
-      }
-      .mikrotik-monitor-page .stat-grid::-webkit-scrollbar { display:none; }
-      .mikrotik-monitor-page .stat-grid .sc { padding:10px 11px 9px; min-width:138px; }
-      .mikrotik-monitor-page .stat-grid .sc-icon { width:34px; height:34px; font-size:15px; top:12px; right:12px; }
       .mikrotik-monitor-page .stat-grid .sc-val { font-size:16px; margin-top:7px; }
-      .mikrotik-monitor-page .stat-grid .sc-label { max-width:68%; font-size:9px; }
       .mikrotik-monitor-page .card { border-radius:18px; }
       .mikrotik-monitor-page .card-hd { flex-direction:column; align-items:stretch; }
       .mikrotik-monitor-page .monitor-card-hd h6{ margin-bottom:0; }
@@ -263,19 +213,6 @@
       }
     }
     @media (max-width: 520px) {
-      .topbar { padding:12px 14px; border-radius:20px; }
-      .monitor-topbar-actions { gap:6px; }
-      .monitor-topbar-main { grid-template-columns:minmax(0,1fr) 42px; gap:6px; }
-      .monitor-topbar-shortcuts { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
-      .monitor-topbar-shortcuts .btn,
-      .monitor-topbar-shortcuts .adm-badge { min-height:38px; height:38px; font-size:11px; }
-      .monitor-topbar-shortcuts .tb-theme-btn span,
-      .monitor-topbar-shortcuts .adm-badge { font-size:10px; }
-      .monitor-topbar-shortcuts .tb-theme-btn span { display:none; }
-      .monitor-topbar-shortcuts .tb-theme-btn { padding-inline:0; }
-      .monitor-topbar-shortcuts .btn i,
-      .monitor-topbar-shortcuts .adm-badge i { margin-right:0; }
-      .monitor-topbar-shortcuts .btn { gap:5px; }
       .monitor-mobile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
       .monitor-mobile-card { padding:8px 9px; }
       .monitor-mobile-head { gap:7px; margin-bottom:5px; }
@@ -291,9 +228,7 @@
       .monitor-sync-detail { font-size:10px; line-height:1.35; }
       #monitor-refresh-btn { min-height:36px; height:36px; padding:0 10px; font-size:11px; }
       .mikrotik-monitor-page .stat-grid .sc { border-radius:16px; padding:9px 9px 8px; min-width:132px; }
-      .mikrotik-monitor-page .stat-grid .sc-label { font-size:9px; max-width:72%; }
       .mikrotik-monitor-page .stat-grid .sc-val { font-size:14px; margin-top:6px; }
-      .mikrotik-monitor-page .stat-grid .sc-icon { width:30px; height:30px; font-size:13px; top:10px; right:10px; }
       .mikrotik-monitor-page .mtabs { gap:6px; margin-bottom:10px; }
       .mikrotik-monitor-page .mtab{
         padding:9px 8px;
@@ -320,8 +255,8 @@
   <div class="topbar">
     <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-router"></i> <%= t('admin.nav.mikrotik_monitoring', 'Monitoring MikroTik') %></div>
     <div class="tb-right">
-      <div class="monitor-topbar-actions">
-        <div class="monitor-topbar-main">
+      <div class="suite-topbar-actions">
+        <div class="suite-topbar-main">
           <div class="router-selector">
             <i class="bi bi-hdd-network small"></i>
             <% const defaultRouter = (routers || []).find(r => Number(r.is_active || 0) === 1) || (routers || [])[0] || null; %>
@@ -337,7 +272,7 @@
             <span>Terang</span>
           </button>
         </div>
-        <div class="monitor-topbar-shortcuts">
+        <div class="suite-topbar-shortcuts">
           <a href="#" onclick="downloadBackup(event)" class="btn btn-p btn-sm"><i class="bi bi-download"></i> <span>Backup</span></a>
           <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= (typeof session !== 'undefined' && session.isCashier) ? t('admin.role.cashier', 'Kasir') : t('admin.role.admin', 'Admin') %></span>
           <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i> <span>Logout</span></a>
@@ -345,7 +280,7 @@
       </div>
     </div>
   </div>
-<div class="page admin-shell-page mikrotik-monitor-page">
+<div class="page admin-shell-page mikrotik-suite-page mikrotik-monitor-page">
     <% const mTab = 'monitoring'; %>
 
     <div class="mtabs">
@@ -371,11 +306,12 @@
     </div>
 
     <!-- Summary Cards -->
-    <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
-      <div class="sc p"><i class="bi bi-ethernet sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.pppoe_online', 'PPPoE Online') %></div><div class="sc-val" id="pppoe-online-count">0</div></div>
-      <div class="sc s"><i class="bi bi-wifi sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.hotspot_online', 'Hotspot Online') %></div><div class="sc-val" id="hotspot-online-count">0</div></div>
-      <div class="sc w"><i class="bi bi-people sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.total_secrets', 'Total Secrets') %></div><div class="sc-val" id="total-secrets-count">0</div></div>
-      <div class="sc d"><i class="bi bi-person-badge sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.total_hotspot', 'Total Hotspot') %></div><div class="sc-val" id="total-hotspot-count">0</div></div>
+    <div class="stat-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+      <div class="sc p is-actionable" data-monitor-card="pppoe-online" onclick="applyMonitorCardFilter('pppoe-online')"><i class="bi bi-ethernet sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.pppoe_online', 'PPPoE Online') %></div><div class="sc-val" id="pppoe-online-count">0</div></div>
+      <div class="sc d is-actionable" data-monitor-card="pppoe-offline" onclick="applyMonitorCardFilter('pppoe-offline')"><i class="bi bi-plug sc-icon"></i><div class="sc-label">PPPoE Offline</div><div class="sc-val" id="pppoe-offline-count">0</div></div>
+      <div class="sc s is-actionable" data-monitor-card="hotspot-online" onclick="applyMonitorCardFilter('hotspot-online')"><i class="bi bi-wifi sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.hotspot_online', 'Hotspot Online') %></div><div class="sc-val" id="hotspot-online-count">0</div></div>
+      <div class="sc w is-actionable" data-monitor-card="pppoe-all" onclick="applyMonitorCardFilter('pppoe-all')"><i class="bi bi-people sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.total_secrets', 'Total Secrets') %></div><div class="sc-val" id="total-secrets-count">0</div></div>
+      <div class="sc d is-actionable" data-monitor-card="hotspot-all" onclick="applyMonitorCardFilter('hotspot-all')"><i class="bi bi-person-badge sc-icon"></i><div class="sc-label"><%= t('admin.mikrotik.stats.total_hotspot', 'Total Hotspot') %></div><div class="sc-val" id="total-hotspot-count">0</div></div>
     </div>
 
     <div class="tabs">
@@ -438,6 +374,12 @@
           <div class="monitor-toolbar monitor-toolbar-simple" id="hotspot-toolbar">
             <div class="monitor-toolbar-stack">
               <input type="text" class="fc fc-sm" id="hotspot-search" placeholder="<%= t('admin.mikrotik.search_placeholder', 'Cari...') %>" oninput="setHotspotSearch(this.value)">
+              <select class="fs fs-sm" id="hotspot-status-filter" onchange="setHotspotStatusFilter(this.value)">
+                <option value="all">Semua Status</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="disabled">Disabled</option>
+              </select>
             </div>
             <div class="monitor-toolbar-actions">
               <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('hotspot-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
@@ -700,8 +642,52 @@
   function showTab(e, id) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    e.currentTarget.classList.add('active');
+    if (e && e.currentTarget) {
+      e.currentTarget.classList.add('active');
+    } else {
+      const tabMap = { 'pppoe': 0, 'hotspot': 1, 'pppoe-profiles': 2, 'hotspot-profiles-tab': 3 };
+      const idx = tabMap[id];
+      const tabs = document.querySelectorAll('.tab');
+      if (Number.isInteger(idx) && tabs[idx]) tabs[idx].classList.add('active');
+    }
     document.getElementById(id).classList.add('active');
+    ensureMonitoringTabLoaded(id);
+  }
+
+  function isCompactMobileMonitoring() {
+    return window.matchMedia ? window.matchMedia('(max-width: 768px)').matches : false;
+  }
+
+  const tabLoadState = {
+    pppoe: true,
+    hotspot: false,
+    pppoeProfiles: false,
+    hotspotProfiles: false
+  };
+
+  function ensureMonitoringTabLoaded(id) {
+    if (id === 'pppoe') {
+      tabLoadState.pppoe = true;
+      return;
+    }
+    if (id === 'hotspot') {
+      if (!tabLoadState.hotspot) {
+        tabLoadState.hotspot = true;
+        loadHotspotUsers();
+      }
+      return;
+    }
+    if (id === 'pppoe-profiles') {
+      if (!tabLoadState.pppoeProfiles) {
+        tabLoadState.pppoeProfiles = true;
+        loadPppoeProfiles();
+      }
+      return;
+    }
+    if (id === 'hotspot-profiles-tab' && !tabLoadState.hotspotProfiles) {
+      tabLoadState.hotspotProfiles = true;
+      loadHotspotUserProfiles();
+    }
   }
 
   function toggleMonitorToolbar(toolbarId, trigger) {
@@ -723,14 +709,18 @@
   let searchDebounceTimer = null;
   let monitoringRefreshPromise = null;
   let pendingMonitoringRefresh = null;
+  let activeMonitorCard = 'pppoe-all';
   const monitoringSync = {
     lastSuccessAt: null,
     status: 'idle',
-    detail: 'Saat pertama kali dibuka, data router dimuat lalu disimpan ke cache. Saat dibuka lagi, sistem menampilkan cache dulu agar lebih cepat. Gunakan refresh manual untuk update terbaru.'
+    detail: 'Saat pertama kali dibuka, collector MikroTik menyiapkan snapshot router. Gunakan refresh manual untuk memicu pembaruan langsung.',
+    source: 'warming_up',
+    ageMs: null,
+    partialFailure: false
   };
   const tableState = {
     pppoe: { page: 1, limit: 25, q: '', status: 'all', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
-    hotspot: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
+    hotspot: { page: 1, limit: 25, q: '', status: 'all', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
     pppoeProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 },
     hotspotProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 }
   };
@@ -741,12 +731,21 @@
     pppoeProfiles: false,
     hotspotProfiles: false
   };
-  const MONITORING_CACHE_KEY = 'billing-admin-mikrotik-cache-v4';
+  const MONITORING_CACHE_KEY = 'billing-admin-mikrotik-cache-v8';
   const summaryState = {
     pppoeOnline: 0,
+    pppoeOffline: 0,
     hotspotOnline: 0,
     totalSecrets: 0,
-    totalHotspot: 0
+    totalHotspot: 0,
+    metadata: {
+      snapshotAt: null,
+      ageMs: null,
+      source: 'warming_up',
+      routerReachable: false,
+      collectorStatus: 'warming_up',
+      partialFailure: false
+    }
   };
 
   tableState.pppoe.status = tableState.pppoe.status || 'all';
@@ -758,16 +757,16 @@
   function readMonitoringCacheStore() {
     try {
       const raw = localStorage.getItem(MONITORING_CACHE_KEY);
-      if (!raw) return { version: 4, routers: {} };
+      if (!raw) return { version: 8, routers: {} };
       const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return { version: 4, routers: {} };
+      if (!parsed || typeof parsed !== 'object') return { version: 8, routers: {} };
       return {
-        version: 4,
+        version: 8,
         routers: parsed.routers && typeof parsed.routers === 'object' ? parsed.routers : {}
       };
     } catch (error) {
       console.error('Failed to read MikroTik cache:', error);
-      return { version: 4, routers: {} };
+      return { version: 8, routers: {} };
     }
   }
 
@@ -897,15 +896,55 @@
     return `<span class="badge bw">${I18N.statusOffline}</span>`;
   }
 
+  function createTextCell(value, className = '') {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    td.textContent = value == null || value === '' ? '-' : String(value);
+    return td;
+  }
+
+  function createBadgeCell(value, badgeClass = 'bp') {
+    const td = document.createElement('td');
+    const span = document.createElement('span');
+    span.className = `badge ${badgeClass}`;
+    span.textContent = value == null || value === '' ? '-' : String(value);
+    td.appendChild(span);
+    return td;
+  }
+
+  function createStatusCell(statusKey) {
+    const td = document.createElement('td');
+    td.innerHTML = renderStatusBadge(statusKey);
+    return td;
+  }
+
+  function createActionCell(actions = []) {
+    const td = document.createElement('td');
+    for (const action of actions) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = action.className || 'btn btn-g btn-icon btn-sm';
+      btn.title = action.title || '';
+      if (typeof action.onClick === 'function') btn.addEventListener('click', action.onClick);
+      const icon = document.createElement('i');
+      icon.className = action.icon || 'bi bi-pencil';
+      btn.appendChild(icon);
+      td.appendChild(btn);
+    }
+    return td;
+  }
+
   function applySearchInputs() {
     const pppoeSearch = document.getElementById('pppoe-search');
     const pppoeStatusFilter = document.getElementById('pppoe-status-filter');
     const hotspotSearch = document.getElementById('hotspot-search');
+    const hotspotStatusFilter = document.getElementById('hotspot-status-filter');
     const pppoeProfilesSearch = document.getElementById('pppoe-profiles-search');
     const hotspotProfilesSearch = document.getElementById('hotspot-profiles-search');
     if (pppoeSearch) pppoeSearch.value = tableState.pppoe.q || '';
     if (pppoeStatusFilter) pppoeStatusFilter.value = tableState.pppoe.status || 'all';
     if (hotspotSearch) hotspotSearch.value = tableState.hotspot.q || '';
+    if (hotspotStatusFilter) hotspotStatusFilter.value = tableState.hotspot.status || 'all';
     if (pppoeProfilesSearch) pppoeProfilesSearch.value = tableState.pppoeProfiles.q || '';
     if (hotspotProfilesSearch) hotspotProfilesSearch.value = tableState.hotspotProfiles.q || '';
   }
@@ -949,15 +988,63 @@
     return formatDurationCompact(secret?.offlineSeconds);
   }
 
+  function applyCollectorMetadata(data = {}, options = {}) {
+    const metadata = {
+      snapshotAt: data.snapshotAt || null,
+      ageMs: Number.isFinite(Number(data.ageMs)) ? Number(data.ageMs) : null,
+      source: String(data.source || summaryState.metadata?.source || 'collector').trim() || 'collector',
+      routerReachable: Boolean(data.routerReachable),
+      collectorStatus: String(data.collectorStatus || summaryState.metadata?.collectorStatus || 'warming_up').trim() || 'warming_up',
+      partialFailure: Boolean(data.partialFailure)
+    };
+    if (options.updateGlobalMeta === false) {
+      return metadata;
+    }
+    summaryState.metadata = metadata;
+    monitoringSync.source = metadata.source;
+    monitoringSync.ageMs = metadata.ageMs;
+    monitoringSync.partialFailure = metadata.partialFailure;
+    const snapshotDate = metadata.snapshotAt ? new Date(metadata.snapshotAt) : null;
+    if (snapshotDate && !Number.isNaN(snapshotDate.getTime())) {
+      monitoringSync.lastSuccessAt = snapshotDate;
+    }
+    if (options.skipStatusUpdate) return metadata;
+
+    const ageText = metadata.ageMs == null ? '' : ` Umur snapshot ${formatDurationCompact(Math.floor(metadata.ageMs / 1000))}.`;
+    const sourceText = metadata.source ? ` Sumber: ${metadata.source}.` : '';
+    if (metadata.collectorStatus === 'ready') {
+      setMonitoringSyncStatus('success', `Snapshot collector siap dipakai.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      return metadata;
+    }
+    if (metadata.collectorStatus === 'partial') {
+      setMonitoringSyncStatus('error', `Sebagian data MikroTik gagal diperbarui. Menampilkan snapshot terakhir yang masih aman.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      return metadata;
+    }
+    if (metadata.collectorStatus === 'stale') {
+      setMonitoringSyncStatus('error', `Snapshot MikroTik sudah lama dan perlu refresh manual.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      return metadata;
+    }
+    if (metadata.collectorStatus === 'warming_up') {
+      setMonitoringSyncStatus('syncing', `Collector MikroTik sedang menyiapkan snapshot awal.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      return metadata;
+    }
+    setMonitoringSyncStatus('error', `Collector MikroTik belum bisa membaca router.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+    return metadata;
+  }
+
   function applySummaryData(data = {}, options = {}) {
     summaryState.pppoeOnline = Number(data.pppoeOnline || 0);
+    summaryState.pppoeOffline = Number(data.pppoeOffline || 0);
     summaryState.hotspotOnline = Number(data.hotspotOnline || 0);
     summaryState.totalSecrets = Number(data.totalSecrets || 0);
     summaryState.totalHotspot = Number(data.totalHotspot || 0);
     document.getElementById('pppoe-online-count').innerText = summaryState.pppoeOnline;
+    document.getElementById('pppoe-offline-count').innerText = summaryState.pppoeOffline;
     document.getElementById('hotspot-online-count').innerText = summaryState.hotspotOnline;
     document.getElementById('total-secrets-count').innerText = summaryState.totalSecrets;
     document.getElementById('total-hotspot-count').innerText = summaryState.totalHotspot;
+    applyCollectorMetadata(data, options);
+    syncMonitorCardState();
     if (!options.skipPersist) persistMonitoringCache();
   }
 
@@ -968,10 +1055,10 @@
     tableState.pppoe.totalPages = Number(response.totalPages || 1);
     tableState.pppoe.filteredTotal = Number(response.filteredTotal || 0);
     tableState.pppoe.onlineCount = Number(response.onlineCount || 0);
+    tableState.pppoe.offlineCount = Number(response.offlineCount || 0);
     updatePaginationUi('pppoe');
-
-    document.getElementById('pppoe-online-count').innerText = tableState.pppoe.onlineCount;
-    document.getElementById('total-secrets-count').innerText = tableState.pppoe.total;
+    applyCollectorMetadata(response, { ...options, skipStatusUpdate: true, updateGlobalMeta: false });
+    syncMonitorCardState();
 
     const tbody = document.getElementById('pppoe-list');
     if (!pppoeData.length) {
@@ -982,28 +1069,36 @@
     }
 
     tbody.replaceChildren();
-    tbody.insertAdjacentHTML('beforeend', pppoeData.map((s, i) => {
+    for (const [i, secret] of pppoeData.entries()) {
+      const s = secret && typeof secret === 'object' ? secret : {};
       const active = s.session || null;
       const statusKey = active
         ? 'online'
         : (s.displayStatus === 'disabled' || s.disabled === true || s.disabled === 'true' ? 'disabled' : 'offline');
-      const statusHtml = renderStatusBadge(statusKey);
-      return `
-        <tr>
-          <td class="fw6">${s.name}</td>
-          <td><span class="badge bp">${s.profile}</span></td>
-          <td>${getPppoeLastOnlineText(s)}</td>
-          <td>${getPppoeOfflineDurationText(s)}</td>
-          <td>${s.remoteAddress || s['remote-address'] || s.sessionRemoteAddress || '-'}</td>
-          <td>${s.sessionUptime || '-'}</td>
-          <td>${statusHtml}</td>
-          <td>
-            <button class="btn btn-g btn-icon btn-sm" onclick="editSecret(${i})"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-d btn-icon btn-sm" onclick="deleteSecret('${s.id}')"><i class="bi bi-trash"></i></button>
-          </td>
-        </tr>
-      `;
-    }).join(''));
+      const tr = document.createElement('tr');
+      tr.appendChild(createTextCell(s.name, 'fw6'));
+      tr.appendChild(createBadgeCell(s.profile, 'bp'));
+      tr.appendChild(createTextCell(getPppoeLastOnlineText(s)));
+      tr.appendChild(createTextCell(getPppoeOfflineDurationText(s)));
+      tr.appendChild(createTextCell(s.remoteAddress || s['remote-address'] || s.sessionRemoteAddress || '-'));
+      tr.appendChild(createTextCell(s.sessionUptime || '-'));
+      tr.appendChild(createStatusCell(statusKey));
+      tr.appendChild(createActionCell([
+        {
+          className: 'btn btn-g btn-icon btn-sm',
+          title: I18N.editLabel,
+          icon: 'bi bi-pencil',
+          onClick: () => editSecret(i)
+        },
+        {
+          className: 'btn btn-d btn-icon btn-sm',
+          title: I18N.deleteLabel,
+          icon: 'bi bi-trash',
+          onClick: () => deleteSecret(s.id)
+        }
+      ]));
+      tbody.appendChild(tr);
+    }
 
     renderMobileCards('pppoe-mobile-list', pppoeData.map((s, i) => {
       const active = s.session || null;
@@ -1055,10 +1150,10 @@
     tableState.hotspot.totalPages = Number(response.totalPages || 1);
     tableState.hotspot.filteredTotal = Number(response.filteredTotal || 0);
     tableState.hotspot.onlineCount = Number(response.onlineCount || 0);
+    tableState.hotspot.offlineCount = Number(response.offlineCount || 0);
     updatePaginationUi('hotspot');
-
-    document.getElementById('hotspot-online-count').innerText = tableState.hotspot.onlineCount;
-    document.getElementById('total-hotspot-count').innerText = tableState.hotspot.total;
+    applyCollectorMetadata(response, { ...options, skipStatusUpdate: true, updateGlobalMeta: false });
+    syncMonitorCardState();
 
     const tbody = document.getElementById('hotspot-list');
     if (!hotspotData.length) {
@@ -1069,28 +1164,36 @@
     }
 
     tbody.replaceChildren();
-    tbody.insertAdjacentHTML('beforeend', hotspotData.map((h, i) => {
+    for (const [i, user] of hotspotData.entries()) {
+      const h = user && typeof user === 'object' ? user : {};
       const active = h.session || null;
       const statusKey = active
         ? 'online'
         : (h.displayStatus === 'disabled' || h.disabled === true || h.disabled === 'true' ? 'disabled' : 'offline');
-      const statusHtml = renderStatusBadge(statusKey);
-      return `
-        <tr>
-          <td class="fw6">${h.name}</td>
-          <td><span class="badge bm">${h.profile}</span></td>
-          <td>${h.sessionAddress || h.address || '-'}</td>
-          <td>${h.limitUptime || h['limit-uptime'] || '-'}</td>
-          <td>${h.comment || '-'}</td>
-          <td>${h.sessionUptime || '-'}</td>
-          <td>${statusHtml}</td>
-          <td>
-            <button class="btn btn-g btn-icon btn-sm" onclick="editHotspot(${i})"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-d btn-icon btn-sm" onclick="deleteHotspot('${h.id}')"><i class="bi bi-trash"></i></button>
-          </td>
-        </tr>
-      `;
-    }).join(''));
+      const tr = document.createElement('tr');
+      tr.appendChild(createTextCell(h.name, 'fw6'));
+      tr.appendChild(createBadgeCell(h.profile, 'bm'));
+      tr.appendChild(createTextCell(h.sessionAddress || h.address || '-'));
+      tr.appendChild(createTextCell(h.limitUptime || h['limit-uptime'] || '-'));
+      tr.appendChild(createTextCell(h.comment || '-'));
+      tr.appendChild(createTextCell(h.sessionUptime || '-'));
+      tr.appendChild(createStatusCell(statusKey));
+      tr.appendChild(createActionCell([
+        {
+          className: 'btn btn-g btn-icon btn-sm',
+          title: I18N.editLabel,
+          icon: 'bi bi-pencil',
+          onClick: () => editHotspot(i)
+        },
+        {
+          className: 'btn btn-d btn-icon btn-sm',
+          title: I18N.deleteLabel,
+          icon: 'bi bi-trash',
+          onClick: () => deleteHotspot(h.id)
+        }
+      ]));
+      tbody.appendChild(tr);
+    }
 
     renderMobileCards('hotspot-mobile-list', hotspotData.map((h, i) => {
       const active = h.session || null;
@@ -1319,7 +1422,9 @@
 
     const lastSuccessAt = entry.lastSuccessAt ? new Date(entry.lastSuccessAt) : (entry.savedAt ? new Date(entry.savedAt) : null);
     monitoringSync.lastSuccessAt = lastSuccessAt && !Number.isNaN(lastSuccessAt.getTime()) ? lastSuccessAt : null;
-    setMonitoringSyncStatus('success', 'Menampilkan data MikroTik dari cache. Tekan Refresh Manual kalau ingin ambil data terbaru dari router.', monitoringSync.lastSuccessAt);
+    if (!cachedSummary || !cachedSummary.metadata) {
+      setMonitoringSyncStatus('success', 'Menampilkan data MikroTik dari cache. Tekan Refresh Manual kalau ingin ambil data terbaru dari router.', monitoringSync.lastSuccessAt);
+    }
     return true;
   }
 
@@ -1404,6 +1509,7 @@
 
   function resetMonitoringView(message = 'Data router sedang disiapkan...') {
     document.getElementById('pppoe-online-count').innerText = '0';
+    document.getElementById('pppoe-offline-count').innerText = '0';
     document.getElementById('hotspot-online-count').innerText = '0';
     document.getElementById('total-secrets-count').innerText = '0';
     document.getElementById('total-hotspot-count').innerText = '0';
@@ -1415,6 +1521,7 @@
     setMobileListMessage('hotspot-mobile-list', message);
     setMobileListMessage('pppoe-profiles-mobile-list', message);
     setMobileListMessage('hotspot-profiles-mobile-list', message);
+    syncMonitorCardState();
   }
 
   function updatePaginationUi(kind) {
@@ -1457,11 +1564,26 @@
   function setSecretsStatusFilter(value) {
     tableState.pppoe.status = String(value || 'all').trim() || 'all';
     tableState.pppoe.page = 1;
+    activeMonitorCard = tableState.pppoe.status === 'online'
+      ? 'pppoe-online'
+      : tableState.pppoe.status === 'offline'
+        ? 'pppoe-offline'
+        : 'pppoe-all';
+    syncMonitorCardState();
     loadSecrets();
   }
 
   function setHotspotSearch(value) {
     scheduleTableSearch('hotspot', value);
+  }
+
+  function setHotspotStatusFilter(value) {
+    tableState.hotspot.status = String(value || 'all').trim() || 'all';
+    tableState.hotspot.page = 1;
+    activeMonitorCard = tableState.hotspot.status === 'online' ? 'hotspot-online' : 'hotspot-all';
+    syncMonitorCardState();
+    tabLoadState.hotspot = true;
+    loadHotspotUsers();
   }
 
   function setPppoeProfilesSearch(value) {
@@ -1483,6 +1605,7 @@
     const nextPage = tableState.hotspot.page + step;
     if (nextPage < 1 || nextPage > Math.max(1, tableState.hotspot.totalPages || 1)) return;
     tableState.hotspot.page = nextPage;
+    tabLoadState.hotspot = true;
     loadHotspotUsers();
   }
 
@@ -1490,6 +1613,7 @@
     const nextPage = tableState.pppoeProfiles.page + step;
     if (nextPage < 1 || nextPage > Math.max(1, tableState.pppoeProfiles.totalPages || 1)) return;
     tableState.pppoeProfiles.page = nextPage;
+    tabLoadState.pppoeProfiles = true;
     loadPppoeProfiles();
   }
 
@@ -1497,7 +1621,66 @@
     const nextPage = tableState.hotspotProfiles.page + step;
     if (nextPage < 1 || nextPage > Math.max(1, tableState.hotspotProfiles.totalPages || 1)) return;
     tableState.hotspotProfiles.page = nextPage;
+    tabLoadState.hotspotProfiles = true;
     loadHotspotUserProfiles();
+  }
+
+  function syncMonitorCardState() {
+    document.querySelectorAll('[data-monitor-card]').forEach((card) => {
+      card.classList.toggle('is-active', card.dataset.monitorCard === activeMonitorCard);
+    });
+  }
+
+  function applyMonitorCardFilter(kind) {
+    activeMonitorCard = kind;
+    if (kind === 'pppoe-online') {
+      showTab(null, 'pppoe');
+      tableState.pppoe.status = 'online';
+      tableState.pppoe.page = 1;
+      const filter = document.getElementById('pppoe-status-filter');
+      if (filter) filter.value = 'online';
+      syncMonitorCardState();
+      loadSecrets();
+      return;
+    }
+    if (kind === 'pppoe-offline') {
+      showTab(null, 'pppoe');
+      tableState.pppoe.status = 'offline';
+      tableState.pppoe.page = 1;
+      const filter = document.getElementById('pppoe-status-filter');
+      if (filter) filter.value = 'offline';
+      syncMonitorCardState();
+      loadSecrets();
+      return;
+    }
+    if (kind === 'hotspot-online') {
+      showTab(null, 'hotspot');
+      tableState.hotspot.status = 'online';
+      tableState.hotspot.page = 1;
+      const filter = document.getElementById('hotspot-status-filter');
+      if (filter) filter.value = 'online';
+      syncMonitorCardState();
+      loadHotspotUsers();
+      return;
+    }
+    if (kind === 'hotspot-all') {
+      showTab(null, 'hotspot');
+      tableState.hotspot.status = 'all';
+      tableState.hotspot.page = 1;
+      const filter = document.getElementById('hotspot-status-filter');
+      if (filter) filter.value = 'all';
+      syncMonitorCardState();
+      loadHotspotUsers();
+      return;
+    }
+
+    showTab(null, 'pppoe');
+    tableState.pppoe.status = 'all';
+    tableState.pppoe.page = 1;
+    const filter = document.getElementById('pppoe-status-filter');
+    if (filter) filter.value = 'all';
+    syncMonitorCardState();
+    loadSecrets();
   }
 
   async function fetchJsonWithTimeout(url, timeoutMs = 12000) {
@@ -1523,6 +1706,7 @@
     tableState.pppoe.status = 'all';
     tableState.hotspot.page = 1;
     tableState.hotspot.q = '';
+    tableState.hotspot.status = 'all';
     tableState.pppoeProfiles.page = 1;
     tableState.pppoeProfiles.q = '';
     tableState.hotspotProfiles.page = 1;
@@ -1642,6 +1826,7 @@
         limit: String(tableState.hotspot.limit)
       });
       if (tableState.hotspot.q) params.set('q', tableState.hotspot.q);
+      if (tableState.hotspot.status && tableState.hotspot.status !== 'all') params.set('status', tableState.hotspot.status);
       const uRes = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/hotspot-users', Object.fromEntries(params), force), 25000);
       applyHotspotResponse(uRes);
     } catch (err) {
@@ -1666,17 +1851,27 @@
     setMonitoringSyncStatus('syncing', waitingMessage);
     if (isManual) {
       await waitMs(5000);
+      }
+      setMonitoringSyncStatus('syncing', loadingMessage);
+      const snapshotForce = Boolean(force);
+      await loadMonitoringSummary(snapshotForce);
+      const loadFullSuite = !isCompactMobileMonitoring() || force || reason === 'manual';
+      if (snapshotForce) {
+        setMonitoringSyncStatus('syncing', 'Snapshot terbaru sudah diambil. Menyelaraskan tabel monitoring...');
+      }
+      await loadSecrets(false);
+      if (loadFullSuite || tabLoadState.hotspot) await loadHotspotUsers(false);
+      if (loadFullSuite || tabLoadState.pppoeProfiles) await loadPppoeProfiles(false);
+      if (loadFullSuite || tabLoadState.hotspotProfiles) await loadHotspotUserProfiles(false);
+      const now = new Date();
+    if (!summaryState.metadata || !summaryState.metadata.collectorStatus) {
+      const successMessage = loadFullSuite
+        ? (isManual ? 'Refresh manual selesai. Data MikroTik sudah diperbarui.' : 'Data MikroTik berhasil dimuat dan disimpan ke cache.')
+        : 'Data inti MikroTik berhasil dimuat. Tab lain akan dimuat saat dibuka agar handphone tetap ringan.';
+      setMonitoringSyncStatus('success', successMessage, now);
+    } else {
+      applyCollectorMetadata(summaryState.metadata);
     }
-    setMonitoringSyncStatus('syncing', loadingMessage);
-    await loadMonitoringSummary(force);
-    await Promise.all([
-      loadSecrets(force),
-      loadHotspotUsers(force),
-      loadPppoeProfiles(force),
-      loadHotspotUserProfiles(force)
-    ]);
-    const now = new Date();
-    setMonitoringSyncStatus('success', isManual ? 'Refresh manual selesai. Data MikroTik sudah diperbarui.' : 'Data MikroTik berhasil dimuat dan disimpan ke cache.', now);
     persistMonitoringCache();
   }
 
@@ -1966,18 +2161,32 @@
     ta.value = buildMikhmonOnLoginScript(price, validity);
   }
 
-  ensureMonitoringRouterSelected();
-  renderMonitoringSyncState();
-  applySearchInputs();
-  if (restoreMonitoringCacheForCurrentRouter()) {
-    refreshMonitoringAfterCacheRestore('auto');
-  } else {
-    resetMonitoringView('Memuat data router untuk pertama kali...');
-    queueMonitoringRefresh(false, 'auto').catch((error) => {
-      console.error('Auto monitoring load failed:', error);
-      setMonitoringSyncStatus('error', `Muat data otomatis gagal: ${error.message || error}`);
-    });
+  async function bootstrapMonitoringPage() {
+    try {
+      ensureMonitoringRouterSelected();
+      renderMonitoringSyncState();
+      applySearchInputs();
+      if (restoreMonitoringCacheForCurrentRouter()) {
+        refreshMonitoringAfterCacheRestore('auto');
+        return;
+      }
+      resetMonitoringView('Memuat data router untuk pertama kali...');
+      await queueMonitoringRefresh(false, 'auto');
+    } catch (error) {
+      console.error('Monitoring page bootstrap failed:', error);
+      setMonitoringSyncStatus('error', `Inisialisasi halaman gagal: ${error.message || error}`);
+    }
   }
+
+  bootstrapMonitoringPage();
+  setTimeout(() => {
+    if (monitoringSync.status !== 'idle') return;
+    setMonitoringSyncStatus('syncing', 'Memulai ulang pemuatan data MikroTik...');
+    queueMonitoringRefresh(false, 'fallback').catch((error) => {
+      console.error('Fallback monitoring load failed:', error);
+      setMonitoringSyncStatus('error', `Muat data fallback gagal: ${error.message || error}`);
+    });
+  }, 1200);
 </script>
 </body>
 </html>

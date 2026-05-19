@@ -354,6 +354,12 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
   router.post('/whatsapp/reset', requireAdminSession, (req, res) => {
     try {
+      const confirmText = String(req.body?.confirm_reset_text || '').trim().toUpperCase();
+      if (confirmText !== 'RESET WA') {
+        req.session._msg = { text: 'Reset sesi dibatalkan. Ketik "RESET WA" untuk mengonfirmasi penghapusan sesi WhatsApp.', type: 'warning' };
+        return res.redirect('/admin/whatsapp');
+      }
+
       const authFolder = getSetting('whatsapp_auth_folder', 'auth_info_baileys');
       const folderPath = path.resolve(__dirname, '..', '..', authFolder);
 

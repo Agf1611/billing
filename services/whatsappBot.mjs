@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import fs from 'fs';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
 import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
@@ -573,6 +574,9 @@ let reconnectTimer = null;
 let socketEpoch = 0;
 let qrShownSinceStart = false;
 let notifiedAdminForQr = false;
+let whatsappLockFd = null;
+let whatsappLockPath = null;
+let whatsappLockOwned = false;
 
 function updateWhatsappStatus(patch = {}) {
   Object.assign(whatsappStatus, patch, { lastUpdate: new Date() });
@@ -584,6 +588,109 @@ function clearReconnectTimer() {
     reconnectTimer = null;
   }
   whatsappStatus.reconnectAt = null;
+}
+
+function getWhatsappLockPath() {
+  const configured = String(getSetting('whatsapp_lock_file', '') || '').trim();
+  if (configured) {
+    return path.isAbsolute(configured) ? configured : path.resolve(projectRoot, configured);
+  }
+  if (process.platform === 'win32') {
+    return path.resolve(projectRoot, 'data', 'whatsapp-bot.lock');
+  }
+  return '/tmp/billing-rtrw-whatsapp.lock';
+}
+
+function releaseWhatsappLock() {
+  if (!whatsappLockOwned || !whatsappLockPath) return;
+  try {
+    if (whatsappLockFd !== null) {
+      fs.closeSync(whatsappLockFd);
+      whatsappLockFd = null;
+    }
+  } catch {}
+  try {
+    if (fs.existsSync(whatsappLockPath)) {
+      const raw = fs.readFileSync(whatsappLockPath, 'utf8');
+      if (raw.includes(`"pid":${process.pid}`)) {
+        fs.unlinkSync(whatsappLockPath);
+      }
+    }
+  } catch {}
+  whatsappLockOwned = false;
+  whatsappLockPath = null;
+}
+
+function parseExistingWhatsappLock(lockPath) {
+  try {
+    if (!fs.existsSync(lockPath)) return null;
+    const raw = fs.readFileSync(lockPath, 'utf8');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isWhatsappLockStale(lockData) {
+  const pid = Number(lockData?.pid || 0);
+  if (!Number.isFinite(pid) || pid <= 0) return true;
+  if (process.platform === 'win32') return false;
+  try {
+    return !fs.existsSync(`/proc/${pid}`);
+  } catch {
+    return false;
+  }
+}
+
+function tryAcquireWhatsappLock() {
+  if (whatsappLockOwned && whatsappLockPath) {
+    return { ok: true, path: whatsappLockPath };
+  }
+
+  const lockPath = getWhatsappLockPath();
+  try {
+    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  } catch {}
+
+  const payload = JSON.stringify({
+    pid: process.pid,
+    port: Number(getSetting('server_port', 0)) || null,
+    cwd: projectRoot,
+    startedAt: new Date().toISOString()
+  });
+
+  try {
+    const fd = fs.openSync(lockPath, 'wx');
+    fs.writeFileSync(fd, payload, 'utf8');
+    whatsappLockFd = fd;
+    whatsappLockPath = lockPath;
+    whatsappLockOwned = true;
+    return { ok: true, path: lockPath };
+  } catch (error) {
+    if (error && error.code !== 'EEXIST') {
+      throw error;
+    }
+    const existingLock = parseExistingWhatsappLock(lockPath);
+    if (existingLock && isWhatsappLockStale(existingLock)) {
+      try {
+        fs.unlinkSync(lockPath);
+        logger.warn(`[WA] Menghapus lock WhatsApp stale: ${lockPath} (pid=${existingLock.pid || '-'})`);
+        const retryFd = fs.openSync(lockPath, 'wx');
+        fs.writeFileSync(retryFd, payload, 'utf8');
+        whatsappLockFd = retryFd;
+        whatsappLockPath = lockPath;
+        whatsappLockOwned = true;
+        return { ok: true, path: lockPath, recovered: true };
+      } catch (retryError) {
+        if (retryError && retryError.code !== 'EEXIST') {
+          throw retryError;
+        }
+      }
+    }
+    return { ok: false, path: lockPath };
+  }
 }
 
 function normalizeDisconnectCode(rawCode) {
@@ -672,7 +779,7 @@ async function waitForWhatsappOpen(maxWaitMs = 20000, pollMs = 1000) {
   while (Date.now() < deadline) {
     if (currentSock && whatsappStatus.connection === 'open') return true;
     const state = String(whatsappStatus.connection || '').toLowerCase();
-    if (state === 'qr' || state === 'loggedout') return false;
+    if (state === 'qr' || state === 'loggedout' || state === 'passive') return false;
     await sleep(Math.max(250, Number(pollMs) || 1000));
   }
   return Boolean(currentSock && whatsappStatus.connection === 'open');
@@ -682,7 +789,7 @@ export async function ensureWhatsAppReady(maxWaitMs = 20000) {
   if (currentSock && whatsappStatus.connection === 'open') return true;
 
   const state = String(whatsappStatus.connection || '').toLowerCase();
-  if (state === 'qr' || state === 'loggedout') return false;
+  if (state === 'qr' || state === 'loggedout' || state === 'passive') return false;
 
   try {
     await startWhatsAppBot({ force: !currentSock || state === 'replaced' || state === 'close' });
@@ -797,6 +904,7 @@ export async function sendWAImage(to, imageBuffer, caption = '') {
 export async function restartWhatsAppBot() {
   logger.info('WhatsApp: Memulai ulang bot...');
   clearReconnectTimer();
+  releaseWhatsappLock();
   const oldSock = currentSock;
   currentSock = null;
   socketEpoch += 1;
@@ -830,33 +938,47 @@ export async function startWhatsAppBot(options = {}) {
   clearReconnectTimer();
   updateWhatsappStatus({ connection: 'connecting', reason: 'starting', qr: null });
 
+  const lock = tryAcquireWhatsappLock();
+  if (!lock.ok) {
+    updateWhatsappStatus({
+      connection: 'passive',
+      qr: null,
+      user: null,
+      reason: 'lock_held',
+      reconnectAt: null
+    });
+    logger.warn(`[WA] Instance ini mode pasif karena sesi WhatsApp sedang dipegang proses lain. lock=${lock.path}`);
+    return null;
+  }
+
   const authFolder = path.resolve(projectRoot, getSetting('whatsapp_auth_folder', 'auth_info_baileys'));
   const lidMapPath = path.resolve(projectRoot, getSetting('whatsapp_lid_map_file', 'data/wa-lid-map.json'));
   const lidStore = new WaLidStore(lidMapPath);
   const startEpoch = ++socketEpoch;
 
   currentStartPromise = (async () => {
-    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-    const { version } = await fetchLatestBaileysVersion();
+    try {
+      const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+      const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({
-      version,
-      auth: state,
-      printQRInTerminal: false,
-      browser: Browsers.ubuntu('Chrome'),
-      syncFullHistory: false,
-      markOnlineOnConnect: false,
-      generateHighQualityLinkPreview: false,
-      getMessage: async () => undefined,
-      connectTimeoutMs: 60000,
-      keepAliveIntervalMs: 30000,
-      defaultQueryTimeoutMs: 60000,
-      logger: pino({ level: 'silent' })
-    });
+      const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        browser: Browsers.ubuntu('Chrome'),
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        generateHighQualityLinkPreview: false,
+        getMessage: async () => undefined,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        defaultQueryTimeoutMs: 60000,
+        logger: pino({ level: 'silent' })
+      });
 
-    currentSock = sock;
+      currentSock = sock;
 
-    sock.ev.on('creds.update', saveCreds);
+      sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -890,6 +1012,7 @@ export async function startWhatsAppBot(options = {}) {
       }
 
       currentSock = null;
+      releaseWhatsappLock();
       updateWhatsappStatus({
         qr: null,
         user: null,
@@ -907,9 +1030,12 @@ export async function startWhatsAppBot(options = {}) {
         return;
       }
       if (code === DisconnectReason.connectionReplaced) {
-        whatsappStatus.connection = 'replaced';
-        logger.warn('WhatsApp session tergantikan oleh koneksi lain. Menunggu 15 detik sebelum klaim ulang sesi...');
-        scheduleReconnect(code, 15000);
+        updateWhatsappStatus({
+          connection: 'passive',
+          reason: 'connection_replaced',
+          reconnectAt: null
+        });
+        logger.warn('WhatsApp session tergantikan oleh koneksi lain. Bot masuk mode pasif agar tidak rebutan sesi.');
         return;
       }
       scheduleReconnect(code, code === DisconnectReason.restartRequired ? 1000 : 3000);
@@ -1454,7 +1580,11 @@ export async function startWhatsAppBot(options = {}) {
     }
     });
 
-    return sock;
+      return sock;
+    } catch (error) {
+      releaseWhatsappLock();
+      throw error;
+    }
   })();
 
   try {
@@ -1463,3 +1593,7 @@ export async function startWhatsAppBot(options = {}) {
     currentStartPromise = null;
   }
 }
+
+process.on('exit', () => {
+  releaseWhatsappLock();
+});

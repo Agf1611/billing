@@ -193,6 +193,8 @@ const getOnlineValues = (brandKey, profile) => {
   return base;
 };
 
+const WEAK_SIGNAL_THRESHOLD_DBM = -24;
+
 /**
  * OID sistem per brand untuk mengambil metrics hardware.
  * Semua diambil dengan snmp.get (bukan walk).
@@ -928,10 +930,11 @@ const isLikelySn = (sample) => {
   return true;
 };
 
-const pickSnTable = async (session, activeProfile) => {
+const pickSnTable = async (session, activeProfile, options = {}) => {
   const nameOid = activeProfile.name_table || '';
   const lastDot = nameOid.lastIndexOf('.');
   const parentBranch = lastDot > 0 ? nameOid.slice(0, lastDot) : nameOid;
+  const fastOnly = options.fastOnly === true;
 
   const candidates = [
     activeProfile.sn_table,
@@ -956,7 +959,18 @@ const pickSnTable = async (session, activeProfile) => {
     unique.push(oid);
   }
 
+  if (activeProfile.sn_table) {
+    const directMap = await slowWalk(session, activeProfile.sn_table);
+    if (Object.keys(directMap).length > 0) {
+      return { oid: activeProfile.sn_table, map: directMap };
+    }
+    if (fastOnly) {
+      return { oid: activeProfile.sn_table, map: {} };
+    }
+  }
+
   for (const oid of unique) {
+    if (oid === activeProfile.sn_table) continue;
     const samples = await walkSample(session, oid, 2);
     if (samples.length === 0) continue;
     if (!isLikelySn(samples[0])) continue;
@@ -1313,9 +1327,16 @@ const decodeRxPower = (brand, val) => {
 
 // ─── MAIN: getOltStats ────────────────────────────────────────────────────────
 
-async function getOltStats(id, full = false) {
+async function getOltStats(id, full = false, options = {}) {
   const olt = getOltById(id);
   if (!olt) return null;
+  const skipTelnetDetails = options && options.skipTelnetDetails === true;
+  const skipSystemMetrics = options && options.skipSystemMetrics === true;
+  const skipCardMetrics = options && options.skipCardMetrics === true;
+  const skipUnauthOnus = options && options.skipUnauthOnus === true;
+  const skipFirmware = options && options.skipFirmware === true;
+  const skipOnuUptime = options && options.skipOnuUptime === true;
+  const fastSnLookup = options && options.fastSnLookup === true;
 
   const stats = {
     id:          olt.id,
@@ -1414,9 +1435,13 @@ async function getOltStats(id, full = false) {
         const detectedBrandKey = activeProfile.__brandKey || brandKey;
         const onlineVals = getOnlineValues(detectedBrandKey, activeProfile);
 
-        await fetchSystemMetrics(session, detectedBrandKey, stats);
-        if (full) {
+        if (!skipSystemMetrics) {
+          await fetchSystemMetrics(session, detectedBrandKey, stats);
+        }
+        if (full && !skipCardMetrics) {
           await fetchCardMetrics(session, detectedBrandKey, stats);
+        }
+        if (full && !skipUnauthOnus) {
           await fetchUnauthOnus(session, activeProfile, stats);
         }
 
@@ -1445,20 +1470,34 @@ async function getOltStats(id, full = false) {
         let upMap = {};
 
         let telnetDetailLookup = { byId: new Map(), byName: new Map() };
+        const detailTasks = [];
+        if (activeProfile.rx_power_table) {
+          detailTasks.push(slowWalk(session, activeProfile.rx_power_table).then((map) => { rxMap = map; }));
+        }
         if (full) {
-          const snPick = await pickSnTable(session, activeProfile);
+          const snPick = await pickSnTable(session, activeProfile, { fastOnly: fastSnLookup });
           snMap = snPick.map || {};
-          if (activeProfile.rx_power_table) rxMap = await slowWalk(session, activeProfile.rx_power_table);
-          if (activeProfile.tx_power_table) txMap = await slowWalk(session, activeProfile.tx_power_table);
-          if (activeProfile.distance_table) distMap = await slowWalk(session, activeProfile.distance_table);
-          if (activeProfile.firmware_table) fwMap = await slowWalk(session, activeProfile.firmware_table);
-          if (activeProfile.uptime_table)   upMap = await slowWalk(session, activeProfile.uptime_table);
-          if (detectedBrandKey === 'hioso' || detectedBrandKey === 'hsgq') {
+          if (activeProfile.tx_power_table) {
+            detailTasks.push(slowWalk(session, activeProfile.tx_power_table).then((map) => { txMap = map; }));
+          }
+          if (activeProfile.distance_table) {
+            detailTasks.push(slowWalk(session, activeProfile.distance_table).then((map) => { distMap = map; }));
+          }
+          if (!skipFirmware && activeProfile.firmware_table) {
+            detailTasks.push(slowWalk(session, activeProfile.firmware_table).then((map) => { fwMap = map; }));
+          }
+          if (!skipOnuUptime && activeProfile.uptime_table) {
+            detailTasks.push(slowWalk(session, activeProfile.uptime_table).then((map) => { upMap = map; }));
+          }
+          if (!skipTelnetDetails && (detectedBrandKey === 'hioso' || detectedBrandKey === 'hsgq')) {
             const telnetRows = await fetchHiosoOnuDetailViaTelnet(olt);
             if (Array.isArray(telnetRows) && telnetRows.length) {
               telnetDetailLookup = buildHiosoTelnetLookup(telnetRows);
             }
           }
+        }
+        if (detailTasks.length > 0) {
+          await Promise.all(detailTasks);
         }
 
         const allIndices = new Set([...Object.keys(statusMap), ...Object.keys(nameMap)]);
@@ -1508,7 +1547,7 @@ async function getOltStats(id, full = false) {
 
           if (rx !== 'N/A') {
             const n = parseFloat(rx);
-            if (Number.isFinite(n) && n < -27) weakCount++;
+            if (Number.isFinite(n) && n < WEAK_SIGNAL_THRESHOLD_DBM) weakCount++;
           }
 
           if (full) {

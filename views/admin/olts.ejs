@@ -9,6 +9,43 @@
   <style>
     /* OLT Dashboard */
     .olt-dashboard { display: flex; flex-direction: column; gap: 14px; }
+    .olt-header-actions,
+    .olt-selector-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .olt-selector-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      min-width: 0;
+      flex: 1 1 420px;
+    }
+
+    .olt-section-table {
+      width: 100%;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .mw,
+    .page,
+    .olt-dashboard,
+    .olt-selector-container,
+    .onu-main-card,
+    .system-info-bar,
+    .stat-card-v2,
+    .details {
+      min-width: 0;
+    }
+
+    .onu-card-shell {
+      min-width: 100%;
+    }
     
     .stats-row { 
       display: grid; 
@@ -25,6 +62,22 @@
       gap: 12px;
       box-shadow: var(--shadow-soft);
       border: 1px solid var(--border);
+    }
+
+    .stat-card-v2.is-filter {
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .stat-card-v2.is-filter:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+    }
+
+    .stat-card-v2.is-filter.active {
+      border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 28%, transparent), var(--shadow-soft);
+      background: color-mix(in srgb, var(--surface-strong) 82%, var(--primary) 18%);
     }
     
     .stat-card-v2 .icon-box {
@@ -84,6 +137,7 @@
       font-weight: 600;
       color: var(--text);
       min-width: 250px;
+      max-width: 100%;
       outline: none;
       background: var(--bg3);
     }
@@ -107,6 +161,21 @@
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .onu-card-header-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      flex: 1 1 360px;
+      min-width: 0;
+    }
+
+    .onu-search-field {
+      width: min(100%, 250px);
+      padding: 4px 12px;
+      font-size: 12px;
     }
     
     .onu-table-v2 { width: 100%; border-collapse: collapse; }
@@ -226,6 +295,19 @@
       flex-wrap: wrap;
     }
 
+    .table-empty-cell {
+      padding: 0 !important;
+    }
+
+    .table-empty-cell::before {
+      display: none !important;
+    }
+
+    .dtbl code,
+    .onu-table-v2 code {
+      word-break: break-word;
+    }
+
     .btn-outline-primary.btn-sm.py-0.px-2 {
       border-radius: 10px;
       font-size: 11px !important;
@@ -259,16 +341,200 @@
 
     @media (max-width: 768px) {
       .olt-dashboard { gap: 12px; }
-      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .stat-card-v2 { padding: 12px; }
+      .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+      .stat-card-v2 {
+        padding: 12px 11px;
+        gap: 10px;
+        min-height: 88px;
+      }
+      .stat-card-v2 .icon-box {
+        width: 38px;
+        height: 38px;
+        font-size: 17px;
+      }
       .stat-card-v2 .details h3 { font-size: 18px; }
-      .system-info-bar { padding: 10px 12px; }
-      .olt-selector-container { padding: 12px; }
+      .stat-card-v2 .details p {
+        font-size: 10px;
+        letter-spacing: .05em;
+      }
+      .system-info-bar {
+        padding: 10px 12px;
+        display: grid;
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+      .info-item {
+        justify-content: space-between;
+        width: 100%;
+      }
+      .info-item.ms-auto {
+        width: 100%;
+      }
+      .olt-selector-container {
+        padding: 12px;
+        align-items: stretch;
+      }
+      .olt-selector-main {
+        flex-direction: column;
+        align-items: stretch;
+        flex-basis: 100%;
+        gap: 8px;
+      }
+      .olt-selector-main label {
+        width: 100%;
+        line-height: 1.35;
+      }
+      .olt-selector-main,
+      .olt-selector-actions,
+      .olt-header-actions,
+      .onu-card-header-main {
+        width: 100%;
+      }
+      .olt-selector-actions,
+      .olt-header-actions {
+        justify-content: stretch;
+      }
+      .olt-selector-actions .btn,
+      .olt-header-actions .btn {
+        flex: 1 1 180px;
+      }
       .custom-select-v2 { min-width: 100%; width: 100%; }
       .onu-main-card .card-header { padding: 11px 12px; }
       .onu-table-v2 th, .onu-table-v2 td { padding: 8px 10px; }
+      .onu-search-field { width: 100%; }
       .btn-action-v2 { width: 28px; height: 28px; }
       .traffic-v2 { width: 100%; justify-content: flex-start; }
+      .tbl-wrap,
+      .table-responsive,
+      .olt-section-table {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        max-height: none !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+      }
+
+      .onu-table-v2,
+      .dtbl {
+        display: table;
+        width: max-content;
+        min-width: 100%;
+      }
+
+      .onu-table-v2 thead,
+      .dtbl thead {
+        display: table-header-group;
+      }
+
+      .onu-table-v2 tbody,
+      .dtbl tbody {
+        display: table-row-group;
+      }
+
+      .onu-table-v2 tr,
+      .dtbl tr {
+        display: table-row;
+      }
+
+      .onu-table-v2 thead,
+      .dtbl thead {
+        display: table-header-group;
+      }
+
+      .onu-table-v2 th,
+      .onu-table-v2 td,
+      .dtbl th,
+      .dtbl td {
+        display: table-cell;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+
+      .onu-table-v2 td::before,
+      .dtbl td::before {
+        display: none;
+      }
+
+      .onu-table-v2 td > *,
+      .dtbl td > * {
+        margin-left: 0;
+      }
+
+      .onu-actions {
+        width: auto;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+      }
+
+      .onu-actions .btn,
+      .onu-actions .btn-action-v2 {
+        min-height: 32px;
+      }
+
+      .onu-name-cell {
+        min-width: 180px;
+      }
+
+      .table-empty-cell {
+        padding: 0 !important;
+        white-space: normal !important;
+      }
+
+      #manageOltsModal .mb,
+      #wanConfigModal .mb {
+        max-width: min(100vw - 16px, 900px) !important;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .stats-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .tb-right,
+      .tb-right .d-flex,
+      .olt-header-actions,
+      .olt-selector-actions {
+        width: 100%;
+      }
+
+      .tb-right .btn,
+      .olt-header-actions .btn,
+      .olt-selector-actions .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .olt-selector-main label,
+      .card-header .text-muted.small {
+        width: 100%;
+      }
+
+      .onu-table-v2 th,
+      .onu-table-v2 td,
+      .dtbl th,
+      .dtbl td {
+        padding: 8px 10px;
+      }
+
+      .onu-name-cell {
+        min-width: 160px;
+      }
+
+      .onu-actions {
+        gap: 4px;
+      }
+
+      .sn-mac,
+      .power-badge,
+      .status-pill-v2,
+      .brand-badge {
+        max-width: 100%;
+      }
     }
   </style>
 </head>
@@ -283,7 +549,7 @@
       <span><%= t('admin.nav.olt_management', 'Manajemen OLT') %></span>
     </div>
     <div class="tb-right">
-      <div class="d-flex gap-2">
+      <div class="olt-header-actions">
         <button class="btn btn-g btn-sm" onclick="openModal('manageOltsModal')"><i class="bi bi-gear"></i> <%= t('admin.olts.manage', 'Kelola OLT') %></button>
         <button class="btn btn-p btn-sm" onclick="openModal('addOltModal')"><i class="bi bi-plus-lg"></i> <%= t('admin.olts.add', 'Tambah OLT') %></button>
       </div>
@@ -298,7 +564,7 @@
     <div class="olt-dashboard">
       <!-- OLT Selector & Global Actions -->
       <div class="olt-selector-container">
-        <div class="d-flex align-items-center gap-3">
+        <div class="olt-selector-main">
           <label class="fw-bold text-muted small text-uppercase"><%= t('admin.olts.select_label', 'Pilih Perangkat OLT:') %></label>
           <select id="olt-selector" class="custom-select-v2" onchange="handleOltChange()">
             <% if (olts.length === 0) { %>
@@ -310,7 +576,7 @@
             <% } %>
           </select>
         </div>
-        <div class="d-flex gap-2">
+        <div class="olt-selector-actions">
           <button class="btn btn-sm btn-p" onclick="refreshCurrentOlt()">
             <i class="bi bi-arrow-clockwise"></i> <%= t('admin.olts.refresh_data', 'Refresh Data') %>
           </button>
@@ -319,28 +585,28 @@
 
       <!-- Summary Cards -->
       <div class="stats-row">
-        <div class="stat-card-v2">
+        <div class="stat-card-v2 is-filter active" data-stat-filter="all" onclick="setOnuFilter('all')">
           <div class="icon-box bg-blue"><i class="bi bi-device-hdd"></i></div>
           <div class="details">
             <h3 id="stat-total-onu">-</h3>
             <p><%= t('admin.olts.stats.total_onu', 'Total ONU') %></p>
           </div>
         </div>
-        <div class="stat-card-v2">
+        <div class="stat-card-v2 is-filter" data-stat-filter="online" onclick="setOnuFilter('online')">
           <div class="icon-box bg-green"><i class="bi bi-wifi"></i></div>
           <div class="details">
             <h3 id="stat-online-onu">-</h3>
             <p><%= t('admin.olts.stats.online', 'Online') %></p>
           </div>
         </div>
-        <div class="stat-card-v2">
+        <div class="stat-card-v2 is-filter" data-stat-filter="offline" onclick="setOnuFilter('offline')">
           <div class="icon-box bg-red"><i class="bi bi-wifi-off"></i></div>
           <div class="details">
             <h3 id="stat-offline-onu">-</h3>
             <p><%= t('admin.olts.stats.offline', 'Offline') %></p>
           </div>
         </div>
-        <div class="stat-card-v2">
+        <div class="stat-card-v2 is-filter" data-stat-filter="weak" onclick="setOnuFilter('weak')">
           <div class="icon-box bg-orange"><i class="bi bi-exclamation-triangle"></i></div>
           <div class="details">
             <h3 id="stat-weak-onu">-</h3>
@@ -369,7 +635,7 @@
           <div class="card-header">
             <h4 class="fw-bold m-0 text-primary small text-uppercase"><i class="bi bi-grid-3x3-gap"></i> <%= t('admin.olts.card_list', 'Daftar Board / Card') %></h4>
           </div>
-          <div class="table-responsive">
+          <div class="olt-section-table">
             <table class="onu-table-v2">
               <thead>
                 <tr>
@@ -396,7 +662,7 @@
           <div class="card-header d-flex justify-content-between align-items-center">
             <h4 class="fw-bold m-0 text-warning small text-uppercase"><i class="bi bi-exclamation-triangle"></i> <%= t('admin.olts.unauth_onu', 'ONU Belum Terdaftar (Unauth)') %></h4>
           </div>
-          <div class="table-responsive">
+          <div class="olt-section-table">
             <table class="onu-table-v2">
               <thead>
                 <tr>
@@ -424,10 +690,10 @@
         </div>
         
         <div class="card-header">
-          <div class="d-flex align-items-center gap-3">
+          <div class="onu-card-header-main">
             <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i> <%= t('admin.olts.onu_list_title', 'Daftar Perangkat ONU Terdaftar') %></h6>
             <div id="search-container" style="display:none;">
-              <input type="text" id="onu-search" class="fc fc-sm" placeholder="<%= t('admin.olts.search_placeholder', 'Cari ID / SN...') %>" onkeyup="filterOnuTable()" style="width: 250px; padding: 4px 12px; font-size: 12px;">
+              <input type="text" id="onu-search" class="fc fc-sm onu-search-field" placeholder="<%= t('admin.olts.search_placeholder', 'Cari ID / SN...') %>" onkeyup="filterOnuTable()">
             </div>
           </div>
           <div class="text-muted small"><%= t('admin.olts.last_update', 'Update Terakhir') %>: <span id="last-update">-</span></div>
@@ -450,7 +716,7 @@
             </thead>
             <tbody id="onu-table-body">
               <tr>
-                <td colspan="9">
+                <td colspan="9" class="table-empty-cell">
                   <div class="empty-state">
                     <i class="bi bi-hdd-network"></i>
                     <p><%= t('admin.olts.empty_select', 'Pilih perangkat OLT di atas untuk memantau data ONU.') %></p>
@@ -486,11 +752,11 @@
         <tbody>
           <% olts.forEach(olt => { %>
             <tr>
-              <td><strong><%= olt.name %></strong></td>
-              <td><code><%= olt.host %></code></td>
-              <td><span class="brand-badge brand-<%= olt.brand %>"><%= olt.brand %></span></td>
-              <td><span class="badge <%= olt.is_active ? 'bs' : 'bd' %>"><%= olt.is_active ? t('common.active', 'Aktif') : t('common.inactive', 'Nonaktif') %></span></td>
-              <td>
+              <td data-label="<%= t('admin.olts.manage_modal.table.name', 'Nama OLT') %>"><strong><%= olt.name %></strong></td>
+              <td data-label="<%= t('admin.olts.manage_modal.table.host', 'Host / IP') %>"><code><%= olt.host %></code></td>
+              <td data-label="<%= t('admin.olts.manage_modal.table.brand', 'Brand') %>"><span class="brand-badge brand-<%= olt.brand %>"><%= olt.brand %></span></td>
+              <td data-label="<%= t('admin.olts.manage_modal.table.status', 'Status') %>"><span class="badge <%= olt.is_active ? 'bs' : 'bd' %>"><%= olt.is_active ? t('common.active', 'Aktif') : t('common.inactive', 'Nonaktif') %></span></td>
+              <td data-label="<%= t('admin.olts.manage_modal.table.actions', 'Aksi') %>">
                 <div class="d-flex gap-2">
                   <button class="btn btn-g btn-icon btn-sm" onclick="editOlt('<%= olt.id %>')"><i class="bi bi-pencil"></i></button>
                   <form action="/admin/olts/<%= olt.id %>/delete" method="POST" onsubmit="return confirm(I18N.confirmDeleteOlt)">
@@ -756,6 +1022,9 @@ const I18N = {
   lang: "<%= lang || 'id' %>",
   confirmDeleteOlt: "<%= t('admin.olts.confirm_delete', 'Hapus OLT ini?') %>",
   serverConnectFailed: "<%= t('admin.olts.errors.server_connect_failed', 'Gagal menghubungi server') %>",
+  summaryLoadTimeout: "<%= t('admin.olts.errors.summary_timeout', 'Timeout saat memuat ringkasan OLT.') %>",
+  fullLoadTimeout: "<%= t('admin.olts.errors.full_timeout', 'Timeout saat memuat detail OLT.') %>",
+  loadingDetails: "<%= t('admin.olts.loading_details', 'Memuat detail ONU...') %>",
   noOnuData: "<%= t('admin.olts.empty_no_onu', 'Tidak ada data ONU ditemukan.') %>",
   tryAgain: "<%= t('admin.olts.actions.try_again', 'Coba Lagi') %>",
   renamePrompt: "<%= t('admin.olts.actions.rename_prompt', 'Masukkan nama baru untuk ONU:') %>",
@@ -774,6 +1043,9 @@ function closeModal(id) { document.getElementById(id).classList.remove('show'); 
 
 const oltsData = JSON.parse(document.getElementById('olt-data-store').dataset.olts);
 const oltDefaults = document.getElementById('olt-default-settings');
+let activeOltLoadToken = 0;
+let activeOnuFilter = 'all';
+const WEAK_SIGNAL_THRESHOLD_DBM = -24;
 
 function editOlt(id) {
   const olt = oltsData.find(o => o.id == id);
@@ -803,134 +1075,221 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function updateOltSummary(stats = {}) {
+  document.getElementById('stat-total-onu').innerText = stats.onus_total ?? '-';
+  document.getElementById('stat-online-onu').innerText = stats.onus_online ?? '-';
+  document.getElementById('stat-offline-onu').innerText = stats.onus_offline ?? '-';
+  document.getElementById('stat-weak-onu').innerText = stats.onus_weak ?? '-';
+  document.getElementById('stat-temp').innerText = stats.temp || 'N/A';
+  document.getElementById('stat-cpu').innerText = stats.cpu || 'N/A';
+  document.getElementById('stat-ram').innerText = stats.ram || 'N/A';
+  document.getElementById('stat-uptime').innerText = stats.uptime || 'N/A';
+  document.getElementById('stat-traffic-in').innerText = formatBytes(stats.uplink_rx) + '/s';
+  document.getElementById('stat-traffic-out').innerText = formatBytes(stats.uplink_tx) + '/s';
+  document.getElementById('last-update').innerText = new Date().toLocaleTimeString(I18N.lang === 'en' ? 'en-US' : 'id-ID');
+}
+
+function renderCardList(stats = {}) {
+  const cardContainer = document.getElementById('card-list-container');
+  const cardBody = document.getElementById('card-table-body');
+  if (Array.isArray(stats.cards) && stats.cards.length > 0) {
+    cardContainer.style.display = 'block';
+    cardBody.replaceChildren();
+    cardBody.insertAdjacentHTML('beforeend', stats.cards.map(card => {
+      const statusClass = card.status === 'INSERVICE' || card.status === 'ONLINE' ? 'pill-online' : 'pill-offline';
+      return `<tr>
+        <td data-label="Slot"><strong>${card.index}</strong></td>
+        <td data-label="Type"><span class="badge-v2">${card.type}</span></td>
+        <td data-label="Status"><span class="status-pill-v2 ${statusClass}">${card.status}</span></td>
+        <td data-label="Ports">${card.ports}</td>
+        <td data-label="Serial"><code class="sn-mac">${card.serial}</code></td>
+        <td data-label="CPU">${card.cpu}</td>
+        <td data-label="RAM">${card.ram}</td>
+      </tr>`;
+    }).join(''));
+  } else {
+    cardBody.replaceChildren();
+    cardContainer.style.display = 'none';
+  }
+}
+
+function renderUnauthList(stats = {}, id) {
+  const unauthContainer = document.getElementById('unauth-list-container');
+  const unauthBody = document.getElementById('unauth-table-body');
+  if (Array.isArray(stats.unauth_onus) && stats.unauth_onus.length > 0) {
+    unauthContainer.style.display = 'block';
+    unauthBody.replaceChildren();
+    unauthBody.insertAdjacentHTML('beforeend', stats.unauth_onus.map(onu => {
+      return `<tr>
+        <td data-label="Port / Index"><code class="sn-mac">${onu.id || onu.index}</code></td>
+        <td data-label="Serial Number"><code class="sn-mac">${onu.sn}</code></td>
+        <td data-label="Type"><span class="badge-v2">${onu.type}</span></td>
+        <td data-label="Aksi">
+          <button class="btn btn-sm btn-p" onclick="authorizeOnuPrompt('${id}', '${onu.index}', '${onu.sn}')">
+            <i class="bi bi-check-circle"></i> Otorisasi
+          </button>
+        </td>
+      </tr>`;
+    }).join(''));
+  } else {
+    unauthBody.replaceChildren();
+    unauthContainer.style.display = 'none';
+  }
+}
+
+function renderOnuError(message) {
+  document.getElementById('search-container').style.display = 'none';
+  renderCardList();
+  renderUnauthList({}, '');
+  const tbody = document.getElementById('onu-table-body');
+  tbody.replaceChildren();
+  tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9" class="table-empty-cell">
+    <div class="empty-state">
+      <i class="bi bi-exclamation-triangle"></i>
+      <p>${message || I18N.serverConnectFailed}</p>
+      <button class="btn btn-sm btn-p mt-2" onclick="refreshCurrentOlt()">${I18N.tryAgain}</button>
+    </div>
+  </td></tr>`);
+}
+
+function renderOnuLoadingState() {
+  document.getElementById('search-container').style.display = 'none';
+  renderCardList();
+  renderUnauthList({}, '');
+  const tbody = document.getElementById('onu-table-body');
+  tbody.replaceChildren();
+  tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9" class="table-empty-cell">
+    <div class="empty-state">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-3">${I18N.loadingDetails}</p>
+    </div>
+  </td></tr>`);
+}
+
+function renderOnuTable(stats = {}, id) {
+  const tbody = document.getElementById('onu-table-body');
+  if (Array.isArray(stats.onus) && stats.onus.length > 0) {
+    document.getElementById('search-container').style.display = 'block';
+    tbody.replaceChildren();
+    tbody.insertAdjacentHTML('beforeend', stats.onus.map((onu, index) => {
+      const statusVal = String(onu.status || '');
+      const isOnline = statusVal.toLowerCase() === 'online';
+      const statusClass = isOnline ? 'pill-online' : 'pill-offline';
+      const rxVal = parseFloat(onu.rx);
+      let rxClass = 'power-good';
+      const hasWeakSignal = Number.isFinite(rxVal) && rxVal < WEAK_SIGNAL_THRESHOLD_DBM;
+      if (!Number.isFinite(rxVal)) rxClass = '';
+      else if (rxVal < -27) rxClass = 'power-danger';
+      else if (rxVal < WEAK_SIGNAL_THRESHOLD_DBM) rxClass = 'power-warning';
+      return `<tr>
+        <td data-label="<%= t('admin.olts.table.no', 'No') %>" data-onu-filter="${isOnline ? 'online' : 'offline'}" data-onu-weak="${hasWeakSignal ? 'true' : 'false'}">${index + 1}</td>
+        <td data-label="ONU">
+          <div class="onu-name-cell">
+            <span class="onu-name-main">${onu.name || '-'}</span>
+            <span class="onu-name-meta">${onu.id || '-'}${onu.firmware && onu.firmware !== '-' ? ` • FW ${onu.firmware}` : ''}</span>
+          </div>
+        </td>
+        <td data-label="MAC ONU"><code class="sn-mac">${onu.mac || '-'}</code></td>
+        <td data-label="<%= t('admin.olts.table.serial', 'Serial Number') %>"><code class="sn-mac">${onu.sn || '-'}</code></td>
+        <td data-label="<%= t('admin.olts.table.status', 'Status') %>"><span class="status-pill-v2 ${statusClass}"><i class="bi bi-circle-fill" style="font-size:6px;"></i> ${formatStatus(statusVal) || '-'}</span></td>
+        <td data-label="<%= t('admin.olts.table.tx', 'TxPower') %>"><span class="power-badge">${onu.tx || 'N/A'}</span></td>
+        <td data-label="<%= t('admin.olts.table.rx', 'RxPower') %>"><span class="power-badge ${rxClass}">${onu.rx || 'N/A'}</span></td>
+        <td data-label="<%= t('admin.olts.table.distance', 'Jarak') %>"><span class="small text-muted">${onu.distance != null ? onu.distance : '-'}</span></td>
+        <td data-label="<%= t('common.actions', 'Aksi') %>" style="text-align:right">
+          <div class="onu-actions">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="configureWanPrompt('${id}', '${onu.index}', '${onu.name}', '${onu.sn}')" style="font-size: 11px;">
+              <i class="bi bi-gear-fill"></i> WAN
+            </button>
+            <button class="btn-action-v2 btn-rename-v2" onclick="renameOnuPrompt('${id}', '${onu.index}', '${onu.name}')" title="${I18N.renameTitle}"><i class="bi bi-pencil-square"></i></button>
+            <button class="btn-action-v2 btn-reboot-v2" onclick="rebootOnu('${id}', '${onu.index}')" title="${I18N.rebootTitle}"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    }).join(''));
+    applyOnuFilters();
+    return;
+  }
+
+  document.getElementById('search-container').style.display = 'none';
+  tbody.replaceChildren();
+  tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9" class="table-empty-cell">
+    <div class="empty-state">
+      <i class="bi bi-exclamation-triangle"></i>
+      <p>${stats.error || I18N.noOnuData}</p>
+      ${stats.error ? '<button class="btn btn-sm btn-p mt-2" onclick="refreshCurrentOlt()">' + I18N.tryAgain + '</button>' : ''}
+    </div>
+  </td></tr>`);
+  applyOnuFilters();
+}
+
+async function fetchOltStatsJson(id, options = {}) {
+  const { full = false, timeoutMs = full ? 35000 : 10000, section = '' } = options;
+  const controller = new AbortController();
+  const timeoutLabel = full ? I18N.fullLoadTimeout : I18N.summaryLoadTimeout;
+  let timer = null;
+  try {
+    const stats = await Promise.race([
+      (async () => {
+        const params = new URLSearchParams();
+        if (full) params.set('full', 'true');
+        if (section) params.set('section', section);
+        const url = `/admin/olts/${id}/stats${params.toString() ? `?${params.toString()}` : ''}`;
+        const res = await fetch(url, { signal: controller.signal });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error(payload?.error || I18N.serverConnectFailed);
+        }
+        return payload || {};
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          try { controller.abort(); } catch (_error) {}
+          reject(new Error(timeoutLabel));
+        }, timeoutMs);
+      })
+    ]);
+
+    return stats;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error(timeoutLabel);
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function loadOltDashboard(id) {
   if (!id) return;
-  
+
   const overlay = document.getElementById('loading-overlay');
+  const loadToken = ++activeOltLoadToken;
   overlay.style.display = 'flex';
-  
+  renderOnuLoadingState();
+
   try {
-    const res = await fetch(`/admin/olts/${id}/stats?full=true`);
-    if (!res.ok) throw new Error(I18N.serverConnectFailed);
-    const stats = await res.json();
-    
-    // Update Stats Cards
-    document.getElementById('stat-total-onu').innerText = stats.onus_total;
-    document.getElementById('stat-online-onu').innerText = stats.onus_online;
-    document.getElementById('stat-offline-onu').innerText = stats.onus_offline;
-    document.getElementById('stat-weak-onu').innerText = stats.onus_weak;
-    
-    // Update System Info
-    document.getElementById('stat-temp').innerText = stats.temp || 'N/A';
-    document.getElementById('stat-cpu').innerText = stats.cpu || 'N/A';
-    document.getElementById('stat-ram').innerText = stats.ram || 'N/A';
-    document.getElementById('stat-uptime').innerText = stats.uptime || 'N/A';
-    document.getElementById('stat-traffic-in').innerText = formatBytes(stats.uplink_rx) + '/s';
-    document.getElementById('stat-traffic-out').innerText = formatBytes(stats.uplink_tx) + '/s';
-    document.getElementById('last-update').innerText = new Date().toLocaleTimeString(I18N.lang === 'en' ? 'en-US' : 'id-ID');
-    
-    // Render Card List
-    const cardContainer = document.getElementById('card-list-container');
-    const cardBody = document.getElementById('card-table-body');
-    if (stats.cards && stats.cards.length > 0) {
-      cardContainer.style.display = 'block';
-      cardBody.replaceChildren();
-      cardBody.insertAdjacentHTML('beforeend', stats.cards.map(card => {
-        const statusClass = card.status === 'INSERVICE' || card.status === 'ONLINE' ? 'pill-online' : 'pill-offline';
-        return `<tr>
-          <td><strong>${card.index}</strong></td>
-          <td><span class="badge-v2">${card.type}</span></td>
-          <td><span class="status-pill-v2 ${statusClass}">${card.status}</span></td>
-          <td>${card.ports}</td>
-          <td><code class="sn-mac">${card.serial}</code></td>
-          <td>${card.cpu}</td>
-          <td>${card.ram}</td>
-        </tr>`;
-      }).join(''));
-    } else {
-      cardContainer.style.display = 'none';
-    }
-
-    // Render Unauth List
-    const unauthContainer = document.getElementById('unauth-list-container');
-    const unauthBody = document.getElementById('unauth-table-body');
-    if (stats.unauth_onus && stats.unauth_onus.length > 0) {
-      unauthContainer.style.display = 'block';
-      unauthBody.replaceChildren();
-      unauthBody.insertAdjacentHTML('beforeend', stats.unauth_onus.map(onu => {
-        return `<tr>
-          <td><code class="sn-mac">${onu.id || onu.index}</code></td>
-          <td><code class="sn-mac">${onu.sn}</code></td>
-          <td><span class="badge-v2">${onu.type}</span></td>
-          <td>
-            <button class="btn btn-sm btn-p" onclick="authorizeOnuPrompt('${id}', '${onu.index}', '${onu.sn}')">
-              <i class="bi bi-check-circle"></i> Otorisasi
-            </button>
-          </td>
-        </tr>`;
-      }).join(''));
-    } else {
-      unauthContainer.style.display = 'none';
-    }
-
-    // Render Table
-    const tbody = document.getElementById('onu-table-body');
-    if (stats.onus && stats.onus.length > 0) {
-      document.getElementById('search-container').style.display = 'block';
-      tbody.replaceChildren();
-      tbody.insertAdjacentHTML('beforeend', stats.onus.map((onu, index) => {
-        const statusVal = String(onu.status || '');
-        const isOnline = statusVal.toLowerCase() === 'online';
-        const statusClass = isOnline ? 'pill-online' : 'pill-offline';
-        const rxVal = parseFloat(onu.rx);
-        let rxClass = 'power-good';
-        if (!Number.isFinite(rxVal)) rxClass = '';
-        else if (rxVal < -27) rxClass = 'power-danger';
-        else if (rxVal < -24) rxClass = 'power-warning';
-        
-        return `<tr>
-          <td>${index + 1}</td>
-          <td>
-            <div class="onu-name-cell">
-              <span class="onu-name-main">${onu.name || '-'}</span>
-              <span class="onu-name-meta">${onu.id || '-'}${onu.firmware && onu.firmware !== '-' ? ` • FW ${onu.firmware}` : ''}</span>
-            </div>
-          </td>
-          <td><code class="sn-mac">${onu.mac || '-'}</code></td>
-          <td><code class="sn-mac">${onu.sn || '-'}</code></td>
-          <td><span class="status-pill-v2 ${statusClass}"><i class="bi bi-circle-fill" style="font-size:6px;"></i> ${formatStatus(statusVal) || '-'}</span></td>
-          <td><span class="power-badge">${onu.tx || 'N/A'}</span></td>
-          <td><span class="power-badge ${rxClass}">${onu.rx || 'N/A'}</span></td>
-          <td><span class="small text-muted">${onu.distance != null ? onu.distance : '-'}</span></td>
-          <td style="text-align:right">
-            <div class="onu-actions">
-              <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="configureWanPrompt('${id}', '${onu.index}', '${onu.name}', '${onu.sn}')" style="font-size: 11px;">
-                <i class="bi bi-gear-fill"></i> WAN
-              </button>
-              <button class="btn-action-v2 btn-rename-v2" onclick="renameOnuPrompt('${id}', '${onu.index}', '${onu.name}')" title="${I18N.renameTitle}"><i class="bi bi-pencil-square"></i></button>
-              <button class="btn-action-v2 btn-reboot-v2" onclick="rebootOnu('${id}', '${onu.index}')" title="${I18N.rebootTitle}"><i class="bi bi-arrow-clockwise"></i></button>
-            </div>
-          </td>
-        </tr>`;
-      }).join(''));
-    } else {
-      document.getElementById('search-container').style.display = 'none';
-      tbody.replaceChildren();
-      tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9">
-        <div class="empty-state">
-          <i class="bi bi-exclamation-triangle"></i>
-          <p>${stats.error || I18N.noOnuData}</p>
-          ${stats.error ? '<button class="btn btn-sm btn-p mt-2" onclick="refreshCurrentOlt()">' + I18N.tryAgain + '</button>' : ''}
-        </div>
-      </td></tr>`);
-    }
+    const summaryStats = await fetchOltStatsJson(id, { full: false, timeoutMs: 10000 });
+    if (loadToken !== activeOltLoadToken) return;
+    updateOltSummary(summaryStats);
   } catch (e) {
-    const tbody = document.getElementById('onu-table-body');
-    tbody.replaceChildren();
-    tbody.insertAdjacentHTML('beforeend', `<tr><td colspan="9" class="text-center p-5 text-danger">${I18N.errorPrefix}${e.message}</td></tr>`);
-  } finally {
+    if (loadToken !== activeOltLoadToken) return;
+    renderOnuError(`${I18N.errorPrefix}${e.message}`);
     overlay.style.display = 'none';
+    return;
   }
+
+  overlay.style.display = 'none';
+
+  fetchOltStatsJson(id, { full: true, section: 'table', timeoutMs: 25000 })
+    .then((fullStats) => {
+      if (loadToken !== activeOltLoadToken) return;
+      renderCardList();
+      renderUnauthList({}, id);
+      renderOnuTable(fullStats, id);
+    })
+    .catch((e) => {
+      if (loadToken !== activeOltLoadToken) return;
+      renderOnuError(`${I18N.errorPrefix}${e.message}`);
+    });
 }
 
 function formatStatus(statusVal) {
@@ -943,6 +1302,7 @@ function formatStatus(statusVal) {
 
 function handleOltChange() {
   const id = document.getElementById('olt-selector').value;
+  setOnuFilter('all', { silent: true });
   if (id) loadOltDashboard(id);
 }
 
@@ -951,13 +1311,44 @@ function refreshCurrentOlt() {
 }
 
 function filterOnuTable() {
+  applyOnuFilters();
+}
+
+function setOnuFilter(filterName, options = {}) {
+  activeOnuFilter = String(filterName || 'all').trim().toLowerCase() || 'all';
+  document.querySelectorAll('[data-stat-filter]').forEach((card) => {
+    const isActive = card.dataset.statFilter === activeOnuFilter;
+    card.classList.toggle('active', isActive);
+  });
+  if (!options.silent) {
+    applyOnuFilters();
+  }
+}
+
+function applyOnuFilters() {
   const input = document.getElementById('onu-search');
-  const filter = input.value.toLowerCase();
+  const searchTerm = String(input?.value || '').toLowerCase().trim();
   const rows = document.querySelectorAll('#onu-table-body tr');
-  
+
   rows.forEach(row => {
+    if (row.querySelector('.empty-state')) {
+      row.style.display = '';
+      return;
+    }
+
     const text = row.innerText.toLowerCase();
-    row.style.display = text.includes(filter) ? '' : 'none';
+    const filterCell = row.querySelector('[data-onu-filter]');
+    const rowFilter = filterCell?.dataset?.onuFilter || '';
+    const rowWeak = filterCell?.dataset?.onuWeak === 'true';
+
+    const matchesSearch = !searchTerm || text.includes(searchTerm);
+    const matchesStat =
+      activeOnuFilter === 'all' ||
+      (activeOnuFilter === 'online' && rowFilter === 'online') ||
+      (activeOnuFilter === 'offline' && rowFilter === 'offline') ||
+      (activeOnuFilter === 'weak' && rowWeak);
+
+    row.style.display = matchesSearch && matchesStat ? '' : 'none';
   });
 }
 

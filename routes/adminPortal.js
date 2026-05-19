@@ -13,6 +13,7 @@ const usageSvc = require('../services/usageService');
 const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
 const mikrotikService = require('../services/mikrotikService');
+const monitoringCollectorSvc = require('../services/monitoringCollectorService');
 const adminSvc = require('../services/adminService');
 const agentSvc = require('../services/agentService');
 const techSvc = require('../services/techService');
@@ -1020,6 +1021,7 @@ async function withLoaderTimeout(loader, timeoutMs = 8000) {
 
 function clearMonitoringCache(routerId = null, kinds = []) {
   const targets = Array.isArray(kinds) && kinds.length ? kinds : [
+    'snapshot',
     'summary',
     'secrets',
     'active-pppoe',
@@ -1058,6 +1060,39 @@ function countUniqueMonitoringRows(rows = [], candidates = []) {
     seen.add(key);
   }
   return seen.size;
+}
+
+function getNormalizedMonitoringIdentity(...values) {
+  for (const value of values) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function countUniquePppoeUsers(rows = []) {
+  return countUniqueMonitoringRows(rows, [
+    (row) => getNormalizedMonitoringIdentity(row?.name, row?.user, row?.username)
+  ]);
+}
+
+function countUniqueHotspotUsers(rows = []) {
+  return countUniqueMonitoringRows(rows, [
+    (row) => getNormalizedMonitoringIdentity(row?.name, row?.user, row?.username)
+  ]);
+}
+
+function buildCollectorMetadata(snapshot) {
+  const raw = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  return {
+    snapshotAt: raw.snapshotAt || null,
+    ageMs: Number.isFinite(Number(raw.ageMs)) ? Number(raw.ageMs) : null,
+    source: String(raw.source || 'collector').trim() || 'collector',
+    routerReachable: Boolean(raw.routerReachable),
+    collectorStatus: String(raw.collectorStatus || 'warming_up').trim() || 'warming_up',
+    partialFailure: Boolean(raw.partialFailure),
+    sections: raw.sections && typeof raw.sections === 'object' ? raw.sections : {}
+  };
 }
 
 function getPendingCustomerRequestCount() {
@@ -1863,10 +1898,31 @@ router.get('/olts', requireAdminSession, async (req, res) => {
 
 router.get('/olts/:id/stats', requireAdminSession, async (req, res) => {
   try {
-    const stats = await oltSvc.getOltStats(req.params.id, req.query.full === 'true');
+    const section = String(req.query.section || '').trim().toLowerCase();
+    const wantsFull = req.query.full === 'true';
+    const tableOnly = section === 'table';
+    const timeoutMs = tableOnly ? 25000 : (wantsFull ? 35000 : 10000);
+    const statsOptions = tableOnly
+      ? {
+          skipTelnetDetails: true,
+          skipSystemMetrics: true,
+          skipCardMetrics: true,
+          skipUnauthOnus: true,
+          skipFirmware: true,
+          skipOnuUptime: true,
+          fastSnLookup: true
+        }
+      : { skipTelnetDetails: wantsFull };
+    const stats = await Promise.race([
+      oltSvc.getOltStats(req.params.id, wantsFull || tableOnly, statsOptions),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`OLT request timeout (${Math.round(timeoutMs / 1000)}s)`)), timeoutMs);
+      })
+    ]);
     res.json(stats);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    const isTimeout = /timeout/i.test(String(e && e.message || ''));
+    res.status(isTimeout ? 504 : 500).json({ error: e.message });
   }
 });
 
@@ -1966,149 +2022,93 @@ router.get('/api/customers/:id/pppoe-traffic', requireAdminSession, async (req, 
 
   const customer = customerSvc.getCustomerById(customerId);
   if (!customer) return res.status(404).json({ ok: false, error: 'not_found' });
+  const usageMeta = usageSvc.getUsageSnapshotMeta(customerId, new Date());
+  const usageBlock = {
+    storedUploadBytes: Math.max(0, Number(usageMeta?.usage?.bytes_in || 0) || 0),
+    storedDownloadBytes: Math.max(0, Number(usageMeta?.usage?.bytes_out || 0) || 0),
+    storedTotalBytes: Math.max(0, Number(usageMeta?.usage?.bytes_in || 0) || 0) + Math.max(0, Number(usageMeta?.usage?.bytes_out || 0) || 0),
+    updatedAt: usageMeta?.updatedAt || '',
+    freshnessSeconds: Number.isFinite(Number(usageMeta?.freshnessSeconds)) ? Number(usageMeta.freshnessSeconds) : null,
+    usageLagSeconds: Number.isFinite(Number(usageMeta?.usageLagSeconds)) ? Number(usageMeta.usageLagSeconds) : null,
+    usageSource: String(usageMeta?.usageSource || 'customer_usage').trim() || 'customer_usage',
+    isAuthoritative: usageMeta?.isAuthoritative !== false,
+    usageWritable: false
+  };
 
   const routerId = customer.router_id ? Number(customer.router_id) : null;
   const username = String(customer.pppoe_username || '').trim();
 
   if (!routerId || !username) {
-    return res.json({ ok: true, available: false, online: false, username: username || null, rxMbps: 0, txMbps: 0 });
+    return res.json({
+      ok: true,
+      available: false,
+      username: username || null,
+      live: { online: false, interface: null, source: 'snapshot', uptime: null, rxMbps: 0, txMbps: 0 },
+      usage: usageBlock,
+      online: false,
+      rxMbps: 0,
+      txMbps: 0
+    });
   }
-
-  const now = Date.now();
-  prunePppoeTrafficSamples(now);
-
-  let conn = null;
   try {
-    conn = await mikrotikService.getConnection(routerId);
-    const sessions = await conn.client.menu('/ppp/active').where('name', username).get();
-    if (!sessions || sessions.length === 0) {
-      return res.json({ ok: true, available: true, online: false, username, rxMbps: 0, txMbps: 0 });
-    }
-
-    const s = sessions[0];
-    let iface = strField(s, ['interface', 'interface-name', 'interfaceName', 'ifname', 'if-name', 'pppInterface']) || null;
-    const baseSessionId = strField(s, ['.id', 'id', 'sessionId', 'session-id']) || `${username}`;
-    const bytesIn = numField(s, ['bytesIn', 'bytes-in', 'bytes_in']);
-    const bytesOut = numField(s, ['bytesOut', 'bytes-out', 'bytes_out']);
-    const uptime = strField(s, ['uptime']) || null;
-
-    if (!iface) {
-      try {
-        const pppoeSrvMenu = conn.client.menu('/interface/pppoe-server');
-        let pppoeRows = [];
-        try {
-          pppoeRows = await pppoeSrvMenu.where('user', username).get();
-        } catch {
-          pppoeRows = await pppoeSrvMenu.get();
-        }
-        const hit = (Array.isArray(pppoeRows) ? pppoeRows : []).find(r => String(r.user || r['user'] || '').trim() === username);
-        const ifaceName = strField(hit, ['name']);
-        if (ifaceName) iface = ifaceName;
-      } catch {}
-    }
-
-    const sessionId = `${baseSessionId}${iface ? `|${iface}` : ''}`;
-
-    const key = `${routerId || 'default'}:${username}`;
-    const prev = pppoeTrafficSamples.get(key);
-    let rxBytes = bytesIn;
-    let txBytes = bytesOut;
-    let source = 'ppp-active';
-
-    if (iface) {
-      const ifMenu = conn.client.menu('/interface');
-      if (ifMenu) {
-        try {
-          const mtRaw = await invokeRouterOsMenuCommand(ifMenu, 'monitor-traffic', { interface: iface, once: '' });
-          const mt = Array.isArray(mtRaw) ? mtRaw[0] : mtRaw;
-          const rxBps = numField(mt, ['rxBitsPerSecond', 'rx-bits-per-second', 'rx-bits-per-second']);
-          const txBps = numField(mt, ['txBitsPerSecond', 'tx-bits-per-second', 'tx-bits-per-second']);
-          if (rxBps || txBps) {
-            return res.json({
-              ok: true,
-              available: true,
-              online: true,
-              username,
-              iface,
-              source: 'monitor-traffic',
-              uptime,
-              rxMbps: (Number(rxBps) || 0) / 1e6,
-              txMbps: (Number(txBps) || 0) / 1e6
-            });
-          }
-        } catch {}
-      }
-    }
-
-    if (iface) {
-      try {
-        const ifRows = await conn.client.menu('/interface').where('name', iface).get();
-        if (ifRows && ifRows.length > 0) {
-          const row = ifRows[0];
-          const ifRx = numField(row, ['rxByte', 'rx-byte', 'rx-bytes', 'rxBytes']);
-          const ifTx = numField(row, ['txByte', 'tx-byte', 'tx-bytes', 'txBytes']);
-          if (ifRx || ifTx) {
-            rxBytes = ifRx;
-            txBytes = ifTx;
-            source = 'interface';
-          }
-        }
-      } catch {}
-    }
-
-    pppoeTrafficSamples.set(key, { t: now, sessionId, rxBytes, txBytes, source });
-
-    if (!prev || prev.sessionId !== sessionId || !prev.t) {
+    const live = await customerDetailSvc.resolvePppoeTrafficLive(username, routerId, [routerId]);
+    if (!live) {
       return res.json({
         ok: true,
         available: true,
-        online: true,
-        warmup: true,
         username,
-        iface,
-        source,
-        uptime,
+        live: { online: false, interface: null, source: 'fallback', uptime: null, rxMbps: 0, txMbps: 0 },
+        usage: usageBlock,
+        online: false,
         rxMbps: 0,
         txMbps: 0
       });
     }
-
-    const dtMs = Math.max(1, now - prev.t);
-    const dIn = rxBytes - numField(prev, ['rxBytes']);
-    const dOut = txBytes - numField(prev, ['txBytes']);
-    if (dIn < 0 || dOut < 0) {
+    if (!live.online) {
       return res.json({
         ok: true,
         available: true,
-        online: true,
-        warmup: true,
         username,
-        iface,
-        source,
-        uptime,
+        live: { online: false, interface: live.iface || '-', source: live.source || 'ppp-active', uptime: live.uptime || '-', rxMbps: 0, txMbps: 0 },
+        usage: usageBlock,
+        online: false,
         rxMbps: 0,
         txMbps: 0
       });
     }
-
-    const rxMbps = (dIn * 8) / (dtMs / 1000) / 1e6;
-    const txMbps = (dOut * 8) / (dtMs / 1000) / 1e6;
-
     return res.json({
       ok: true,
       available: true,
+      username: live.username || username,
+      live: {
+        online: true,
+        warmup: Boolean(live.warmup),
+        interface: live.iface || '-',
+        source: live.source || 'ppp-active',
+        uptime: live.uptime || '-',
+        rxMbps: Number.isFinite(Number(live.rxMbps || 0)) ? Number(live.rxMbps || 0) : 0,
+        txMbps: Number.isFinite(Number(live.txMbps || 0)) ? Number(live.txMbps || 0) : 0
+      },
+      usage: usageBlock,
       online: true,
-      username,
-      iface,
-      source,
-      uptime,
-      rxMbps: Number.isFinite(rxMbps) ? rxMbps : 0,
-      txMbps: Number.isFinite(txMbps) ? txMbps : 0
+      warmup: Boolean(live.warmup),
+      iface: live.iface || '-',
+      source: live.source || 'ppp-active',
+      uptime: live.uptime || '-',
+      rxMbps: Number.isFinite(Number(live.rxMbps || 0)) ? Number(live.rxMbps || 0) : 0,
+      txMbps: Number.isFinite(Number(live.txMbps || 0)) ? Number(live.txMbps || 0) : 0
     });
   } catch (e) {
-    return res.json({ ok: false, error: e.message || 'failed' });
-  } finally {
-    if (conn && conn.api) conn.api.close();
+    return res.json({
+      ok: true,
+      available: Boolean(username),
+      username: username || null,
+      live: { online: false, interface: null, source: 'fallback-error', uptime: null, rxMbps: 0, txMbps: 0 },
+      usage: usageBlock,
+      online: false,
+      rxMbps: 0,
+      txMbps: 0
+    });
   }
 });
 
@@ -4881,6 +4881,87 @@ router.post('/bookkeeping/:id/delete', requireAdminSession, restrictToAdmin, (re
   return redirectBack(res, '/admin/bookkeeping');
 });
 
+router.get('/usage-audit', requireAdminSession, restrictToAdmin, (req, res) => {
+  const rows = usageSvc.listUsageReplayAuditCurrentPeriod(new Date(), {
+    minDiffBytes: 1024 * 1024 * 1024,
+    minRatio: 1.25,
+    limit: 300
+  });
+  const stats = rows.reduce((acc, row) => {
+    acc.total += 1;
+    acc.totalStoredBytes += Number(row.storedTotalBytes || 0);
+    acc.totalRuntimeBytes += Number(row.runtimeTotalBytes || 0);
+    acc.totalDiffBytes += Number(row.diffBytes || 0);
+    if (row.repairable) {
+      acc.repairable += 1;
+      acc.totalRepairSavedBytes += Number(row.repairSavedBytes || 0);
+    } else {
+      acc.manualReview += 1;
+    }
+    return acc;
+  }, {
+    total: 0,
+    repairable: 0,
+    manualReview: 0,
+    totalStoredBytes: 0,
+    totalRuntimeBytes: 0,
+    totalDiffBytes: 0,
+    totalRepairSavedBytes: 0
+  });
+  res.render('admin/usage_audit', {
+    title: 'Audit Usage Pelanggan',
+    company: company(),
+    activePage: 'usage_audit',
+    rows,
+    stats,
+    msg: flashMsg(req),
+    settings: getSettings()
+  });
+});
+
+router.post('/usage-audit/repair-all', requireAdminSession, restrictToAdmin, (req, res) => {
+  try {
+    const results = usageSvc.repairUsageReplayForAllCurrentCustomers(new Date());
+    const repairedCount = Array.isArray(results) ? results.length : 0;
+    const savedBytes = (Array.isArray(results) ? results : []).reduce((sum, row) => (
+      sum + Math.max(0, Number(row?.savedBytes || 0))
+    ), 0);
+    req.session._msg = {
+      type: 'success',
+      text: repairedCount > 0
+        ? `Repair usage selesai untuk ${repairedCount} pelanggan. Hemat ${((savedBytes / (1024 ** 3)) || 0).toFixed(2)} GB duplikasi.`
+        : 'Tidak ada pelanggan yang perlu direpair otomatis.'
+    };
+  } catch (error) {
+    req.session._msg = { type: 'error', text: `Gagal repair usage massal: ${error.message}` };
+  }
+  return res.redirect('/admin/usage-audit');
+});
+
+router.post('/usage-audit/:id/repair', requireAdminSession, restrictToAdmin, (req, res) => {
+  try {
+    const customerId = Number(req.params.id || 0);
+    const customer = customerSvc.getCustomerById(customerId);
+    if (!customer) {
+      req.session._msg = { type: 'error', text: 'Pelanggan tidak ditemukan.' };
+      return res.redirect('/admin/usage-audit');
+    }
+    const result = usageSvc.repairUsageReplayForCurrentPeriod(customerId, new Date());
+    req.session._msg = result?.repaired
+      ? {
+          type: 'success',
+          text: `Usage ${customer.name} direpair. Dikoreksi ${((Number(result.savedBytes || 0) / (1024 ** 3)) || 0).toFixed(2)} GB.`
+        }
+      : {
+          type: 'success',
+          text: `Usage ${customer.name} sudah normal, tidak ada replay yang perlu diperbaiki.`
+        };
+  } catch (error) {
+    req.session._msg = { type: 'error', text: `Gagal repair usage pelanggan: ${error.message}` };
+  }
+  return res.redirect('/admin/usage-audit');
+});
+
 router.get('/settings', requireAdminSession, (req, res) => {
   const settings = getSettings();
   const stickySettings = popSettingsFormData(req);
@@ -6127,12 +6208,15 @@ router.get('/api/mikrotik/users', requireAdmin, async (req, res) => {
 
 // ─── MIKROTIK MONITORING ───────────────────────────────────────────────────
 router.get('/mikrotik', requireAdminSession, (req, res) => {
-  const routers = mikrotikService.getAllRouters();
-  res.render('admin/mikrotik', {
-    title: 'Monitoring MikroTik', company: company(), activePage: 'mikrotik', 
-    routers, msg: flashMsg(req)
+    const routers = mikrotikService.getAllRouters();
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.render('admin/mikrotik', {
+      title: 'Monitoring MikroTik', company: company(), activePage: 'mikrotik', 
+      routers, msg: flashMsg(req)
+    });
   });
-});
 
 router.get('/vouchers', requireAdminSession, (req, res) => {
   const routers = mikrotikService.getAllRouters();
@@ -6712,65 +6796,22 @@ router.post('/api/vouchers/batches/:id/delete', requireAdmin, async (req, res) =
 router.get('/api/mikrotik/secrets', requireAdmin, async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
-    const bypassCache = shouldForceMonitoringRefresh(req);
     const listQuery = parseMonitoringListQuery(req, 25);
-    const secretsOutcome = await getCachedMonitoringData({
-        kind: 'secrets',
-        routerId,
-        ttlMs: 10000,
-        loader: () => withLoaderTimeout(() => mikrotikService.getPppoeSecrets(routerId), 8000),
-        bypassCache
-      });
-    let activeOutcome;
-    try {
-      activeOutcome = await getCachedMonitoringData({
-        kind: 'active-pppoe',
-        routerId,
-        ttlMs: 2000,
-        loader: () => withLoaderTimeout(() => mikrotikService.getPppoeActive(routerId), 12000),
-        bypassCache
-      });
-    } catch (activeError) {
-      logger.warn(`[MikroTik API] PPPoE active fallback kosong: ${activeError.message}`);
-      activeOutcome = { data: [], cacheStatus: 'ERROR-FALLBACK' };
-    }
-    const data = Array.isArray(secretsOutcome.data) ? secretsOutcome.data : [];
-    const activeSessions = Array.isArray(activeOutcome.data) ? activeOutcome.data : [];
-    const activeByName = new Map(activeSessions.map((session) => [String(session?.name || ''), session]));
-    const trackingState = mikrotikService.syncPppoeMonitoringState(routerId, data, activeSessions);
-    const nowMs = Date.now();
-    const enriched = data.map((secret) => {
-      const username = String(secret?.name || '').trim();
-      const active = activeByName.get(username) || null;
-      const state = trackingState.get(username) || null;
-      const isDisabled = secret?.disabled === true || secret?.disabled === 'true';
-      const displayStatus = active
-        ? 'online'
-        : (isDisabled ? 'disabled' : 'offline');
-      const lastOnlineAt = state?.last_online_at || null;
-      const offlineSince = displayStatus === 'offline'
-        ? (state?.offline_since || null)
-        : null;
-      let offlineSeconds = null;
-      if (offlineSince) {
-        const parsedOfflineSince = Date.parse(offlineSince);
-        if (Number.isFinite(parsedOfflineSince)) {
-          offlineSeconds = Math.max(0, Math.floor((nowMs - parsedOfflineSince) / 1000));
-        }
-      }
-      return {
-        ...secret,
-        session: active,
-        sessionUptime: active?.uptime || null,
-        sessionRemoteAddress: active?.address || null,
-        isOnline: Boolean(active),
-        displayStatus,
-        lastOnlineAt,
-        offlineSince,
-        offlineSeconds
-      };
-    });
-    res.set('X-Mikrotik-Cache', `${secretsOutcome.cacheStatus}/${activeOutcome.cacheStatus}`);
+    const forceRefresh = shouldForceMonitoringRefresh(req);
+    const snapshot = forceRefresh
+      ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
+      : await monitoringCollectorSvc.getRouterSnapshot(routerId);
+    const enriched = Array.isArray(snapshot?.derived?.tables?.pppoe) ? snapshot.derived.tables.pppoe : [];
+    const derivedSummary = snapshot?.derived?.summary || {};
+    const totalAll = Number(derivedSummary.totalSecrets || 0);
+    const totalEnabled = Number(derivedSummary.totalSecretsActive || 0);
+    const onlineCount = Number(derivedSummary.pppoeOnline || 0);
+    const offlineCount = countUniquePppoeUsers(
+      enriched.filter((row) => row.displayStatus === 'offline')
+    );
+    const disabledCount = Number(derivedSummary.pppoeDisabled || 0);
+    const metadata = buildCollectorMetadata(snapshot);
+    res.set('X-Mikrotik-Cache', metadata.source);
     if (!listQuery.wantsMeta) {
       return res.json(enriched);
     }
@@ -6790,23 +6831,26 @@ router.get('/api/mikrotik/secrets', requireAdmin, async (req, res) => {
       items: pageData.items,
       page: pageData.page,
       limit: pageData.limit,
-      total: countUniqueMonitoringRows(enriched, ['.id', 'name']),
+      total: totalAll,
       totalPages: pageData.totalPages,
       filteredTotal: filtered.length,
-      onlineCount: countUniqueMonitoringRows(activeSessions, ['.id', 'name']),
+      onlineCount,
+      offlineCount,
+      disabledCount,
+      enabledCount: totalEnabled,
+      ...metadata,
       cache: {
-        secrets: secretsOutcome.cacheStatus,
-        active: activeOutcome.cacheStatus
+        snapshot: metadata.source
       }
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 
 router.post('/api/mikrotik/secrets', requireAdmin, express.json(), async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.addPppoeSecret(req.body, routerId);
-    clearMonitoringCache(routerId, ['secrets', 'active-pppoe']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6815,7 +6859,7 @@ router.post('/api/mikrotik/secrets/:id/update', requireAdmin, express.json(), as
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.updatePppoeSecret(req.params.id, req.body, routerId);
-    clearMonitoringCache(routerId, ['secrets', 'active-pppoe']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6824,7 +6868,7 @@ router.post('/api/mikrotik/secrets/:id/delete', requireAdmin, async (req, res) =
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.deletePppoeSecret(req.params.id, routerId);
-    clearMonitoringCache(routerId, ['secrets', 'active-pppoe']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6832,76 +6876,60 @@ router.post('/api/mikrotik/secrets/:id/delete', requireAdmin, async (req, res) =
 router.get('/api/mikrotik/hotspot-users', requireAdmin, async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
-    const bypassCache = shouldForceMonitoringRefresh(req);
     const listQuery = parseMonitoringListQuery(req, 25);
-    const usersOutcome = await getCachedMonitoringData({
-        kind: 'hotspot-users',
-        routerId,
-        ttlMs: 10000,
-        loader: () => withLoaderTimeout(() => mikrotikService.getHotspotUsers(routerId), 8000),
-        bypassCache
-      });
-    let activeOutcome;
-    try {
-      activeOutcome = await getCachedMonitoringData({
-        kind: 'active-hotspot',
-        routerId,
-        ttlMs: 2000,
-        loader: () => withLoaderTimeout(() => mikrotikService.getHotspotActive(routerId), 12000),
-        bypassCache
-      });
-    } catch (activeError) {
-      logger.warn(`[MikroTik API] Hotspot active fallback kosong: ${activeError.message}`);
-      activeOutcome = { data: [], cacheStatus: 'ERROR-FALLBACK' };
-    }
-    const data = Array.isArray(usersOutcome.data) ? usersOutcome.data : [];
-    const activeSessions = Array.isArray(activeOutcome.data) ? activeOutcome.data : [];
-    const activeByUser = new Map(activeSessions.map((session) => [String(session?.user || ''), session]));
-    const enriched = data.map((user) => {
-      const active = activeByUser.get(String(user?.name || '')) || null;
-      return {
-        ...user,
-        session: active,
-        sessionUptime: active?.uptime || null,
-        sessionAddress: active?.address || null,
-        isOnline: Boolean(active),
-        displayStatus: active
-          ? 'online'
-          : (user?.disabled === true || user?.disabled === 'true' ? 'disabled' : 'offline')
-      };
-    });
-    res.set('X-Mikrotik-Cache', `${usersOutcome.cacheStatus}/${activeOutcome.cacheStatus}`);
+    const forceRefresh = shouldForceMonitoringRefresh(req);
+    const snapshot = forceRefresh
+      ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
+      : await monitoringCollectorSvc.getRouterSnapshot(routerId);
+    const enriched = Array.isArray(snapshot?.derived?.tables?.hotspot) ? snapshot.derived.tables.hotspot : [];
+    const derivedSummary = snapshot?.derived?.summary || {};
+    const totalAll = Number(derivedSummary.totalHotspot || 0);
+    const totalEnabled = Number(derivedSummary.totalHotspotActive || 0);
+    const onlineCount = Number(derivedSummary.hotspotOnline || 0);
+    const offlineCount = countUniqueHotspotUsers(
+      enriched.filter((row) => row.displayStatus === 'offline')
+    );
+    const disabledCount = Number(derivedSummary.hotspotDisabled || 0);
+    const metadata = buildCollectorMetadata(snapshot);
+    res.set('X-Mikrotik-Cache', metadata.source);
     if (!listQuery.wantsMeta) {
       return res.json(enriched);
     }
-    const filtered = listQuery.q
-      ? enriched.filter((row) => matchesMonitoringSearch(row, listQuery.q, [
+    let filtered = enriched;
+    if (listQuery.status === 'online' || listQuery.status === 'offline' || listQuery.status === 'disabled') {
+      filtered = filtered.filter((row) => row.displayStatus === listQuery.status);
+    }
+    if (listQuery.q) {
+      filtered = filtered.filter((row) => matchesMonitoringSearch(row, listQuery.q, [
           'name', 'profile', 'address', 'comment', 'limit-uptime',
           'limitUptime', 'mac-address', 'server', 'sessionAddress'
-        ]))
-      : enriched;
+        ]));
+    }
     const pageData = paginateMonitoringRows(filtered, listQuery.page, listQuery.limit);
     res.json({
       items: pageData.items,
       page: pageData.page,
       limit: pageData.limit,
-      total: countUniqueMonitoringRows(enriched, ['.id', 'name']),
+      total: totalAll,
       totalPages: pageData.totalPages,
       filteredTotal: filtered.length,
-      onlineCount: countUniqueMonitoringRows(activeSessions, ['.id', (row) => `${row?.user || ''}|${row?.address || ''}`, 'user']),
+      onlineCount,
+      offlineCount,
+      disabledCount,
+      enabledCount: totalEnabled,
+      ...metadata,
       cache: {
-        users: usersOutcome.cacheStatus,
-        active: activeOutcome.cacheStatus
+        snapshot: metadata.source
       }
     });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 
 router.post('/api/mikrotik/hotspot-users', requireAdmin, express.json(), async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.addHotspotUser(req.body, routerId);
-    clearMonitoringCache(routerId, ['hotspot-users', 'active-hotspot']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6910,7 +6938,7 @@ router.post('/api/mikrotik/hotspot-users/:id/update', requireAdmin, express.json
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.updateHotspotUser(req.params.id, req.body, routerId);
-    clearMonitoringCache(routerId, ['hotspot-users', 'active-hotspot']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6919,7 +6947,7 @@ router.post('/api/mikrotik/hotspot-users/:id/delete', requireAdmin, async (req, 
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
     await mikrotikService.deleteHotspotUser(req.params.id, routerId);
-    clearMonitoringCache(routerId, ['hotspot-users', 'active-hotspot']);
+      clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -6931,52 +6959,63 @@ router.get('/api/mikrotik/hotspot-profiles', requireAdmin, async (req, res) => {
 router.get('/api/mikrotik/active-pppoe', requireAdmin, async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
-    const bypassCache = shouldForceMonitoringRefresh(req);
-    const { data, cacheStatus } = await getCachedMonitoringData({
-      kind: 'active-pppoe',
-      routerId,
-      ttlMs: 2000,
-      loader: () => withLoaderTimeout(() => mikrotikService.getPppoeActive(routerId), 20000),
-      bypassCache
+    const forceRefresh = shouldForceMonitoringRefresh(req);
+    const snapshot = forceRefresh
+      ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
+      : await monitoringCollectorSvc.getRouterSnapshot(routerId);
+    const metadata = buildCollectorMetadata(snapshot);
+    res.set('X-Mikrotik-Cache', metadata.source);
+    res.json({
+      items: Array.isArray(snapshot?.raw?.pppoeActiveRaw) ? snapshot.raw.pppoeActiveRaw : [],
+      ...metadata
     });
-    res.set('X-Mikrotik-Cache', cacheStatus);
-    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/api/mikrotik/active-hotspot', requireAdmin, async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
-    const bypassCache = shouldForceMonitoringRefresh(req);
-    const { data, cacheStatus } = await getCachedMonitoringData({
-      kind: 'active-hotspot',
-      routerId,
-      ttlMs: 2000,
-      loader: () => withLoaderTimeout(() => mikrotikService.getHotspotActive(routerId), 20000),
-      bypassCache
+    const forceRefresh = shouldForceMonitoringRefresh(req);
+    const snapshot = forceRefresh
+      ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
+      : await monitoringCollectorSvc.getRouterSnapshot(routerId);
+    const metadata = buildCollectorMetadata(snapshot);
+    res.set('X-Mikrotik-Cache', metadata.source);
+    res.json({
+      items: Array.isArray(snapshot?.raw?.hotspotActiveRaw) ? snapshot.raw.hotspotActiveRaw : [],
+      ...metadata
     });
-    res.set('X-Mikrotik-Cache', cacheStatus);
-    res.json(data);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/api/mikrotik/summary', requireAdmin, async (req, res) => {
   try {
     const routerId = req.query.routerId ? Number(req.query.routerId) : null;
-    const bypassCache = shouldForceMonitoringRefresh(req);
-    const summaryResult = await getCachedMonitoringData({
-      kind: 'summary',
-      routerId,
-      ttlMs: 3000,
-      loader: () => withLoaderTimeout(() => mikrotikService.getMonitoringSummary(routerId), 20000),
-      bypassCache
-    });
-
-    res.set('X-Mikrotik-Cache', summaryResult.cacheStatus);
+    const forceRefresh = shouldForceMonitoringRefresh(req);
+    const snapshot = forceRefresh
+      ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
+      : await monitoringCollectorSvc.getRouterSnapshot(routerId);
+    const summary = snapshot?.derived?.summary || {};
+    const metadata = buildCollectorMetadata(snapshot);
+    const summaryPayload = {
+      pppoeOnline: Number(summary.pppoeOnline || 0),
+      pppoeOffline: Number(summary.pppoeOffline || 0),
+      pppoeDisabled: Number(summary.pppoeDisabled || 0),
+      hotspotOnline: Number(summary.hotspotOnline || 0),
+      hotspotOffline: Number(summary.hotspotOffline || 0),
+      hotspotDisabled: Number(summary.hotspotDisabled || 0),
+      totalSecrets: Number(summary.totalSecrets || 0),
+      totalSecretsActive: Number(summary.totalSecretsActive || 0),
+      totalHotspot: Number(summary.totalHotspot || 0),
+      totalHotspotActive: Number(summary.totalHotspotActive || 0),
+      source: metadata.source
+    };
+    res.set('X-Mikrotik-Cache', metadata.source);
     res.json({
-      ...summaryResult.data,
+      ...summaryPayload,
+      ...metadata,
       cache: {
-        summary: summaryResult.cacheStatus
+        summary: metadata.source
       }
     });
   } catch (e) {
@@ -7601,6 +7640,12 @@ router.post('/whatsapp/test-template', requireAdminSession, express.urlencoded({
 
 router.post('/whatsapp/reset', requireAdminSession, (req, res) => {
   try {
+    const confirmText = String(req.body?.confirm_reset_text || '').trim().toUpperCase();
+    if (confirmText !== 'RESET WA') {
+      req.session._msg = { text: 'Reset sesi dibatalkan. Ketik "RESET WA" untuk mengonfirmasi penghapusan sesi WhatsApp.', type: 'warning' };
+      return res.redirect('/admin/whatsapp');
+    }
+
     const authFolder = getSetting('whatsapp_auth_folder', 'auth_info_baileys');
     const folderPath = path.resolve(__dirname, '..', authFolder);
     
@@ -7667,6 +7712,7 @@ router.get('/routers', requireAdminSession, (req, res) => {
 router.post('/routers', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
   try {
     mikrotikService.createRouter(req.body);
+    monitoringCollectorSvc.syncConfiguredRouters();
     req.session._msg = { type: 'success', text: `Router "${req.body.name}" berhasil ditambahkan.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
@@ -7677,6 +7723,7 @@ router.post('/routers', requireAdminSession, express.urlencoded({ extended: true
 router.post('/routers/:id/update', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
   try {
     mikrotikService.updateRouter(req.params.id, req.body);
+    monitoringCollectorSvc.syncConfiguredRouters();
     req.session._msg = { type: 'success', text: 'Router berhasil diperbarui.' };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
@@ -7687,6 +7734,7 @@ router.post('/routers/:id/update', requireAdminSession, express.urlencoded({ ext
 router.post('/routers/:id/delete', requireAdminSession, (req, res) => {
   try {
     mikrotikService.deleteRouter(req.params.id);
+    monitoringCollectorSvc.syncConfiguredRouters();
     req.session._msg = { type: 'success', text: 'Router berhasil dihapus.' };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };

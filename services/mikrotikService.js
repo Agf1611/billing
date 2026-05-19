@@ -1,4 +1,5 @@
 const dns = require('dns');
+const net = require('net');
 const { URL } = require('url');
 const RosClient = require('ros-client');
 const { RouterOSClient } = require('routeros-client');
@@ -7,6 +8,62 @@ const { logger } = require('../config/logger');
 const db = require('../config/database');
 
 const MIKROTIK_CONNECT_TIMEOUT_MS = 1200;
+const connectionProbeCache = new Map();
+const listCache = new Map();
+
+function cacheKey(routerId, name) {
+  const rid = routerId == null || String(routerId).trim() === '' ? 'default' : String(routerId).trim();
+  return `${name}:${rid}`;
+}
+
+function getCachedList(key, ttlMs) {
+  const hit = listCache.get(key);
+  if (!hit) return null;
+  const age = Date.now() - Number(hit.ts || 0);
+  if (age >= Math.max(0, Number(ttlMs) || 0)) return null;
+  return hit.data;
+}
+
+function setCachedList(key, data) {
+  listCache.set(key, { ts: Date.now(), data });
+}
+
+function invalidateListCaches(routerId, names = []) {
+  for (const name of Array.isArray(names) ? names : []) {
+    listCache.delete(cacheKey(routerId, name));
+  }
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  const ms = Math.max(200, Number(timeoutMs) || 0);
+  if (!ms) return promise;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const t = setTimeout(() => {
+        clearTimeout(t);
+        reject(new Error(`Timeout ${ms}ms${label ? `: ${label}` : ''}`));
+      }, ms);
+    })
+  ]);
+}
+
+async function canConnectTcp(host, port, timeoutMs = MIKROTIK_CONNECT_TIMEOUT_MS) {
+  const h = String(host || '').trim();
+  const p = Number(port) || 0;
+  if (!h || !p) return false;
+  return await new Promise((resolve) => {
+    const socket = net.connect({ host: h, port: p });
+    const done = (ok) => {
+      try { socket.destroy(); } catch {}
+      resolve(Boolean(ok));
+    };
+    socket.setTimeout(Math.max(200, Number(timeoutMs) || MIKROTIK_CONNECT_TIMEOUT_MS));
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+  });
+}
 
 function toKebabCase(key) {
   const s = String(key || '').trim();
@@ -228,9 +285,14 @@ async function getRosClientConnection(config) {
     password: config.password,
     port: Number(config.port) || 8728,
     tls: Boolean(config.useTls),
-    timeout: MIKROTIK_CONNECT_TIMEOUT_MS
+    timeout: Math.max(MIKROTIK_CONNECT_TIMEOUT_MS, 5000)
   });
-  await api.connect();
+  if (typeof api.on === 'function') {
+    api.on('error', (err) => {
+      logger.error(`[MikroTik] ros-client error (${config.host}:${config.port}): ${err?.message || err}`);
+    });
+  }
+  await withTimeout(api.connect(), Math.max(MIKROTIK_CONNECT_TIMEOUT_MS, 5000), `ros-client ${config.host}:${config.port}`);
   const originalClose = typeof api.close === 'function' ? api.close.bind(api) : null;
   const originalDisconnect = typeof api.disconnect === 'function' ? api.disconnect.bind(api) : null;
   api.close = async () => {
@@ -251,13 +313,11 @@ async function getRouterOsClientConnection(config) {
     user: config.user,
     password: config.password
   });
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`Connection timeout after ${MIKROTIK_CONNECT_TIMEOUT_MS}ms`)), MIKROTIK_CONNECT_TIMEOUT_MS);
-  });
-  const client = await Promise.race([
+  const client = await withTimeout(
     api.connect(),
-    timeoutPromise
-  ]).catch(async (error) => {
+    Math.max(MIKROTIK_CONNECT_TIMEOUT_MS, 5000),
+    `routeros-client ${config.host}:${config.port}`
+  ).catch(async (error) => {
     try { await api.close(); } catch {}
     throw error;
   });
@@ -274,8 +334,63 @@ async function getRouterOsClientConnection(config) {
   };
 }
 
+async function resolveConnectableConfig(baseConfig) {
+  const configuredPort = Number(baseConfig?.port) || 8728;
+  const fallbackPort = configuredPort === 8728 ? 8729 : 8728;
+  const probeKey = `${String(baseConfig?.host || '').trim()}:${String(baseConfig?.user || '').trim()}:${configuredPort}`;
+  const now = Date.now();
+  const cached = connectionProbeCache.get(probeKey);
+
+  if (cached && cached.failUntil && now < cached.failUntil) {
+    const e = new Error(cached.failMessage || `Tidak bisa konek ke MikroTik ${baseConfig.host}:${configuredPort}.`);
+    e.code = 'ECONNREFUSED';
+    throw e;
+  }
+
+  let selectedPort = (cached && cached.okUntil && now < cached.okUntil && cached.port)
+    ? Number(cached.port)
+    : 0;
+
+  if (!selectedPort) {
+    const candidates = configuredPort === fallbackPort ? [configuredPort] : [configuredPort, fallbackPort];
+    for (const port of candidates) {
+      const ok = await canConnectTcp(baseConfig.host, port, MIKROTIK_CONNECT_TIMEOUT_MS);
+      if (ok) {
+        selectedPort = port;
+        break;
+      }
+    }
+  }
+
+  if (!selectedPort) {
+    const failMessage = `Tidak bisa konek ke MikroTik ${baseConfig.host}:${configuredPort} (juga sudah coba ${fallbackPort}). Pastikan API 8728 atau API-SSL 8729 aktif.`;
+    connectionProbeCache.set(probeKey, {
+      port: 0,
+      okUntil: 0,
+      failUntil: now + 5000,
+      failMessage
+    });
+    const e = new Error(failMessage);
+    e.code = 'ECONNREFUSED';
+    throw e;
+  }
+
+  connectionProbeCache.set(probeKey, {
+    port: selectedPort,
+    okUntil: now + 30000,
+    failUntil: 0,
+    failMessage: ''
+  });
+
+  return {
+    ...baseConfig,
+    port: selectedPort,
+    useTls: selectedPort === 8729 || Boolean(baseConfig?.useTls)
+  };
+}
+
 async function getConnection(routerId = null) {
-  const config = resolveRouterConfig(routerId);
+  const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
   const attempts = [];
   if (config.routerOsMode === 'routeros_v6') {
     attempts.push(['routeros-client', () => getRouterOsClientConnection(config)]);
@@ -296,6 +411,16 @@ async function getConnection(routerId = null) {
       return connection;
     } catch (err) {
       lastError = err;
+      const probeKey = `${String(config.host || '').trim()}:${String(config.user || '').trim()}:${String(config.port || '').trim()}`;
+      const msg = String(err?.message || err || '');
+      if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('EHOSTUNREACH') || msg.includes('Timeout')) {
+        connectionProbeCache.set(probeKey, {
+          port: 0,
+          okUntil: 0,
+          failUntil: Date.now() + 5000,
+          failMessage: `Tidak bisa konek ke MikroTik ${config.host}:${config.port}. ${msg}`
+        });
+      }
       logger.warn(`[MikroTik] Connection attempt via ${driverName} failed for ${config.host}:${config.port}: ${err.message}`);
     }
   }
@@ -309,12 +434,12 @@ async function getPppoeProfilesViaRouterOsClient(routerId = null) {
 }
 
 async function getForcedRouterOsConnection(routerId = null) {
-  const config = resolveRouterConfig(routerId);
+  const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
   return await getRouterOsClientConnection(config);
 }
 
 async function getForcedRosConnection(routerId = null) {
-  const config = resolveRouterConfig(routerId);
+  const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
   return await getRosClientConnection(config);
 }
 
@@ -385,13 +510,16 @@ async function checkConnection(routerId = null) {
 }
 
 async function getPppoeProfiles(routerId = null) {
+  const ck = cacheKey(routerId, 'pppoeProfiles');
+  const cached = getCachedList(ck, 15000);
+  if (cached) return cached;
   try {
-    const results = await getMenuRowsViaRouterOsClient(
+    const results = await getMenuRowsViaStableConnection(
       routerId,
       '/ppp/profile',
       ['.id', 'name', 'local-address', 'remote-address', 'rate-limit', 'only-one']
     );
-    return results.map(r => ({
+    const mapped = results.map(r => ({
       id: r['.id'],
       name: r.name,
       localAddress: r.localAddress || r['local-address'] || '-',
@@ -399,6 +527,8 @@ async function getPppoeProfiles(routerId = null) {
       rateLimit: r.rateLimit || r['rate-limit'] || '-',
       onlyOne: r.onlyOne || r['only-one'] || '-'
     }));
+    setCachedList(ck, mapped);
+    return mapped;
   } catch (e) {
     logger.error('Error getting PPPoE profiles:', e);
     return [];
@@ -532,9 +662,15 @@ async function kickHotspotUser(username, routerId = null) {
   }
 }
 
-async function getPppoeSecrets(routerId = null) {
+async function getPppoeSecrets(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'pppoeSecrets');
+  const cached = bypassCache ? null : getCachedList(ck, 8000);
+  if (cached) return cached;
   try {
-    return await getMenuRowsViaStableConnection(routerId, '/ppp/secret');
+    const rows = await getMenuRowsViaStableConnection(routerId, '/ppp/secret');
+    setCachedList(ck, rows);
+    return rows;
   } catch (e) {
     logger.error('Error getting PPPoE secrets:', e);
     return [];
@@ -545,7 +681,9 @@ async function addPppoeSecret(data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/secret').add(data);
+    const res = await conn.client.menu('/ppp/secret').add(data);
+    invalidateListCaches(routerId, ['pppoeSecrets', 'pppoeActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -555,7 +693,9 @@ async function updatePppoeSecret(id, data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/secret').set(data, id);
+    const res = await conn.client.menu('/ppp/secret').set(data, id);
+    invalidateListCaches(routerId, ['pppoeSecrets', 'pppoeActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -565,16 +705,25 @@ async function deletePppoeSecret(id, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/secret').remove(id);
+    const res = await conn.client.menu('/ppp/secret').remove(id);
+    invalidateListCaches(routerId, ['pppoeSecrets', 'pppoeActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
 }
 
-async function getPppoeActive(routerId = null) {
-  let conn = null;
+async function getPppoeActive(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'pppoeActive');
+  const cached = bypassCache ? null : getCachedList(ck, 3000);
+  if (cached) return cached;
   try {
-    const activeRows = await getMenuRowsViaStableConnection(routerId, '/ppp/active');
+    const activeRows = await getMenuRowsViaStableConnection(
+      routerId,
+      '/ppp/active',
+      ['.id', 'session-id', 'name', 'service', 'address', 'uptime', 'caller-id', 'interface', 'bytes-in', 'bytes-out']
+    );
     const sessions = Array.isArray(activeRows) ? activeRows.map(augmentRow) : [];
     const needsInterfaceStats = sessions.some((row) =>
       (row?.['bytes-in'] === undefined || row?.['bytes-in'] === null || row?.['bytes-in'] === '') &&
@@ -583,46 +732,80 @@ async function getPppoeActive(routerId = null) {
       (row?.bytesOut === undefined || row?.bytesOut === null || row?.bytesOut === '')
     );
 
-    if (sessions.length && needsInterfaceStats) {
-      try {
-        conn = await getConnection(routerId);
-        const interfaceRows = await conn.client.menu('/interface').where('type', 'pppoe-in').where('running', 'true').get({
-          proplist: ['.id', 'name', 'type', 'rx-byte', 'tx-byte', 'running', 'dynamic']
-        });
-        const interfaceMap = new Map();
-        for (const row of Array.isArray(interfaceRows) ? interfaceRows : []) {
-          const interfaceName = String(row?.name || '').trim();
-          const match = interfaceName.match(/^<pppoe-(.+)>$/i);
-          const username = String(match?.[1] || '').trim();
-          if (!username) continue;
-          interfaceMap.set(username, augmentRow(row));
-        }
+    if (sessions.length) {
+      if (needsInterfaceStats) {
+        try {
+          const interfaceRows = await getMenuRowsViaStableConnection(
+            routerId,
+            '/interface',
+            ['.id', 'name', 'type', 'rx-byte', 'tx-byte', 'running', 'dynamic']
+          );
+          const interfaceMap = new Map();
+          for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
+            const row = augmentRow(rawRow);
+            if (String(row?.type || '').trim() !== 'pppoe-in') continue;
+            const interfaceName = String(row?.name || '').trim();
+            const match = interfaceName.match(/^<pppoe-(.+)>$/i);
+            const username = String(match?.[1] || '').trim();
+            if (!username) continue;
+            interfaceMap.set(username, row);
+          }
 
-        for (const row of sessions) {
-          const iface = interfaceMap.get(String(row?.name || '').trim());
-          if (!iface) continue;
-          const bytesIn = iface['rx-byte'] ?? iface.rxByte ?? '0';
-          const bytesOut = iface['tx-byte'] ?? iface.txByte ?? '0';
-
-          if (row['bytes-in'] === undefined || row['bytes-in'] === null || row['bytes-in'] === '') row['bytes-in'] = bytesIn;
-          if (row.bytesIn === undefined || row.bytesIn === null || row.bytesIn === '') row.bytesIn = row['bytes-in'];
-          if (row['bytes-out'] === undefined || row['bytes-out'] === null || row['bytes-out'] === '') row['bytes-out'] = bytesOut;
-          if (row.bytesOut === undefined || row.bytesOut === null || row.bytesOut === '') row.bytesOut = row['bytes-out'];
-          if (row.interface === undefined || row.interface === null || row.interface === '') row.interface = iface.name;
+          for (const row of sessions) {
+            const iface = interfaceMap.get(String(row?.name || '').trim());
+            if (!iface) continue;
+            const bytesIn = iface['rx-byte'] ?? iface.rxByte ?? '0';
+            const bytesOut = iface['tx-byte'] ?? iface.txByte ?? '0';
+            if (row['bytes-in'] === undefined || row['bytes-in'] === null || row['bytes-in'] === '') row['bytes-in'] = bytesIn;
+            if (row.bytesIn === undefined || row.bytesIn === null || row.bytesIn === '') row.bytesIn = row['bytes-in'];
+            if (row['bytes-out'] === undefined || row['bytes-out'] === null || row['bytes-out'] === '') row['bytes-out'] = bytesOut;
+            if (row.bytesOut === undefined || row.bytesOut === null || row.bytesOut === '') row.bytesOut = row['bytes-out'];
+            if (row.interface === undefined || row.interface === null || row.interface === '') row.interface = iface.name;
+          }
+        } catch (ifaceErr) {
+          logger.warn(`[MikroTik] Failed to enrich PPPoE interface byte counters: ${ifaceErr.message}`);
         }
-      } catch (ifaceErr) {
-        logger.warn(`[MikroTik] Failed to enrich PPPoE interface byte counters: ${ifaceErr.message}`);
       }
+      setCachedList(ck, sessions);
+      return sessions;
     }
 
-    return sessions;
+    const interfaceRows = await getMenuRowsViaStableConnection(
+      routerId,
+      '/interface',
+      ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time']
+    );
+    const fallbackSessions = [];
+    for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
+      const row = augmentRow(rawRow);
+      if (String(row?.type || '').trim() !== 'pppoe-in') continue;
+      if (String(row?.running || '').trim() !== 'true' && row?.running !== true) continue;
+      const interfaceName = String(row?.name || '').trim();
+      const match = interfaceName.match(/^<pppoe-(.+)>$/i);
+      const username = String(match?.[1] || '').trim();
+      if (!username) continue;
+      const bytesIn = row['rx-byte'] ?? row.rxByte ?? '0';
+      const bytesOut = row['tx-byte'] ?? row.txByte ?? '0';
+      fallbackSessions.push(augmentRow({
+        '.id': row['.id'] || row.id || interfaceName,
+        name: username,
+        service: 'pppoe',
+        interface: interfaceName,
+        uptime: row.uptime || row['uptime'] || row['last-link-up-time'] || '',
+        'bytes-in': bytesIn,
+        bytesIn,
+        'bytes-out': bytesOut,
+        bytesOut,
+        address: row.address || row['address'] || '',
+        callerId: row.callerId || row['caller-id'] || ''
+      }));
+    }
+
+    setCachedList(ck, fallbackSessions);
+    return fallbackSessions;
   } catch (e) {
     logger.error('Error getting active PPPoE sessions:', e);
     return [];
-  } finally {
-    try {
-      if (conn && conn.api) await conn.api.close();
-    } catch {}
   }
 }
 
@@ -803,7 +986,7 @@ function buildPppoeCustomerSnapshot({ username, secret, active, profile } = {}) 
   const rateLimit = pickPppoeSnapshotText(profile?.rateLimit, profile?.['rate-limit']);
   const iface = pickPppoeSnapshotText(active?.interface, active?.['interface-name'], active?.name);
   const uptime = pickPppoeSnapshotText(active?.uptime);
-  const sessionId = pickPppoeSnapshotText(active?.['.id'], active?.id);
+  const sessionId = pickPppoeSnapshotText(active?.['session-id'], active?.sessionId, active?.['.id'], active?.id);
   const bytesIn = pickPppoeSnapshotNumber(active?.bytesIn, active?.['bytes-in'], active?.bytes_in);
   const bytesOut = pickPppoeSnapshotNumber(active?.bytesOut, active?.['bytes-out'], active?.bytes_out);
   const online = Boolean(active);
@@ -949,39 +1132,62 @@ async function getPppoeCustomerSnapshot(username, routerId = null, reuseConn = n
   return null;
 }
 
-async function getHotspotActive(routerId = null) {
+async function getHotspotActive(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'hotspotActive');
+  const cached = bypassCache ? null : getCachedList(ck, 5000);
+  if (cached) return cached;
   try {
-    return await getMenuRowsViaStableConnection(
+    const rows = await withTimeout(getMenuRowsViaStableConnection(
       routerId,
       '/ip/hotspot/active',
       ['.id', 'user', 'address', 'mac-address', 'uptime', 'login-by', 'server']
-    );
+    ), 5000, 'getHotspotActive');
+    setCachedList(ck, rows);
+    return rows;
   } catch (e) {
     logger.error('Error getting active Hotspot sessions:', e);
     return [];
   }
 }
 
-async function getMonitoringSummary(routerId = null) {
-  try {
-    const [secrets, activePppoe, hotspotUsers, activeHotspot] = await Promise.all([
-      withMikrotikTimeout(getPppoeSecrets(routerId), 9000, []),
-      withMikrotikTimeout(getPppoeActive(routerId), 12000, []),
-      withMikrotikTimeout(getHotspotUsers(routerId), 9000, []),
-      withMikrotikTimeout(getHotspotActive(routerId), 12000, [])
-    ]);
+async function getMonitoringSnapshot(routerId = null) {
+  const [secrets, activePppoe, hotspotUsers, hotspotActive] = await Promise.all([
+    withMikrotikTimeout(getPppoeSecrets(routerId), 10000, []),
+    withMikrotikTimeout(getPppoeActive(routerId), 12000, []),
+    withMikrotikTimeout(getHotspotUsers(routerId), 10000, []),
+    withMikrotikTimeout(getHotspotActive(routerId), 12000, [])
+  ]);
+  return {
+    secrets: Array.isArray(secrets) ? secrets : [],
+    activePppoe: Array.isArray(activePppoe) ? activePppoe : [],
+    hotspotUsers: Array.isArray(hotspotUsers) ? hotspotUsers : [],
+    hotspotActive: Array.isArray(hotspotActive) ? hotspotActive : [],
+    source: 'snapshot-stable-loaders'
+  };
+}
 
-    return {
-      pppoeOnline: Array.isArray(activePppoe) ? activePppoe.length : 0,
-      hotspotOnline: Array.isArray(activeHotspot) ? activeHotspot.length : 0,
-      totalSecrets: Array.isArray(secrets) ? secrets.length : 0,
-      totalHotspot: Array.isArray(hotspotUsers) ? hotspotUsers.length : 0,
-      source: 'live-services'
-    };
-  } catch (e) {
-    logger.error('Error getting MikroTik monitoring summary:', e);
-    throw e;
-  }
+async function getMonitoringSummary(routerId = null) {
+    try {
+      const [secrets, activePppoe, hotspotUsers, activeHotspot] = await Promise.all([
+        withMikrotikTimeout(getPppoeSecrets(routerId, { bypassCache: true }), 10000, []),
+        withMikrotikTimeout(getPppoeActive(routerId, { bypassCache: true }), 12000, []),
+        withMikrotikTimeout(getHotspotUsers(routerId, { bypassCache: true }), 10000, []),
+        withMikrotikTimeout(getHotspotActive(routerId, { bypassCache: true }), 12000, [])
+      ]);
+      const snapshotSource = 'direct-live-services';
+
+      return {
+        pppoeOnline: Array.isArray(activePppoe) ? activePppoe.length : 0,
+        hotspotOnline: Array.isArray(activeHotspot) ? activeHotspot.length : 0,
+        totalSecrets: Array.isArray(secrets) ? secrets.length : 0,
+        totalHotspot: Array.isArray(hotspotUsers) ? hotspotUsers.length : 0,
+        source: snapshotSource
+      };
+    } catch (e) {
+      logger.error('Error getting MikroTik monitoring summary:', e);
+      throw e;
+    }
 }
 
 // PPPoE Profiles CRUD
@@ -989,7 +1195,9 @@ async function addPppoeProfile(data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/profile').add(data);
+    const res = await conn.client.menu('/ppp/profile').add(data);
+    invalidateListCaches(routerId, ['pppoeProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error adding PPPoE profile:', e);
     throw e;
@@ -1002,7 +1210,9 @@ async function updatePppoeProfile(id, data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/profile').set(data, id);
+    const res = await conn.client.menu('/ppp/profile').set(data, id);
+    invalidateListCaches(routerId, ['pppoeProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error updating PPPoE profile:', e);
     throw e;
@@ -1015,7 +1225,9 @@ async function deletePppoeProfile(id, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ppp/profile').remove(id);
+    const res = await conn.client.menu('/ppp/profile').remove(id);
+    invalidateListCaches(routerId, ['pppoeProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error deleting PPPoE profile:', e);
     throw e;
@@ -1026,12 +1238,18 @@ async function deletePppoeProfile(id, routerId = null) {
 
 // Hotspot Profiles CRUD (User Profiles)
 async function getHotspotUserProfiles(routerId = null) {
+  const ck = cacheKey(routerId, 'hotspotUserProfiles');
+  const cached = getCachedList(ck, 30000);
+  if (cached) return cached;
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user/profile').get({
+    const results = await conn.client.menu('/ip/hotspot/user/profile').get({
       proplist: ['.id', 'name', 'rate-limit', 'shared-users', 'session-timeout', 'on-login']
     });
+    const mapped = Array.isArray(results) ? results.map(augmentRow) : [];
+    setCachedList(ck, mapped);
+    return mapped;
   } catch (e) {
     logger.error('Error getting Hotspot user profiles:', e);
     return [];
@@ -1044,7 +1262,9 @@ async function addHotspotUserProfile(data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user/profile').add(data);
+    const res = await conn.client.menu('/ip/hotspot/user/profile').add(data);
+    invalidateListCaches(routerId, ['hotspotUserProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error adding Hotspot user profile:', e);
     throw e;
@@ -1057,7 +1277,9 @@ async function updateHotspotUserProfile(id, data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user/profile').set(data, id);
+    const res = await conn.client.menu('/ip/hotspot/user/profile').set(data, id);
+    invalidateListCaches(routerId, ['hotspotUserProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error updating Hotspot user profile:', e);
     throw e;
@@ -1070,7 +1292,9 @@ async function deleteHotspotUserProfile(id, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user/profile').remove(id);
+    const res = await conn.client.menu('/ip/hotspot/user/profile').remove(id);
+    invalidateListCaches(routerId, ['hotspotUserProfiles']);
+    return res;
   } catch (e) {
     logger.error('Error deleting Hotspot user profile:', e);
     throw e;
@@ -1079,9 +1303,15 @@ async function deleteHotspotUserProfile(id, routerId = null) {
   }
 }
 
-async function getHotspotUsers(routerId = null) {
+async function getHotspotUsers(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'hotspotUsers');
+  const cached = bypassCache ? null : getCachedList(ck, 15000);
+  if (cached) return cached;
   try {
-    return await getMenuRowsViaStableConnection(routerId, '/ip/hotspot/user');
+    const rows = await withTimeout(getMenuRowsViaStableConnection(routerId, '/ip/hotspot/user'), 10000, 'getHotspotUsers');
+    setCachedList(ck, rows);
+    return rows;
   } catch (e) {
     logger.error('Error getting Hotspot users:', e);
     return [];
@@ -1092,7 +1322,9 @@ async function addHotspotUser(data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user').add(data);
+    const res = await conn.client.menu('/ip/hotspot/user').add(data);
+    invalidateListCaches(routerId, ['hotspotUsers', 'hotspotActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1102,7 +1334,9 @@ async function updateHotspotUser(id, data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user').set(data, id);
+    const res = await conn.client.menu('/ip/hotspot/user').set(data, id);
+    invalidateListCaches(routerId, ['hotspotUsers', 'hotspotActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1112,7 +1346,9 @@ async function deleteHotspotUser(id, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/user').remove(id);
+    const res = await conn.client.menu('/ip/hotspot/user').remove(id);
+    invalidateListCaches(routerId, ['hotspotUsers', 'hotspotActive']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1160,10 +1396,15 @@ async function getSystemResource(routerId = null) {
 }
 
 async function getHotspotProfiles(routerId = null) {
+  const ck = cacheKey(routerId, 'hotspotProfiles');
+  const cached = getCachedList(ck, 30000);
+  if (cached) return cached;
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/profile').get();
+    const rows = await conn.client.menu('/ip/hotspot/profile').get();
+    setCachedList(ck, rows);
+    return rows;
   } catch (e) {
     logger.error('Error getting Hotspot profiles:', e);
     return [];
@@ -1176,7 +1417,9 @@ async function addHotspotProfile(data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/profile').add(data);
+    const res = await conn.client.menu('/ip/hotspot/profile').add(data);
+    invalidateListCaches(routerId, ['hotspotProfiles']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1186,7 +1429,9 @@ async function updateHotspotProfile(id, data, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/profile').set(data, id);
+    const res = await conn.client.menu('/ip/hotspot/profile').set(data, id);
+    invalidateListCaches(routerId, ['hotspotProfiles']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1196,7 +1441,9 @@ async function deleteHotspotProfile(id, routerId = null) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    return await conn.client.menu('/ip/hotspot/profile').remove(id);
+    const res = await conn.client.menu('/ip/hotspot/profile').remove(id);
+    invalidateListCaches(routerId, ['hotspotProfiles']);
+    return res;
   } finally {
     if (conn && conn.api) conn.api.close();
   }
@@ -1575,10 +1822,11 @@ module.exports = {
   addHotspotUser,
   updateHotspotUser,
   deleteHotspotUser,
-  getHotspotProfiles,
-  getPppoeActive,
-  getHotspotActive,
-  getMonitoringSummary,
+    getHotspotProfiles,
+    getPppoeActive,
+    getHotspotActive,
+    getMonitoringSnapshot,
+    getMonitoringSummary,
   addPppoeProfile,
   updatePppoeProfile,
   deletePppoeProfile,

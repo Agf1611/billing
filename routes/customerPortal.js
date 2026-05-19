@@ -1461,30 +1461,63 @@ router.get('/api/pppoe-traffic', async (req, res) => {
     if (!profile?.id) return profile;
     return customerSvc.getCustomerById(profile.id) || profile;
   };
-  const getUsagePayload = () => {
+  const getUsagePayload = (usageMeta = null) => {
     const refreshed = getFreshUsageProfile();
+    const usageRow = usageMeta?.usage || null;
+    const storedUploadBytes = Math.max(0, Number(usageRow?.bytes_in ?? refreshed?.bytes_in ?? 0) || 0);
+    const storedDownloadBytes = Math.max(0, Number(usageRow?.bytes_out ?? refreshed?.bytes_out ?? 0) || 0);
+    const usagePayload = {
+      storedUploadBytes,
+      storedDownloadBytes,
+      storedTotalBytes: storedUploadBytes + storedDownloadBytes,
+      updatedAt: usageMeta?.updatedAt || usageRow?.updated_at || '',
+      freshnessSeconds: Number.isFinite(Number(usageMeta?.freshnessSeconds)) ? Number(usageMeta.freshnessSeconds) : null,
+      usageLagSeconds: Number.isFinite(Number(usageMeta?.usageLagSeconds)) ? Number(usageMeta.usageLagSeconds) : null,
+      usageSource: String(usageMeta?.usageSource || 'customer_usage').trim() || 'customer_usage',
+      isAuthoritative: usageMeta?.isAuthoritative !== false,
+      usageWritable: Boolean(profile?.id)
+    };
     return {
-      usageBytesIn: Number(refreshed?.bytes_in || 0) || 0,
-      usageBytesOut: Number(refreshed?.bytes_out || 0) || 0,
-      usageDownloadBytes: Number(refreshed?.bytes_out || 0) || 0,
-      usageUploadBytes: Number(refreshed?.bytes_in || 0) || 0
+      usage: usagePayload,
+      usageBytesIn: usagePayload.storedUploadBytes,
+      usageBytesOut: usagePayload.storedDownloadBytes,
+      usageUploadBytes: usagePayload.storedUploadBytes,
+      usageDownloadBytes: usagePayload.storedDownloadBytes,
+      usageLagSeconds: usagePayload.usageLagSeconds,
+      usageSource: usagePayload.usageSource,
+      usageWritable: usagePayload.usageWritable
     };
   };
-  const buildSafePayload = (partial = {}) => ({
-    ok: true,
-    available: true,
-    online: false,
-    username: username || null,
-    iface: null,
-    source: 'snapshot',
-    uptime: null,
-    rxMbps: 0,
-    txMbps: 0,
-    uploadMbps: 0,
-    downloadMbps: 0,
-    ...getUsagePayload(),
-    ...partial
-  });
+  const buildSafePayload = (partial = {}, usageMeta = null) => {
+    const usagePayload = getUsagePayload(usageMeta);
+    const live = {
+      online: false,
+      interface: null,
+      source: 'snapshot',
+      uptime: null,
+      rxMbps: 0,
+      txMbps: 0,
+      uploadMbps: 0,
+      downloadMbps: 0,
+      ...(partial.live || {})
+    };
+    return {
+      ok: true,
+      available: partial.available !== undefined ? Boolean(partial.available) : true,
+      username: partial.username !== undefined ? partial.username : (username || null),
+      live,
+      ...usagePayload,
+      online: live.online,
+      warmup: Boolean(live.warmup),
+      iface: live.interface,
+      source: live.source,
+      uptime: live.uptime,
+      rxMbps: live.rxMbps,
+      txMbps: live.txMbps,
+      uploadMbps: live.uploadMbps,
+      downloadMbps: live.downloadMbps
+    };
+  };
 
   if (!username || !routerId) {
     if (!routerId && profile && profile.router_id) {
@@ -1502,7 +1535,10 @@ router.get('/api/pppoe-traffic', async (req, res) => {
     }
   }
 
-  if (!username) return res.json({ ok: true, available: false, online: false, ...getUsagePayload() });
+  if (!username) {
+    const usageMeta = profile?.id ? usageSvc.getUsageSnapshotMeta(profile.id, new Date()) : null;
+    return res.json(buildSafePayload({ available: false, username: null }, usageMeta));
+  }
   try {
     const sessionProfile = profile || findCustomerProfileByLoginId(loginId);
     const candidateRouterIds = resolveCandidateRouterIds(
@@ -1524,21 +1560,26 @@ router.get('/api/pppoe-traffic', async (req, res) => {
 
     if (!live) {
       const cachedSnapshot = getPortalPppoeSnapshotCache(req);
+      const usageMeta = profile?.id ? usageSvc.getUsageSnapshotMeta(profile.id, new Date()) : null;
       if (cachedSnapshot) {
         return res.json(buildSafePayload({
           username,
-          online: Boolean(cachedSnapshot.online),
-          iface: cachedSnapshot.interface || null,
-          source: 'snapshot-cache',
-          uptime: cachedSnapshot.uptime || null
-        }));
+          live: {
+            online: Boolean(cachedSnapshot.online),
+            interface: cachedSnapshot.interface || null,
+            source: 'snapshot-cache',
+            uptime: cachedSnapshot.uptime || null
+          }
+        }, usageMeta));
       }
       return res.json(buildSafePayload({
         username,
         available: true,
-        online: false,
-        source: 'fallback'
-      }));
+        live: {
+          online: false,
+          source: 'fallback'
+        }
+      }, usageMeta));
     }
 
     if (!live.online) {
@@ -1547,15 +1588,19 @@ router.get('/api/pppoe-traffic', async (req, res) => {
         online: false,
         statusText: 'Offline'
       });
+      const usageMeta = profile?.id ? usageSvc.getUsageSnapshotMeta(profile.id, new Date()) : null;
       return res.json(buildSafePayload({
         username,
-        online: false,
-        source: live.source || 'ppp-active'
-      }));
+        live: {
+          online: false,
+          source: live.source || 'ppp-active'
+        }
+      }, usageMeta));
     }
 
+    let usageMeta = profile?.id ? usageSvc.getUsageSnapshotMeta(profile.id, new Date()) : null;
     if (profile?.id && ((Number(live.bytesIn || 0) > 0) || (Number(live.bytesOut || 0) > 0))) {
-      usageSvc.syncUsageTotals(
+      const syncResult = usageSvc.syncUsageTotalsSemiLive(
         profile.id,
         Number(live.bytesIn || 0) || 0,
         Number(live.bytesOut || 0) || 0,
@@ -1566,6 +1611,7 @@ router.get('/api/pppoe-traffic', async (req, res) => {
           source: live.source || 'portal-pppoe-traffic'
         }
       );
+      usageMeta = syncResult?.usageMeta || usageSvc.getUsageSnapshotMeta(profile.id, new Date());
     }
     setPortalPppoeSnapshotCache(req, {
       username,
@@ -1579,26 +1625,31 @@ router.get('/api/pppoe-traffic', async (req, res) => {
 
     return res.json(buildSafePayload({
       username,
-      online: true,
-      iface: live.iface || null,
-      source: live.source || 'ppp-active',
-      uptime: live.uptime || null,
-      bytesIn: Number(live.bytesIn || 0) || 0,
-      bytesOut: Number(live.bytesOut || 0) || 0,
-      rxMbps: Number(live.rxMbps || 0) || 0,
-      txMbps: Number(live.txMbps || 0) || 0,
-      uploadMbps: Number(live.rxMbps || 0) || 0,
-      downloadMbps: Number(live.txMbps || 0) || 0
-    }));
+      live: {
+        online: true,
+        interface: live.iface || null,
+        source: live.source || 'ppp-active',
+        uptime: live.uptime || null,
+        bytesIn: Number(live.bytesIn || 0) || 0,
+        bytesOut: Number(live.bytesOut || 0) || 0,
+        rxMbps: Number(live.rxMbps || 0) || 0,
+        txMbps: Number(live.txMbps || 0) || 0,
+        uploadMbps: Number(live.rxMbps || 0) || 0,
+        downloadMbps: Number(live.txMbps || 0) || 0
+      }
+    }, usageMeta));
   } catch (e) {
     const cachedSnapshot = getPortalPppoeSnapshotCache(req);
+    const usageMeta = profile?.id ? usageSvc.getUsageSnapshotMeta(profile.id, new Date()) : null;
     return res.json(buildSafePayload({
       username,
-      online: Boolean(cachedSnapshot?.online),
-      iface: cachedSnapshot?.interface || null,
-      source: cachedSnapshot ? 'snapshot-cache' : 'fallback-error',
-      uptime: cachedSnapshot?.uptime || null
-    }));
+      live: {
+        online: Boolean(cachedSnapshot?.online),
+        interface: cachedSnapshot?.interface || null,
+        source: cachedSnapshot ? 'snapshot-cache' : 'fallback-error',
+        uptime: cachedSnapshot?.uptime || null
+      }
+    }, usageMeta));
   }
 });
 

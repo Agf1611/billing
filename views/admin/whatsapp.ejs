@@ -31,6 +31,20 @@
       text-align:center;
       font-weight:700;
     }
+    .wa-reset-form {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+    .wa-reset-input {
+      width:180px;
+      min-height:40px;
+      text-align:center;
+      font-weight:700;
+      text-transform:uppercase;
+    }
     .wa-pending-bar {
       display:none;
       align-items:center;
@@ -124,10 +138,12 @@
             <input class="fc wa-test-input" name="test_phone" value="<%= (typeof getSetting === 'function' ? getSetting('whatsapp_test_number', '') : '') || '' %>" inputmode="tel" autocomplete="tel" placeholder="Nomor test WA">
             <button class="btn btn-p" data-submit-label="<%= t('admin.whatsapp.test_notification', 'Kirim Test Notif') %>"><i class="bi bi-send-check"></i> <%= t('admin.whatsapp.test_notification', 'Kirim Test Notif') %></button>
           </form>
-          <form method="POST" action="/admin/whatsapp/reset" onsubmit="return confirm('<%= t('admin.whatsapp.confirm_reset', 'Apakah Anda yakin ingin menghapus sesi WhatsApp? Anda harus scan QR ulang setelah ini.') %>')">
+          <form class="wa-reset-form" method="POST" action="/admin/whatsapp/reset" onsubmit="return confirm('<%= t('admin.whatsapp.confirm_reset', 'Apakah Anda yakin ingin menghapus sesi WhatsApp? Anda harus scan QR ulang setelah ini.') %>')">
+            <input class="fc wa-reset-input" name="confirm_reset_text" autocomplete="off" placeholder="Ketik RESET WA" aria-label="Konfirmasi reset WhatsApp">
             <button class="btn btn-d"><i class="bi bi-trash"></i> <%= t('admin.whatsapp.reset_session', 'Hapus Sesi / Reset') %></button>
           </form>
         </div>
+        <p class="mt-3 text-sm text-muted">Untuk keamanan sesi, reset WhatsApp sekarang butuh konfirmasi teks <strong>RESET WA</strong>.</p>
       </div>
     </div>
   </div>
@@ -138,6 +154,7 @@
   const I18N = {
     descOpen: "<%= t('admin.whatsapp.desc_open', 'Bot WhatsApp aktif dan siap mengirim notifikasi.') %>",
     descQr: "<%= t('admin.whatsapp.desc_qr', 'Sesi tidak ditemukan atau kedaluwarsa.') %>",
+    descPassive: "Bot masuk mode pasif. Biasanya sesi sedang dipakai koneksi lain atau baru saja digantikan.",
     descOffPrefix: "<%= t('admin.whatsapp.disconnected_prefix', 'Terputus') %>",
     descOff: "<%= t('admin.whatsapp.desc_off', 'Bot WhatsApp sedang offline atau sedang mencoba menghubungkan ulang.') %>",
     deviceFallback: "<%= t('admin.whatsapp.device_fallback', 'Device') %>",
@@ -220,6 +237,10 @@
             qrContainer.appendChild(canvas);
           }
         });
+      } else if (status.connection === 'passive') {
+        icon.classList.add('status-close');
+        text.innerText = 'Mode Pasif';
+        desc.innerText = I18N.descPassive;
       } else {
         icon.classList.add('status-close');
         text.innerText = I18N.descOffPrefix + ' (' + (status.connection || 'off') + ')';

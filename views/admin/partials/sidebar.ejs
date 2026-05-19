@@ -37,6 +37,11 @@
     <a href="/admin/customers" class="sb-item <%= activePage==='customers' ? 'active' : '' %>">
       <i class="bi bi-people"></i><span><%= t('admin.nav.customers', 'Pelanggan') %></span>
     </a>
+    <% if (typeof session !== 'undefined' && session.isAdmin) { %>
+    <a href="/admin/usage-audit" class="sb-item <%= activePage==='usage_audit' ? 'active' : '' %>">
+      <i class="bi bi-clipboard2-pulse"></i><span>Audit Usage</span>
+    </a>
+    <% } %>
     <a href="/admin/billing" class="sb-item <%= activePage==='billing' ? 'active' : '' %>">
       <i class="bi bi-receipt"></i><span><%= t('admin.nav.invoices', 'Tagihan') %></span>
     </a>
@@ -52,7 +57,10 @@
     </a>
     <% if (typeof session !== 'undefined' && session.isAdmin) { %>
     <a href="/admin/monitoring" class="sb-item <%= activePage==='monitoring' ? 'active' : '' %>">
-      <i class="bi bi-broadcast-pin"></i><span>Monitoring ONU/OLT</span>
+      <i class="bi bi-broadcast-pin"></i><span>Manajemen ONU</span>
+    </a>
+    <a href="/admin/olts" class="sb-item <%= activePage==='olts' ? 'active' : '' %>">
+      <i class="bi bi-hdd-rack"></i><span><%= t('admin.nav.olt_management', 'Manajemen OLT') %></span>
     </a>
     <% } %>
     <a href="/admin/map" class="sb-item <%= activePage==='map' ? 'active' : '' %>">
@@ -82,9 +90,6 @@
     <div class="sb-section">LAINNYA</div>
     <a href="/admin/packages" class="sb-item <%= activePage==='packages' ? 'active' : '' %>">
       <i class="bi bi-box-seam"></i><span><%= t('admin.nav.internet_packages', 'Paket Internet') %></span>
-    </a>
-    <a href="/admin/olts" class="sb-item <%= activePage==='olts' ? 'active' : '' %>">
-      <i class="bi bi-hdd-rack"></i><span><%= t('admin.nav.olt_management', 'Manajemen OLT') %></span>
     </a>
     <a href="/admin/inventory" class="sb-item <%= activePage==='inventory' ? 'active' : '' %>">
       <i class="bi bi-boxes"></i><span>Inventaris (Stok)</span>

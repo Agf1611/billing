@@ -547,14 +547,20 @@
     });
   }
 
+  function customerDetailCanPoll() {
+    const overlay = document.getElementById('customerDetailOverlay');
+    if (!overlay?.classList.contains('show')) return false;
+    if (!customerDetailState.customerId || customerDetailState.loading) return false;
+    return customerDetailState.activeTab === 'detail';
+  }
+
   function customerDetailStartPolling() {
     if (customerDetailState.refreshTimer) clearInterval(customerDetailState.refreshTimer);
     customerDetailState.refreshTimer = setInterval(() => {
-      if (!document.getElementById('customerDetailOverlay')?.classList.contains('show')) return;
-      if (!customerDetailState.customerId) return;
-      if (customerDetailState.loading) return;
+      if (document.hidden) return;
+      if (!customerDetailCanPoll()) return;
       loadCustomerDetail(customerDetailState.year, true);
-    }, 3000);
+    }, 15000);
   }
 
   function openCustomerDetail(customerId, year = null) {
@@ -642,24 +648,19 @@
       const shouldAutoRefreshNetwork = !forceNetworkRefresh &&
         Boolean(json?.customer?.pppoeUsername) &&
         (
-          String(json?.network?.remoteAddress || '-').trim() === '-' ||
           (
-            String(json?.network?.status || '').toLowerCase() === 'offline' &&
-            String(json?.network?.lastOnlineAt || '').trim() === ''
-          ) ||
-          (
-            json?.usage?.isLive &&
+            String(json?.network?.remoteAddress || '-').trim() === '-' &&
+            String(json?.network?.uptime || '-').trim() === '-' &&
+            String(json?.network?.lastOnlineAt || '').trim() === '' &&
             !(Number(json?.network?.rxMbps || 0) || Number(json?.network?.txMbps || 0))
           )
         );
       if (shouldAutoRefreshNetwork) {
         window.setTimeout(() => {
-          const overlay = document.getElementById('customerDetailOverlay');
-          if (!overlay?.classList.contains('show')) return;
           if (customerDetailState.customerId !== customerId) return;
-          if (customerDetailState.loading) return;
+          if (!customerDetailCanPoll()) return;
           loadCustomerDetail(targetYear, true);
-        }, 350);
+        }, 1200);
       }
       customerDetailStartPolling();
     } catch (error) {
@@ -702,7 +703,6 @@
       : '-';
     const routerText = customer.routerName || customer.oltName || 'Tanpa router';
     const trafficLabel = usage?.isLive ? 'Traffic Live' : 'Traffic Tersimpan';
-    const trafficHint = usage?.isLive ? 'Data sesi aktif dari MikroTik' : 'Data terakhir tersimpan';
     const sessionPillText = usage?.isLive ? 'Live MikroTik' : 'Data tersimpan';
     const monthlyTrafficText = customerDetailBytesToGb(usage.storedTotalBytes || usage.totalBytes);
     const trafficState = customerDetailComputeTrafficState(detail);
@@ -842,7 +842,8 @@
               </div>
               <div class="customer-detail-cell compact customer-mobile-secondary">
                 <div class="label">Sumber Data</div>
-                <div class="value">${escapeCustomerDetailHtml(usage.snapshotSource || network.source || 'tersimpan')}</div>
+                <div class="value">${escapeCustomerDetailHtml(usage.usageSource || usage.snapshotSource || network.source || 'database')}</div>
+                <div class="customer-detail-muted" style="font-size:11px;margin-top:6px">${escapeCustomerDetailHtml(usage.updatedAt ? `Update ${customerDetailDateTime(usage.updatedAt, '-')}` : 'Data pemakaian terakhir tersimpan')}</div>
               </div>
             </div>
           </div>
