@@ -782,7 +782,7 @@ function startServer(portToUse) {
     }
 }
 
-// Mulai server dengan port dari settings.json
+// Mulai server dengan port dari konfigurasi aktif
 const port = global.appSettings.port;
 logger.info(`Attempting to start server on configured port: ${port}`);
 

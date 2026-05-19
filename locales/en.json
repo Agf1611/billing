@@ -963,7 +963,7 @@
       "latest": "Up to date",
       "check": "Check Version",
       "run": "Update Now",
-      "keep_files": "Files not overwritten during update: settings.json and database folder. After update completes, restart the app to activate the new version.",
+      "keep_files": "Files not overwritten during update: runtime config, database folder, auth session, logs, and uploads. After update completes, restart the app to activate the new version.",
       "log_title": "Update Log",
       "confirm": "Run update from GitHub now? Make sure the internet connection is stable and the app will be restarted after completion."
     }

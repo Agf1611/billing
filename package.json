@@ -10,7 +10,8 @@
     "check:ejs": "node scripts/smoke-render.js",
     "scan:static": "node scripts/static-scan.js",
     "smoke:core": "node scripts/smoke-core.js",
-    "qa": "npm run check:syntax && npm run check:ejs && npm run smoke:core && npm run scan:static"
+    "qa": "npm run check:syntax && npm run check:ejs && npm run smoke:core && npm run scan:static",
+    "audit:publish": "node scripts/audit-public-release.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.21",

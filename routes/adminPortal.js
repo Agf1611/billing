@@ -3,7 +3,13 @@
  */
 const express = require('express');
 const router = express.Router();
-const { getSetting, getSettings, saveSettings } = require('../config/settingsManager');
+const {
+  getSetting,
+  getSettings,
+  saveSettings,
+  getOperationalSettingsPath,
+  getPrivateSettingsPath
+} = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const db = require('../config/database');
 const customerDevice = require('../services/customerDeviceService');
@@ -5239,12 +5245,13 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   const pm2Process = detectPm2Process(repoRoot);
   const restartProcessName = pm2Process?.name || getDefaultPm2ProcessName(repoRoot);
   const backupRoot = path.join(os.tmpdir(), `billing-update-backup-${Date.now()}`);
-  const backupSettings = path.join(backupRoot, 'settings.json');
+  const backupSettings = path.join(backupRoot, 'settings.runtime.json');
   const backupDb = path.join(backupRoot, 'database');
   const backupAuth = path.join(backupRoot, 'auth_info_baileys');
   const backupLogs = path.join(backupRoot, 'logs');
   const backupUploads = path.join(backupRoot, 'uploads');
-  const settingsPath = path.join(repoRoot, 'settings.json');
+  const settingsPath = getOperationalSettingsPath();
+  const restoreSettingsPath = getPrivateSettingsPath();
   const dbDir = path.join(repoRoot, 'database');
   const authFolder = String(getSetting('whatsapp_auth_folder', 'auth_info_baileys') || 'auth_info_baileys');
   const authPath = path.join(repoRoot, authFolder);
@@ -5255,7 +5262,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   let safetyStashLabel = '';
 
   const restorePreservedData = () => {
-    if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, settingsPath);
+    if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, restoreSettingsPath);
     if (fs.existsSync(backupDb)) replaceDirSync(backupDb, dbDir);
     if (fs.existsSync(backupAuth)) replaceDirSync(backupAuth, authPath);
     if (fs.existsSync(backupLogs)) replaceDirSync(backupLogs, logsPath);

@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Load settings
-const settings = require('../settings.json');
+const { getSettings } = require('../config/settingsManager');
+const settings = getSettings();
 
 console.log('=== Test Admin Functionality ===\n');
 
@@ -20,7 +21,7 @@ function testIsAdminNumber(number) {
     try {
         const cleanNumber = number.replace(/\D/g, '');
         
-        // Cek admin dari settings.json
+        // Cek admin dari konfigurasi aktif
         const adminNumbers = settings.admins || [];
         for (const adminNumber of adminNumbers) {
             const cleanAdminNumber = adminNumber.replace(/\D/g, '');
@@ -29,7 +30,7 @@ function testIsAdminNumber(number) {
             }
         }
         
-        // Cek technician numbers dari settings.json
+        // Cek technician numbers dari konfigurasi aktif
         const technicianNumbers = settings.technician_numbers || [];
         for (const techNumber of technicianNumbers) {
             const cleanTechNumber = techNumber.replace(/\D/g, '');

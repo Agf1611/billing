@@ -40,8 +40,8 @@ fi
 cd "$SCRIPT_DIR"
 
 restore_runtime_data() {
-  if [ -f "$BACKUP_ROOT/settings.json" ]; then
-    cp -f "$BACKUP_ROOT/settings.json" "$SCRIPT_DIR/settings.json"
+  if [ -f "$BACKUP_ROOT/settings.runtime.json" ]; then
+    cp -f "$BACKUP_ROOT/settings.runtime.json" "$SCRIPT_DIR/settings.local.json"
   fi
   if [ -d "$BACKUP_ROOT/database" ]; then
     rm -rf "$SCRIPT_DIR/database"
@@ -108,7 +108,11 @@ fi
 
 echo -e "${BLUE}[INFO]${NC} Membuat backup runtime..."
 mkdir -p "$BACKUP_ROOT"
-[ -f "$SCRIPT_DIR/settings.json" ] && cp "$SCRIPT_DIR/settings.json" "$BACKUP_ROOT/settings.json"
+if [ -f "$SCRIPT_DIR/settings.local.json" ]; then
+  cp "$SCRIPT_DIR/settings.local.json" "$BACKUP_ROOT/settings.runtime.json"
+elif [ -f "$SCRIPT_DIR/settings.json" ]; then
+  cp "$SCRIPT_DIR/settings.json" "$BACKUP_ROOT/settings.runtime.json"
+fi
 [ -d "$SCRIPT_DIR/database" ] && cp -a "$SCRIPT_DIR/database" "$BACKUP_ROOT/database"
 [ -d "$SCRIPT_DIR/auth_info_baileys" ] && cp -a "$SCRIPT_DIR/auth_info_baileys" "$BACKUP_ROOT/auth_info_baileys"
 [ -d "$SCRIPT_DIR/logs" ] && cp -a "$SCRIPT_DIR/logs" "$BACKUP_ROOT/logs"
@@ -147,7 +151,7 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  SERVER_PORT="$(node -e "try{const s=require('./settings.json'); process.stdout.write(String(s.server_port || 3001));}catch(e){process.stdout.write('3001');}")"
+  SERVER_PORT="$(node -e "try{const s=require('./config/settingsManager').getSettings(); process.stdout.write(String(s.server_port || 3001));}catch(e){process.stdout.write('3001');}")"
   echo -e "${BLUE}[INFO]${NC} Health check port ${SERVER_PORT}..."
   curl -I -s "http://127.0.0.1:${SERVER_PORT}/admin/login" | head -n 1 || true
 fi

@@ -8,12 +8,15 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const db = require('../config/database');
 const { logger } = require('../config/logger');
-const { getSetting } = require('../config/settingsManager');
+const {
+  getSetting,
+  getOperationalSettingsPath,
+  getPrivateSettingsPath
+} = require('../config/settingsManager');
 
 const projectRoot = path.join(__dirname, '..');
 const backupDir = path.join(projectRoot, 'backups');
 const dbPath = path.join(projectRoot, 'database', 'billing.db');
-const settingsPath = path.join(projectRoot, 'settings.json');
 const DATABASE_EXTENSIONS = new Set(['.db', '.sqlite', '.sqlite3']);
 const SETTINGS_EXTENSIONS = new Set(['.json']);
 const ESSENTIAL_DATABASE_TABLES = ['customers', 'packages', 'invoices'];
@@ -159,6 +162,7 @@ function backupSettings() {
     const timestamp = getBackupTimestamp();
     const backupFileName = `settings_${timestamp}.json`;
     const backupFilePath = path.join(backupDir, backupFileName);
+    const settingsPath = getOperationalSettingsPath();
 
     fs.copyFileSync(settingsPath, backupFilePath);
     const stats = fs.statSync(backupFilePath);
@@ -339,8 +343,9 @@ function restoreSettingsFromFilePath(filePath, sourceLabel) {
       logger.warn('[Backup] Failed to create pre-restore settings backup');
     }
 
-    fs.writeFileSync(settingsPath, JSON.stringify(validation.data, null, 2), 'utf8');
-    const stats = fs.statSync(settingsPath);
+    const targetSettingsPath = getPrivateSettingsPath();
+    fs.writeFileSync(targetSettingsPath, JSON.stringify(validation.data, null, 2), 'utf8');
+    const stats = fs.statSync(targetSettingsPath);
     logger.info(`[Backup] Settings restored from: ${sourceLabel} (${Math.round(stats.size / 1024)} KB)`);
 
     return {

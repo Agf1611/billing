@@ -963,7 +963,7 @@
       "latest": "Terbaru",
       "check": "Cek Versi",
       "run": "Update Sekarang",
-      "keep_files": "File yang tidak ditimpa saat update: settings.json dan folder database. Setelah update selesai, restart aplikasi agar versi baru aktif.",
+      "keep_files": "File yang tidak ditimpa saat update: konfigurasi runtime, folder database, auth session, log, dan uploads. Setelah update selesai, restart aplikasi agar versi baru aktif.",
       "log_title": "Log Update",
       "confirm": "Jalankan update dari GitHub sekarang? Pastikan koneksi internet aman dan aplikasi akan direstart setelah selesai."
     }

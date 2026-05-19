@@ -10,8 +10,8 @@ auth_info_baileys/
 logs/
 backups/
 
-settings.json
-settings.json.*
+settings.local.json
+settings.local.json.*
 
 run-out.log
 run-err.log
@@ -24,9 +24,11 @@ login-cookies.txt
 .codex-tmp-*.sh
 .deploy_*
 tmp_*.sh
+tmp_*.js
 tmp_*.html
 tmp_*.png
 tmp_*.zip
+tmp-*.js
 tmp-*.png
 tmp-*.html
 tmp-*.zip
@@ -34,6 +36,10 @@ tmp-deploy-*.sh
 __tmp_*.js
 __tmp_*.sh
 tmp_apk_inspect/
+workspace_archive/
+billing-rtrw-alijayanet/
+*.tar.gz
+*.tgz
 
 billing-update-*.tar.gz
 

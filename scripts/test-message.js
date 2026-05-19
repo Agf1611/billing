@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Load settings
-const settings = require('../settings.json');
+const { getSettings } = require('../config/settingsManager');
+const settings = getSettings();
 
 console.log('=== Test Pengiriman Pesan WhatsApp ===\n');
 
