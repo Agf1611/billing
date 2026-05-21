@@ -36,6 +36,18 @@ function ensurePortalNotificationsSchema() {
   portalNotificationsSchemaReady = true;
 }
 
+function parseSqliteUtcTimestampMs(value, fallback = Date.now()) {
+  if (!value) return Number(fallback || Date.now());
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number(fallback || Date.now());
+  const raw = String(value || '').trim();
+  if (!raw) return Number(fallback || Date.now());
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)
+    ? `${raw.replace(' ', 'T')}Z`
+    : raw;
+  const parsed = new Date(normalized).getTime();
+  return Number.isFinite(parsed) ? parsed : Number(fallback || Date.now());
+}
+
 async function trySendLifecycleWhatsapp(phone, message) {
   try {
     if (!getSetting('whatsapp_enabled', false)) return false;
@@ -220,12 +232,50 @@ function updateCustomerCablePath(id, path) {
   return db.prepare('UPDATE customers SET cable_path = ? WHERE id = ?').run(path, id);
 }
 
+function updateCustomerMapLocation(id, lat, lng, options = {}) {
+  const customerId = Number(id);
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (!Number.isFinite(customerId) || customerId <= 0) throw new Error('ID pelanggan tidak valid');
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) throw new Error('Koordinat pelanggan tidak valid');
+  const clearCablePath = options.clearCablePath !== false;
+  return db.prepare(`
+    UPDATE customers
+    SET lat = ?, lng = ?, cable_path = CASE WHEN ? = 1 THEN NULL ELSE cable_path END
+    WHERE id = ?
+  `).run(latitude.toFixed(6), longitude.toFixed(6), clearCablePath ? 1 : 0, customerId);
+}
+
+function updateCustomerOdpLink(id, odpId, options = {}) {
+  const customerId = Number(id);
+  const normalizedOdpId = odpId == null || odpId === '' ? null : Number(odpId);
+  if (!Number.isFinite(customerId) || customerId <= 0) throw new Error('ID pelanggan tidak valid');
+  if (normalizedOdpId !== null && (!Number.isFinite(normalizedOdpId) || normalizedOdpId <= 0)) {
+    throw new Error('ID ODP tidak valid');
+  }
+  const clearCablePath = options.clearCablePath !== false;
+  return db.prepare(`
+    UPDATE customers
+    SET odp_id = ?, cable_path = CASE WHEN ? = 1 THEN NULL ELSE cable_path END
+    WHERE id = ?
+  `).run(normalizedOdpId, clearCablePath ? 1 : 0, customerId);
+}
+
 function markPortalNotificationsSeen(customerId, seenAt = null) {
   ensurePortalNotificationsSchema();
   const id = Number(customerId);
   if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
   const ts = seenAt || new Date().toISOString();
   return db.prepare('UPDATE customers SET portal_notifications_seen_at = ? WHERE id = ?').run(ts, id);
+}
+
+function pruneOldPortalNotifications(retentionDays = 30) {
+  ensurePortalNotificationsSchema();
+  const days = Math.max(1, Math.min(Number(retentionDays || 30) || 30, 365));
+  return db.prepare(`
+    DELETE FROM customer_portal_notifications
+    WHERE datetime(created_at) < datetime('now', ?)
+  `).run(`-${days} days`);
 }
 
 function getPortalNotifications(customerId, limit = 20) {
@@ -262,7 +312,7 @@ function addPortalNotification(customerId, data = {}, options = {}) {
       LIMIT 1
     `).get(id, kind, title, body);
     if (existing?.created_at) {
-      const ageMs = Date.now() - new Date(existing.created_at).getTime();
+      const ageMs = Date.now() - parseSqliteUtcTimestampMs(existing.created_at, Date.now());
       if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < dedupeWindowMs) {
         return existing;
       }
@@ -690,6 +740,6 @@ async function activateCustomer(id) {
 module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
   getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
-  suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath,
-  resetPromoCyclesUsed, markPortalNotificationsSeen, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk, getCustomerSearchSuggestions
+  suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath, updateCustomerMapLocation, updateCustomerOdpLink,
+  resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk, getCustomerSearchSuggestions
 };

@@ -146,6 +146,13 @@
             </div>
             <div class="wa-inline-grid" style="margin-top:14px;">
               <div class="fg">
+                <label class="fl">Kirim via WhatsApp</label>
+                <label style="display:flex; align-items:center; gap:10px; font-weight:800; color:var(--text);">
+                  <input type="checkbox" name="send_whatsapp" value="1" <%= getSetting('whatsapp_enabled', false) ? 'checked' : '' %>>
+                  Aktifkan broadcast WhatsApp
+                </label>
+              </div>
+              <div class="fg">
                 <label class="fl">Kirim juga Push App</label>
                 <label style="display:flex; align-items:center; gap:10px; font-weight:800; color:var(--text);">
                   <input type="checkbox" name="send_push" value="1" <%= (getSetting('onesignal_enabled', false) && getSetting('onesignal_push_announcement_enabled', true)) ? 'checked' : '' %>>
@@ -160,6 +167,40 @@
           </div>
           <div class="card-bd wa-card-actions">
             <button type="submit" class="btn btn-p" id="broadcastSubmitBtn"><i class="bi bi-send"></i> Mulai Broadcast</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-hd">
+          <h6><i class="bi bi-bell-fill"></i> Test Push OneSignal</h6>
+        </div>
+        <form method="POST" action="/admin/whatsapp/test-push" data-wa-submit data-waiting-text="Sedang mengirim test push OneSignal..." onsubmit="return confirm('Kirim test push OneSignal ke pelanggan ini?');">
+          <div class="card-bd">
+            <div class="alert alert-i" style="margin-bottom:14px;">
+              <i class="bi bi-info-circle"></i> Test ini hanya memakai OneSignal dan inbox portal, tidak mengirim WhatsApp.
+            </div>
+            <div class="wa-inline-grid">
+              <div class="fg">
+                <label class="fl">Pelanggan Tujuan</label>
+                <input class="fc" name="customer_lookup" placeholder="ID / nomor HP / PPPoE / tag" required>
+              </div>
+              <div class="fg">
+                <label class="fl">Judul Push</label>
+                <input class="fc" name="push_title" value="Test Push Portal" placeholder="Judul notifikasi">
+              </div>
+              <div class="fg">
+                <label class="fl">Isi Push</label>
+                <input class="fc" name="push_message" value="Jika notifikasi ini masuk, push OneSignal portal pelanggan sudah aktif." placeholder="Isi notifikasi" required>
+              </div>
+            </div>
+            <div id="pushTestPending" class="wa-form-pending" aria-live="polite">
+              <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+              <span>Sedang mengirim test push OneSignal...</span>
+            </div>
+          </div>
+          <div class="card-bd wa-card-actions">
+            <button type="submit" class="btn btn-p"><i class="bi bi-bell"></i> Kirim Test Push</button>
           </div>
         </form>
       </div>

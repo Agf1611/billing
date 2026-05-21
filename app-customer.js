@@ -10,7 +10,7 @@ const customerSvc = require('./services/customerService');
 const { normalizePhoneDigits, formatPhoneDisplay, buildWhatsAppLink } = require('./services/phoneService');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { scheduleAutoBackup } = require('./services/backupService');
-const { assertCriticalSecuritySettings } = require('./config/security');
+const { assertCriticalSecuritySettings, isStrongAdminApiKey } = require('./config/security');
 const {
   installSafeRedirectMiddleware,
   getRuntimeConfigurationWarnings,
@@ -149,6 +149,7 @@ const cookieSecure = getSetting('cookie_secure', isProduction);
 const trustProxy = getSetting('trust_proxy', false);
 const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+const CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const sessionCookieName = String(getSetting('session_cookie_name', 'billing.sid') || 'billing.sid').trim() || 'billing.sid';
 const sessionCookieDomain = String(getSetting('session_cookie_domain', '') || '').trim();
 const rawSessionCookieSameSite = String(getSetting('session_cookie_same_site', 'lax') || 'lax').trim().toLowerCase();
@@ -162,7 +163,9 @@ const sessionStore = createSqliteSessionStore({
 
 function applySessionLifetime(sessionState) {
   if (!sessionState || !sessionState.cookie) return;
-  const maxAge = sessionState.rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
+  const maxAge = sessionState.customerPersistentLogin
+    ? CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS
+    : (sessionState.rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS);
   sessionState.cookie.maxAge = maxAge;
 }
 
@@ -241,6 +244,117 @@ runtimeWarnings.forEach((item) => {
 // Konstanta
 const VERSION = '2.0.0';
 
+function extractRequestApiKey(req) {
+  const auth = String(req.headers.authorization || '').trim();
+  const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+  return String(
+    req.headers['x-api-key'] ||
+    req.headers['x-whatsapp-api-key'] ||
+    req.headers.apikey ||
+    bearer ||
+    req.body?.api_key ||
+    req.body?.apikey ||
+    ''
+  ).trim();
+}
+
+function getWhatsappApiKey() {
+  const dedicatedKey = String(getSetting('whatsapp_api_key', '') || '').trim();
+  if (dedicatedKey) return dedicatedKey;
+  return String(getSetting('admin_api_key', '') || '').trim();
+}
+
+function requireWhatsappApiKey(req, res, next) {
+  const configuredKey = getWhatsappApiKey();
+  if (!isStrongAdminApiKey(configuredKey)) {
+    return res.status(503).json({
+      success: false,
+      error: 'whatsapp_api_key_not_configured',
+      message: 'WhatsApp API key belum diatur atau terlalu lemah.'
+    });
+  }
+  const providedKey = extractRequestApiKey(req);
+  if (!providedKey || providedKey !== configuredKey) {
+    return res.status(401).json({
+      success: false,
+      error: 'unauthorized',
+      message: 'API key tidak valid.'
+    });
+  }
+  return next();
+}
+
+app.get('/api/whatsapp/status', requireWhatsappApiKey, async (req, res) => {
+  try {
+    const { whatsappStatus } = await import('./services/whatsappBot.mjs');
+    return res.json({
+      success: true,
+      enabled: Boolean(getSetting('whatsapp_enabled', false)),
+      connection: whatsappStatus?.connection || 'unknown',
+      reason: whatsappStatus?.reason || '',
+      user: whatsappStatus?.user || null
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Gagal membaca status WhatsApp.'
+    });
+  }
+});
+
+app.post('/api/whatsapp/send-message', requireWhatsappApiKey, async (req, res) => {
+  try {
+    if (!getSetting('whatsapp_enabled', false)) {
+      return res.status(503).json({
+        success: false,
+        error: 'whatsapp_disabled',
+        message: 'WhatsApp bot sedang nonaktif.'
+      });
+    }
+
+    const to = String(req.body?.number || req.body?.phone || req.body?.to || req.body?.target || '').trim();
+    const message = String(req.body?.message || req.body?.text || req.body?.body || '').trim();
+    if (!to) return res.status(400).json({ success: false, error: 'missing_number', message: 'Nomor tujuan wajib diisi.' });
+    if (!message) return res.status(400).json({ success: false, error: 'missing_message', message: 'Pesan wajib diisi.' });
+    if (message.length > 5000) return res.status(400).json({ success: false, error: 'message_too_long', message: 'Pesan maksimal 5000 karakter.' });
+
+    const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('./services/whatsappBot.mjs');
+    const ready = await ensureWhatsAppReady(15000);
+    if (!ready) {
+      return res.status(503).json({
+        success: false,
+        error: 'whatsapp_not_ready',
+        message: 'WhatsApp bot belum terhubung.',
+        connection: whatsappStatus?.connection || 'unknown'
+      });
+    }
+
+    const sent = await sendWA(to, message);
+    if (!sent) {
+      return res.status(502).json({
+        success: false,
+        error: 'send_failed',
+        message: 'WhatsApp gagal mengirim pesan.'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Pesan WhatsApp berhasil dikirim.',
+      data: {
+        number: normalizePhoneDigits(to),
+        length: message.length
+      }
+    });
+  } catch (error) {
+    logger.error(`[WA API] Gagal send-message: ${error.stack || error.message || error}`);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Gagal mengirim WhatsApp.'
+    });
+  }
+});
+
 const insertWebhookPaymentNotif = db.prepare(`
   INSERT INTO webhook_payment_notifs (service, content, parsed_amount, parsed_ok, ip, user_agent)
   VALUES (?, ?, ?, ?, ?, ?)
@@ -265,18 +379,6 @@ const selectRecentDuplicateWebhookMatched = db.prepare(`
   LIMIT 1
 `);
 
-const selectRecentDuplicateWebhookAny = db.prepare(`
-  SELECT id, matched_invoice_id, created_at
-  FROM webhook_payment_notifs
-  WHERE service = ?
-    AND content = ?
-    AND parsed_amount = ?
-    AND id != ?
-    AND created_at >= datetime('now', '-2 day')
-  ORDER BY id DESC
-  LIMIT 1
-`);
-
 const selectInvoiceByUniqueAmount = db.prepare(`
   SELECT i.id, i.customer_id, i.status, i.amount, i.qris_amount_unique, i.qris_unique_code, i.notes,
          c.status as customer_status
@@ -287,16 +389,9 @@ const selectInvoiceByUniqueAmount = db.prepare(`
   LIMIT 2
 `);
 
-const markInvoicePaidAppendNote = db.prepare(`
+const updateInvoiceQrisPaidNotif = db.prepare(`
   UPDATE invoices
-  SET status='paid',
-      paid_at=CURRENT_TIMESTAMP,
-      paid_by_name=?,
-      notes=CASE
-        WHEN notes IS NULL OR TRIM(notes) = '' THEN ?
-        ELSE notes || '\n' || ?
-      END,
-      qris_paid_notif_id=?
+  SET qris_paid_notif_id=?
   WHERE id=?
 `);
 
@@ -347,33 +442,87 @@ function getIp(req) {
   return String((req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '');
 }
 
-function parseRupiahAmountFromNotification(content) {
-  const text = String(content || '').replace(/\u00A0/g, ' ').trim();
+function normalizeAmountCandidate(raw) {
+  let text = String(raw || '').replace(/\s+/g, '').replace(/[^\d.,]/g, '');
   if (!text) return null;
 
-  const candidates = [
-    /(?:\bRp\.?\s*|IDR\s*)([0-9][0-9\.\,\s]*)/i,
-    /(?:sebesar|senilai|nominal|masuk|transfer|top\s*up|topup|saldo\s+masuk)\s*(?:saldo\s*)?(?:\bRp\.?\s*)?([0-9][0-9\.\,\s]*)/i,
+  const lastDot = text.lastIndexOf('.');
+  const lastComma = text.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) {
+    const decimalSep = lastDot > lastComma ? '.' : ',';
+    const thousandsSep = decimalSep === '.' ? ',' : '.';
+    const parts = text.split(decimalSep);
+    const tail = parts[parts.length - 1] || '';
+    text = text.replace(new RegExp(`\\${thousandsSep}`, 'g'), '');
+    if (tail.length <= 2) text = text.split(decimalSep)[0];
+    else text = text.replace(new RegExp(`\\${decimalSep}`, 'g'), '');
+  } else if (lastComma >= 0) {
+    const parts = text.split(',');
+    const tail = parts[parts.length - 1] || '';
+    text = tail.length === 2 ? parts.slice(0, -1).join('') : parts.join('');
+  } else if (lastDot >= 0) {
+    const parts = text.split('.');
+    const tail = parts[parts.length - 1] || '';
+    text = tail.length === 2 ? parts.slice(0, -1).join('') : parts.join('');
+  }
+
+  const digits = text.replace(/[^\d]/g, '');
+  if (!digits) return null;
+  const amount = Number.parseInt(digits, 10);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function pushAmountCandidate(target, raw) {
+  const amount = normalizeAmountCandidate(raw);
+  if (amount && !target.includes(amount)) target.push(amount);
+}
+
+function parseRupiahAmountsFromNotification(content) {
+  const text = String(content || '').replace(/\u00A0/g, ' ').trim();
+  if (!text) return [];
+
+  const amounts = [];
+  const patterns = [
+    /(?:\bRp\.?\s*|IDR\s*)(?:\+|:|=)?\s*([0-9][0-9.,]*)/gi,
+    /(?:sebesar|senilai|nominal|masuk|diterima|terima|transfer|top\s*up|topup|saldo\s+masuk|payment|pembayaran|bayar|setoran|kredit|credit)\s*(?:saldo\s*)?(?:\bRp\.?\s*)?(?:\+|:|=)?\s*([0-9][0-9.,]*)/gi
   ];
 
-  let raw = null;
-  for (const re of candidates) {
-    const m = text.match(re);
-    if (m && m[1]) {
-      raw = String(m[1]);
-      break;
+  for (const re of patterns) {
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match[1]) pushAmountCandidate(amounts, match[1]);
     }
   }
-  if (!raw) return null;
 
-  let num = raw.replace(/\s+/g, '');
-  if (num.includes(',')) num = num.split(',')[0];
-  num = num.replace(/\./g, '');
-  num = num.replace(/[^\d]/g, '');
-  if (!num) return null;
+  if (!amounts.length) {
+    const looseMatches = text.match(/\b\d{4,}(?:[.,]\d{3})*(?:[.,]\d{2})?\b/g) || [];
+    if (looseMatches.length === 1) pushAmountCandidate(amounts, looseMatches[0]);
+  }
 
-  const amount = Number.parseInt(num, 10);
-  return Number.isFinite(amount) ? amount : null;
+  return amounts;
+}
+
+function findUniqueQrisInvoiceMatch(amounts = []) {
+  const checked = [];
+  const ambiguous = [];
+  for (const amount of Array.isArray(amounts) ? amounts : []) {
+    const candidates = selectInvoiceByUniqueAmount.all(amount);
+    checked.push({ amount, count: candidates.length, ids: candidates.map((row) => row.id) });
+    if (candidates.length === 1) {
+      return { amount, invoice: candidates[0], checked, ambiguous };
+    }
+    if (candidates.length > 1) {
+      ambiguous.push({ amount, ids: candidates.map((row) => row.id) });
+    }
+  }
+  return { amount: null, invoice: null, checked, ambiguous };
+}
+
+function appendInvoiceNote(existingNotes, noteLine) {
+  const current = String(existingNotes || '').trim();
+  const next = String(noteLine || '').trim();
+  if (!next) return current;
+  return current ? `${current}\n${next}` : next;
 }
 
 function buildWebhookPaidWhatsappMessage(customer, invoice, gateway, settings, baseUrl) {
@@ -451,7 +600,9 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
   logger.info(`[WEBHOOK][payment-notif] IN service=${String(service || '-')} content="${rawText.replace(/\r?\n/g, ' ').slice(0, 500)}"`);
 
   try {
-    const amount = parseRupiahAmountFromNotification(rawText);
+    const amountCandidates = parseRupiahAmountsFromNotification(rawText);
+    const qrisMatch = findUniqueQrisInvoiceMatch(amountCandidates);
+    const amount = qrisMatch.amount || amountCandidates[0] || null;
     const ip = String((req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '');
     const ua = String(req.get('user-agent') || '');
     let notifId = null;
@@ -474,37 +625,55 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
       try {
         const normalizedService = String(service || '');
         const duplicateMatched = notifId
-          ? selectRecentDuplicateWebhookMatched.get(normalizedService, rawText, amount, notifId)
-          : null;
-        const duplicateAny = !duplicateMatched && notifId
-          ? selectRecentDuplicateWebhookAny.get(normalizedService, rawText, amount, notifId)
+          ? amountCandidates
+              .map((candidateAmount) => selectRecentDuplicateWebhookMatched.get(normalizedService, rawText, candidateAmount, notifId))
+              .find(Boolean)
           : null;
 
-        if (duplicateMatched || duplicateAny) {
-          matchedInvoiceId = Number((duplicateMatched?.matched_invoice_id ?? duplicateAny?.matched_invoice_id) || 0) || null;
+        const duplicateMatchedInvoiceId = duplicateMatched
+          ? (Number(duplicateMatched.matched_invoice_id || 0) || null)
+          : null;
+        if (
+          duplicateMatched &&
+          (!qrisMatch.invoice || Number(qrisMatch.invoice.id || 0) === duplicateMatchedInvoiceId)
+        ) {
+          matchedInvoiceId = duplicateMatchedInvoiceId;
           if (notifId && matchedInvoiceId) {
             try { updateWebhookPaymentNotifMatch.run(matchedInvoiceId, notifId); } catch {}
           }
           logger.warn(
-            `[WEBHOOK][payment-notif] DUPLICATE ignored service=${normalizedService || '-'} amount=${amount} prior_notif=${duplicateMatched?.id || duplicateAny?.id || '-'} prior_match=${matchedInvoiceId || '-'}`
+            `[WEBHOOK][payment-notif] DUPLICATE ignored service=${normalizedService || '-'} amount=${amount} prior_notif=${duplicateMatched.id || '-'} prior_match=${matchedInvoiceId || '-'}`
           );
           return res.status(200).json({
             status: 'processed',
             parsed: true,
             amount,
+            amounts: amountCandidates,
             matched_invoice_id: matchedInvoiceId,
             duplicate: true
           });
         }
+        if (duplicateMatched && qrisMatch.invoice) {
+          logger.warn(
+            `[WEBHOOK][payment-notif] DUPLICATE content ignored because new unpaid invoice matched service=${normalizedService || '-'} amount=${amount} prior_match=${duplicateMatchedInvoiceId || '-'} new_match=${qrisMatch.invoice.id || '-'}`
+          );
+        }
 
-        const candidates = selectInvoiceByUniqueAmount.all(amount);
-        if (Array.isArray(candidates) && candidates.length === 1) {
-          const inv = candidates[0];
+        if (qrisMatch.invoice) {
+          const inv = qrisMatch.invoice;
           const invId = Number(inv.id || 0);
           const custId = Number(inv.customer_id || 0);
           if (invId > 0) {
             const noteLine = `AUTO-QRIS: cocok nominal unik Rp ${amount} (service=${String(service || '-')}, notif=${notifId || '-'})`;
-            markInvoicePaidAppendNote.run('QRIS', noteLine, noteLine, notifId || null, invId);
+            const nextNotes = appendInvoiceNote(inv.notes, noteLine);
+            billingSvc.markAsPaid(invId, 'QRIS', nextNotes, {
+              type: 'system',
+              id: null,
+              name: 'Webhook QRIS',
+              ip,
+              userAgent: ua
+            });
+            if (notifId) updateInvoiceQrisPaidNotif.run(notifId, invId);
             matchedInvoiceId = invId;
 
             if (notifId) {
@@ -513,7 +682,7 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
 
             await trySendWebhookPaidWhatsapp(req, custId, invId, String(service || 'QRIS').toUpperCase());
 
-            if (custId > 0 && String(inv.customer_status || '') === 'suspended') {
+            if (custId > 0 && ['suspended', 'inactive'].includes(String(inv.customer_status || '').toLowerCase())) {
               const cnt = countUnpaidInvoicesForCustomer.get(custId);
               const unpaid = Number(cnt?.c || 0);
               if (unpaid === 0) {
@@ -525,8 +694,10 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
 
             logger.info(`[WEBHOOK][payment-notif] MATCH invoice=${invId} amount=${amount}`);
           }
-        } else if (Array.isArray(candidates) && candidates.length > 1) {
-          logger.error(`[WEBHOOK][payment-notif] MATCH ambiguous: amount=${amount} candidates=${candidates.map(x => x.id).join(',')}`);
+        } else if (qrisMatch.ambiguous.length) {
+          logger.error(`[WEBHOOK][payment-notif] MATCH ambiguous: ${qrisMatch.ambiguous.map((item) => `amount=${item.amount} candidates=${item.ids.join(',')}`).join(' | ')}`);
+        } else if (amountCandidates.length) {
+          logger.warn(`[WEBHOOK][payment-notif] Tidak ada invoice unpaid dengan nominal unik: ${amountCandidates.join(', ')}`);
         }
       } catch (e) {
         logger.error(`[WEBHOOK][payment-notif] MATCH error: ${e && e.message ? e.message : String(e)}`);
@@ -534,8 +705,8 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
     }
 
     if (amount != null) {
-      logger.info(`[WEBHOOK][payment-notif] PARSED service=${String(service || '-')} amount=${amount}`);
-      return res.status(200).json({ status: 'processed', parsed: true, amount, matched_invoice_id: matchedInvoiceId });
+      logger.info(`[WEBHOOK][payment-notif] PARSED service=${String(service || '-')} amount=${amount} candidates=${amountCandidates.join(',')}`);
+      return res.status(200).json({ status: 'processed', parsed: true, amount, amounts: amountCandidates, matched_invoice_id: matchedInvoiceId });
     }
 
     logger.error(`[WEBHOOK][payment-notif] FAILED parse: "${rawText.replace(/\r?\n/g, ' ').slice(0, 500)}"`);

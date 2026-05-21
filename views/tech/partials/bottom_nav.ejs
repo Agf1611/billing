@@ -82,6 +82,12 @@
     </div>
   </div>
 
+  <%- include('../../partials/employee_location_tracker', {
+    enabled: true,
+    endpoint: '/tech/api/location',
+    roleLabel: 'Teknisi'
+  }) %>
+
   <script>
     (function () {
       const html = document.documentElement;
@@ -98,7 +104,7 @@
           btn.appendChild(icon);
           btn.appendChild(label);
         }
-        if (meta) meta.setAttribute('content', isLight ? '#eef4ff' : '#07111f');
+        if (meta) meta.setAttribute('content', isLight ? '#eef3ff' : '#09111d');
       };
 
       syncThemeButton();

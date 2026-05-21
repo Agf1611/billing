@@ -4,6 +4,7 @@ const { getSetting } = require('../config/settingsManager');
 const agentSvc = require('../services/agentService');
 const billingSvc = require('../services/billingService');
 const customerSvc = require('../services/customerService');
+const employeeLocationSvc = require('../services/employeeLocationService');
 
 function requireAgentSession(req, res, next) {
   if (req.session && req.session.isAgent && req.session.agentId) return next();
@@ -24,6 +25,9 @@ function popReceipt(req) {
 
 function company() {
   return getSetting('company_header', 'ISP App');
+}
+function companyLogo() {
+  return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png';
 }
 
 router.get('/manifest.webmanifest', (req, res) => {
@@ -56,7 +60,7 @@ router.get('/login', (req, res) => {
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
   if (req.session && req.session.isAgent) return res.redirect('/agent');
-  res.render('agent/login', { title: 'Login Agent', company: company(), error: null });
+  res.render('agent/login', { title: 'Login Agent', company: company(), logoUrl: companyLogo(), error: null, form: {} });
 });
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
@@ -69,10 +73,16 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
     req.session.agentName = agent.name;
     return res.redirect('/agent');
   }
-  return res.render('agent/login', { title: 'Login Agent', company: company(), error: 'Username atau password salah!' });
+  return res.render('agent/login', { title: 'Login Agent', company: company(), logoUrl: companyLogo(), error: 'Username atau password salah!', form: { username } });
 });
 
 router.get('/logout', (req, res) => {
+  const agentId = Number(req.session?.agentId || 0) || 0;
+  if (agentId) {
+    try {
+      employeeLocationSvc.clearEmployeeLocation('agent', agentId, 'logout');
+    } catch (_error) {}
+  }
   req.session.destroy();
   res.redirect('/agent/login');
 });
@@ -128,6 +138,39 @@ router.get('/', requireAgentSession, (req, res) => {
     msg: flashMsg(req),
     receipt: popReceipt(req)
   });
+});
+
+router.post('/api/location', requireAgentSession, express.json({ limit: '32kb' }), (req, res) => {
+  try {
+    const agentId = Number(req.session?.agentId || 0) || 0;
+    if (!agentId) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+    if (req.body && req.body.enabled === false) {
+      employeeLocationSvc.clearEmployeeLocation('agent', agentId, String(req.body.reason || 'disabled'));
+      return res.json({ ok: true, disabled: true });
+    }
+
+    const agent = agentSvc.getAgentById(agentId);
+    if (!agent) return res.status(404).json({ ok: false, error: 'agent_not_found' });
+
+    const location = employeeLocationSvc.upsertEmployeeLocation({
+      role: 'agent',
+      employeeId: agentId,
+      username: agent.username,
+      name: agent.name || req.session?.agentName || 'Agent',
+      phone: agent.phone || '',
+      lat: req.body?.lat,
+      lng: req.body?.lng,
+      accuracy: req.body?.accuracy,
+      source: 'portal-agent',
+      userAgent: req.headers['user-agent'] || '',
+      note: String(req.body?.note || '').trim()
+    });
+
+    return res.json({ ok: true, location });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Gagal menyimpan lokasi agent.' });
+  }
 });
 
 router.post('/pay-invoice', requireAgentSession, express.urlencoded({ extended: true }), async (req, res) => {

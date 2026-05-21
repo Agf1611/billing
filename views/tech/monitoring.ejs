@@ -1,12 +1,187 @@
 <%- include('partials/header') %>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<style>
+  .monitoring-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:12px;
+  }
+  .monitoring-head h5{
+    margin:0;
+    font-size:21px;
+    font-weight:900;
+    letter-spacing:-.04em;
+  }
+  .monitoring-head p{
+    margin:5px 0 0;
+    color:var(--tech-muted);
+    font-size:12px;
+    line-height:1.5;
+  }
+  .monitoring-refresh{
+    width:42px;
+    height:42px;
+    border-radius:15px;
+    border:1px solid var(--tech-border);
+    background:linear-gradient(180deg, rgba(111,141,255,.14), rgba(111,141,255,.08));
+    color:var(--tech-primary);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .monitoring-stats{
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .monitoring-stat{
+    padding:12px 13px;
+    border-radius:20px;
+    border:1px solid var(--tech-border);
+    background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.03));
+    box-shadow:var(--tech-shadow);
+    cursor:pointer;
+    transition:transform .18s ease, border-color .18s ease, background .18s ease;
+  }
+  .monitoring-stat.active{
+    border-color:rgba(111,141,255,.34);
+    background:linear-gradient(180deg, rgba(111,141,255,.14), rgba(111,141,255,.06));
+    transform:translateY(-1px);
+  }
+  .monitoring-stat-label{
+    display:block;
+    margin-bottom:8px;
+    color:var(--tech-muted);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-weight:800;
+  }
+  .monitoring-stat-value{
+    font-size:24px;
+    font-weight:900;
+    line-height:1;
+    letter-spacing:-.03em;
+  }
+  .monitoring-filter-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:12px;
+  }
+  .monitoring-filter-chip{
+    border:none;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 12px;
+    border-radius:999px;
+    background:var(--tech-panel-soft);
+    color:var(--tech-text);
+    font-size:11px;
+    font-weight:800;
+    border:1px solid var(--tech-border);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .monitoring-filter-chip.active{
+    background:linear-gradient(180deg, rgba(111,141,255,.18), rgba(111,141,255,.08));
+    border-color:rgba(111,141,255,.3);
+    color:var(--tech-primary);
+  }
+  .monitoring-device-actions{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:8px;
+  }
+  .monitoring-device-actions .btn{
+    min-height:44px;
+    border-radius:15px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    font-size:11px;
+    font-weight:800;
+    padding:8px 6px;
+  }
+  .monitoring-action-mini{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    line-height:1;
+  }
+  .monitoring-action-mini i{font-size:14px}
+  .monitoring-action-mini small{font-size:9px;font-weight:800;letter-spacing:.02em}
+  .monitoring-disabled-note{
+    font-size:10px;
+    color:var(--tech-muted);
+    margin-top:6px;
+  }
+  .monitoring-detail-grid{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+  }
+  .monitoring-detail-cell{
+    border:1px solid var(--tech-border);
+    border-radius:16px;
+    padding:10px 11px;
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .monitoring-detail-label{
+    display:block;
+    margin-bottom:5px;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--tech-muted);
+    font-weight:800;
+  }
+  .monitoring-detail-value{
+    font-size:12px;
+    line-height:1.45;
+    color:var(--tech-text);
+    word-break:break-word;
+  }
+  @media (max-width:576px){
+    .monitoring-stats{grid-template-columns:repeat(2, minmax(0, 1fr))}
+    .monitoring-stat:last-child{grid-column:1 / -1}
+    .monitoring-detail-grid{grid-template-columns:1fr}
+  }
+</style>
+
+<div class="monitoring-head">
   <div>
-    <h5 class="mb-0 fw-bold">Monitoring ONU</h5>
-    <div class="text-secondary" style="font-size:12px;">Kelola perangkat pelanggan di lapangan dengan tampilan yang lebih nyaman di mode gelap maupun terang.</div>
+    <h5>Monitoring ONU</h5>
+    <p>Kelola perangkat pelanggan di lapangan dengan tampilan yang lebih nyaman di mode gelap maupun terang.</p>
   </div>
-  <button class="btn btn-sm btn-outline-primary rounded-circle" onclick="loadDevices()" aria-label="Refresh perangkat">
+  <button class="monitoring-refresh" onclick="loadDevices()" aria-label="Refresh perangkat">
     <i class="bi bi-arrow-clockwise"></i>
+  </button>
+</div>
+
+<div class="monitoring-stats">
+  <button type="button" class="monitoring-stat active" data-filter="all" onclick="setDeviceFilter('all')">
+    <span class="monitoring-stat-label">Semua ONU</span>
+    <span class="monitoring-stat-value" id="statAll">0</span>
+  </button>
+  <button type="button" class="monitoring-stat" data-filter="online" onclick="setDeviceFilter('online')">
+    <span class="monitoring-stat-label">Online</span>
+    <span class="monitoring-stat-value text-success" id="statOnline">0</span>
+  </button>
+  <button type="button" class="monitoring-stat" data-filter="offline" onclick="setDeviceFilter('offline')">
+    <span class="monitoring-stat-label">Offline</span>
+    <span class="monitoring-stat-value text-danger" id="statOffline">0</span>
+  </button>
+  <button type="button" class="monitoring-stat" data-filter="issues" onclick="setDeviceFilter('issues')">
+    <span class="monitoring-stat-label">Masalah</span>
+    <span class="monitoring-stat-value text-warning" id="statIssues">0</span>
   </button>
 </div>
 
@@ -16,6 +191,12 @@
     <input type="text" id="search-input" class="form-control tech-field shadow-none" placeholder="Cari nama, nomor pelanggan, akun PPPoE, serial number, atau tag..." oninput="filterDevices()">
   </div>
   <div class="field-hint">Cari cepat berdasarkan identitas pelanggan atau perangkat agar teknisi lebih cepat menemukan ONU yang sedang dicek.</div>
+  <div class="monitoring-filter-row">
+    <button type="button" class="monitoring-filter-chip active" data-filter-chip="all" onclick="setDeviceFilter('all')"><i class="bi bi-grid-3x3-gap"></i> Semua</button>
+    <button type="button" class="monitoring-filter-chip" data-filter-chip="online" onclick="setDeviceFilter('online')"><i class="bi bi-wifi"></i> Online</button>
+    <button type="button" class="monitoring-filter-chip" data-filter-chip="offline" onclick="setDeviceFilter('offline')"><i class="bi bi-wifi-off"></i> Offline</button>
+    <button type="button" class="monitoring-filter-chip" data-filter-chip="issues" onclick="setDeviceFilter('issues')"><i class="bi bi-exclamation-triangle"></i> Masalah</button>
+  </div>
 </div>
 
 <div id="device-list">
@@ -27,8 +208,8 @@
 
 <div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered mx-3">
-    <div class="modal-content surface-soft">
-      <div class="modal-header" style="border-color:var(--tech-border)">
+    <div class="modal-content tech-modal-card">
+      <div class="modal-header">
         <h6 class="modal-title" id="modalTitle">Ubah Pengaturan</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
@@ -51,7 +232,7 @@
           <p class="mt-2 mb-0">Apakah Anda yakin ingin melakukan reboot pada perangkat ini?</p>
         </div>
       </div>
-      <div class="modal-footer" style="border-color:var(--tech-border)">
+      <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
         <button type="button" id="btn-submit-action" class="btn btn-primary btn-sm">Simpan Perubahan</button>
       </div>
@@ -59,9 +240,25 @@
   </div>
 </div>
 
+<div class="modal fade" id="deviceDetailModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable mx-3">
+    <div class="modal-content tech-modal-card">
+      <div class="modal-header">
+        <h6 class="modal-title" id="deviceDetailTitle">Detail Perangkat</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="deviceDetailBody">
+        <div class="text-center py-4 text-secondary small">Memuat detail perangkat...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let allDevices = [];
+let currentDeviceFilter = 'all';
 const actionModal = new bootstrap.Modal(document.getElementById('actionModal'));
+const deviceDetailModal = new bootstrap.Modal(document.getElementById('deviceDetailModal'));
 
 function escHtml(value) {
   return String(value ?? '')
@@ -99,9 +296,15 @@ function renderDevices(devices) {
       : `${device.model || 'ONU'} | SN: ${device.serialNumber || '-'}`;
     const actionTag = escHtml((device.tags || [])[0] || '');
     const actionSsid = escHtml(device.ssid || '');
+    const safeActionTag = JSON.stringify(String((device.tags || [])[0] || ''));
     const rxClass = device.rxPower && String(device.rxPower).includes('-')
       ? (parseFloat(device.rxPower) < -27 ? 'text-danger' : 'text-success')
       : '';
+    const hasPppoeIp = Boolean(String(device.pppoeIP || '').trim() && String(device.pppoeIP || '').trim() !== '-');
+    const hasWeakSignal = Number.isFinite(parseFloat(String(device.rxPower || '').replace(',', '.'))) && parseFloat(String(device.rxPower || '').replace(',', '.')) < -27;
+    const actionDisabled = !isOn;
+    const actionDisabledAttr = actionDisabled ? 'disabled' : '';
+    const disabledNote = actionDisabled ? '<div class="monitoring-disabled-note">SSID, password, dan reboot aktif saat perangkat online.</div>' : '';
 
     container.insertAdjacentHTML('beforeend', `
       <div class="t-card mb-3 p-3" style="border-left:4px solid ${isOn ? 'var(--tech-success)' : 'var(--tech-danger)'}">
@@ -133,20 +336,112 @@ function renderDevices(devices) {
           </div>
         </div>
 
-        <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${actionTag}', 'ssid', '${actionSsid}')">
-            <i class="bi bi-wifi"></i> SSID
+        <div class="monitoring-device-actions">
+          <button class="btn btn-sm btn-primary" onclick='openDeviceDetail(${safeActionTag})'>
+            <span class="monitoring-action-mini"><i class="bi bi-eye"></i><small>Detail</small></span>
           </button>
-          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="openActionModal('${actionTag}', 'pass')">
-            <i class="bi bi-key"></i> Pass
+          <button class="btn btn-sm btn-outline-primary" ${actionDisabledAttr} onclick="openActionModal('${actionTag}', 'reboot')">
+            <span class="monitoring-action-mini"><i class="bi bi-power"></i><small>Reboot</small></span>
           </button>
-          <button class="btn btn-sm btn-outline-danger" onclick="openActionModal('${actionTag}', 'reboot')">
-            <i class="bi bi-power"></i>
+          <button class="btn btn-sm btn-outline-primary" ${actionDisabledAttr} onclick="openActionModal('${actionTag}', 'ssid', '${actionSsid}')">
+            <span class="monitoring-action-mini"><i class="bi bi-wifi"></i><small>SSID</small></span>
+          </button>
+          <button class="btn btn-sm btn-outline-primary" ${actionDisabledAttr} onclick="openActionModal('${actionTag}', 'pass')">
+            <span class="monitoring-action-mini"><i class="bi bi-key"></i><small>Password</small></span>
           </button>
         </div>
+        ${disabledNote}
       </div>
     `);
   });
+}
+
+function updateMonitoringStats(devices) {
+  const list = Array.isArray(devices) ? devices : [];
+  const onlineCount = list.filter((device) => String(device?.status || '').toLowerCase() === 'online').length;
+  const offlineCount = list.filter((device) => String(device?.status || '').toLowerCase() !== 'online').length;
+  const issuesCount = list.filter((device) => isDeviceIssue(device)).length;
+  document.getElementById('statAll').textContent = list.length;
+  document.getElementById('statOnline').textContent = onlineCount;
+  document.getElementById('statOffline').textContent = offlineCount;
+  document.getElementById('statIssues').textContent = issuesCount;
+}
+
+function parseRxValue(value) {
+  const parsed = parseFloat(String(value || '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isDeviceIssue(device) {
+  const status = String(device?.status || '').toLowerCase();
+  if (status !== 'online') return true;
+  const hasPppoeIp = Boolean(String(device?.pppoeIP || '').trim() && String(device?.pppoeIP || '').trim() !== '-');
+  if (!hasPppoeIp) return true;
+  const rxValue = parseRxValue(device?.rxPower);
+  if (rxValue !== null && rxValue < -27) return true;
+  return false;
+}
+
+function applyDeviceFilters() {
+  const q = String(document.getElementById('search-input')?.value || '').trim().toLowerCase();
+  const filtered = allDevices.filter((device) => {
+    const tags = Array.isArray(device?.tags) ? device.tags : [];
+    const serialNumber = String(device?.serialNumber || '').toLowerCase();
+    const pppoeUsername = String(device?.pppoeUsername || '').toLowerCase();
+    const customerName = String(device?.customerName || '').toLowerCase();
+    const customerPhone = String(device?.customerPhone || '').toLowerCase();
+    const deviceId = String(device?.id || '').toLowerCase();
+    const tagMatch = tags.some((tag) => String(tag || '').toLowerCase().includes(q));
+    const textMatch = !q || tagMatch || serialNumber.includes(q) || pppoeUsername.includes(q) || customerName.includes(q) || customerPhone.includes(q) || deviceId.includes(q);
+    if (!textMatch) return false;
+    if (currentDeviceFilter === 'online') return String(device?.status || '').toLowerCase() === 'online';
+    if (currentDeviceFilter === 'offline') return String(device?.status || '').toLowerCase() !== 'online';
+    if (currentDeviceFilter === 'issues') return isDeviceIssue(device);
+    return true;
+  });
+  renderDevices(filtered);
+}
+
+function syncDeviceFilterUi() {
+  document.querySelectorAll('[data-filter], [data-filter-chip]').forEach((node) => {
+    const filterValue = node.getAttribute('data-filter') || node.getAttribute('data-filter-chip');
+    node.classList.toggle('active', filterValue === currentDeviceFilter);
+  });
+}
+
+function setDeviceFilter(filter) {
+  currentDeviceFilter = filter || 'all';
+  syncDeviceFilterUi();
+  applyDeviceFilters();
+}
+
+async function openDeviceDetail(tag) {
+  const safeTag = String(tag || '').trim();
+  if (!safeTag) return;
+  document.getElementById('deviceDetailTitle').textContent = 'Detail Perangkat';
+  document.getElementById('deviceDetailBody').innerHTML = '<div class="text-center py-4 text-secondary small">Memuat detail perangkat...</div>';
+  deviceDetailModal.show();
+  try {
+    const res = await fetch(`/tech/api/device/${encodeURIComponent(safeTag)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Gagal memuat detail perangkat.');
+    const onlineStatus = String(data.status || '').toLowerCase() === 'online' ? 'Online' : 'Offline';
+    document.getElementById('deviceDetailTitle').textContent = data.customerName || data.serialNumber || safeTag;
+    document.getElementById('deviceDetailBody').innerHTML = `
+      <div class="monitoring-detail-grid">
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">Status</span><div class="monitoring-detail-value">${escHtml(onlineStatus)}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">Serial</span><div class="monitoring-detail-value">${escHtml(data.serialNumber || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">PPPoE</span><div class="monitoring-detail-value">${escHtml(data.pppoeUsername || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">IP</span><div class="monitoring-detail-value">${escHtml(data.pppoeIP || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">RX Power</span><div class="monitoring-detail-value">${escHtml(data.rxPower || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">Uptime</span><div class="monitoring-detail-value">${escHtml(data.uptime || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">Model</span><div class="monitoring-detail-value">${escHtml(data.model || '-')}</div></div>
+        <div class="monitoring-detail-cell"><span class="monitoring-detail-label">WiFi</span><div class="monitoring-detail-value">${escHtml(data.ssid || '-')}</div></div>
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('deviceDetailBody').innerHTML = `<div class="alert alert-danger small mb-0">${escHtml(e.message || 'Gagal memuat detail perangkat.')}</div>`;
+  }
 }
 
 async function loadDevices() {
@@ -154,23 +449,15 @@ async function loadDevices() {
     const res = await fetch('/tech/api/devices');
     const data = await res.json();
     allDevices = data.devices || [];
-    renderDevices(allDevices);
+    updateMonitoringStats(allDevices);
+    applyDeviceFilters();
   } catch (e) {
     setDeviceListMessage(`Gagal memuat data: ${e.message}`, 'alert alert-danger small');
   }
 }
 
 function filterDevices() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const filtered = allDevices.filter((d) =>
-    d.tags.some((t) => t.toLowerCase().includes(q)) ||
-    d.serialNumber.toLowerCase().includes(q) ||
-    (d.pppoeUsername && d.pppoeUsername !== 'N/A' && String(d.pppoeUsername).toLowerCase().includes(q)) ||
-    (d.customerName && String(d.customerName).toLowerCase().includes(q)) ||
-    (d.customerPhone && String(d.customerPhone).toLowerCase().includes(q)) ||
-    (d.id && String(d.id).toLowerCase().includes(q))
-  );
-  renderDevices(filtered);
+  applyDeviceFilters();
 }
 
 function openActionModal(tag, type, currentSsid = '') {
@@ -189,16 +476,19 @@ function openActionModal(tag, type, currentSsid = '') {
     document.getElementById('ssid-input-group').classList.remove('d-none');
     document.getElementById('new-ssid').value = currentSsid;
     submitBtn.innerText = 'Simpan SSID';
+    submitBtn.dataset.defaultLabel = 'Simpan SSID';
   } else if (type === 'pass') {
     document.getElementById('modalTitle').innerText = 'Ubah Password WiFi';
     document.getElementById('pass-input-group').classList.remove('d-none');
     document.getElementById('new-password').value = '';
     submitBtn.innerText = 'Simpan Password';
+    submitBtn.dataset.defaultLabel = 'Simpan Password';
   } else if (type === 'reboot') {
     document.getElementById('modalTitle').innerText = 'Reboot Perangkat';
     document.getElementById('reboot-confirm').classList.remove('d-none');
     submitBtn.innerText = 'Ya, reboot sekarang';
     submitBtn.className = 'btn btn-danger btn-sm';
+    submitBtn.dataset.defaultLabel = 'Ya, reboot sekarang';
   }
 
   actionModal.show();
@@ -252,7 +542,7 @@ document.getElementById('btn-submit-action').addEventListener('click', async fun
     alert('Error: ' + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Simpan Perubahan';
+    btn.textContent = btn.dataset.defaultLabel || 'Simpan Perubahan';
   }
 });
 

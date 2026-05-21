@@ -10,6 +10,7 @@ const packageChangeSvc = require('./packageChangeService');
 const mikrotikService = require('./mikrotikService');
 const usageSvc = require('./usageService');
 const { getSetting } = require('../config/settingsManager');
+const { hasStaticQrisEnabled } = require('./qrisService');
 const {
   buildCustomerCheckBillingLink,
   buildCustomerPortalLoginLink,
@@ -25,6 +26,18 @@ const {
 function getEffectiveCustomerBillingDay(rawDay, month, year) {
   const day = Number(rawDay || 0) || Number(getSetting('isolir_day', 10) || 10) || 10;
   return billingSvc.getEffectiveBillingDay(day, month, year);
+}
+
+function startOfLocalDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getDaysUntilInvoiceDue(invoice, customer, today = new Date()) {
+  const dueAt = billingSvc.getInvoiceDueDate(invoice, customer?.isolate_day);
+  if (!dueAt) return null;
+  const dueDay = startOfLocalDay(dueAt);
+  const currentDay = startOfLocalDay(today);
+  return Math.round((dueDay.getTime() - currentDay.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 // Helper: Random delay generator untuk smart rate limiting
@@ -88,6 +101,11 @@ function buildPaymentGuideMessage(customer, invoices = []) {
     primaryInvoice &&
     String(primaryInvoice.status || 'unpaid').toLowerCase() === 'unpaid' &&
     (!Number(primaryInvoice.qris_amount_unique || 0) || !Number(primaryInvoice.qris_unique_code || 0)) &&
+    hasStaticQrisEnabled({
+      qris_static_enabled: getSetting('qris_static_enabled', undefined),
+      qris_static_payload: getSetting('qris_static_payload', ''),
+      qris_static_qr_url: getSetting('qris_static_qr_url', '')
+    }) &&
     String(getSetting('qris_static_payload', '') || '').trim()
   ) {
     try {
@@ -192,6 +210,15 @@ async function syncUsageTotalsWithRetry(customerId, totalIn, totalOut, at, meta,
 }
 
 function startCronJobs() {
+  try {
+    const pruned = customerSvc.pruneOldPortalNotifications(30);
+    if (Number(pruned?.changes || 0) > 0) {
+      logger.info(`[CRON] Membersihkan ${pruned.changes} pesan inbox pelanggan lama.`);
+    }
+  } catch (error) {
+    logger.warn(`[CRON] Gagal membersihkan inbox pelanggan saat startup: ${error.message}`);
+  }
+
   cron.schedule('10,40 * * * *', async () => {
     try {
       const processed = await packageChangeSvc.processDueScheduledRequests(50);
@@ -203,16 +230,27 @@ function startCronJobs() {
     }
   });
 
-  // 1. Generate Tagihan Otomatis setiap tanggal 1 jam 07:00
-  cron.schedule('0 7 1 * *', () => {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-    
-    logger.info(`[CRON] Menjalankan generate tagihan otomatis untuk ${month}/${year}`);
+  cron.schedule('20 3 * * *', () => {
     try {
-      const count = billingSvc.generateMonthlyInvoices(month, year);
-      logger.info(`[CRON] Berhasil generate ${count} tagihan otomatis.`);
+      const pruned = customerSvc.pruneOldPortalNotifications(30);
+      if (Number(pruned?.changes || 0) > 0) {
+        logger.info(`[CRON] Membersihkan ${pruned.changes} pesan inbox pelanggan lebih dari 30 hari.`);
+      }
+    } catch (error) {
+      logger.warn(`[CRON] Gagal membersihkan inbox pelanggan lama: ${error.message}`);
+    }
+  });
+
+  // 1. Generate tagihan otomatis harian H-7 sebelum tanggal isolir/jatuh tempo pelanggan.
+  cron.schedule('30 6 * * *', () => {
+    const leadDays = Math.max(0, Number(getSetting('auto_invoice_lead_days', 7) || 7) || 7);
+    logger.info(`[CRON] Menjalankan generate tagihan otomatis H-${leadDays} sebelum jatuh tempo.`);
+    try {
+      const result = billingSvc.generateInvoicesDueInDays(leadDays);
+      logger.info(
+        `[CRON] Generate tagihan H-${leadDays} selesai: periode=${result.periodMonth}/${result.periodYear}, ` +
+        `jatuh_tempo_tgl=${result.dueDay}, eligible=${result.eligible}, dibuat=${result.count}.`
+      );
     } catch (error) {
       logger.error(`[CRON] Gagal generate tagihan otomatis: ${error.message}`);
     }
@@ -292,11 +330,11 @@ function startCronJobs() {
     }
 
     const baseDelayMs = (Number(getSetting('whatsapp_broadcast_delay', 5) || 5) * 1000); // Default 5 detik
-    const batchSize = 15; // 15 pesan per batch (dari 20)
+    const batchSize = Math.max(1, Math.min(20, Number(getSetting('whatsapp_auto_billing_batch_size', 12) || 12) || 12));
     const batchPauseMs = 120000; // Pause 2 menit setelah batch (dari 1 menit)
+    const dailyLimit = Math.max(0, Number(getSetting('whatsapp_auto_billing_daily_limit', 0) || 0) || 0);
 
     const today = new Date();
-    const day = today.getDate();
 
     const customers = customerSvc.getAllCustomers();
     let targetCount = 0;
@@ -314,6 +352,10 @@ function startCronJobs() {
       `Terima kasih atas kerja samanya.\n` +
       `Salam,\nAdmin ${getSetting('company_header', 'ISP')}`;
     const template = String(getSetting('whatsapp_auto_billing_message', defaultTemplate) || defaultTemplate);
+    const billingTemplate = String(
+      getSetting('whatsapp_billing_message', defaultBillingWhatsappTemplate(getSetting('company_header', 'ISP'))) ||
+      defaultBillingWhatsappTemplate(getSetting('company_header', 'ISP'))
+    ).trim();
     const reminderTemplate = String(
       getSetting('whatsapp_due_reminder_message', getSetting('whatsapp_billing_message', template)) ||
       template
@@ -332,26 +374,40 @@ function startCronJobs() {
       const unpaidCount = Number(c.unpaid_count || 0) || 0;
       if (unpaidCount <= 0) continue;
 
-      const dueDay = getEffectiveCustomerBillingDay(c.isolate_day, today.getMonth() + 1, today.getFullYear());
-      const reminderDays = [dueDay - 3, dueDay - 2, dueDay - 1].filter((candidate) => candidate >= 1);
-      const shouldSend = reminderDays.includes(day);
-      if (!shouldSend) continue;
+      let unpaidInvoices = [];
+      let targetInvoice = null;
+      let daysLeft = null;
+      try {
+        unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
+        targetInvoice = unpaidInvoices.find((invoice) => {
+          const diff = getDaysUntilInvoiceDue(invoice, c, today);
+          if (![7, 3, 2, 1].includes(diff)) return false;
+          daysLeft = diff;
+          return true;
+        });
+      } catch (invoiceError) {
+        logger.warn(`[CRON] Gagal cek tagihan unpaid customer ${c.id}: ${invoiceError.message || invoiceError}`);
+      }
+      if (!targetInvoice || !daysLeft) continue;
 
       seenPhones.add(digits);
       try {
-        const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
-        const primaryInvoice = unpaidInvoices[0] || null;
-        const dueText = primaryInvoice ? formatInvoiceDueDate(primaryInvoice, c) : `Tanggal ${dueDay}`;
+        const dueText = formatInvoiceDueDate(targetInvoice, c);
         customerSvc.addPortalNotification(c.id, {
-          kind: 'due-reminder',
+          kind: daysLeft === 7 ? 'invoice-ready' : 'due-reminder',
           tab: 'billing',
-          title: `Pengingat jatuh tempo H-${Math.max(1, dueDay - day)}`,
+          title: daysLeft === 7 ? 'Tagihan baru tersedia' : `Pengingat jatuh tempo H-${daysLeft}`,
           body: `Tagihan internet Anda akan jatuh tempo ${dueText}. Silakan cek tagihan agar layanan tetap aktif.`
         }, { dedupeWindowMs: 20 * 60 * 60 * 1000 });
       } catch (notificationError) {
         logger.warn(`[CRON] Gagal simpan notif jatuh tempo customer ${c.id}: ${notificationError.message || notificationError}`);
       }
-      targetCustomers.push(c);
+      targetCustomers.push({
+        customer: c,
+        daysLeft,
+        template: daysLeft === 7 ? billingTemplate : reminderTemplate
+      });
+      if (dailyLimit > 0 && targetCustomers.length >= dailyLimit) break;
     }
 
     if (targetCustomers.length === 0) {
@@ -359,11 +415,15 @@ function startCronJobs() {
       return;
     }
 
-    logger.info(`[CRON] Memulai pengingat tagihan otomatis untuk ${targetCustomers.length} pelanggan dengan smart rate limit.`);
+    logger.info(
+      `[CRON] Memulai pengingat tagihan otomatis untuk ${targetCustomers.length} pelanggan dengan smart rate limit. ` +
+      `Batas harian=${dailyLimit > 0 ? dailyLimit : 'tanpa batas khusus'}.`
+    );
 
     // Kirim pesan dengan smart rate limit
     for (let i = 0; i < targetCustomers.length; i++) {
-      const c = targetCustomers[i];
+      const target = targetCustomers[i];
+      const c = target.customer;
       let attemptCount = 0;
       const maxAttempts = 3;
 
@@ -377,10 +437,10 @@ function startCronJobs() {
           const messageContext = buildWhatsappMessageContext(c, unpaidInvoices);
 
           let formattedMsg = ensureDueDateLine(fillWhatsappTemplate(
-            reminderTemplate,
+            target.template,
             messageContext
           ), messageContext.jatuh_tempo);
-          if (!/\{\{\s*payment_guide\s*\}\}/i.test(reminderTemplate) && messageContext.payment_guide) {
+          if (!/\{\{\s*payment_guide\s*\}\}/i.test(target.template) && messageContext.payment_guide) {
             formattedMsg += `\n\n${messageContext.payment_guide}`;
           }
 

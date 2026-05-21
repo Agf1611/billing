@@ -284,7 +284,7 @@ async function payInvoiceAsAgent(agentId, invoiceId, note = '') {
   const tx = run();
 
   const customer = customerSvc.getCustomerById(inv.customer_id);
-  if (customer && customer.status === 'suspended') {
+  if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
     const freshCustomer = customerSvc.getAllCustomers().find(c => c.id === inv.customer_id);
     if (freshCustomer && freshCustomer.unpaid_count === 0) {
       await customerSvc.activateCustomer(inv.customer_id);

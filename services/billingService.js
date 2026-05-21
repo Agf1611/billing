@@ -2,8 +2,11 @@
  * Service: Logika Billing & Tagihan
  */
 const db = require('../config/database');
+const { logger } = require('../config/logger');
 const auditTrail = require('./auditTrailService');
 const bookkeepingSvc = require('./bookkeepingService');
+const { getSettingsWithCache } = require('../config/settingsManager');
+const { resolveQrisUniqueCodeRange, hasStaticQrisEnabled } = require('./qrisService');
 
 function daysInMonth(year, month1to12) {
   return new Date(year, month1to12, 0).getDate();
@@ -33,6 +36,11 @@ function getEffectiveBillingDay(day, month1to12, year) {
   return Math.min(normalized, daysInMonth(y, month));
 }
 
+function addCalendarDays(date, days) {
+  const base = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + Number(days || 0));
+}
+
 function resolveInvoiceDueDay(customer, periodMonth, periodYear) {
   return getEffectiveBillingDay(customer?.isolate_day, periodMonth, periodYear);
 }
@@ -54,6 +62,10 @@ function isInvoiceLateForCustomer(invoice, customer, paymentDate = new Date()) {
   const dueAt = getInvoiceDueDate(invoice, customer.isolate_day);
   if (!dueAt) return false;
   return paymentDate.getTime() > dueAt.getTime();
+}
+
+function invoicePeriodKey(year, month) {
+  return (Number(year || 0) * 100) + Number(month || 0);
 }
 
 function shiftCustomerBillingAnchorAfterLatePayment(customerId, invoiceLike, paymentDate = new Date()) {
@@ -105,6 +117,10 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
   const baseAmount = Number(current.amount || 0);
   if (!Number.isFinite(baseAmount) || baseAmount <= 0) throw new Error('Nominal tagihan tidak valid');
 
+  const currentSettings = getSettingsWithCache();
+  const codeRange = resolveQrisUniqueCodeRange(currentSettings);
+  const minCode = Math.max(1, Number(codeRange.min || 1) || 1);
+  const maxCode = Math.max(minCode, Number(codeRange.max || minCode) || minCode);
   const exists = db.prepare('SELECT id FROM invoices WHERE status = ? AND qris_amount_unique = ? AND id != ? LIMIT 1');
   const update = db.prepare(`
     UPDATE invoices
@@ -116,7 +132,7 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
   let chosenAmount = 0;
 
   for (let i = 0; i < 50; i += 1) {
-    const code = 1 + Math.floor(Math.random() * 999);
+    const code = minCode + Math.floor(Math.random() * ((maxCode - minCode) + 1));
     const amount = baseAmount + code;
     if (!exists.get('unpaid', amount, invId)) {
       chosenCode = code;
@@ -126,7 +142,7 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
   }
 
   if (!chosenAmount) {
-    for (let code = 1; code <= 999; code += 1) {
+    for (let code = minCode; code <= maxCode; code += 1) {
       const amount = baseAmount + code;
       if (!exists.get('unpaid', amount, invId)) {
         chosenCode = code;
@@ -142,6 +158,13 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
 }
 
 function backfillUniqueQrisForUnpaidInvoices(invoiceIds = []) {
+  if (!hasStaticQrisEnabled(getSettingsWithCache())) {
+    return {
+      assigned: 0,
+      failed: [],
+      scanned: 0
+    };
+  }
   const normalizedIds = Array.isArray(invoiceIds)
     ? [...new Set(invoiceIds.map((id) => Number(id || 0)).filter((id) => Number.isFinite(id) && id > 0))]
     : [];
@@ -253,6 +276,56 @@ function generateMonthlyInvoices(month, year) {
   };
 }
 
+function generateInvoicesDueInDays(leadDays = 7, fromDate = new Date()) {
+  const safeLeadDays = Math.max(0, parseInt(leadDays, 10) || 0);
+  const dueDate = addCalendarDays(fromDate, safeLeadDays);
+  const periodMonth = dueDate.getMonth() + 1;
+  const periodYear = dueDate.getFullYear();
+  const targetDueDay = dueDate.getDate();
+
+  const customers = db.prepare("SELECT * FROM customers WHERE status IN ('active','suspended') AND package_id IS NOT NULL").all();
+  const existing = db.prepare('SELECT customer_id FROM invoices WHERE period_month=? AND period_year=?').all(periodMonth, periodYear);
+  const existingIds = new Set(existing.map(e => e.customer_id));
+  const insert = db.prepare(`INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)`);
+  const bumpPromo = db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?');
+  let created = 0;
+  let eligible = 0;
+  const createdInvoiceIds = [];
+
+  const run = db.transaction(() => {
+    for (const c of customers) {
+      if (existingIds.has(c.id)) continue;
+      const customerDueDay = resolveInvoiceDueDay(c, periodMonth, periodYear);
+      if (customerDueDay !== targetDueDay) continue;
+
+      eligible++;
+      const pkg = db.prepare('SELECT * FROM packages WHERE id=?').get(c.package_id);
+      if (!pkg) continue;
+      const { amount, bumpPromo: bump, notesAuto } = computeInvoiceAmountAndMeta(c, pkg, periodMonth, periodYear);
+      const result = insert.run(c.id, periodMonth, periodYear, amount, notesAuto, customerDueDay);
+      if (bump) bumpPromo.run(c.id);
+      createdInvoiceIds.push(result.lastInsertRowid);
+      created++;
+    }
+  });
+  run();
+
+  if (createdInvoiceIds.length) {
+    backfillUniqueQrisForUnpaidInvoices(createdInvoiceIds);
+    createdInvoiceIds.forEach((invoiceId) => pushPortalInvoiceNotification(invoiceId));
+  }
+
+  return {
+    count: created,
+    eligible,
+    createdInvoiceIds,
+    leadDays: safeLeadDays,
+    periodMonth,
+    periodYear,
+    dueDay: targetDueDay
+  };
+}
+
 function generateInvoiceForCustomer(customerId, month, year) {
   const cid = Number(customerId);
   const m = Number(month);
@@ -280,9 +353,87 @@ function generateInvoiceForCustomer(customerId, month, year) {
   if (bump) {
     db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?').run(cid);
   }
-  assignUniqueQrisForInvoice(r.lastInsertRowid);
+  if (hasStaticQrisEnabled(getSettingsWithCache())) {
+    assignUniqueQrisForInvoice(r.lastInsertRowid);
+  }
   pushPortalInvoiceNotification(r.lastInsertRowid);
   return { created: true, invoiceId: r.lastInsertRowid, customerName: customer.name };
+}
+
+function ensurePortalReactivationInvoice(customerId, atDate = new Date()) {
+  const cid = Number(customerId);
+  if (!Number.isFinite(cid) || cid <= 0) return { created: false, skipped: true, reason: 'invalid-customer' };
+
+  const customer = db.prepare('SELECT * FROM customers WHERE id=?').get(cid);
+  if (!customer) return { created: false, skipped: true, reason: 'customer-not-found' };
+
+  const status = String(customer.status || '').trim().toLowerCase();
+  if (!['suspended', 'inactive'].includes(status)) {
+    return { created: false, skipped: true, reason: 'customer-active' };
+  }
+  if (!customer.package_id) {
+    return { created: false, skipped: true, reason: 'missing-package' };
+  }
+
+  const existingUnpaid = db.prepare(`
+    SELECT id, period_month, period_year
+    FROM invoices
+    WHERE customer_id=? AND lower(trim(status))='unpaid'
+    ORDER BY period_year ASC, period_month ASC, id ASC
+    LIMIT 1
+  `).get(cid);
+  if (existingUnpaid) {
+    return { created: false, invoiceId: existingUnpaid.id, reason: 'unpaid-exists' };
+  }
+
+  const date = atDate instanceof Date && !Number.isNaN(atDate.getTime()) ? atDate : new Date();
+  const periodMonth = date.getMonth() + 1;
+  const periodYear = date.getFullYear();
+  const existingCurrent = db.prepare(`
+    SELECT id, status
+    FROM invoices
+    WHERE customer_id=? AND period_month=? AND period_year=?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(cid, periodMonth, periodYear);
+  const existingStatus = String(existingCurrent?.status || '').trim().toLowerCase();
+  if (existingCurrent && ['unpaid', 'paid'].includes(existingStatus)) {
+    return {
+      created: false,
+      invoiceId: existingCurrent.id,
+      reason: existingStatus === 'paid' ? 'current-period-paid' : 'current-period-unpaid'
+    };
+  }
+
+  const pkg = db.prepare('SELECT * FROM packages WHERE id=?').get(customer.package_id);
+  if (!pkg) return { created: false, skipped: true, reason: 'package-not-found' };
+
+  const { amount, bumpPromo, notesAuto } = computeInvoiceAmountAndMeta(customer, pkg, periodMonth, periodYear);
+  const notes = [notesAuto, 'AUTO: Tagihan aktivasi portal prabayar'].filter(Boolean).join(' | ');
+  const r = db.prepare('INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)').run(
+    cid,
+    periodMonth,
+    periodYear,
+    amount,
+    notes,
+    resolveInvoiceDueDay(customer, periodMonth, periodYear)
+  );
+  if (bumpPromo) {
+    db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?').run(cid);
+  }
+  if (hasStaticQrisEnabled(getSettingsWithCache())) {
+    assignUniqueQrisForInvoice(r.lastInsertRowid);
+  }
+  pushPortalInvoiceNotification(r.lastInsertRowid);
+
+  return {
+    created: true,
+    invoiceId: r.lastInsertRowid,
+    customerName: customer.name,
+    periodMonth,
+    periodYear,
+    amount
+  };
 }
 
 function pushPortalInvoiceNotification(invoiceId) {
@@ -294,10 +445,32 @@ function pushPortalInvoiceNotification(invoiceId) {
       kind: 'invoice',
       tab: 'billing',
       title: `Tagihan baru INV-${invoice.id} tersedia`,
-      body: `Periode ${invoice.period_month}/${invoice.period_year} - Rp ${Number(invoice.amount || 0).toLocaleString('id-ID')}`
+      body: `Periode ${invoice.period_month}/${invoice.period_year} - Rp ${Number(invoice.amount || 0).toLocaleString('id-ID')}`,
+      payload: {
+        senderName: 'Billing',
+        senderRole: 'Tagihan',
+        invoiceId: Number(invoice.id || 0) || null
+      }
     }, { dedupeWindowMs: 30 * 24 * 60 * 60 * 1000 });
   } catch (_) {
     return null;
+  }
+}
+
+function queueAdminPaidNotification(invoiceId, paidByName, notes, actor = null, paymentDate = new Date()) {
+  try {
+    const adminPaymentNotificationSvc = require('./adminPaymentNotificationService');
+    Promise.resolve(adminPaymentNotificationSvc.notifyInvoicePaid({
+      invoiceId,
+      paidByName,
+      notes,
+      actor,
+      paymentDate
+    })).catch((error) => {
+      logger.warn(`[Billing] Notifikasi admin pembayaran lunas gagal: ${error.message || String(error)}`);
+    });
+  } catch (error) {
+    logger.warn(`[Billing] Gagal menyiapkan notifikasi admin pembayaran lunas: ${error.message || String(error)}`);
   }
 }
 
@@ -322,6 +495,50 @@ function payInvoiceForCustomerPeriod(customerId, month, year, paidByName, notes)
   return { created: ensure.created, paid: true, alreadyPaid: false, invoiceId: ensure.invoiceId, customerName: ensure.customerName };
 }
 
+function voidPreviousUnpaidForPrepaidRestart(customerId, year, month, paidByName = 'Admin', paymentDate = new Date()) {
+  const cid = Number(customerId || 0);
+  const y = Number(year || 0);
+  const m = Number(month || 0);
+  if (!Number.isFinite(cid) || cid <= 0 || !Number.isFinite(y) || !Number.isFinite(m)) {
+    return { voided: 0, invoiceIds: [] };
+  }
+
+  const customer = db.prepare('SELECT id, status FROM customers WHERE id=?').get(cid);
+  const customerStatus = String(customer?.status || '').trim().toLowerCase();
+  if (!['suspended', 'inactive'].includes(customerStatus)) return { voided: 0, invoiceIds: [] };
+
+  const cutoff = invoicePeriodKey(y, m);
+  const rows = db.prepare(`
+    SELECT id, period_month, period_year, notes
+    FROM invoices
+    WHERE customer_id = ?
+      AND lower(trim(status)) = 'unpaid'
+      AND ((period_year * 100) + period_month) < ?
+    ORDER BY period_year ASC, period_month ASC, id ASC
+  `).all(cid, cutoff);
+  if (!rows.length) return { voided: 0, invoiceIds: [] };
+
+  const noteSuffix = `AUTO: Hangus prabayar karena pelanggan mulai bayar periode ${String(m).padStart(2, '0')}/${y} (${paidByName || 'Admin'})`;
+  const update = db.prepare(`
+    UPDATE invoices
+    SET status='void',
+        paid_at=NULL,
+        paid_by_name=?,
+        notes=trim(COALESCE(NULLIF(notes, ''), '') || CASE WHEN COALESCE(NULLIF(notes, ''), '') = '' THEN '' ELSE ' | ' END || ?)
+    WHERE id=?
+      AND lower(trim(status))='unpaid'
+  `);
+  const run = db.transaction(() => {
+    for (const row of rows) {
+      update.run(paidByName || 'Admin', noteSuffix, row.id);
+      bookkeepingSvc.removeInvoiceIncomeEntry(row.id);
+    }
+  });
+  run();
+
+  return { voided: rows.length, invoiceIds: rows.map((row) => row.id), paymentDate };
+}
+
 function payInvoicesForCustomerMonths(customerId, year, months, paidByName, notes) {
   const cid = Number(customerId);
   const y = Number(year);
@@ -344,10 +561,21 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
   const bumpPromo = db.prepare('UPDATE customers SET promo_cycles_used = COALESCE(promo_cycles_used,0) + 1 WHERE id=?');
   const payInv = db.prepare(`UPDATE invoices SET status='paid', paid_at=CURRENT_TIMESTAMP, paid_by_name=?, notes=? WHERE id=?`);
 
-  const summary = { customerName: customer.name, year: y, paidMonths: [], alreadyPaidMonths: [], createdMonths: [], totalAmount: 0, totalMonths: 0 };
+  const summary = {
+    customerName: customer.name,
+    year: y,
+    paidMonths: [],
+    alreadyPaidMonths: [],
+    createdMonths: [],
+    voidedMonths: 0,
+    voidedInvoiceIds: [],
+    totalAmount: 0,
+    totalMonths: 0
+  };
   const paymentDate = new Date();
   let latePaymentDetected = false;
   const paidInvoiceIds = [];
+  let earliestPaidPeriod = null;
   const run = db.transaction(() => {
     for (const m of selectedMonths) {
       const inv = selectInv.get(cid, m, y);
@@ -373,9 +601,19 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
       summary.paidMonths.push(m);
       summary.totalAmount += (Number.isFinite(amount) ? amount : 0);
       summary.totalMonths += 1;
+      const key = invoicePeriodKey(y, m);
+      earliestPaidPeriod = earliestPaidPeriod == null ? key : Math.min(earliestPaidPeriod, key);
     }
   });
   run();
+
+  if (earliestPaidPeriod != null && summary.totalMonths > 0) {
+    const firstPaidMonth = earliestPaidPeriod % 100;
+    const firstPaidYear = Math.floor(earliestPaidPeriod / 100);
+    const voided = voidPreviousUnpaidForPrepaidRestart(cid, firstPaidYear, firstPaidMonth, paidByName, paymentDate);
+    summary.voidedMonths = voided.invoiceIds.length;
+    summary.voidedInvoiceIds = voided.invoiceIds;
+  }
 
   if (latePaymentDetected && summary.totalMonths > 0) {
     const currentAnchor = normalizeBillingAnchorDay(customer.isolate_day, 10);
@@ -387,6 +625,7 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
 
   for (const invoiceId of paidInvoiceIds) {
     bookkeepingSvc.upsertInvoiceIncomeEntry(invoiceId, paidByName || 'Admin', paymentDate.toISOString());
+    queueAdminPaidNotification(invoiceId, paidByName || 'Admin', notes || '', null, paymentDate);
   }
 
   return summary;
@@ -400,7 +639,7 @@ function getPaidMonthsForCustomerYear(customerId, year) {
   const rows = db.prepare(`
     SELECT period_month
     FROM invoices
-    WHERE customer_id=? AND period_year=? AND status='paid'
+    WHERE customer_id=? AND period_year=? AND lower(trim(status))='paid'
     ORDER BY period_month ASC
   `).all(cid, y);
   return rows.map(r => r.period_month);
@@ -456,7 +695,7 @@ function getAllInvoices({ month, year, status, search, limit = 300 } = {}) {
   const params = [];
   if (month)  { q += ' AND i.period_month=?'; params.push(parseInt(month)); }
   if (year)   { q += ' AND i.period_year=?';  params.push(parseInt(year)); }
-  if (status && status !== 'all') { q += ' AND i.status=?'; params.push(status); }
+  if (status && status !== 'all') { q += ' AND lower(trim(i.status))=?'; params.push(String(status).trim().toLowerCase()); }
   if (search) {
     q += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ?)';
     const s = `%${search}%`;
@@ -478,26 +717,44 @@ function getInvoiceById(id) {
 }
 
 function markAsPaid(invoiceId, paidByName, notes, actor = null) {
-  const invoiceBefore = db.prepare('SELECT id, customer_id, period_month, period_year, amount, status, due_day_snapshot FROM invoices WHERE id=?').get(invoiceId);
+  const invId = Number(invoiceId || 0);
+  if (!Number.isFinite(invId) || invId <= 0) throw new Error('Invoice ID tidak valid');
+
+  const invoiceBefore = db.prepare('SELECT id, customer_id, period_month, period_year, amount, status, due_day_snapshot FROM invoices WHERE id=?').get(invId);
+  if (!invoiceBefore) throw new Error('Tagihan tidak ditemukan');
+
   const paymentDate = new Date();
   const result = db.prepare(`
     UPDATE invoices SET status='paid', paid_at=CURRENT_TIMESTAMP, paid_by_name=?, notes=? WHERE id=?
-  `).run(paidByName || 'Admin', notes || '', invoiceId);
+  `).run(paidByName || 'Admin', notes || '', invId);
+
+  const invoiceAfter = db.prepare('SELECT id, status FROM invoices WHERE id=?').get(invId);
+  if (String(invoiceAfter?.status || '').trim().toLowerCase() !== 'paid') {
+    throw new Error('Status tagihan gagal disimpan sebagai lunas');
+  }
 
   const wasPaid = String(invoiceBefore?.status || '').toLowerCase() === 'paid';
   if (result.changes > 0 && invoiceBefore && !wasPaid) {
+    voidPreviousUnpaidForPrepaidRestart(
+      invoiceBefore.customer_id,
+      invoiceBefore.period_year,
+      invoiceBefore.period_month,
+      paidByName || 'Admin',
+      paymentDate
+    );
     shiftCustomerBillingAnchorAfterLatePayment(invoiceBefore.customer_id, invoiceBefore, paymentDate);
-    bookkeepingSvc.upsertInvoiceIncomeEntry(invoiceId, paidByName || 'Admin', paymentDate.toISOString());
+    bookkeepingSvc.upsertInvoiceIncomeEntry(invId, paidByName || 'Admin', paymentDate.toISOString());
+    queueAdminPaidNotification(invId, paidByName || 'Admin', notes || '', actor, paymentDate);
   }
 
   // Catat audit trail jika berhasil
   if (result.changes > 0 && actor) {
-    const invoice = db.prepare('SELECT id, customer_id, period_month, period_year, amount FROM invoices WHERE id=?').get(invoiceId);
+    const invoice = db.prepare('SELECT id, customer_id, period_month, period_year, amount FROM invoices WHERE id=?').get(invId);
     if (invoice) {
       auditTrail.logAuditTrail({
         action: 'MARK_INVOICE_PAID',
         entity_type: 'invoice',
-        entity_id: String(invoiceId),
+        entity_id: String(invId),
         actor_type: actor.type || 'unknown',
         actor_id: actor.id || null,
         actor_name: actor.name || null,
@@ -603,7 +860,7 @@ function getMonthlyRevenue(year) {
         bucket.ontime_paid_count += 1;
         bucket.ontime_paid_amount += amount;
       }
-    } else {
+    } else if (String(row.status || '').toLowerCase() === 'unpaid') {
       bucket.unpaid_amount += amount;
       bucket.unpaid_count += 1;
     }
@@ -830,7 +1087,7 @@ function getUnpaidInvoicesByCustomerId(customerId) {
     FROM invoices i
     JOIN customers c ON i.customer_id = c.id
     LEFT JOIN packages p ON c.package_id = p.id
-    WHERE i.customer_id = ? AND i.status = 'unpaid'
+    WHERE i.customer_id = ? AND lower(trim(i.status)) = 'unpaid'
     ORDER BY i.period_year ASC, i.period_month ASC
   `).all(customerId);
 }
@@ -880,7 +1137,9 @@ function createInstallProrataCatchUpInvoice(customerId) {
   const r = db.prepare('INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)').run(
     cid, periodMonth, periodYear, amount, notesAuto, resolveInvoiceDueDay(customer, periodMonth, periodYear)
   );
-  assignUniqueQrisForInvoice(r.lastInsertRowid);
+  if (hasStaticQrisEnabled(getSettingsWithCache())) {
+    assignUniqueQrisForInvoice(r.lastInsertRowid);
+  }
 
   return {
     invoiceId: r.lastInsertRowid,
@@ -913,7 +1172,7 @@ function updatePaymentInfo(invoiceId, data) {
 module.exports = {
   getInvoicesByAny,
   getUnpaidInvoicesByCustomerId,
-  generateMonthlyInvoices, generateInvoiceForCustomer, createInstallProrataCatchUpInvoice, payInvoiceForCustomerPeriod, payInvoicesForCustomerMonths, getPaidMonthsForCustomerYear, getCustomerBillingYearSummary, getAllInvoices, getInvoiceById,
+  generateMonthlyInvoices, generateInvoicesDueInDays, generateInvoiceForCustomer, ensurePortalReactivationInvoice, createInstallProrataCatchUpInvoice, payInvoiceForCustomerPeriod, payInvoicesForCustomerMonths, getPaidMonthsForCustomerYear, getCustomerBillingYearSummary, getAllInvoices, getInvoiceById,
   markAsPaid, markAsUnpaid, deleteInvoice,
   getInvoiceSummary, getMonthlyRevenue,
   getDashboardStats, getRecentPayments, getTopUnpaid,

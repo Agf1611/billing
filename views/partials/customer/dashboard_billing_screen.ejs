@@ -14,9 +14,11 @@
         <h4>Tagihan Aktif</h4>
         <div class="soft-muted"><%= safeUnpaidInvoices.length %> tagihan belum dibayar</div>
       </div>
-      <button class="mini-button" type="button" onclick="openPaymentModal()">
-        <i class="bi bi-plus-circle"></i> Bayar
-      </button>
+      <% if (safeUnpaidInvoices.length > 0) { %>
+        <button class="mini-button" type="button" onclick="openPaymentModal()">
+          <i class="bi bi-wallet2"></i> Bayar
+        </button>
+      <% } %>
     </div>
 
     <% if (safeUnpaidInvoices.length === 0) { %>

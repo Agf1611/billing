@@ -1,0 +1,111 @@
+<%
+  const trackerEnabled = Boolean(typeof enabled !== 'undefined' ? enabled : true);
+  const trackerEndpoint = String(typeof endpoint !== 'undefined' ? endpoint : '').trim();
+  const trackerRoleLabel = String(typeof roleLabel !== 'undefined' ? roleLabel : 'Karyawan').trim() || 'Karyawan';
+%>
+<script>
+  (function () {
+    const enabled = <%- JSON.stringify(trackerEnabled) %>;
+    const endpoint = <%- JSON.stringify(trackerEndpoint) %>;
+    const roleLabel = <%- JSON.stringify(trackerRoleLabel) %>;
+    if (!enabled || !endpoint || !navigator.geolocation) return;
+
+    let watchId = null;
+    let lastSentAt = 0;
+    let lastLat = null;
+    let lastLng = null;
+    let permissionDenied = false;
+
+    function distanceMeters(lat1, lng1, lat2, lng2) {
+      if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return Infinity;
+      const toRad = (value) => value * Math.PI / 180;
+      const earthRadius = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return earthRadius * c;
+    }
+
+    async function postLocation(payload) {
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin',
+          keepalive: true,
+          body: JSON.stringify(payload)
+        });
+      } catch (_error) {}
+    }
+
+    function shouldSend(lat, lng) {
+      const now = Date.now();
+      if (!Number.isFinite(lastLat) || !Number.isFinite(lastLng)) return true;
+      if ((now - lastSentAt) >= 60 * 1000) return true;
+      return distanceMeters(lastLat, lastLng, lat, lng) >= 25;
+    }
+
+    function handlePosition(position) {
+      const coords = position && position.coords ? position.coords : null;
+      const lat = coords ? Number(coords.latitude) : NaN;
+      const lng = coords ? Number(coords.longitude) : NaN;
+      const accuracy = coords ? Number(coords.accuracy || 0) : 0;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !shouldSend(lat, lng)) return;
+      lastLat = lat;
+      lastLng = lng;
+      lastSentAt = Date.now();
+      postLocation({
+        enabled: true,
+        lat,
+        lng,
+        accuracy,
+        note: roleLabel + ' live'
+      });
+    }
+
+    function disableTracking(reason) {
+      if (permissionDenied) return;
+      permissionDenied = true;
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      postLocation({ enabled: false, reason: reason || 'denied' });
+    }
+
+    function handleError(error) {
+      if (error && Number(error.code) === 1) {
+        disableTracking('permission_denied');
+      }
+    }
+
+    function requestSnapshot() {
+      if (document.visibilityState === 'hidden' || permissionDenied) return;
+      navigator.geolocation.getCurrentPosition(handlePosition, handleError, {
+        enableHighAccuracy: true,
+        maximumAge: 60000,
+        timeout: 15000
+      });
+    }
+
+    try {
+      watchId = navigator.geolocation.watchPosition(handlePosition, handleError, {
+        enableHighAccuracy: true,
+        maximumAge: 60000,
+        timeout: 20000
+      });
+    } catch (_error) {}
+
+    requestSnapshot();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestSnapshot();
+    });
+  })();
+</script>

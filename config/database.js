@@ -103,6 +103,24 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS employee_live_locations (
+    role TEXT NOT NULL,
+    employee_id INTEGER NOT NULL,
+    username TEXT DEFAULT '',
+    name TEXT NOT NULL DEFAULT '',
+    phone TEXT DEFAULT '',
+    lat REAL,
+    lng REAL,
+    accuracy REAL DEFAULT 0,
+    source TEXT DEFAULT 'device',
+    sharing_enabled INTEGER NOT NULL DEFAULT 1,
+    user_agent TEXT DEFAULT '',
+    note TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (role, employee_id)
+  );
+
   CREATE TABLE IF NOT EXISTS collector_payment_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     collector_id INTEGER NOT NULL REFERENCES collectors(id) ON DELETE CASCADE,
@@ -211,6 +229,26 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (router_key, username)
+  );
+
+  CREATE TABLE IF NOT EXISTS mass_outage_incidents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    router_key TEXT NOT NULL DEFAULT 'default',
+    router_id INTEGER REFERENCES routers(id) ON DELETE SET NULL,
+    zone_key TEXT NOT NULL,
+    zone_label TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',
+    detected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    recovered_at DATETIME,
+    baseline_count INTEGER NOT NULL DEFAULT 0,
+    offline_count INTEGER NOT NULL DEFAULT 0,
+    offline_percent REAL NOT NULL DEFAULT 0,
+    affected_customer_ids_json TEXT NOT NULL DEFAULT '[]',
+    sample_customers_json TEXT NOT NULL DEFAULT '[]',
+    first_snapshot_at DATETIME,
+    last_snapshot_at DATETIME,
+    opened_by_system INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS customer_portal_notifications (
@@ -409,6 +447,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_digi_staff_tx_ref ON digiflazz_staff_transactions(ref_id);
 
   CREATE INDEX IF NOT EXISTS idx_collectors_username ON collectors(username);
+  CREATE INDEX IF NOT EXISTS idx_employee_live_locations_role ON employee_live_locations(role);
+  CREATE INDEX IF NOT EXISTS idx_employee_live_locations_updated ON employee_live_locations(updated_at);
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_status ON collector_payment_requests(status);
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_invoice ON collector_payment_requests(invoice_id);
   CREATE INDEX IF NOT EXISTS idx_collector_pay_req_collector ON collector_payment_requests(collector_id);
@@ -421,6 +461,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status);
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at);
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_effective ON package_change_requests(effective_at);
+  CREATE INDEX IF NOT EXISTS idx_mass_outage_router_status ON mass_outage_incidents(router_key, status);
+  CREATE INDEX IF NOT EXISTS idx_mass_outage_detected ON mass_outage_incidents(detected_at);
+  CREATE INDEX IF NOT EXISTS idx_mass_outage_zone_status ON mass_outage_incidents(zone_key, status);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_mass_outage_open_unique ON mass_outage_incidents(router_key, zone_key) WHERE status = 'open';
 
   CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_created ON webhook_payment_notifs(created_at);
   CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_service ON webhook_payment_notifs(service);
@@ -566,6 +610,8 @@ try { db.exec("ALTER TABLE invoices ADD COLUMN qris_unique_code INTEGER"); } cat
 try { db.exec("ALTER TABLE invoices ADD COLUMN qris_amount_unique INTEGER"); } catch (e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN qris_assigned_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN qris_paid_notif_id INTEGER"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_invoices_qris_unpaid_amount ON invoices(status, qris_amount_unique)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_duplicate ON webhook_payment_notifs(service, parsed_amount, created_at)"); } catch (e) {}
 
 // Kolom untuk Login OLT (Web/API)
 try { db.exec("ALTER TABLE olts ADD COLUMN web_user TEXT DEFAULT 'admin'"); } catch (e) {}
@@ -690,6 +736,9 @@ db.exec(`
     source_id INTEGER,
     created_by_role TEXT DEFAULT '',
     created_by_name TEXT DEFAULT '',
+    holder_role TEXT DEFAULT '',
+    holder_entity_id INTEGER,
+    holder_label TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -697,6 +746,32 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bookkeeping_category ON bookkeeping_entries(category);
   CREATE INDEX IF NOT EXISTS idx_bookkeeping_source ON bookkeeping_entries(source_type, source_id);
 `);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cash_settlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    settlement_date DATE NOT NULL,
+    from_role TEXT NOT NULL DEFAULT '',
+    from_entity_id INTEGER,
+    from_label TEXT NOT NULL DEFAULT '',
+    to_role TEXT NOT NULL DEFAULT 'admin',
+    to_entity_id INTEGER,
+    to_label TEXT NOT NULL DEFAULT 'Admin',
+    amount INTEGER NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_by_role TEXT DEFAULT '',
+    created_by_name TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_cash_settlements_date ON cash_settlements(settlement_date);
+  CREATE INDEX IF NOT EXISTS idx_cash_settlements_from ON cash_settlements(from_role, from_entity_id);
+  CREATE INDEX IF NOT EXISTS idx_cash_settlements_to ON cash_settlements(to_role, to_entity_id);
+`);
+
+try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_role TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_entity_id INTEGER"); } catch (e) {}
+try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_label TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_bookkeeping_holder ON bookkeeping_entries(holder_role, holder_entity_id)"); } catch (e) {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS technician_customer_requests (
@@ -835,6 +910,23 @@ try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_customer O
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_package_change_requests_effective ON package_change_requests(effective_at)"); } catch (e) {}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS network_map_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_odp_id INTEGER NOT NULL REFERENCES odps(id) ON DELETE CASCADE,
+    to_odp_id INTEGER NOT NULL REFERENCES odps(id) ON DELETE CASCADE,
+    link_kind TEXT NOT NULL DEFAULT 'backbone',
+    cable_size TEXT DEFAULT '',
+    path_json TEXT DEFAULT '',
+    color TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_network_map_links_from ON network_map_links(from_odp_id);
+  CREATE INDEX IF NOT EXISTS idx_network_map_links_to ON network_map_links(to_odp_id);
+  CREATE INDEX IF NOT EXISTS idx_network_map_links_kind ON network_map_links(link_kind);
+`);
 
 try {
   const hasLegacyTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='customer_package_change_requests'").get();

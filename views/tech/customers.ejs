@@ -1,30 +1,31 @@
 <%- include('partials/header') %>
 
 <style>
-  .tech-customer-hero{display:grid;gap:14px;padding:16px;background:linear-gradient(145deg, rgba(91,140,255,.16), rgba(91,140,255,.05)), var(--tech-panel)}
+  .tech-customer-hero{display:grid;gap:14px;padding:16px;background:linear-gradient(145deg, rgba(111,141,255,.18), rgba(77,189,255,.08)), var(--tech-panel)}
   .tech-customer-hero-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .tech-customer-hero-copy h2{font-size:22px;font-weight:900;letter-spacing:-.04em;line-height:1.05;margin:0 0 6px}
   .tech-customer-hero-copy p{margin:0;color:var(--tech-muted);font-size:13px;line-height:1.55}
-  .tech-customer-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .tech-customer-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-primary-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
   .tech-customer-add-btn{min-height:48px;padding:0 16px;border-radius:16px;font-weight:800;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
   .tech-customer-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 132px 48px 48px;gap:8px;align-items:center;margin-bottom:12px}
   .tech-customer-toolbar .form-control,
   .tech-customer-toolbar .form-select{background:var(--tech-input-bg);color:var(--tech-text);border-color:var(--tech-border)}
   .tech-customer-toolbar .btn{height:48px;border-radius:16px}
   .tech-customer-list{display:grid;gap:8px}
-  .tech-customer-card{display:grid;gap:8px;padding:11px}
+  .tech-customer-card{display:grid;gap:8px;padding:12px;background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025));border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .tech-customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
   .tech-customer-name{font-size:15px;font-weight:900;line-height:1.15}
   .tech-customer-sub{font-size:11px;color:var(--tech-muted);margin-top:4px;line-height:1.4}
   .tech-customer-chip-row{display:flex;gap:6px;flex-wrap:wrap}
+  .tech-customer-chip-row .badge-status{padding:7px 11px}
   .tech-customer-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .tech-customer-cell{padding:9px;border-radius:16px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);min-height:62px}
+  .tech-customer-cell{padding:10px;border-radius:17px;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));border:1px solid var(--tech-border);min-height:64px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .tech-customer-cell .label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--tech-muted);margin-bottom:3px}
   .tech-customer-cell .value{font-size:11px;font-weight:800;line-height:1.28;word-break:break-word}
   .tech-customer-address{display:flex;align-items:flex-start;gap:6px;font-size:10px;color:var(--tech-muted);line-height:1.28}
   .tech-customer-address span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
   .tech-customer-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-  .tech-customer-actions .btn{border-radius:15px;min-height:48px;font-weight:800;padding:6px 4px}
+  .tech-customer-actions .btn{border-radius:16px;min-height:48px;font-weight:800;padding:6px 4px;border-width:1px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
   .tech-action-mini{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;line-height:1}
   .tech-action-mini i{font-size:14px}
   .tech-action-mini small{font-size:9px;font-weight:800;letter-spacing:.02em}
@@ -36,7 +37,7 @@
     .tech-customer-toolbar{grid-template-columns:minmax(0,1fr) 112px 44px 44px}
     .tech-customer-meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
     .tech-customer-card{padding:10px;gap:7px}
-    .tech-customer-cell{padding:8px;min-height:56px}
+    .tech-customer-cell{padding:8px;min-height:58px}
     .tech-customer-cell .value{font-size:10.5px}
     .tech-customer-actions .btn{min-height:44px}
     .tech-customer-name{font-size:13px}
@@ -92,7 +93,7 @@
 
       <div class="tech-customer-chip-row">
         <span class="badge-status <%= c.unpaid_count > 0 ? 'badge-open' : 'badge-resolved' %>"><%= c.unpaid_count > 0 ? `${c.unpaid_count} tagihan` : 'Lunas' %></span>
-        <span class="badge-status badge-in_progress">Traffic <%= (((Number(c.bytes_in || 0) || 0) + (Number(c.bytes_out || 0) || 0)) / (1024 * 1024 * 1024)).toFixed(2) %> GB</span>
+        <span class="badge-status badge-neutral">Traffic <%= (((Number(c.bytes_in || 0) || 0) + (Number(c.bytes_out || 0) || 0)) / (1024 * 1024 * 1024)).toFixed(2) %> GB</span>
       </div>
 
       <div class="tech-customer-meta">
@@ -124,7 +125,7 @@
           <span class="tech-action-mini"><i class="bi bi-eye"></i><small>Detail</small></span>
         </button>
         <% if (c.unpaid_count > 0) { %>
-          <button type="button" class="btn btn-success" onclick="openCustomerDetail(<%= c.id %>)" title="Lunas">
+          <button type="button" class="btn btn-success" data-customer-name="<%= String(c.name || '').replace(/"/g, '&quot;') %>" data-unpaid-count="<%= Number(c.unpaid_count || 0) %>" onclick="techQuickMarkPaid(<%= c.id %>, this)" title="Lunas">
             <span class="tech-action-mini"><i class="bi bi-cash-coin"></i><small>Lunas</small></span>
           </button>
         <% } else { %>
@@ -159,5 +160,39 @@
   deviceApiBase: '/tech/api/device',
   paymentApiBase: '/tech/api/customers'
 }) %>
+
+<script>
+  async function techQuickMarkPaid(customerId, button) {
+    const id = Number(customerId || 0) || 0;
+    if (!id || !button) return;
+    const customerName = String(button.dataset.customerName || 'pelanggan').trim() || 'pelanggan';
+    const unpaidCount = Number(button.dataset.unpaidCount || 0) || 0;
+    const message = unpaidCount > 1
+      ? `Lunaskan tagihan paling awal untuk ${customerName}? Masih ada ${unpaidCount} tagihan belum lunas.`
+      : `Lunaskan tagihan ${customerName}?`;
+    if (!confirm(message)) return;
+
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="tech-action-mini"><i class="bi bi-hourglass-split"></i><small>Proses</small></span>';
+    try {
+      const res = await fetch(`/tech/api/customers/${encodeURIComponent(String(id))}/pay-unpaid-first`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({ notes: 'Lunas oleh teknisi' })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.success === false) throw new Error(json?.error || 'Gagal melunaskan tagihan');
+      alert('Tagihan berhasil dilunasi.');
+      window.location.reload();
+    } catch (error) {
+      alert(error.message || String(error));
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+</script>
 
 <%- include('partials/bottom_nav') %>

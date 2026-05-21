@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { normalizeHolderFromPaidByName, normalizeHolderFromContext } = require('./cashLedgerService');
 
 const DEFAULT_EXPENSE_CATEGORIES = [
   'Listrik',
@@ -88,17 +89,25 @@ function createEntry(data) {
   const sourceId = Number.isFinite(Number(data.source_id)) && Number(data.source_id) > 0 ? Number(data.source_id) : null;
   const createdByRole = String(data.created_by_role || '').trim();
   const createdByName = String(data.created_by_name || '').trim();
+  const holder = normalizeHolderFromContext({
+    ...data,
+    source_type: sourceType,
+    created_by_role: createdByRole,
+    created_by_name: createdByName
+  });
 
   return db.prepare(`
     INSERT INTO bookkeeping_entries (
       type, category, amount, entry_date, description,
       customer_id, invoice_id, source_type, source_id,
-      created_by_role, created_by_name
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      created_by_role, created_by_name,
+      holder_role, holder_entity_id, holder_label
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     type, category, amount, entryDate, description,
     customerId, invoiceId, sourceType, sourceId,
-    createdByRole, createdByName
+    createdByRole, createdByName,
+    holder.role, holder.entityId, holder.label
   );
 }
 
@@ -137,8 +146,8 @@ function listEntries({ type = '', month = '', year = '', search = '', category =
   }
   if (search) {
     const like = `%${String(search).trim()}%`;
-    q += ' AND (b.description LIKE ? OR b.category LIKE ? OR c.name LIKE ? OR b.created_by_name LIKE ?)';
-    params.push(like, like, like, like);
+    q += ' AND (b.description LIKE ? OR b.category LIKE ? OR c.name LIKE ? OR b.created_by_name LIKE ? OR b.holder_label LIKE ?)';
+    params.push(like, like, like, like, like);
   }
   q += ` ORDER BY b.entry_date DESC, b.id DESC LIMIT ${maxLimit}`;
   return db.prepare(q).all(...params);
@@ -410,6 +419,7 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
   if (!invoice) return null;
 
   const entryDate = normalizeDateInput((paidAt || invoice.paid_at || new Date().toISOString()).slice(0, 10));
+  const holder = normalizeHolderFromPaidByName(String(paidByName || invoice.paid_by_name || '').trim());
   const description = [
     `Pembayaran tagihan ${invoice.customer_name || 'Pelanggan'}`,
     `periode ${invoice.period_month}/${invoice.period_year}`,
@@ -428,6 +438,9 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
           customer_id=?,
           invoice_id=?,
           created_by_name=?,
+          holder_role=?,
+          holder_entity_id=?,
+          holder_label=?,
           updated_at=CURRENT_TIMESTAMP
       WHERE id=?
     `).run(
@@ -437,6 +450,9 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
       Number(invoice.customer_id || 0) || null,
       Number(invoice.id || 0) || null,
       String(paidByName || invoice.paid_by_name || '').trim(),
+      holder.role,
+      holder.entityId,
+      holder.label,
       existing.id
     );
     return existing.id;
@@ -445,8 +461,9 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
   const result = db.prepare(`
     INSERT INTO bookkeeping_entries (
       type, category, amount, entry_date, description,
-      customer_id, invoice_id, source_type, source_id, created_by_role, created_by_name
-    ) VALUES ('income', 'Pembayaran Tagihan', ?, ?, ?, ?, ?, 'invoice', ?, 'system', ?)
+      customer_id, invoice_id, source_type, source_id, created_by_role, created_by_name,
+      holder_role, holder_entity_id, holder_label
+    ) VALUES ('income', 'Pembayaran Tagihan', ?, ?, ?, ?, ?, 'invoice', ?, 'system', ?, ?, ?, ?)
   `).run(
     Number(invoice.amount || 0),
     entryDate,
@@ -454,7 +471,10 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
     Number(invoice.customer_id || 0) || null,
     Number(invoice.id || 0) || null,
     Number(invoice.id || 0) || null,
-    String(paidByName || invoice.paid_by_name || '').trim()
+    String(paidByName || invoice.paid_by_name || '').trim(),
+    holder.role,
+    holder.entityId,
+    holder.label
   );
   return result.lastInsertRowid;
 }

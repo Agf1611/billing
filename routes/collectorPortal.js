@@ -6,6 +6,7 @@ const db = require('../config/database');
 const billingSvc = require('../services/billingService');
 const customerSvc = require('../services/customerService');
 const adminSvc = require('../services/adminService');
+const employeeLocationSvc = require('../services/employeeLocationService');
 
 function requireCollectorSession(req, res, next) {
   if (req.session && req.session.isCollector && req.session.collectorId) return next();
@@ -14,6 +15,9 @@ function requireCollectorSession(req, res, next) {
 
 function company() {
   return getSetting('company_header', 'ISP App');
+}
+function companyLogo() {
+  return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png';
 }
 
 function flashMsg(req) {
@@ -49,7 +53,7 @@ router.get('/manifest.webmanifest', (req, res) => {
 
 router.get('/login', (req, res) => {
   if (req.session && req.session.isCollector) return res.redirect('/collector');
-  res.render('collector/login', { title: 'Login Kolektor', company: company(), error: null });
+  res.render('collector/login', { title: 'Login Kolektor', company: company(), logoUrl: companyLogo(), error: null, form: {} });
 });
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
@@ -63,10 +67,16 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
     req.session.collectorUsername = collector.username;
     return res.redirect('/collector');
   }
-  return res.render('collector/login', { title: 'Login Kolektor', company: company(), error: 'Username atau password salah!' });
+  return res.render('collector/login', { title: 'Login Kolektor', company: company(), logoUrl: companyLogo(), error: 'Username atau password salah!', form: { username } });
 });
 
 router.get('/logout', (req, res) => {
+  const collectorId = Number(req.session?.collectorId || 0) || 0;
+  if (collectorId) {
+    try {
+      employeeLocationSvc.clearEmployeeLocation('collector', collectorId, 'logout');
+    } catch (_error) {}
+  }
   req.session.destroy();
   res.redirect('/collector/login');
 });
@@ -213,6 +223,39 @@ router.get('/', requireCollectorSession, (req, res) => {
     myReqs,
     msg: flashMsg(req)
   });
+});
+
+router.post('/api/location', requireCollectorSession, express.json({ limit: '32kb' }), (req, res) => {
+  try {
+    const collectorId = Number(req.session?.collectorId || 0) || 0;
+    if (!collectorId) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+    if (req.body && req.body.enabled === false) {
+      employeeLocationSvc.clearEmployeeLocation('collector', collectorId, String(req.body.reason || 'disabled'));
+      return res.json({ ok: true, disabled: true });
+    }
+
+    const collector = adminSvc.getCollectorById(collectorId);
+    if (!collector) return res.status(404).json({ ok: false, error: 'collector_not_found' });
+
+    const location = employeeLocationSvc.upsertEmployeeLocation({
+      role: 'collector',
+      employeeId: collectorId,
+      username: collector.username,
+      name: collector.name || req.session?.collectorName || 'Kolektor',
+      phone: collector.phone || '',
+      lat: req.body?.lat,
+      lng: req.body?.lng,
+      accuracy: req.body?.accuracy,
+      source: 'portal-collector',
+      userAgent: req.headers['user-agent'] || '',
+      note: String(req.body?.note || '').trim()
+    });
+
+    return res.json({ ok: true, location });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Gagal menyimpan lokasi kolektor.' });
+  }
 });
 
 router.post('/payment-request', requireCollectorSession, express.urlencoded({ extended: true }), (req, res) => {

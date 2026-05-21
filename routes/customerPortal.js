@@ -10,6 +10,7 @@ const mikrotikService = require('../services/mikrotikService');
 const customerDetailSvc = require('../services/customerDetailService');
 const { logger } = require('../config/logger');
 const ticketSvc = require('../services/ticketService');
+const techSvc = require('../services/techService');
 const usageSvc = require('../services/usageService');
 const crypto = require('crypto');
 const db = require('../config/database');
@@ -28,10 +29,17 @@ const {
   fillWhatsappTemplate,
   ensureDueDateLine
 } = require('../services/publicLinkService');
-const { buildDynamicQrisPayload, buildDynamicQrisDataUrl } = require('../services/qrisService');
+const {
+  buildDynamicQrisPayload,
+  buildDynamicQrisDataUrl,
+  hasStaticQrisEnabled: resolveStaticQrisEnabled
+} = require('../services/qrisService');
+const {
+  isPushConfigured,
+  sendPushToTechnicians
+} = require('../services/pushNotificationService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
-const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+const CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const LOGIN_GENIE_PREFETCH_MAX_WAIT_MS = 1200;
 const LOGIN_GENIE_PREFETCH_INTERVAL_MS = 500;
 const LOGIN_GENIE_PREFETCH_REQUEST_TIMEOUT_MS = 900;
@@ -91,6 +99,15 @@ function getSessionCustomer(req) {
   return findCustomerProfileByLoginId(loginId);
 }
 
+function keepCustomerSessionPersistent(req) {
+  if (!req?.session) return;
+  req.session.rememberMe = true;
+  req.session.customerPersistentLogin = true;
+  if (req.session.cookie) {
+    req.session.cookie.maxAge = CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS;
+  }
+}
+
 function normalizePortalAccountStatus(status) {
   const normalized = String(status || 'active').trim().toLowerCase();
   if (normalized === 'suspended') return 'suspended';
@@ -101,6 +118,18 @@ function normalizePortalAccountStatus(status) {
 function isPortalRestrictedStatus(status) {
   const normalized = normalizePortalAccountStatus(status);
   return normalized === 'suspended' || normalized === 'inactive';
+}
+
+function isPortalServiceActionRestricted(profile) {
+  return profile && isPortalRestrictedStatus(profile.status);
+}
+
+function blockInactiveServiceAction(req, res, actionLabel = 'Aksi ini', targetHash = 'settings') {
+  req.session._msg = {
+    type: 'warning',
+    text: `${actionLabel} hanya bisa digunakan saat akun pelanggan aktif. Silakan lunasi tagihan atau hubungi admin.`
+  };
+  return res.redirect(`/customer/dashboard#${targetHash || 'settings'}`);
 }
 
 function getPortalAccountState(status) {
@@ -129,7 +158,7 @@ function getPortalAccountState(status) {
   };
 }
 
-/** Rute portal yang boleh diakses saat status suspended (bayar publik, logout, dll.) */
+/** Rute yang tetap aman diakses tanpa dashboard penuh / dari link publik. */
 function isSuspendedPortalExemptPath(reqPath) {
   const p = String(reqPath || '');
   if (
@@ -360,10 +389,7 @@ function gatewayDefaultExpiresAtIso(gateway, nowMs = Date.now()) {
 }
 
 function hasStaticQrisEnabled(settings) {
-  return Boolean(
-    String(settings?.qris_static_qr_url || '').trim() ||
-    String(settings?.qris_static_payload || '').trim()
-  );
+  return resolveStaticQrisEnabled(settings);
 }
 
 function normalizePaymentMethodLabel(channel = {}) {
@@ -666,45 +692,107 @@ function syncPortalSessionProfile(req, profile, customerView = null) {
   }
 }
 
+function parsePortalNotificationPayload(item) {
+  const raw = item?.payload_json ?? item?.payload ?? {};
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try {
+    const parsed = JSON.parse(String(raw || '{}'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function defaultPortalNotificationSender(kind) {
+  const normalized = String(kind || 'system').trim();
+  if (normalized === 'announcement') return { name: 'Admin', role: 'Pengumuman' };
+  if (normalized === 'invoice' || normalized === 'due-reminder') return { name: 'Billing', role: 'Tagihan' };
+  if (normalized === 'ticket') return { name: 'Bantuan Pelanggan', role: 'Tiket' };
+  if (normalized === 'password') return { name: 'Sistem Router', role: 'Router WiFi' };
+  if (normalized === 'suspension' || normalized === 'reactivation') return { name: 'Sistem Layanan', role: 'Status Layanan' };
+  return { name: 'Sistem', role: 'Info Pelanggan' };
+}
+
+function pickPortalNotificationImage(payload) {
+  const value = payload?.image_url || payload?.imageUrl || payload?.image || payload?.media_url || payload?.mediaUrl || '';
+  return String(value || '').trim();
+}
+
+function parsePortalNotificationTime(value, fallback = Date.now()) {
+  if (!value) return Number(fallback || Date.now());
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number(fallback || Date.now());
+  const raw = String(value || '').trim();
+  if (!raw) return Number(fallback || Date.now());
+  const looksLikeSqliteUtc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw);
+  const normalized = looksLikeSqliteUtc ? `${raw.replace(' ', 'T')}Z` : raw;
+  const parsed = new Date(normalized).getTime();
+  return Number.isFinite(parsed) ? parsed : Number(fallback || Date.now());
+}
+
+function enrichPortalNotification(item, fallback = {}) {
+  const kind = String(item?.kind || fallback.kind || 'system').trim() || 'system';
+  const payload = parsePortalNotificationPayload(item);
+  const sender = defaultPortalNotificationSender(kind);
+  const sourceId = Number(item?.id || 0) || null;
+  const rawCreatedMs = item?.created_at ? parsePortalNotificationTime(item.created_at, fallback.time || Date.now()) : Number(fallback.time || Date.now());
+  const createdMs = Number.isFinite(rawCreatedMs) ? rawCreatedMs : Date.now();
+  return {
+    id: sourceId ? `inbox-${sourceId}` : String(fallback.id || `${kind}-${createdMs || Date.now()}`),
+    sourceId,
+    kind,
+    payload,
+    senderName: String(payload.sender_name || payload.senderName || payload.sender || fallback.senderName || sender.name || 'Sistem').trim() || sender.name,
+    senderRole: String(payload.sender_role || payload.senderRole || fallback.senderRole || sender.role || 'Info Pelanggan').trim() || sender.role,
+    imageUrl: pickPortalNotificationImage(payload) || String(fallback.imageUrl || '').trim(),
+    tab: String(item?.tab || fallback.tab || 'home').trim() || 'home',
+    title: String(item?.title || fallback.title || 'Info pelanggan').trim() || 'Info pelanggan',
+    body: String(item?.body || fallback.body || '').trim(),
+    time: createdMs
+  };
+}
+
 function buildCustomerNotifications({ invoices = [], tickets = [], appNotif = null, seenAt = null, profile = null, inboxItems = [] } = {}) {
   const notifications = [];
-  const seenMs = seenAt ? new Date(seenAt).getTime() : 0;
+  const seenMs = seenAt ? parsePortalNotificationTime(seenAt, 0) : 0;
 
   if (appNotif && appNotif.text) {
     notifications.push({
-      kind: 'system',
-      unread: false,
-      tab: 'home',
-      title: 'Info sistem',
-      body: appNotif.text,
-      time: Date.now() - 1
+      ...enrichPortalNotification(null, {
+        id: 'session-info',
+        kind: 'system',
+        tab: 'home',
+        title: 'Info sistem',
+        body: appNotif.text,
+        time: Date.now() - 1
+      }),
+      unread: false
     });
   }
 
   const hasIsolationInbox = inboxItems.some((item) => ['suspension', 'reactivation'].includes(String(item?.kind || '').trim()));
   if (profile && String(profile.status || '').toLowerCase() === 'suspended' && !hasIsolationInbox) {
     notifications.push({
-      kind: 'suspension',
-      unread: true,
-      tab: 'billing',
-      title: 'Layanan dinonaktifkan sementara',
-      body: 'Masih ada tagihan yang belum lunas. Silakan cek tagihan atau hubungi admin.',
-      time: Date.now()
+      ...enrichPortalNotification(null, {
+        id: 'status-suspension',
+        kind: 'suspension',
+        tab: 'billing',
+        title: 'Layanan dinonaktifkan sementara',
+        body: 'Masih ada tagihan yang belum lunas. Silakan cek tagihan atau hubungi admin.',
+        time: Date.now()
+      }),
+      unread: true
     });
   }
 
   inboxItems
     .filter((item) => String(item?.kind || '').trim() !== 'wifi-offline')
     .forEach((item) => {
-    const createdMs = item?.created_at ? new Date(item.created_at).getTime() : Date.now();
-    notifications.push({
-      kind: String(item.kind || 'system').trim() || 'system',
-      unread: createdMs > seenMs,
-      tab: String(item.tab || 'home').trim() || 'home',
-      title: String(item.title || 'Info pelanggan').trim() || 'Info pelanggan',
-      body: String(item.body || '').trim(),
-      time: createdMs
-    });
+      const enriched = enrichPortalNotification(item);
+      notifications.push({
+        ...enriched,
+        unread: Number(enriched.time || 0) > seenMs
+      });
     });
 
   notifications.sort((a, b) => Number(b.time || 0) - Number(a.time || 0));
@@ -1060,7 +1148,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const phone = String(req.body.phone || '').trim();
   const settings = getSettingsWithCache();
-  const rememberMe = req.body.remember_me === 'on' || req.body.remember_me === '1' || req.body.remember_me === true || req.body.remember_me === 'true';
+  const rememberMe = true;
 
   function renderLoginError(message) {
     return res.render('login', {
@@ -1088,16 +1176,12 @@ router.post('/login', async (req, res) => {
   if (!settings.login_otp_enabled) {
     req.session.phone = loginTag;
     req.session.customerId = Number(matchedCustomer.id);
-    req.session.rememberMe = rememberMe;
+    keepCustomerSessionPersistent(req);
     req.session.genieSyncPending = true;
     req.session.genieSyncStartedAt = Date.now();
-    req.session.cookie.maxAge = rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
     await primePortalDeviceCache(req, loginTag);
     logger.info(`[Login] Login biasa berhasil untuk customerId=${matchedCustomer.id || '-'}.`);
     return req.session.save(() => {
-      if (isPortalRestrictedStatus(matchedCustomer.status)) {
-        return res.redirect('/isolated');
-      }
       return res.redirect('/customer/dashboard');
     });
   }
@@ -1119,7 +1203,7 @@ router.post('/login', async (req, res) => {
     customerId: Number(matchedCustomer.id),
     phone: deliveryPhone,
     effectiveTag: loginTag,
-    rememberMe,
+    rememberMe: true,
     otp: loginOtp,
     expiry: loginExpiry
   };
@@ -1205,9 +1289,6 @@ router.post('/login', async (req, res) => {
   // --- DIRECT LOGIN ---
   logger.info('[Login] Login direct berhasil.');
   req.session.phone = effectiveTag;
-  if (customer && isPortalRestrictedStatus(customer.status)) {
-    return res.redirect('/isolated');
-  }
   return res.redirect('/customer/dashboard');
 });
 
@@ -1239,16 +1320,12 @@ router.post('/login-otp', async (req, res) => {
 
     req.session.phone = pending.effectiveTag;
     req.session.customerId = Number(customer.id);
-    req.session.rememberMe = Boolean(pending.rememberMe);
+    keepCustomerSessionPersistent(req);
     req.session.genieSyncPending = true;
     req.session.genieSyncStartedAt = Date.now();
-    req.session.cookie.maxAge = pending.rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
     await primePortalDeviceCache(req, pending.effectiveTag);
     delete req.session.pending_login;
     return req.session.save(() => {
-      if (isPortalRestrictedStatus(customer.status)) {
-        return res.redirect('/isolated');
-      }
       return res.redirect('/customer/dashboard');
     });
   } else {
@@ -1256,14 +1333,8 @@ router.post('/login-otp', async (req, res) => {
   }
 });
 
-// Pelanggan nonaktif / terisolir: paksa halaman /isolated, kecuali cek tagihan / bayar / logout
+// Pelanggan nonaktif / terisolir tetap boleh masuk portal untuk melihat tagihan dan melakukan pembayaran.
 router.use((req, res, next) => {
-  if (isSuspendedPortalExemptPath(req.path)) return next();
-  const profile = getSessionCustomer(req);
-  if (!profile) return next();
-  if (profile && isPortalRestrictedStatus(profile.status)) {
-    return res.redirect('/isolated');
-  }
   next();
 });
 
@@ -1389,8 +1460,20 @@ router.get('/dashboard', async (req, res) => {
   if (dashboardCustomer && dashboardCustomer.pppoeUsername && hasUsableValue(dashboardCustomer.pppoeUsername)) {
     searchToken = dashboardCustomer.pppoeUsername;
   }
-  
+
+  let reactivationInvoiceResult = null;
+  if (refreshedProfile && ['suspended', 'inactive'].includes(String(refreshedProfile.status || '').toLowerCase())) {
+    try {
+      reactivationInvoiceResult = billingSvc.ensurePortalReactivationInvoice(refreshedProfile.id);
+    } catch (error) {
+      logger.warn(`[Portal] Gagal menyiapkan tagihan aktivasi untuk customerId=${refreshedProfile.id}: ${error.message}`);
+    }
+  }
+
   const invoices = billingSvc.getInvoicesByAny(searchToken);
+  if (reactivationInvoiceResult?.created && !msgNotif) {
+    msgNotif = dashboardNotif('Tagihan aktivasi sudah disiapkan. Silakan lanjutkan pembayaran agar layanan bisa aktif kembali.', 'info');
+  }
   
   // Ambil tiket keluhan pelanggan
   let tickets = [];
@@ -1656,6 +1739,10 @@ router.get('/api/pppoe-traffic', async (req, res) => {
 router.post('/change-ssid', async (req, res) => {
   const phone = req.session && req.session.phone;
   if (!phone) return res.redirect('/customer/login');
+  const profile = getSessionCustomer(req);
+  if (isPortalServiceActionRestricted(profile)) {
+    return blockInactiveServiceAction(req, res, 'Ubah nama WiFi');
+  }
   const ssid = String(req.body.ssid || '').trim();
   const ok = await updateSSID(phone, ssid);
   if (ok && ssid) {
@@ -1673,6 +1760,9 @@ router.post('/change-password', async (req, res) => {
   if (!phone) return res.redirect('/customer/login');
   const { password } = req.body;
   const profile = getSessionCustomer(req);
+  if (isPortalServiceActionRestricted(profile)) {
+    return blockInactiveServiceAction(req, res, 'Ubah password WiFi');
+  }
   const ok = await updatePassword(phone, password);
 
   if (ok && profile?.id) {
@@ -1694,6 +1784,10 @@ router.post('/change-password', async (req, res) => {
 router.post('/reboot', async (req, res) => {
   const phone = req.session && req.session.phone;
   if (!phone) return res.redirect('/customer/login');
+  const profile = getSessionCustomer(req);
+  if (isPortalServiceActionRestricted(profile)) {
+    return blockInactiveServiceAction(req, res, 'Reboot perangkat');
+  }
   const r = await requestReboot(phone);
   
   req.session._msg = r.ok
@@ -1799,6 +1893,9 @@ router.post('/packages/change', async (req, res) => {
   try {
     const profile = getSessionCustomer(req);
     if (!profile || !profile.id) throw new Error('Sesi pelanggan tidak ditemukan');
+    if (isPortalServiceActionRestricted(profile)) {
+      return blockInactiveServiceAction(req, res, 'Perubahan paket', 'packages');
+    }
     const rateLimit = checkPackageChangeRateLimit(req, profile.id);
     if (!rateLimit.allowed) {
       throw new Error(`Terlalu sering mencoba mengajukan perubahan paket. Silakan coba lagi setelah ${rateLimit.retryAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}.`);
@@ -2085,6 +2182,27 @@ router.post('/tickets/create', async (req, res) => {
       title: `Tiket #${ticketId} berhasil dikirim`,
       body: 'Keluhan Anda sudah kami terima. Tim kami akan segera menindaklanjutinya.'
     }, { dedupeWindowMs: 60 * 1000 });
+
+    try {
+      const settings = getSettingsWithCache();
+      if (isPushConfigured(settings)) {
+        const customer = customerSvc.getCustomerById(customerId);
+        const technicians = (techSvc.getAllTechnicians() || []).filter((tech) => Number(tech.is_active || 0) === 1);
+        await sendPushToTechnicians(technicians, {
+          settings,
+          title: 'Tiket keluhan baru',
+          message: `${String(subject || 'Keluhan pelanggan').trim()} - ${customer?.name || profile.name || 'Pelanggan'}`,
+          targetUrl: `${resolveRequestBaseUrl(req)}/tech/pool`,
+          data: {
+            kind: 'ticket',
+            ticketId: Number(ticketId || 0) || 0,
+            source: 'customer_portal'
+          }
+        });
+      }
+    } catch (pushErr) {
+      logger.warn(`[Ticket] Push teknisi gagal: ${pushErr.message || pushErr}`);
+    }
     
     req.session._msg = { type: 'success', text: 'Keluhan berhasil dikirim. Tim teknisi akan segera mengeceknya.' };
 
@@ -2117,7 +2235,6 @@ router.post('/tickets/create', async (req, res) => {
         }
 
         // Kirim ke semua Teknisi Aktif
-        const techSvc = require('../services/techService');
         const technicians = techSvc.getAllTechnicians().filter(t => t.is_active === 1);
         const seenTech = new Set();
         for (const tech of technicians) {
@@ -2537,7 +2654,13 @@ router.post('/payment/callback', express.json(), async (req, res) => {
 
     const checkInv = billingSvc.getInvoiceById(idNum);
     if (checkInv && checkInv.status !== 'paid') {
-      billingSvc.markAsPaid(idNum, gateway, `Otomatis via Webhook ${gateway}`);
+      billingSvc.markAsPaid(idNum, gateway, `Otomatis via Webhook ${gateway}`, {
+        type: 'system',
+        id: null,
+        name: `Webhook ${gateway}`,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] || ''
+      });
 
       const customer = customerSvc.getCustomerById(checkInv.customer_id);
       
@@ -2559,7 +2682,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
         logger.error(`[Webhook] Gagal kirim notif WA: ${waErr.message}`);
       }
 
-      if (customer && customer.status === 'suspended') {
+      if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
         const unpaidCount = billingSvc.getUnpaidInvoicesByCustomerId(customer.id).length;
         if (unpaidCount === 0) {
           logger.info(`[Webhook] Mengaktifkan kembali pelanggan ${customer.name} secara otomatis.`);

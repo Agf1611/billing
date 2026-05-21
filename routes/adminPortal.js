@@ -20,18 +20,23 @@ const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
 const mikrotikService = require('../services/mikrotikService');
 const monitoringCollectorSvc = require('../services/monitoringCollectorService');
+const massOutageSvc = require('../services/massOutageService');
 const adminSvc = require('../services/adminService');
 const agentSvc = require('../services/agentService');
 const techSvc = require('../services/techService');
 const oltSvc = require('../services/oltService');
 const odpSvc = require('../services/odpService');
+const networkMapLinkSvc = require('../services/networkMapLinkService');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync, spawn } = require('child_process');
 const XLSX = require('xlsx');
 const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 }
+});
 const backupUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 }
@@ -40,8 +45,10 @@ const backupSvc = require('../services/backupService');
 const monitoringSvc = require('../services/monitoringService');
 const inventorySvc = require('../services/inventoryService');
 const bookkeepingSvc = require('../services/bookkeepingService');
+const cashLedgerSvc = require('../services/cashLedgerService');
 const auditSvc = require('../services/auditTrailService');
 const diagnosticsSvc = require('../services/diagnosticsService');
+const employeeLocationSvc = require('../services/employeeLocationService');
 const axios = require('axios');
 const crypto = require('crypto');
 const { normalizePhoneDigits, formatPhoneDisplay, normalizePhoneList } = require('../services/phoneService');
@@ -78,10 +85,14 @@ const registerWhatsappRoutes = require('./admin/registerWhatsappRoutes');
 const {
   isPushConfigured,
   sendPushToCustomer,
-  sendPushToCustomers
+  sendPushToCustomers,
+  sendPushToTechnician,
+  buildAdminPushExternalId
 } = require('../services/pushNotificationService');
 const {
   normalizeQrisPayload,
+  hasStaticQrisEnabled,
+  resolveQrisUniqueCodeRange,
   buildDynamicQrisPayload,
   buildDynamicQrisBuffer,
   decodeQrisPayloadFromBuffer,
@@ -423,6 +434,28 @@ function resolvePaidByName(req, fallback) {
   return fb || 'Admin';
 }
 
+function resolvePaymentActor(req, fallbackName = 'Admin') {
+  if (req.session?.isCashier) {
+    return {
+      type: 'cashier',
+      id: req.session.cashierId || null,
+      name: String(req.session.cashierName || req.session.cashierUsername || fallbackName || 'Kasir').trim(),
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    };
+  }
+  if (req.session?.isAdmin) {
+    return {
+      type: 'admin',
+      id: null,
+      name: String(req.session.adminUser || fallbackName || 'Admin').trim(),
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    };
+  }
+  return null;
+}
+
 async function trySendWhatsappPayment(customerPhone, message) {
   try {
     if (!getSetting('whatsapp_enabled', false)) return false;
@@ -560,6 +593,33 @@ async function trySendTechnicianTaskWhatsappNotification(task, technician, optio
   return trySendWhatsappPayment(phone, message);
 }
 
+async function trySendTechnicianTaskPushNotification(task, technician, options = {}) {
+  if (!task || !technician) return false;
+  const settings = getSettings();
+  if (!isPushConfigured(settings)) return false;
+  const mode = String(options.mode || 'assigned').trim();
+  const modeLabel = mode === 'updated' ? 'Update job teknisi' : 'Job teknisi baru';
+  const taskType = TECHNICIAN_TASK_TYPE_LABELS[String(task.task_type || '').trim()] || 'Job';
+  const priority = TECHNICIAN_TASK_PRIORITY_LABELS[String(task.priority || '').trim()] || String(task.priority || '-');
+  const customerName = String(task.customer_name || task.linked_customer_name || 'Pelanggan').trim();
+  const message = `${taskType}: ${String(task.title || 'Tugas lapangan').trim()} - ${customerName}. Prioritas ${priority}.`;
+  const result = await sendPushToTechnician(technician, {
+    settings,
+    title: modeLabel,
+    message,
+    targetUrl: `${resolveRequestBaseUrl(options.req, resolveAppBaseUrl())}/tech/tasks`,
+    data: {
+      kind: 'technician_task',
+      taskId: Number(task.id || 0) || 0,
+      mode: mode || 'assigned'
+    }
+  });
+  if (!result?.success && !result?.skipped) {
+    logger.warn(`[TechnicianPush] Gagal kirim push tugas #${task.id}: ${result?.reason || result?.error || 'unknown-error'}`);
+  }
+  return Boolean(result?.success);
+}
+
 function resolveWhatsappTestRecipient(whatsappStatus = null, requestedPhone = '') {
   const linkedDigits = String(whatsappStatus?.user?.id || '')
     .split(':')[0]
@@ -618,6 +678,7 @@ function restrictCashierLimitedAccess(req, res, next) {
 }
 
 function company() { return getSetting('company_header', 'ISP Admin'); }
+function companyLogo() { return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png'; }
 
 router.use([
   /^\/olts(?:\/.*)?$/,
@@ -825,6 +886,16 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
     group_link: groupLink,
     group_line: groupLink ? `Grup pelanggan: ${groupLink}` : ''
   };
+}
+
+function buildBroadcastAnnouncementMessage(customer, template, options = {}) {
+  const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
+  const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
+  const payload = buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, options);
+  return fillWhatsappTemplate(template, {
+    ...payload,
+    company: company()
+  }).trim();
 }
 
 function buildBillingWhatsappMessage(customer, invoices = [], fallbackInvoice = null, options = {}) {
@@ -1088,6 +1159,34 @@ function countUniqueHotspotUsers(rows = []) {
   ]);
 }
 
+function parseRouterIdParam(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveRouterSelection(value, options = {}) {
+  const requestedRouterId = parseRouterIdParam(value);
+  if (!requestedRouterId) {
+    return { routerId: null, requestedRouterId: null, missingRequestedRouter: false };
+  }
+  const router = mikrotikService.getRouterById(requestedRouterId);
+  if (router) {
+    return { routerId: requestedRouterId, requestedRouterId, missingRequestedRouter: false, router };
+  }
+  if (options.fallbackToNull === false) {
+    return { routerId: requestedRouterId, requestedRouterId, missingRequestedRouter: true, router: null };
+  }
+  return { routerId: null, requestedRouterId, missingRequestedRouter: true, router: null };
+}
+
+function buildMissingRouterApiError(requestedRouterId) {
+  return {
+    error: `Router dengan ID ${requestedRouterId} sudah dihapus. Silakan pilih router lain atau muat ulang halaman.`,
+    code: 'router_not_found',
+    requestedRouterId
+  };
+}
+
 function buildCollectorMetadata(snapshot) {
   const raw = snapshot && typeof snapshot === 'object' ? snapshot : {};
   return {
@@ -1209,7 +1308,7 @@ function buildAdminHomeShortcuts(req, summary = {}) {
     {
       label: 'Pengumuman',
       shortLabel: 'WA',
-      desc: 'Broadcast info ke pelanggan via WhatsApp',
+      desc: 'Broadcast info via WhatsApp dan Push App',
       href: '/admin/whatsapp/broadcast',
       icon: 'bi-megaphone',
       tone: 'mint',
@@ -1841,13 +1940,19 @@ async function createVoucherBatchAsync(batchId) {
 router.use((req, res, next) => {
   res.locals.session = req.session;
   res.locals.adminPendingCustomerRequests = (req.session?.isAdmin || req.session?.isCashier) ? getPendingCustomerRequestCount() : 0;
+  const adminOneSignalAppId = String(getSetting('onesignal_app_id', '') || '').trim();
+  res.locals.adminPushEnabled = Boolean(req.session?.isAdmin && getSetting('onesignal_enabled', false) === true && adminOneSignalAppId);
+  res.locals.adminOneSignalAppId = adminOneSignalAppId;
+  res.locals.adminPushExternalId = req.session?.isAdmin
+    ? buildAdminPushExternalId({ username: req.session.adminUser || getSetting('admin_username', 'admin') || 'admin' })
+    : '';
   next();
 });
 
 // ─── AUTH ROUTES ───────────────────────────────────────────────────────────
 router.get('/login', (req, res) => {
   if (req.session?.isAdmin || req.session?.isCashier) return res.redirect('/admin');
-  res.render('admin/login', { title: 'Admin Login', company: company(), error: null, form: {} });
+  res.render('admin/login', { title: 'Admin Login', company: company(), logoUrl: companyLogo(), error: null, form: {} });
 });
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
@@ -1876,12 +1981,21 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
   res.render('admin/login', {
     title: 'Admin Login',
     company: company(),
+    logoUrl: companyLogo(),
     error: 'Username atau password salah',
     form: { username, rememberMe }
   });
 });
 
 router.get('/logout', (req, res) => {
+  const cashierId = req.session?.isCashier && !req.session?.isAdmin
+    ? Number(req.session?.cashierId || 0) || 0
+    : 0;
+  if (cashierId) {
+    try {
+      employeeLocationSvc.clearEmployeeLocation('cashier', cashierId, 'logout');
+    } catch (_error) {}
+  }
   req.session.destroy(() => {
     res.clearCookie('connect.sid');
     res.redirect('/admin/login');
@@ -2007,19 +2121,111 @@ router.post('/olts/:id/delete', requireAdminSession, restrictToAdmin, (req, res)
 });
 
 // ─── ODP & MAP MANAGEMENT ───────────────────────────────────────────────────
-router.get('/map', requireAdminSession, (req, res) => {
+router.get('/map', requireAdminSession, async (req, res) => {
   const customers = customerSvc.getAllCustomers();
   const odps = odpSvc.getAllOdps();
+  const networkLinks = networkMapLinkSvc.listAllNetworkMapLinks();
+  const staffLocations = employeeLocationSvc.getLiveEmployeeLocations({ maxAgeMinutes: 180 });
+  let deviceByTag = new Map();
+  let deviceByPppoe = new Map();
+
+  try {
+    const deviceResult = await customerDevice.listAllDevices(1500);
+    if (deviceResult?.ok && Array.isArray(deviceResult.devices)) {
+      deviceResult.devices.forEach((device) => {
+        const mapped = customerDevice.mapDeviceData(device, device?._tags?.[0] || device?._id || '');
+        if (!mapped) return;
+        const pppoe = String(mapped.pppoeUsername || '').trim().toLowerCase();
+        const tags = Array.isArray(device?._tags) ? device._tags : [];
+        if (pppoe && pppoe !== 'n/a' && !deviceByPppoe.has(pppoe)) {
+          deviceByPppoe.set(pppoe, mapped);
+        }
+        tags.forEach((tag) => {
+          const key = String(tag || '').trim().toLowerCase();
+          if (key && !deviceByTag.has(key)) deviceByTag.set(key, mapped);
+        });
+        const fallbackId = String(device?._id || '').trim().toLowerCase();
+        if (fallbackId && !deviceByTag.has(fallbackId)) deviceByTag.set(fallbackId, mapped);
+      });
+    }
+  } catch (error) {
+    logger.warn(`[AdminMap] Gagal memuat data device untuk peta: ${error.message}`);
+  }
+
+  const enrichedCustomers = customers.map((customer) => {
+    const tagKey = String(customer.genieacs_tag || '').trim().toLowerCase();
+    const pppoeKey = String(customer.pppoe_username || '').trim().toLowerCase();
+    const mapped = deviceByPppoe.get(pppoeKey) || deviceByTag.get(tagKey) || null;
+    return {
+      ...customer,
+      device_rx_power: mapped?.rxPower || '',
+      device_pppoe_username: mapped?.pppoeUsername || '',
+      device_status: mapped?.status || '',
+      device_last_inform: mapped?.lastInform || ''
+    };
+  });
   
   res.render('admin/map', { 
     title: 'Peta Jaringan', 
     company: company(), 
     activePage: 'map', 
-    customers, 
+    customers: enrichedCustomers, 
     odps,
+    networkLinks,
+    staffLocations,
     msg: flashMsg(req),
     settings: getSettings()
   });
+});
+
+router.post('/api/staff-location', requireAdminSession, express.json({ limit: '32kb' }), (req, res) => {
+  if (!req.session?.isCashier || req.session?.isAdmin) {
+    return res.status(403).json({ ok: false, error: 'Akses lokasi hanya untuk akun kasir.' });
+  }
+
+  try {
+    const cashierId = Number(req.session?.cashierId || 0) || 0;
+    if (!cashierId) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+    if (req.body && req.body.enabled === false) {
+      employeeLocationSvc.clearEmployeeLocation('cashier', cashierId, String(req.body.reason || 'disabled'));
+      return res.json({ ok: true, disabled: true });
+    }
+
+    const cashier = adminSvc.getCashierById(cashierId);
+    if (!cashier) return res.status(404).json({ ok: false, error: 'cashier_not_found' });
+
+    const location = employeeLocationSvc.upsertEmployeeLocation({
+      role: 'cashier',
+      employeeId: cashierId,
+      username: cashier.username,
+      name: cashier.name || req.session?.cashierName || 'Kasir',
+      phone: cashier.phone || '',
+      lat: req.body?.lat,
+      lng: req.body?.lng,
+      accuracy: req.body?.accuracy,
+      source: 'portal-cashier',
+      userAgent: req.headers['user-agent'] || '',
+      note: String(req.body?.note || '').trim()
+    });
+
+    return res.json({ ok: true, location });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Gagal menyimpan lokasi kasir.' });
+  }
+});
+
+router.get('/api/staff-locations', requireAdminSession, (req, res) => {
+  try {
+    const role = String(req.query.role || 'all').trim().toLowerCase();
+    const allLocations = employeeLocationSvc.getLiveEmployeeLocations({ maxAgeMinutes: 180 });
+    const locations = role && role !== 'all'
+      ? allLocations.filter((item) => String(item.role || '').trim().toLowerCase() === role)
+      : allLocations;
+    return res.json({ ok: true, locations });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: error.message || 'Gagal memuat lokasi karyawan.' });
+  }
 });
 
 router.get('/api/customers/:id/pppoe-traffic', requireAdminSession, async (req, res) => {
@@ -2127,6 +2333,82 @@ router.post('/api/customers/:id/cable-path', requireAdminSession, (req, res) => 
     res.json({ ok: true });
   } catch (e) {
     console.error('[API] Save Cable Path Error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/customers/:id/location', requireAdminSession, express.json({ limit: '32kb' }), (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const lat = Number(req.body?.lat);
+    const lng = Number(req.body?.lng);
+    const clearCablePath = req.body?.clearCablePath !== false;
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('Koordinat pelanggan tidak valid');
+    customerSvc.updateCustomerMapLocation(id, lat, lng, { clearCablePath });
+    res.json({
+      ok: true,
+      id,
+      lat: Number(lat.toFixed(6)),
+      lng: Number(lng.toFixed(6)),
+      clearCablePath
+    });
+  } catch (e) {
+    console.error('[API] Update Customer Location Error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/customers/:id/odp-link', requireAdminSession, express.json({ limit: '32kb' }), (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const rawOdpId = req.body?.odpId;
+    const odpId = rawOdpId == null || rawOdpId === '' ? null : Number(rawOdpId);
+    const clearCablePath = req.body?.clearCablePath !== false;
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
+    if (rawOdpId != null && rawOdpId !== '' && (!Number.isFinite(odpId) || odpId <= 0)) {
+      throw new Error('ID ODP tidak valid');
+    }
+    customerSvc.updateCustomerOdpLink(id, odpId, { clearCablePath });
+    res.json({
+      ok: true,
+      id,
+      odpId,
+      clearCablePath
+    });
+  } catch (e) {
+    console.error('[API] Update Customer ODP Link Error:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+router.post('/api/map-links', requireAdminSession, express.json({ limit: '96kb' }), (req, res) => {
+  try {
+    const fromOdpId = Number(req.body?.fromOdpId || 0);
+    const toOdpId = Number(req.body?.toOdpId || 0);
+    const linkKind = String(req.body?.linkKind || 'backbone').trim().toLowerCase() || 'backbone';
+    const cableSize = String(req.body?.cableSize || '').trim();
+    const path = req.body?.path;
+    const pathJson = Array.isArray(path) ? JSON.stringify(path) : String(req.body?.pathJson || '').trim();
+    const color = String(req.body?.color || '').trim();
+    const result = networkMapLinkSvc.saveNetworkMapLink({
+      fromOdpId,
+      toOdpId,
+      linkKind,
+      cableSize,
+      pathJson,
+      color
+    });
+    res.json({
+      ok: true,
+      id: result.id,
+      fromOdpId,
+      toOdpId,
+      linkKind,
+      cableSize
+    });
+  } catch (e) {
+    console.error('[API] Save Map Link Error:', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -2304,10 +2586,14 @@ router.post('/technician-tasks', requireAdminSession, restrictToAdmin, express.u
       mode: 'assigned',
       baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
     });
+    const pushNotified = await trySendTechnicianTaskPushNotification(createdTask, assignedTechnician, {
+      mode: 'assigned',
+      baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
+    });
     req.session._msg = {
       type: 'success',
-      text: notified
-        ? 'Tugas teknisi berhasil dibuat dan notifikasi WhatsApp sudah dikirim.'
+      text: notified || pushNotified
+        ? `Tugas teknisi berhasil dibuat dan notifikasi ${[notified ? 'WhatsApp' : '', pushNotified ? 'push app' : ''].filter(Boolean).join(' + ')} sudah dikirim.`
         : 'Tugas teknisi berhasil dibuat.'
     };
   } catch (e) {
@@ -2355,10 +2641,16 @@ router.post('/technician-tasks/:id/update', requireAdminSession, restrictToAdmin
           baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
         })
       : false;
+    const pushNotified = shouldNotify
+      ? await trySendTechnicianTaskPushNotification(updatedTask, assignedTechnician, {
+          mode: wasReassigned ? 'assigned' : 'updated',
+          baseUrl: resolveRequestBaseUrl(req, resolveAppBaseUrl())
+        })
+      : false;
     req.session._msg = {
       type: 'success',
-      text: notified
-        ? 'Tugas teknisi berhasil diperbarui dan notifikasi WhatsApp sudah dikirim.'
+      text: notified || pushNotified
+        ? `Tugas teknisi berhasil diperbarui dan notifikasi ${[notified ? 'WhatsApp' : '', pushNotified ? 'push app' : ''].filter(Boolean).join(' + ')} sudah dikirim.`
         : 'Tugas teknisi berhasil diperbarui.'
     };
   } catch (e) {
@@ -2723,7 +3015,13 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
     if (decidedNote) notesParts.push(`Approval: ${decidedNote}`);
     const notes = notesParts.join(' | ');
 
-    billingSvc.markAsPaid(Number(row.invoice_id), collectorLabel, notes);
+    billingSvc.markAsPaid(Number(row.invoice_id), collectorLabel, notes, {
+      type: 'collector',
+      id: row.collector_id || null,
+      name: `${collectorLabel} (disetujui ${approver})`,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    });
 
     db.prepare(`
       UPDATE collector_payment_requests
@@ -2754,7 +3052,7 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
     }
 
     const freshCustomer = customerSvc.getAllCustomers().find(c => Number(c.id) === Number(inv.customer_id));
-    if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
+    if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && freshCustomer.unpaid_count === 0) {
       await customerSvc.activateCustomer(inv.customer_id);
     }
 
@@ -3050,6 +3348,7 @@ router.get('/', requireAdminSession, async (req, res) => {
       .getAllTickets()
       .filter((ticket) => ['open', 'in_progress'].includes(String(ticket?.status || '').toLowerCase()))
       .slice(0, 5);
+    const openOutages = massOutageSvc.listOpenIncidents().slice(0, 6);
     const adminHomeShortcuts = buildAdminHomeShortcuts(req, opsSummary);
     res.render('admin/dashboard', {
       title: 'Dashboard', company: company(), version: '2.0.0',
@@ -3061,6 +3360,7 @@ router.get('/', requireAdminSession, async (req, res) => {
       topUnpaid,
       ticketStats,
       recentActiveTickets,
+      openOutages,
       adminHomeShortcuts,
       dashboardFilterMonth: dashboardFinance.filterMonth,
       dashboardFilterYear: dashboardFinance.filterYear,
@@ -3070,6 +3370,25 @@ router.get('/', requireAdminSession, async (req, res) => {
   } catch (e) {
     logger.error('Admin dashboard error:', e);
     res.status(500).send('Error loading dashboard: ' + e.message);
+  }
+});
+
+router.get('/api/outages', requireAdminSession, (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 20, 100));
+    const status = String(req.query.status || 'open').trim().toLowerCase();
+    const outages = status === 'recent'
+      ? massOutageSvc.listRecentIncidents(limit)
+      : massOutageSvc.listOpenIncidents().slice(0, limit);
+    res.json({
+      success: true,
+      status,
+      count: outages.length,
+      outages
+    });
+  } catch (error) {
+    logger.error('Admin outage API error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Gagal memuat data gangguan massal.' });
   }
 });
 
@@ -3118,17 +3437,26 @@ router.get('/customers', requireAdminSession, (req, res) => {
   const {
     search = '',
     status: filterStatus = '',
+    segment: filterSegment = '',
     billingDayStart = '',
     billingDayEnd = '',
     month: rawMonth = '',
     year: rawYear = '',
-    page: rawPage = '1'
+    page: rawPage = '1',
+    sortBy: rawSortBy = 'name',
+    sortDir: rawSortDir = 'asc'
   } = req.query;
   const now = new Date();
   const selectedMonth = Math.min(12, Math.max(1, parseInt(rawMonth, 10) || (now.getMonth() + 1)));
   const selectedYear = parseInt(rawYear, 10) || now.getFullYear();
   const currentPage = Math.max(1, parseInt(rawPage, 10) || 1);
   const pageSize = 25;
+  const normalizedFilterStatus = String(filterStatus || '').trim().toLowerCase() === 'all'
+    ? ''
+    : String(filterStatus || '').trim();
+  const allowedSortBy = new Set(['name', 'address', 'package', 'status', 'billing']);
+  const sortBy = allowedSortBy.has(String(rawSortBy || '').trim()) ? String(rawSortBy).trim() : 'name';
+  const sortDir = String(rawSortDir || '').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
   const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
   const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
   const monthKey = String(selectedMonth).padStart(2, '0');
@@ -3141,9 +3469,16 @@ router.get('/customers', requireAdminSession, (req, res) => {
   const odps = odpSvc.getAllOdps();
 
   // Apply status filter in JS if provided
-  let filteredCustomers = filterStatus
-    ? customers.filter(c => c.status === filterStatus)
+  let filteredCustomers = normalizedFilterStatus
+    ? customers.filter(c => c.status === normalizedFilterStatus)
     : customers;
+
+  if (filterSegment === 'new') {
+    filteredCustomers = filteredCustomers.filter((c) => {
+      const createdAt = String(c?.created_at || '');
+      return createdAt.slice(5, 7) === monthKey && createdAt.slice(0, 4) === yearKey;
+    });
+  }
 
   if (normalizedBillingDayStart || normalizedBillingDayEnd) {
     filteredCustomers = filteredCustomers.filter((c) => {
@@ -3154,6 +3489,48 @@ router.get('/customers', requireAdminSession, (req, res) => {
       return true;
     });
   }
+
+  const compareText = (left, right) => String(left || '').localeCompare(String(right || ''), 'id', { sensitivity: 'base' });
+  filteredCustomers = [...filteredCustomers].sort((left, right) => {
+    let result = 0;
+    if (sortBy === 'address') {
+      result = compareText(left?.address, right?.address);
+      if (result === 0) result = compareText(left?.name, right?.name);
+    } else if (sortBy === 'package') {
+      result = compareText(left?.package_name, right?.package_name);
+      if (result === 0) result = compareText(left?.name, right?.name);
+    } else if (sortBy === 'status') {
+      const resolveStatusOrder = (customer) => {
+        const statusKey = String(customer?.status || '').trim().toLowerCase();
+        if (statusKey === 'suspended') return 0;
+        if (statusKey === 'active') return 1;
+        if (statusKey === 'inactive') return 2;
+        return 3;
+      };
+      const resolveIsolateDay = (customer) => {
+        if (Number(customer?.auto_isolate || 0) === 0) return 99;
+        const day = Number(customer?.isolate_day || 0);
+        return Number.isFinite(day) && day > 0 ? day : 99;
+      };
+      result = resolveIsolateDay(left) - resolveIsolateDay(right);
+      if (result === 0) result = resolveStatusOrder(left) - resolveStatusOrder(right);
+      if (result === 0) result = compareText(left?.name, right?.name);
+    } else if (sortBy === 'billing') {
+      const leftUnpaid = Number(left?.unpaid_count || 0);
+      const rightUnpaid = Number(right?.unpaid_count || 0);
+      result = leftUnpaid - rightUnpaid;
+      if (result === 0) {
+        const leftDueDay = Number(left?.isolate_day || 0);
+        const rightDueDay = Number(right?.isolate_day || 0);
+        result = leftDueDay - rightDueDay;
+      }
+      if (result === 0) result = compareText(left?.name, right?.name);
+    } else {
+      result = compareText(left?.name, right?.name);
+      if (result === 0) result = compareText(left?.address, right?.address);
+    }
+    return sortDir === 'desc' ? (result * -1) : result;
+  });
 
   const activeRevenue = db.prepare(`
     SELECT COALESCE(SUM(COALESCE(p.price, 0)), 0) AS total
@@ -3220,10 +3597,12 @@ router.get('/customers', requireAdminSession, (req, res) => {
 
   res.render('admin/customers', {
     title: 'Data Pelanggan', company: company(), activePage: 'customers',
-    customers: paginatedCustomers, stats, packages, routers, olts, odps, search, filterStatus,
+    customers: paginatedCustomers, stats, packages, routers, olts, odps, search, filterStatus: normalizedFilterStatus, filterSegment,
     selectedMonth, selectedYear, customerOverview,
     billingDayStart: normalizedBillingDayStart || '',
     billingDayEnd: normalizedBillingDayEnd || '',
+    sortBy,
+    sortDir,
     currentPage: safePage,
     totalPages,
     totalCustomersCount,
@@ -3798,8 +4177,9 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
       const done = sum.paidMonths.length;
       const already = sum.alreadyPaidMonths.length;
       const created = sum.createdMonths.length;
+      const voided = Number(sum.voidedMonths || 0);
       const total = Number(sum.totalAmount) || 0;
-      req.session._msg = { type: 'success', text: `Pembayaran berhasil untuk "${sum.customerName}" tahun ${sum.year}. Total: Rp ${total.toLocaleString('id-ID')} (${sum.totalMonths || 0} bulan). Dibayar: ${done} bulan, dibuat: ${created}, sudah lunas: ${already}.` };
+      req.session._msg = { type: 'success', text: `Pembayaran berhasil untuk "${sum.customerName}" tahun ${sum.year}. Total: Rp ${total.toLocaleString('id-ID')} (${sum.totalMonths || 0} bulan). Dibayar: ${done} bulan, dibuat: ${created}, sudah lunas: ${already}, hangus prabayar: ${voided}.` };
 
       if (customer && customer.phone && done > 0) {
         const monthsText = (sum.paidMonths || []).join(', ');
@@ -3864,7 +4244,7 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
     }
 
     const freshCustomer = customerSvc.getAllCustomers().find(c => String(c.id) === String(req.params.id));
-    if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
+    if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && freshCustomer.unpaid_count === 0) {
       await customerSvc.activateCustomer(req.params.id);
     }
     if (req.session._msg && req.session._msg.type === 'success' && whatsappWarning) {
@@ -4094,7 +4474,7 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
       if (inv) {
         customerId = inv.customer_id;
         const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
-        billingSvc.markAsPaid(id, paidBy, notes);
+        billingSvc.markAsPaid(id, paidBy, notes, resolvePaymentActor(req, paidBy));
         if (!wasPaid) {
           paidInvoices.push({
             id: inv.id,
@@ -4109,7 +4489,7 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
     // Un-isolate logic
     if (customerId) {
       const freshCustomer = customerSvc.getAllCustomers().find(c => c.id === customerId);
-      if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
+      if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && freshCustomer.unpaid_count === 0) {
         await customerSvc.activateCustomer(customerId);
       }
     }
@@ -4157,7 +4537,7 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
     const paidBy = resolvePaidByName(req, req.body.paid_by_name);
     const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
     let whatsappWarning = '';
-    billingSvc.markAsPaid(req.params.id, paidBy, req.body.notes);
+    billingSvc.markAsPaid(req.params.id, paidBy, req.body.notes, resolvePaymentActor(req, paidBy));
     
     // Check if customer is currently suspended and has no more unpaid invoices
     const customer = customerSvc.getCustomerById(inv.customer_id);
@@ -4180,7 +4560,7 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
         whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
       }
     }
-    if (customer && customer.status === 'suspended') {
+    if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
       const freshCustomer = customerSvc.getAllCustomers().find(c => c.id === inv.customer_id);
       if (freshCustomer && freshCustomer.unpaid_count === 0) {
         await customerSvc.activateCustomer(inv.customer_id);
@@ -4277,6 +4657,64 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
     req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name}.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
+  }
+  return redirectBack(res, '/admin/billing');
+});
+
+router.post('/billing/:id/push', requireAdminSession, async (req, res) => {
+  try {
+    let inv = billingSvc.getInvoiceById(req.params.id);
+    if (!inv) throw new Error('Tagihan tidak ditemukan');
+    if (String(inv.status || '').toLowerCase() === 'paid') throw new Error('Tagihan ini sudah lunas.');
+    if (String(inv.status || '').toLowerCase() === 'unpaid' && String(getSetting('qris_static_payload', '') || '').trim()) {
+      inv = billingSvc.assignUniqueQrisForInvoice(inv.id);
+    }
+
+    const customer = customerSvc.getCustomerById(inv.customer_id);
+    if (!customer) throw new Error('Pelanggan tidak ditemukan');
+
+    const settings = getSettings();
+    if (!isPushConfigured(settings) || !isEnabledSwitch(settings.onesignal_push_invoice_enabled ?? true)) {
+      throw new Error('OneSignal tagihan belum aktif atau belum lengkap.');
+    }
+
+    const requestBaseUrl = resolveRequestBaseUrl(req);
+    const dueText = formatInvoiceDueDate(inv, customer);
+    const title = `Tagihan INV-${inv.id}`;
+    const body = `Tagihan ${inv.period_month}/${inv.period_year} sebesar Rp ${Number(inv.amount || 0).toLocaleString('id-ID')} jatuh tempo ${dueText}.`;
+    const result = await sendPushToCustomer(customer, {
+      settings,
+      title,
+      message: body,
+      targetUrl: `${requestBaseUrl}/customer/dashboard#billing`,
+      data: {
+        kind: 'invoice',
+        source: 'admin-manual-billing-push',
+        invoiceId: Number(inv.id || 0) || null,
+        customerId: Number(customer.id || 0) || null
+      }
+    });
+
+    if (!result || result.success !== true) {
+      throw new Error(result?.reason || result?.error || 'OneSignal tidak menerima push.');
+    }
+
+    customerSvc.addPortalNotification(customer.id, {
+      kind: 'invoice',
+      tab: 'billing',
+      title,
+      body,
+      payload: {
+        source: 'admin-manual-billing-push',
+        senderName: 'Billing',
+        senderRole: 'Tagihan',
+        invoiceId: Number(inv.id || 0) || null
+      }
+    }, { dedupeWindowMs: 60 * 1000 });
+
+    req.session._msg = { type: 'success', text: `Notifikasi tagihan push berhasil dikirim ke ${customer.name}.` };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal kirim push tagihan: ' + e.message };
   }
   return redirectBack(res, '/admin/billing');
 });
@@ -4381,11 +4819,14 @@ registerBillingRoutes(router, {
   flashMsg,
   buildInvoiceSummaryFromList,
   resolvePaidByName,
+  resolvePaymentActor,
   sendPaidWhatsappNotification,
   buildBillingWhatsappMessage,
   buildManualPaymentMessage,
   resolveRequestBaseUrl,
-  redirectBack
+  redirectBack,
+  isPushConfigured,
+  sendPushToCustomer
 });
 const ticketSvc = require('../services/ticketService');
 
@@ -4808,11 +5249,16 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
   const categories = bookkeepingSvc.getCategories();
   try {
     bookkeepingSvc.syncPaidInvoiceIncomeEntries();
+    cashLedgerSvc.backfillBookkeepingHolders();
   } catch (syncError) {
     console.warn('[BOOKKEEPING] Sync paid invoice income failed:', syncError.message);
   }
   const summary = bookkeepingSvc.getSummary({ month: filterMonth, year: filterYear });
   const dashboard = bookkeepingSvc.getDashboardDetails({ month: filterMonth, year: filterYear });
+  const cashLedger = cashLedgerSvc.getBookkeepingDashboard({ month: filterMonth, year: filterYear });
+  const settlementSourceOptions = cashLedgerSvc
+    .listManagedCashHolders({ includeInactive: true })
+    .filter((item) => item.role !== 'admin');
   const entries = bookkeepingSvc.listEntries({
     type,
     category,
@@ -4833,6 +5279,8 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
     categories,
     summary,
     dashboard,
+    cashLedger,
+    settlementSourceOptions,
     entries,
     msg: flashMsg(req)
   });
@@ -4875,6 +5323,66 @@ router.post('/bookkeeping', requireAdminSession, restrictToAdmin, express.urlenc
     req.session._msg = { type: 'error', text: 'Gagal menambah pembukuan: ' + (e.message || String(e)) };
   }
   res.redirect('/admin/bookkeeping');
+});
+
+router.post('/bookkeeping/settlements', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  const month = Math.max(1, Math.min(12, parseInt(req.body.month || (new Date().getMonth() + 1), 10) || (new Date().getMonth() + 1)));
+  const year = parseInt(req.body.year || new Date().getFullYear(), 10) || new Date().getFullYear();
+  try {
+    cashLedgerSvc.createSettlement({
+      ...req.body,
+      created_by_role: req.session?.isCashier ? 'cashier' : 'admin',
+      created_by_name: resolvePaidByName(req, 'Admin')
+    });
+    req.session._msg = { type: 'success', text: 'Setoran ke admin berhasil dicatat.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal mencatat setoran: ' + (e.message || String(e)) };
+  }
+  return res.redirect(`/admin/bookkeeping?month=${month}&year=${year}`);
+});
+
+router.get('/bookkeeping/export', requireAdminSession, (req, res) => {
+  const now = new Date();
+  const filterMonth = Math.max(0, Math.min(12, parseInt(req.query.month || (now.getMonth() + 1), 10) || (now.getMonth() + 1)));
+  const filterYear = parseInt(req.query.year || now.getFullYear(), 10) || now.getFullYear();
+  try {
+    bookkeepingSvc.syncPaidInvoiceIncomeEntries();
+    cashLedgerSvc.backfillBookkeepingHolders();
+
+    const summary = bookkeepingSvc.getSummary({ month: filterMonth, year: filterYear });
+    const comparison = bookkeepingSvc.getDashboardDetails({ month: filterMonth, year: filterYear }).comparison || {};
+    const exportData = cashLedgerSvc.buildExportData({ month: filterMonth, year: filterYear });
+    const workbook = XLSX.utils.book_new();
+
+    const summarySheetRows = [
+      { Metrik: 'Periode', Nilai: filterMonth > 0 ? `${filterMonth}/${filterYear}` : String(filterYear) },
+      { Metrik: 'Total Pemasukan', Nilai: Number(summary.total_income || 0) },
+      { Metrik: 'Total Pengeluaran', Nilai: Number(summary.total_expense || 0) },
+      { Metrik: 'Total Bersih', Nilai: Number(comparison.netAmount || 0) },
+      { Metrik: 'Jumlah Pemasukan', Nilai: Number(summary.income_count || 0) },
+      { Metrik: 'Jumlah Pengeluaran', Nilai: Number(summary.expense_count || 0) },
+      ...exportData.summaryRows
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summarySheetRows), 'Ringkasan');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.rolePayments), 'Per Peran');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.actorPayments), 'Per Petugas');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.paymentDetails), 'Detail Pembayaran');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.settlements), 'Detail Setor');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.balances), 'Saldo Berjalan');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData.entries), 'Ledger');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const fileLabel = filterMonth > 0
+      ? `pembukuan-${String(filterYear)}-${String(filterMonth).padStart(2, '0')}.xlsx`
+      : `pembukuan-${String(filterYear)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileLabel}"`);
+    return res.send(buffer);
+  } catch (error) {
+    logger.error(`[Bookkeeping] Gagal export pembukuan: ${error.stack || error.message}`);
+    return res.status(500).send('Gagal export pembukuan.');
+  }
 });
 
 router.post('/bookkeeping/:id/delete', requireAdminSession, restrictToAdmin, (req, res) => {
@@ -5441,6 +5949,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     ],
     payment: [
       'default_gateway',
+      'qris_static_enabled',
       'qris_static_qr_url',
       'qris_static_payload',
       'payment_notif_secret',
@@ -5488,6 +5997,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     ],
     whatsapp: [
       'whatsapp_enabled',
+      'whatsapp_api_key',
       'whatsapp_admin_numbers',
       'whatsapp_test_number',
       'onesignal_enabled',
@@ -5512,6 +6022,11 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'telegram_bot_token'
     ],
     monitoring: [
+      'mass_outage_detection_enabled',
+      'mass_outage_delay_minutes',
+      'mass_outage_threshold_count',
+      'mass_outage_threshold_percent',
+      'mass_outage_zone_aliases',
       'ewallet_live_auto_start',
       'ewallet_log_service_default',
       'ewallet_log_query_default',
@@ -5542,6 +6057,8 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     
     if (newSettings.tripay_enabled === 'true') newSettings.tripay_enabled = true;
     else if (newSettings.tripay_enabled === 'false') newSettings.tripay_enabled = false;
+    if (newSettings.qris_static_enabled === 'true') newSettings.qris_static_enabled = true;
+    else if (newSettings.qris_static_enabled === 'false') newSettings.qris_static_enabled = false;
     
     if (newSettings.midtrans_enabled === 'true') newSettings.midtrans_enabled = true;
     else if (newSettings.midtrans_enabled === 'false') newSettings.midtrans_enabled = false;
@@ -5551,6 +6068,8 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
 
     if (newSettings.duitku_enabled === 'true') newSettings.duitku_enabled = true;
     else if (newSettings.duitku_enabled === 'false') newSettings.duitku_enabled = false;
+    if (newSettings.mass_outage_detection_enabled === 'true') newSettings.mass_outage_detection_enabled = true;
+    else if (newSettings.mass_outage_detection_enabled === 'false') newSettings.mass_outage_detection_enabled = false;
     if (newSettings.ewallet_live_auto_start === 'true') newSettings.ewallet_live_auto_start = true;
     else if (newSettings.ewallet_live_auto_start === 'false') newSettings.ewallet_live_auto_start = false;
 
@@ -5565,6 +6084,16 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     if (newSettings.mikrotik_port !== undefined && newSettings.mikrotik_port !== '') newSettings.mikrotik_port = parseInt(newSettings.mikrotik_port);
     if (newSettings.whatsapp_broadcast_delay !== undefined && newSettings.whatsapp_broadcast_delay !== '') newSettings.whatsapp_broadcast_delay = parseInt(newSettings.whatsapp_broadcast_delay);
     if (newSettings.digiflazz_markup !== undefined && newSettings.digiflazz_markup !== '') newSettings.digiflazz_markup = parseInt(newSettings.digiflazz_markup) || 0;
+    if (newSettings.mass_outage_delay_minutes !== undefined && newSettings.mass_outage_delay_minutes !== '') {
+      newSettings.mass_outage_delay_minutes = Math.max(1, parseInt(newSettings.mass_outage_delay_minutes, 10) || 10);
+    }
+    if (newSettings.mass_outage_threshold_count !== undefined && newSettings.mass_outage_threshold_count !== '') {
+      newSettings.mass_outage_threshold_count = Math.max(1, parseInt(newSettings.mass_outage_threshold_count, 10) || 5);
+    }
+    if (newSettings.mass_outage_threshold_percent !== undefined && newSettings.mass_outage_threshold_percent !== '') {
+      const percent = parseFloat(newSettings.mass_outage_threshold_percent);
+      newSettings.mass_outage_threshold_percent = Number.isFinite(percent) && percent > 0 ? percent : 20;
+    }
     if (newSettings.tr069_periodic_interval !== undefined && newSettings.tr069_periodic_interval !== '') {
       newSettings.tr069_periodic_interval = parseInt(newSettings.tr069_periodic_interval, 10) || 300;
     }
@@ -5595,6 +6124,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'ewallet_log_service_default',
       'ewallet_log_query_default',
       'ewallet_log_limit_default',
+      'mass_outage_zone_aliases',
       'genieacs_url',
       'genieacs_username',
       'genieacs_password',
@@ -5742,11 +6272,19 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
           paymentSaveNotes.push('Link linkqr.id terdeteksi sebagai halaman QRIS. Agar portal bisa membuat QRIS dinamis otomatis, upload gambar QR DANA Business atau tempel payload merchant QRIS.');
         }
       }
+      newSettings.qris_static_enabled = (
+        newSettings.qris_static_enabled === 'true' ||
+        newSettings.qris_static_enabled === true ||
+        newSettings.qris_static_enabled === '1' ||
+        newSettings.qris_static_enabled === 1 ||
+        newSettings.qris_static_enabled === 'on'
+      );
     }
 
     newSettings.admin_username = String(newSettings.admin_username || currentSettings.admin_username || req.session.adminUser || 'admin').trim();
     newSettings.admin_password = String(newSettings.admin_password || currentSettings.admin_password || '').trim();
     newSettings.admin_api_key = String(newSettings.admin_api_key || currentSettings.admin_api_key || '').trim();
+    newSettings.whatsapp_api_key = String(newSettings.whatsapp_api_key || currentSettings.whatsapp_api_key || '').trim();
     newSettings.session_secret = String(newSettings.session_secret || currentSettings.session_secret || '').trim();
     newSettings.xendit_callback_token = String(newSettings.xendit_callback_token || currentSettings.xendit_callback_token || '').trim();
     newSettings.mikrotik_user = String(newSettings.mikrotik_user || currentSettings.mikrotik_user || '').trim();
@@ -5771,6 +6309,13 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       newSettings.ewallet_live_auto_start === 1 ||
       newSettings.ewallet_live_auto_start === 'on'
     );
+    newSettings.mass_outage_detection_enabled = (
+      newSettings.mass_outage_detection_enabled === 'true' ||
+      newSettings.mass_outage_detection_enabled === true ||
+      newSettings.mass_outage_detection_enabled === '1' ||
+      newSettings.mass_outage_detection_enabled === 1 ||
+      newSettings.mass_outage_detection_enabled === 'on'
+    );
     newSettings.support_by_enabled = (
       newSettings.support_by_enabled === 'true' ||
       newSettings.support_by_enabled === true ||
@@ -5784,6 +6329,9 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       if (!isStrongAdminPassword(newSettings.admin_password)) throw new Error('Password admin minimal 12 karakter dan tidak boleh memakai nilai default.');
       if (!isStrongSessionSecret(newSettings.session_secret)) throw new Error('Session secret minimal 32 karakter dan tidak boleh memakai nilai default.');
       if (newSettings.admin_api_key && !isStrongAdminApiKey(newSettings.admin_api_key)) throw new Error('Admin API key minimal 24 karakter dan tidak boleh memakai nilai default.');
+    }
+    if (settingsSection === 'whatsapp' && newSettings.whatsapp_api_key && !isStrongAdminApiKey(newSettings.whatsapp_api_key)) {
+      throw new Error('WhatsApp API key minimal 24 karakter dan tidak boleh memakai nilai default.');
     }
     if (settingsSection === 'payment' && newSettings.xendit_enabled && !isStrongXenditCallbackToken(newSettings.xendit_callback_token)) {
       throw new Error('Xendit callback token wajib diisi minimal 16 karakter saat Xendit diaktifkan.');
@@ -6196,7 +6744,7 @@ router.post('/api/bulk/ssid', requireAdmin, express.json(), async (req, res) => 
 
 router.get('/api/mikrotik/users', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const onlyUnused = String(req.query.onlyUnused || '') === '1';
     const excludeCustomerId = req.query.excludeCustomerId ? Number(req.query.excludeCustomerId) : null;
     const users = await mikrotikService.getPppoeUsers(routerId);
@@ -6604,7 +7152,7 @@ router.get('/vouchers/batches/:id/export.csv', requireAdminSession, (req, res) =
 });
 
 router.get('/api/vouchers/batches', requireAdmin, (req, res) => {
-  const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+  const { routerId } = resolveRouterSelection(req.query.routerId);
   const rows = db.prepare(`
     SELECT
       b.*,
@@ -6646,7 +7194,9 @@ router.get('/api/vouchers/batches/:id', requireAdmin, (req, res) => {
 
 router.post('/api/vouchers/batches', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     const profileName = String(req.body.profile || '').trim();
     const qty = Math.max(1, Math.min(5000, Number(req.body.qty) || 0));
     const prefix = String(req.body.prefix || '').trim();
@@ -6802,7 +7352,7 @@ router.post('/api/vouchers/batches/:id/delete', requireAdmin, async (req, res) =
 
 router.get('/api/mikrotik/secrets', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const listQuery = parseMonitoringListQuery(req, 25);
     const forceRefresh = shouldForceMonitoringRefresh(req);
     const snapshot = forceRefresh
@@ -6855,7 +7405,9 @@ router.get('/api/mikrotik/secrets', requireAdmin, async (req, res) => {
 
 router.post('/api/mikrotik/secrets', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.addPppoeSecret(req.body, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
@@ -6864,7 +7416,9 @@ router.post('/api/mikrotik/secrets', requireAdmin, express.json(), async (req, r
 
 router.post('/api/mikrotik/secrets/:id/update', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.updatePppoeSecret(req.params.id, req.body, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
@@ -6873,7 +7427,9 @@ router.post('/api/mikrotik/secrets/:id/update', requireAdmin, express.json(), as
 
 router.post('/api/mikrotik/secrets/:id/delete', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.deletePppoeSecret(req.params.id, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'secrets', 'active-pppoe']);
     res.json({ success: true });
@@ -6882,7 +7438,7 @@ router.post('/api/mikrotik/secrets/:id/delete', requireAdmin, async (req, res) =
 
 router.get('/api/mikrotik/hotspot-users', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const listQuery = parseMonitoringListQuery(req, 25);
     const forceRefresh = shouldForceMonitoringRefresh(req);
     const snapshot = forceRefresh
@@ -6934,7 +7490,9 @@ router.get('/api/mikrotik/hotspot-users', requireAdmin, async (req, res) => {
 
 router.post('/api/mikrotik/hotspot-users', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.addHotspotUser(req.body, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
@@ -6943,7 +7501,9 @@ router.post('/api/mikrotik/hotspot-users', requireAdmin, express.json(), async (
 
 router.post('/api/mikrotik/hotspot-users/:id/update', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.updateHotspotUser(req.params.id, req.body, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
@@ -6952,7 +7512,9 @@ router.post('/api/mikrotik/hotspot-users/:id/update', requireAdmin, express.json
 
 router.post('/api/mikrotik/hotspot-users/:id/delete', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.deleteHotspotUser(req.params.id, routerId);
       clearMonitoringCache(routerId, ['snapshot', 'summary', 'hotspot-users', 'active-hotspot']);
     res.json({ success: true });
@@ -6960,12 +7522,15 @@ router.post('/api/mikrotik/hotspot-users/:id/delete', requireAdmin, async (req, 
 });
 
 router.get('/api/mikrotik/hotspot-profiles', requireAdmin, async (req, res) => {
-  try { res.json(await mikrotikService.getHotspotProfiles(req.query.routerId)); } catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const { routerId } = resolveRouterSelection(req.query.routerId);
+    res.json(await mikrotikService.getHotspotProfiles(routerId));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/api/mikrotik/active-pppoe', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const forceRefresh = shouldForceMonitoringRefresh(req);
     const snapshot = forceRefresh
       ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
@@ -6981,7 +7546,7 @@ router.get('/api/mikrotik/active-pppoe', requireAdmin, async (req, res) => {
 
 router.get('/api/mikrotik/active-hotspot', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const forceRefresh = shouldForceMonitoringRefresh(req);
     const snapshot = forceRefresh
       ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
@@ -6997,7 +7562,7 @@ router.get('/api/mikrotik/active-hotspot', requireAdmin, async (req, res) => {
 
 router.get('/api/mikrotik/summary', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const forceRefresh = shouldForceMonitoringRefresh(req);
     const snapshot = forceRefresh
       ? await monitoringCollectorSvc.refreshRouterSnapshot(routerId, { mode: 'full' })
@@ -7033,7 +7598,9 @@ router.get('/api/mikrotik/summary', requireAdmin, async (req, res) => {
 // PPPoE Profiles CRUD
 router.post('/api/mikrotik/pppoe-profiles', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.addPppoeProfile(req.body, routerId);
     clearMonitoringCache(routerId, ['profiles']);
     res.json({ success: true });
@@ -7041,7 +7608,9 @@ router.post('/api/mikrotik/pppoe-profiles', requireAdmin, express.json(), async 
 });
 router.post('/api/mikrotik/pppoe-profiles/:id/update', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.updatePppoeProfile(req.params.id, req.body, routerId);
     clearMonitoringCache(routerId, ['profiles']);
     res.json({ success: true });
@@ -7049,7 +7618,9 @@ router.post('/api/mikrotik/pppoe-profiles/:id/update', requireAdmin, express.jso
 });
 router.post('/api/mikrotik/pppoe-profiles/:id/delete', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.deletePppoeProfile(req.params.id, routerId);
     clearMonitoringCache(routerId, ['profiles']);
     res.json({ success: true });
@@ -7059,7 +7630,7 @@ router.post('/api/mikrotik/pppoe-profiles/:id/delete', requireAdmin, async (req,
 // Hotspot User Profiles CRUD
 router.get('/api/mikrotik/hotspot-user-profiles', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const bypassCache = shouldForceMonitoringRefresh(req);
     const listQuery = parseMonitoringListQuery(req, 25);
     let profiles = [];
@@ -7111,7 +7682,9 @@ router.get('/api/mikrotik/hotspot-user-profiles', requireAdmin, async (req, res)
 });
 router.post('/api/mikrotik/hotspot-user-profiles', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.addHotspotUserProfile(req.body, routerId);
     clearMonitoringCache(routerId, ['hotspot-user-profiles']);
     res.json({ success: true });
@@ -7119,7 +7692,9 @@ router.post('/api/mikrotik/hotspot-user-profiles', requireAdmin, express.json(),
 });
 router.post('/api/mikrotik/hotspot-user-profiles/:id/update', requireAdmin, express.json(), async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.updateHotspotUserProfile(req.params.id, req.body, routerId);
     clearMonitoringCache(routerId, ['hotspot-user-profiles']);
     res.json({ success: true });
@@ -7127,7 +7702,9 @@ router.post('/api/mikrotik/hotspot-user-profiles/:id/update', requireAdmin, expr
 });
 router.post('/api/mikrotik/hotspot-user-profiles/:id/delete', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const selection = resolveRouterSelection(req.query.routerId, { fallbackToNull: false });
+    if (selection.missingRequestedRouter) return res.status(409).json(buildMissingRouterApiError(selection.requestedRouterId));
+    const { routerId } = selection;
     await mikrotikService.deleteHotspotUserProfile(req.params.id, routerId);
     clearMonitoringCache(routerId, ['hotspot-user-profiles']);
     res.json({ success: true });
@@ -7136,7 +7713,8 @@ router.post('/api/mikrotik/hotspot-user-profiles/:id/delete', requireAdmin, asyn
 
 router.get('/api/mikrotik/backup', requireAdmin, async (req, res) => {
   try {
-    const backup = await mikrotikService.getBackup(req.query.routerId);
+    const { routerId } = resolveRouterSelection(req.query.routerId);
+    const backup = await mikrotikService.getBackup(routerId);
     res.setHeader('Content-disposition', 'attachment; filename=mikrotik_backup_' + new Date().toISOString().slice(0,10) + '.rsc');
     res.setHeader('Content-type', 'text/plain');
     res.send(backup);
@@ -7327,10 +7905,16 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
       delay: customDelay,
       batchSize: customBatchSize,
       hourlyLimit: customHourlyLimit,
+      send_whatsapp,
       send_push,
       push_title
     } = req.body;
     if (!message) throw new Error('Pesan tidak boleh kosong');
+    const shouldSendWhatsapp = isEnabledSwitch(send_whatsapp);
+    const shouldSendPush = isEnabledSwitch(send_push);
+    if (!shouldSendWhatsapp && !shouldSendPush) {
+      throw new Error('Pilih minimal satu channel broadcast: WhatsApp atau Push App.');
+    }
     const requestBaseUrl = resolveRequestBaseUrl(req);
     
     // Smart Rate Limit Settings
@@ -7379,38 +7963,64 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
       throw new Error('Tidak ada nomor pelanggan yang valid untuk target tersebut.');
     }
 
-    if (isEnabledSwitch(send_push) && isPushConfigured(getSettings()) && isEnabledSwitch(getSetting('onesignal_push_announcement_enabled', true))) {
+    const pushTitle = sanitizePushBody(push_title, 'Pengumuman Pelanggan');
+    const portalAnnouncementItems = uniqueCustomers.map((customer) => {
+      const body = sanitizePushBody(
+        buildBroadcastAnnouncementMessage(customer, message, { baseUrl: requestBaseUrl }),
+        'Ada pengumuman baru untuk pelanggan.'
+      );
+      return { customer, body };
+    });
+
+    if (shouldSendPush) {
+      if (!isPushConfigured(getSettings()) || !isEnabledSwitch(getSetting('onesignal_push_announcement_enabled', true))) {
+        throw new Error('OneSignal belum aktif atau belum lengkap. Cek App ID dan REST API Key di Pengaturan.');
+      }
       try {
-        const title = sanitizePushBody(push_title, 'Pengumuman Pelanggan');
-        const body = sanitizePushBody(message, 'Ada pengumuman baru untuk pelanggan.');
-        await sendPushToCustomers(uniqueCustomers, {
-          settings: getSettings(),
-          title,
-          message: body,
-          targetUrl: `${requestBaseUrl}/customer/dashboard#home`,
-          data: {
-            kind: 'announcement',
-            source: 'broadcast',
-            target
-          }
-        });
+        const settings = getSettings();
+        for (const item of portalAnnouncementItems) {
+          await sendPushToCustomer(item.customer, {
+            settings,
+            title: pushTitle,
+            message: item.body,
+            targetUrl: `${requestBaseUrl}/customer/dashboard#home`,
+            data: {
+              kind: 'announcement',
+              source: 'broadcast',
+              target
+            }
+          });
+        }
       } catch (pushError) {
-        logger.warn(`[Broadcast] Push pengumuman gagal: ${pushError.message}`);
+        throw new Error(`Push OneSignal gagal: ${pushError.message}`);
       }
     }
 
     try {
-      customerSvc.addPortalNotificationsBulk(
-        uniqueCustomers.map((customer) => customer.id),
-        {
+      for (const item of portalAnnouncementItems) {
+        customerSvc.addPortalNotification(item.customer.id, {
           kind: 'announcement',
           tab: 'home',
-          title: sanitizePushBody(push_title, 'Pengumuman Pelanggan'),
-          body: sanitizePushBody(message, 'Ada pengumuman baru untuk pelanggan.')
-        }
-      );
+          title: pushTitle,
+          body: item.body,
+          payload: {
+            senderName: 'Admin',
+            senderRole: 'Pengumuman',
+            source: 'broadcast',
+            target
+          }
+        });
+      }
     } catch (notificationError) {
       logger.warn(`[Broadcast] Simpan inbox pengumuman gagal: ${notificationError.message}`);
+    }
+
+    if (!shouldSendWhatsapp) {
+      req.session._msg = {
+        type: 'success',
+        text: `Broadcast push berhasil dikirim/disimpan untuk ${uniqueCustomers.length} pelanggan tanpa WhatsApp.`
+      };
+      return res.redirect('/admin/whatsapp/broadcast');
     }
 
     const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
@@ -7481,13 +8091,7 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
             const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(cust.id);
             const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
             const payload = buildWhatsappCustomerPayload(cust, unpaidInvoices, primaryInvoice, { baseUrl: requestBaseUrl });
-            let formattedMsg = fillWhatsappTemplate(
-              message,
-              {
-                ...payload,
-                company: company()
-              }
-            );
+            let formattedMsg = buildBroadcastAnnouncementMessage(cust, message, { baseUrl: requestBaseUrl });
             if (!/\{\{\s*payment_guide\s*\}\}/i.test(message) && payload.payment_guide) {
               formattedMsg += `\n\n${payload.payment_guide}`;
             }
@@ -7686,6 +8290,7 @@ registerWhatsappRoutes(router, {
   company,
   flashMsg,
   getSetting,
+  getSettings,
   saveSettings,
   logger,
   customerSvc,
@@ -7707,7 +8312,9 @@ registerWhatsappRoutes(router, {
   getRandomDelay,
   getBackoffDelay,
   addMessageVariation,
-  isPermanentError
+  isPermanentError,
+  isPushConfigured,
+  sendPushToCustomer
 });
 router.get('/routers', requireAdminSession, (req, res) => {
   res.render('admin/routers', {
@@ -7782,7 +8389,7 @@ router.get('/api/isolir-portal-script', requireAdmin, (req, res) => {
 
 router.get('/api/mikrotik/profiles', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.query.routerId);
     const bypassCache = shouldForceMonitoringRefresh(req);
     const listQuery = parseMonitoringListQuery(req, 25);
     let profiles = [];
@@ -7836,7 +8443,8 @@ router.get('/api/mikrotik/profiles', requireAdmin, async (req, res) => {
 
 router.get('/api/mikrotik/profiles/:routerId', requireAdmin, async (req, res) => {
   try {
-    const profiles = await mikrotikService.getPppoeProfiles(req.params.routerId);
+    const { routerId } = resolveRouterSelection(req.params.routerId);
+    const profiles = await mikrotikService.getPppoeProfiles(routerId);
     res.json(profiles);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -7845,7 +8453,7 @@ router.get('/api/mikrotik/profiles/:routerId', requireAdmin, async (req, res) =>
 
 router.get('/api/mikrotik/users/:routerId', requireAdmin, async (req, res) => {
   try {
-    const routerId = req.params.routerId ? Number(req.params.routerId) : null;
+    const { routerId } = resolveRouterSelection(req.params.routerId);
     const onlyUnused = String(req.query.onlyUnused || '') === '1';
     const excludeCustomerId = req.query.excludeCustomerId ? Number(req.query.excludeCustomerId) : null;
     const users = await mikrotikService.getPppoeUsers(routerId);

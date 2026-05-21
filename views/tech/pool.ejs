@@ -1,47 +1,124 @@
 <%- include('partials/header') %>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div>
-    <h5 class="mb-0 fw-bold"><%= t('tech.pool.title', 'Tiket Baru') %></h5>
-    <div class="text-secondary" style="font-size: 12px;"><%= t('tech.pool.subtitle', 'Daftar keluhan yang belum ditangani') %></div>
+<style>
+  .pool-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .pool-head-copy h5{
+    margin:0;
+    font-size:21px;
+    font-weight:900;
+    letter-spacing:-.04em;
+  }
+  .pool-head-copy p{
+    margin:6px 0 0;
+    color:var(--tech-muted);
+    font-size:12px;
+    line-height:1.5;
+  }
+  .pool-counter{
+    width:46px;
+    height:46px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:linear-gradient(180deg, rgba(255,114,134,.18), rgba(255,114,134,.1));
+    border:1px solid rgba(255,114,134,.24);
+    color:var(--tech-danger);
+    font-size:16px;
+    font-weight:900;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .pool-list{
+    display:grid;
+    gap:10px;
+  }
+  .pool-ticket{
+    display:grid;
+    gap:10px;
+    padding:13px 14px;
+    background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.03));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .pool-ticket-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .pool-ticket-name{
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:-.02em;
+  }
+  .pool-ticket-meta,
+  .pool-ticket-message{
+    color:var(--tech-muted);
+    font-size:12px;
+    line-height:1.5;
+  }
+  .pool-ticket-message{
+    padding:10px 11px;
+    border-radius:16px;
+    border:1px solid var(--tech-border);
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  }
+  .pool-empty{
+    text-align:center;
+    padding:44px 20px;
+  }
+  .pool-empty i{
+    font-size:42px;
+    color:var(--tech-success);
+  }
+</style>
+
+<div class="t-card pool-head">
+  <div class="pool-head-copy">
+    <h5><%= t('tech.pool.title', 'Tiket Baru') %></h5>
+    <p><%= t('tech.pool.subtitle', 'Daftar keluhan yang belum ditangani') %></p>
   </div>
-  <div class="bg-danger bg-opacity-25 text-danger rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; font-weight: bold;">
-    <%= tickets.length %>
-  </div>
+  <div class="pool-counter"><%= tickets.length %></div>
 </div>
 
 <% if (tickets.length === 0) { %>
-  <div class="text-center py-5">
-    <i class="bi bi-emoji-smile text-secondary" style="font-size: 40px;"></i>
-    <p class="text-secondary mt-2 small"><%= t('tech.pool.empty', 'Tidak ada keluhan baru saat ini.') %><br><%= t('tech.pool.empty_hint', 'Semua pelanggan berjalan normal.') %></p>
+  <div class="t-card pool-empty">
+    <i class="bi bi-emoji-smile"></i>
+    <p class="text-secondary mt-2 small mb-0"><%= t('tech.pool.empty', 'Tidak ada keluhan baru saat ini.') %><br><%= t('tech.pool.empty_hint', 'Semua pelanggan berjalan normal.') %></p>
   </div>
 <% } else { %>
-  <% tickets.forEach(ticket => { %>
-    <div class="t-card border-danger border-opacity-25">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="badge-status badge-open">
-          <i class="bi bi-exclamation-circle-fill"></i> <%= t('tech.ticket.open', 'Belum Ditangani') %>
-        </span>
-        <span class="text-secondary" style="font-size: 11px;"><%= new Date(ticket.created_at).toLocaleString('id-ID', {day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit'}) %></span>
+  <div class="pool-list">
+    <% tickets.forEach(ticket => { %>
+      <div class="t-card pool-ticket">
+        <div class="pool-ticket-top">
+          <span class="badge-status badge-open">
+            <i class="bi bi-exclamation-circle-fill"></i> <%= t('tech.ticket.open', 'Belum Ditangani') %>
+          </span>
+          <span class="text-secondary" style="font-size: 11px;"><%= new Date(ticket.created_at).toLocaleString('id-ID', {day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit'}) %></span>
+        </div>
+
+        <div class="pool-ticket-name"><%= ticket.customer_name %></div>
+        <div class="pool-ticket-meta">
+          <i class="bi bi-geo-alt-fill me-1"></i><%= ticket.customer_address || t('tech.ticket.no_address', 'Tidak ada alamat') %>
+        </div>
+
+        <div class="pool-ticket-message">
+          <div class="fw-semibold text-danger mb-1"><%= ticket.subject %></div>
+          <div><%= ticket.message %></div>
+        </div>
+
+        <form method="POST" action="/tech/tickets/<%= ticket.id %>/take">
+          <button type="submit" class="btn btn-primary btn-action" onclick="return confirm(<%- JSON.stringify(t('tech.pool.take_confirm', 'Ambil tiket ini untuk Anda kerjakan sekarang?')) %>)">
+            <i class="bi bi-hand-index-thumb-fill me-2"></i> <%= t('tech.pool.take_action', 'Ambil Tugas Ini') %>
+          </button>
+        </form>
       </div>
-      
-      <div class="fw-bold mb-1" style="font-size: 15px;"><%= ticket.customer_name %></div>
-      <div class="text-secondary mb-2" style="font-size: 12px;">
-        <i class="bi bi-geo-alt-fill me-1"></i><%= ticket.customer_address || t('tech.ticket.no_address', 'Tidak ada alamat') %>
-      </div>
-      
-      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size: 13px;">
-        <div class="fw-semibold text-danger"><%= ticket.subject %></div>
-        <div><%= ticket.message %></div>
-      </div>
-      
-      <form method="POST" action="/tech/tickets/<%= ticket.id %>/take">
-        <button type="submit" class="btn btn-primary btn-action" onclick="return confirm(<%- JSON.stringify(t('tech.pool.take_confirm', 'Ambil tiket ini untuk Anda kerjakan sekarang?')) %>)">
-          <i class="bi bi-hand-index-thumb-fill me-2"></i> <%= t('tech.pool.take_action', 'Ambil Tugas Ini') %>
-        </button>
-      </form>
-    </div>
-  <% }) %>
+    <% }) %>
+  </div>
 <% } %>
 
 <%- include('partials/bottom_nav') %>

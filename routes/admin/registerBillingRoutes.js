@@ -1,4 +1,8 @@
-const { buildDynamicQrisPayload, buildDynamicQrisBuffer } = require('../../services/qrisService');
+const {
+  buildDynamicQrisPayload,
+  buildDynamicQrisBuffer,
+  hasStaticQrisEnabled
+} = require('../../services/qrisService');
 
 module.exports = function registerBillingRoutes(router, deps = {}) {
   const {
@@ -9,15 +13,19 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     customerSvc,
     db,
     getSetting,
+    getSettings,
     company,
     flashMsg,
     buildInvoiceSummaryFromList,
     resolvePaidByName,
+    resolvePaymentActor,
     sendPaidWhatsappNotification,
     buildBillingWhatsappMessage,
     buildManualPaymentMessage,
     resolveRequestBaseUrl,
-    redirectBack
+    redirectBack,
+    isPushConfigured,
+    sendPushToCustomer
   } = deps;
 
   function getInvoiceDueDateLocal(invoiceLike) {
@@ -30,7 +38,11 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
   }
 
   function hasDynamicQrisSource() {
-    return Boolean(String(getSetting('qris_static_payload', '') || '').trim());
+    return hasStaticQrisEnabled({
+      qris_static_enabled: getSetting('qris_static_enabled', undefined),
+      qris_static_payload: getSetting('qris_static_payload', ''),
+      qris_static_qr_url: getSetting('qris_static_qr_url', '')
+    }) && Boolean(String(getSetting('qris_static_payload', '') || '').trim());
   }
 
   async function buildInvoiceQrisImageBuffer(invoice) {
@@ -163,7 +175,8 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
   router.post('/billing/generate', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
     try {
       const { month, year } = req.body;
-      const count = billingSvc.generateMonthlyInvoices(parseInt(month, 10), parseInt(year, 10));
+      const generated = billingSvc.generateMonthlyInvoices(parseInt(month, 10), parseInt(year, 10));
+      const count = typeof generated === 'number' ? generated : Number(generated?.count || 0);
       req.session._msg = { type: 'success', text: `${count} tagihan baru berhasil digenerate untuk periode ${month}/${year}.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal generate: ' + e.message };
@@ -234,7 +247,12 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
         if (inv) {
           customerId = inv.customer_id;
           const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
-          billingSvc.markAsPaid(id, paidBy, notes);
+          billingSvc.markAsPaid(
+            id,
+            paidBy,
+            notes,
+            typeof resolvePaymentActor === 'function' ? resolvePaymentActor(req, paidBy) : null
+          );
           if (!wasPaid) {
             paidInvoices.push({
               id: inv.id,
@@ -248,7 +266,7 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
       if (customerId) {
         const freshCustomer = customerSvc.getAllCustomers().find((c) => c.id === customerId);
-        if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
+        if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && freshCustomer.unpaid_count === 0) {
           await customerSvc.activateCustomer(customerId);
         }
       }
@@ -283,7 +301,12 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       const paidBy = resolvePaidByName(req, req.body.paid_by_name);
       const wasPaid = String(inv.status || '').toLowerCase() === 'paid';
       let whatsappWarning = '';
-      billingSvc.markAsPaid(req.params.id, paidBy, req.body.notes);
+      billingSvc.markAsPaid(
+        req.params.id,
+        paidBy,
+        req.body.notes,
+        typeof resolvePaymentActor === 'function' ? resolvePaymentActor(req, paidBy) : null
+      );
 
       const customer = customerSvc.getCustomerById(inv.customer_id);
       if (!wasPaid && customer && customer.phone) {
@@ -297,7 +320,7 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
           whatsappWarning = ` Notifikasi WhatsApp gagal dikirim: ${notifyError.message || String(notifyError)}.`;
         }
       }
-      if (customer && customer.status === 'suspended') {
+      if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
         const freshCustomer = customerSvc.getAllCustomers().find((c) => c.id === inv.customer_id);
         if (freshCustomer && freshCustomer.unpaid_count === 0) {
           await customerSvc.activateCustomer(inv.customer_id);
@@ -392,6 +415,65 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
+    }
+    return redirectBack(res, '/admin/billing');
+  });
+
+  router.post('/billing/:id/push', requireAdminSession, async (req, res) => {
+    try {
+      let inv = billingSvc.getInvoiceById(req.params.id);
+      if (!inv) throw new Error('Tagihan tidak ditemukan');
+      if (String(inv.status || '').toLowerCase() === 'paid') throw new Error('Tagihan ini sudah lunas.');
+      if (String(inv.status || '').toLowerCase() === 'unpaid' && hasDynamicQrisSource()) {
+        inv = billingSvc.assignUniqueQrisForInvoice(inv.id);
+      }
+
+      const customer = customerSvc.getCustomerById(inv.customer_id);
+      if (!customer) throw new Error('Pelanggan tidak ditemukan');
+
+      const settings = typeof getSettings === 'function' ? getSettings() : {};
+      if (typeof isPushConfigured !== 'function' || typeof sendPushToCustomer !== 'function' || !isPushConfigured(settings)) {
+        throw new Error('OneSignal tagihan belum aktif atau belum lengkap.');
+      }
+
+      const requestBaseUrl = resolveRequestBaseUrl(req);
+      const dueAt = getInvoiceDueDateLocal(inv);
+      const dueText = dueAt ? dueAt.toLocaleDateString('id-ID') : '-';
+      const title = `Tagihan INV-${inv.id}`;
+      const body = `Tagihan ${inv.period_month}/${inv.period_year} sebesar Rp ${Number(inv.amount || 0).toLocaleString('id-ID')} jatuh tempo ${dueText}.`;
+      const result = await sendPushToCustomer(customer, {
+        settings,
+        title,
+        message: body,
+        targetUrl: `${requestBaseUrl}/customer/dashboard#billing`,
+        data: {
+          kind: 'invoice',
+          source: 'admin-manual-billing-push',
+          invoiceId: Number(inv.id || 0) || null,
+          customerId: Number(customer.id || 0) || null
+        }
+      });
+
+      if (!result || result.success !== true) {
+        throw new Error(result?.reason || result?.error || 'OneSignal tidak menerima push.');
+      }
+
+      customerSvc.addPortalNotification(customer.id, {
+        kind: 'invoice',
+        tab: 'billing',
+        title,
+        body,
+        payload: {
+          source: 'admin-manual-billing-push',
+          senderName: 'Billing',
+          senderRole: 'Tagihan',
+          invoiceId: Number(inv.id || 0) || null
+        }
+      }, { dedupeWindowMs: 60 * 1000 });
+
+      req.session._msg = { type: 'success', text: `Notifikasi tagihan push berhasil dikirim ke ${customer.name}.` };
+    } catch (e) {
+      req.session._msg = { type: 'error', text: 'Gagal kirim push tagihan: ' + e.message };
     }
     return redirectBack(res, '/admin/billing');
   });

@@ -6,6 +6,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     company,
     flashMsg,
     getSetting,
+    getSettings,
     saveSettings,
     logger,
     customerSvc,
@@ -27,8 +28,20 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     getRandomDelay,
     getBackoffDelay,
     addMessageVariation,
-    isPermanentError
+    isPermanentError,
+    isPushConfigured,
+    sendPushToCustomer
   } = deps;
+
+  function buildBroadcastAnnouncementMessage(customer, template, options = {}) {
+    const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
+    const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
+    const payload = buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, options);
+    return fillWhatsappTemplate(template, {
+      ...payload,
+      company: company()
+    }).trim();
+  }
 
   router.get('/whatsapp', requireAdminSession, async (req, res) => {
     res.render('admin/whatsapp', {
@@ -91,10 +104,80 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     return res.json({ ok: true, message: 'Broadcast berhasil dihentikan.' });
   });
 
+  router.post('/whatsapp/test-push', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
+    try {
+      if (typeof isPushConfigured !== 'function' || typeof sendPushToCustomer !== 'function') {
+        throw new Error('Modul push OneSignal belum tersedia.');
+      }
+
+      const settings = typeof getSettings === 'function' ? getSettings() : {};
+      if (!isPushConfigured(settings)) {
+        throw new Error('OneSignal belum lengkap. Isi App ID dan REST API Key di Pengaturan.');
+      }
+
+      const lookup = String(req.body.customer_lookup || '').trim();
+      if (!lookup) throw new Error('Isi ID pelanggan, nomor HP, PPPoE username, atau tag pelanggan untuk test push.');
+
+      const customer = customerSvc.findCustomerByAny(lookup);
+      if (!customer) throw new Error('Pelanggan tujuan test push tidak ditemukan.');
+
+      const title = String(req.body.push_title || 'Test Push Portal').trim() || 'Test Push Portal';
+      const message = String(req.body.push_message || 'Jika notifikasi ini masuk, push OneSignal portal pelanggan sudah aktif.').trim();
+      if (!message) throw new Error('Isi pesan push tidak boleh kosong.');
+
+      const baseUrl = resolveRequestBaseUrl(req);
+      const result = await sendPushToCustomer(customer, {
+        settings,
+        title,
+        message,
+        targetUrl: `${baseUrl}/customer/dashboard#home`,
+        data: {
+          kind: 'test-push',
+          source: 'admin-test-push',
+          customerId: Number(customer.id || 0) || null
+        }
+      });
+
+      if (!result || result.success !== true) {
+        throw new Error(`OneSignal belum menerima push: ${result?.reason || result?.error || 'unknown-error'}`);
+      }
+
+      try {
+        customerSvc.addPortalNotification(customer.id, {
+          kind: 'announcement',
+          tab: 'home',
+          title,
+          body: message,
+          payload: {
+            source: 'admin-test-push',
+            senderName: 'Admin',
+            senderRole: 'Test Push'
+          }
+        });
+      } catch (notificationError) {
+        logger.warn(`[PushTest] Push terkirim, tetapi gagal simpan inbox: ${notificationError.message}`);
+      }
+
+      req.session._msg = {
+        type: 'success',
+        text: `Test push berhasil dikirim ke ${customer.name || lookup}. Pastikan pelanggan sudah mengizinkan notifikasi di portal.`
+      };
+    } catch (error) {
+      logger.warn(`[PushTest] Gagal kirim test push: ${error.message}`);
+      req.session._msg = { type: 'error', text: 'Gagal kirim test push: ' + error.message };
+    }
+    return res.redirect('/admin/whatsapp/broadcast');
+  });
+
   router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
     try {
-      const { target, message, delay: customDelay, batchSize: customBatchSize, hourlyLimit: customHourlyLimit } = req.body;
+      const { target, message, delay: customDelay, batchSize: customBatchSize, hourlyLimit: customHourlyLimit, send_whatsapp, send_push, push_title } = req.body;
       if (!message) throw new Error('Pesan tidak boleh kosong');
+      const shouldSendWhatsapp = String(send_whatsapp || '').toLowerCase() === '1' || String(send_whatsapp || '').toLowerCase() === 'true' || send_whatsapp === 'on';
+      const shouldSendPush = String(send_push || '').toLowerCase() === '1' || String(send_push || '').toLowerCase() === 'true' || send_push === 'on';
+      if (!shouldSendWhatsapp && !shouldSendPush) {
+        throw new Error('Pilih minimal satu channel broadcast: WhatsApp atau Push App.');
+      }
       const requestBaseUrl = resolveRequestBaseUrl(req);
       const baseDelayMs = (parseInt(customDelay, 10) || getSetting('whatsapp_broadcast_delay', 5)) * 1000;
       const batchSize = parseInt(customBatchSize, 10) || 15;
@@ -132,6 +215,52 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
       if (uniqueCustomers.length === 0) {
         throw new Error('Tidak ada nomor pelanggan yang valid untuk target tersebut.');
+      }
+
+      const pushTitle = String(push_title || 'Pengumuman Pelanggan').trim() || 'Pengumuman Pelanggan';
+      const portalAnnouncementItems = uniqueCustomers.map((customer) => ({
+        customer,
+        body: buildBroadcastAnnouncementMessage(customer, message, { baseUrl: requestBaseUrl }) || 'Ada pengumuman baru untuk pelanggan.'
+      }));
+
+      if (shouldSendPush) {
+        const settings = typeof getSettings === 'function' ? getSettings() : {};
+        if (typeof isPushConfigured !== 'function' || typeof sendPushToCustomer !== 'function' || !isPushConfigured(settings)) {
+          throw new Error('OneSignal belum aktif atau belum lengkap. Cek App ID dan REST API Key di Pengaturan.');
+        }
+        for (const item of portalAnnouncementItems) {
+          await sendPushToCustomer(item.customer, {
+            settings,
+            title: pushTitle,
+            message: item.body,
+            targetUrl: `${requestBaseUrl}/customer/dashboard#home`,
+            data: { kind: 'announcement', source: 'broadcast', target }
+          });
+        }
+      }
+
+      try {
+        for (const item of portalAnnouncementItems) {
+          customerSvc.addPortalNotification(item.customer.id, {
+            kind: 'announcement',
+            tab: 'home',
+            title: pushTitle,
+            body: item.body,
+            payload: {
+              senderName: 'Admin',
+              senderRole: 'Pengumuman',
+              source: 'broadcast',
+              target
+            }
+          });
+        }
+      } catch (notificationError) {
+        logger.warn(`[Broadcast] Simpan inbox pengumuman gagal: ${notificationError.message}`);
+      }
+
+      if (!shouldSendWhatsapp) {
+        req.session._msg = { type: 'success', text: `Broadcast push berhasil dikirim/disimpan untuk ${uniqueCustomers.length} pelanggan tanpa WhatsApp.` };
+        return res.redirect('/admin/whatsapp/broadcast');
       }
 
       const { sendWA, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
@@ -197,13 +326,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
               const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
               const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
               const payload = buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, { baseUrl: requestBaseUrl });
-              let formattedMsg = fillWhatsappTemplate(
-                message,
-                {
-                  ...payload,
-                  company: company()
-                }
-              );
+              let formattedMsg = buildBroadcastAnnouncementMessage(customer, message, { baseUrl: requestBaseUrl });
               if (!/\{\{\s*payment_guide\s*\}\}/i.test(message) && payload.payment_guide) {
                 formattedMsg += `\n\n${payload.payment_guide}`;
               }

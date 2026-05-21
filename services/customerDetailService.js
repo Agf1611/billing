@@ -569,6 +569,7 @@ function monthStatusLabel(status) {
   if (status === 'paid') return 'Lunas';
   if (status === 'isolated') return 'Isolir';
   if (status === 'unpaid') return 'Belum Bayar';
+  if (status === 'void') return 'Hangus Prabayar';
   return 'Belum Ada Tagihan';
 }
 
@@ -613,6 +614,8 @@ function buildMonthlyBilling(customer, invoices = [], year) {
       const rawStatus = String(invoice.status || '').toLowerCase();
       if (rawStatus === 'paid') {
         status = 'paid';
+      } else if (rawStatus === 'void') {
+        status = 'void';
       } else if (
         rawStatus === 'unpaid' &&
         String(customer?.status || '').toLowerCase() === 'suspended' &&

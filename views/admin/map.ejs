@@ -11,12 +11,49 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.Editable/1.2.0/Leaflet.Editable.js"></script>
   <style>
     .mw,.page,.map-stats,.legend-grid,.odps-panel{min-width:0}
-    #map { height: calc(100vh - 200px); min-height: 460px; border-radius: 18px; margin-top: 10px; z-index: 1; background: #e5e7eb; border: 1px solid var(--border); box-shadow: var(--shadow-soft); }
+    #map { height: calc(100vh - 220px); min-height: 600px; border-radius: 18px; margin-top: 10px; z-index: 1; background: #e5e7eb; border: 1px solid var(--border); box-shadow: var(--shadow-soft); touch-action: pan-x pan-y; }
+    .map-shell { position: relative; }
+    .map-shell.is-relocating #map { cursor: crosshair; }
+    .map-tools-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .map-search-form { flex:1; min-width:0; display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:16px; background:var(--surface-strong); border:1px solid var(--border); box-shadow:var(--shadow-soft); }
+    .map-search-icon { color:#64748b; font-size:15px; flex:0 0 auto; }
+    .map-search-input { flex:1; min-width:0; border:0; outline:none; background:transparent; color:var(--text); font-size:13px; font-weight:700; }
+    .map-search-input::placeholder { color:var(--muted); font-weight:700; }
+    .map-search-submit { flex:0 0 auto; min-height:40px; }
+    .map-tools-actions { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+    .map-panel-toggle { min-height:40px; white-space:nowrap; }
+    .map-relocate-bar { position:absolute; left:12px; right:12px; top:16px; z-index:520; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:16px; background:rgba(15,23,42,.94); color:#fff; border:1px solid rgba(148,163,184,.22); box-shadow:0 18px 40px rgba(15,23,42,.28); backdrop-filter:blur(10px); }
+    .map-relocate-bar.hidden { display:none; }
+    .map-customer-action-bar { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); z-index:515; display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:999px; background:rgba(15,23,42,.94); color:#fff; border:1px solid rgba(148,163,184,.22); box-shadow:0 16px 34px rgba(15,23,42,.26); backdrop-filter:blur(10px); pointer-events:auto !important; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    .map-customer-action-bar.hidden { display:none; }
+    .map-customer-action-bar * { pointer-events:auto !important; touch-action:manipulation; }
+    .map-customer-action-label { font-size:12px; font-weight:800; white-space:nowrap; color:#e2e8f0; }
+    .btn-customer-action-move { background:linear-gradient(135deg,#6366f1,#4f46e5); border:1px solid rgba(99,102,241,.9); color:#fff; font-weight:900; touch-action:manipulation; min-height:42px; }
+    .btn-customer-action-move:hover { filter:brightness(.98); color:#fff; }
+    .btn-customer-action-odp { background:linear-gradient(135deg,#14b8a6,#0f766e); border:1px solid rgba(20,184,166,.88); color:#ecfeff; font-weight:900; touch-action:manipulation; min-height:42px; }
+    .btn-customer-action-odp:hover { filter:brightness(.98); color:#ecfeff; }
+    .map-relocate-copy { min-width:0; }
+    .map-relocate-title { font-size:13px; font-weight:900; display:flex; align-items:center; gap:8px; }
+    .map-relocate-meta { margin-top:4px; font-size:11px; color:rgba(226,232,240,.92); font-weight:700; line-height:1.35; }
+    .map-relocate-actions { display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+    .btn-relocate-cancel { background:rgba(255,255,255,.08); border:1px solid rgba(226,232,240,.18); color:#fff; }
+    .btn-relocate-cancel:hover { background:rgba(255,255,255,.14); color:#fff; }
+    .btn-relocate-save { background:linear-gradient(135deg,#22c55e,#16a34a); border:1px solid rgba(22,163,74,.9); color:#03210d; font-weight:900; }
+    .btn-relocate-save:hover { filter:brightness(.98); color:#03210d; }
+    .btn-relocate-save:disabled { opacity:.55; cursor:not-allowed; filter:none; }
+    .btn-odp-link-save { background:linear-gradient(135deg,#14b8a6,#0f766e); border:1px solid rgba(15,118,110,.9); color:#ecfeff; font-weight:900; }
+    .btn-odp-link-save:hover { filter:brightness(.98); color:#ecfeff; }
+    .btn-odp-link-save:disabled { opacity:.55; cursor:not-allowed; filter:none; }
+    .customer-relocate-marker,
+    .customer-relocate-marker * { pointer-events:none !important; }
+    .customer-relocate-pin { width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:rgba(37,99,235,.96); color:#fff; border:3px solid rgba(255,255,255,.96); box-shadow:0 10px 24px rgba(37,99,235,.35); font-size:15px; }
+    .custom-div-icon.is-odp-link-target .marker-odp,
+    .custom-div-icon.is-odp-link-target .odp-box-icon { filter: drop-shadow(0 0 0 rgba(20,184,166,0)) drop-shadow(0 0 14px rgba(20,184,166,.82)) brightness(1.06); transform: scale(1.08); }
     .map-controls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
     .legend { background: rgba(255, 255, 255, 0.98); padding: 12px 15px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-size: 13px; line-height: 2.2; font-weight: 700; color: #1e293b; border: 2px solid #cbd5e1; backdrop-filter: blur(5px); }
     .legend i { width: 16px; height: 16px; display: inline-block; margin-right: 12px; border-radius: 50%; vertical-align: middle; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
     /* Stats Cards on Map */
-    .map-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .map-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .msc { padding: 12px; border-radius: 18px; background: var(--surface-strong); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-soft); min-width: 0; }
     .msc-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex: 0 0 42px; }
     .msc-p { background: #eff6ff; color: #3b82f6; }
@@ -28,67 +65,32 @@
     .msc-info .lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; line-height: 1.25; }
 
     /* Legend Cards */
-    .legend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+    .legend-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
     .lc { background: var(--surface-strong); border: 1px solid var(--border); padding: 10px 12px; border-radius: 14px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-soft); }
     .lc i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
     .lc span { font-size: 12px; font-weight: 700; color: var(--text); }
 
     .odp-box-icon,
     .odp-legend-icon{
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 7px;
-      background: linear-gradient(180deg, #ffd56a 0%, #f59e0b 100%);
-      border: 1px solid rgba(146, 64, 14, 0.55);
-      box-shadow: 0 8px 16px rgba(245, 158, 11, 0.32), inset 0 1px 0 rgba(255,255,255,0.58);
-      color: #78350f;
-    }
-    .odp-box-icon::before,
-    .odp-legend-icon::before{
-      content:'';
-      position:absolute;
-      top:-3px;
-      left:4px;
-      right:4px;
-      height:5px;
-      border-radius:999px;
-      background: linear-gradient(180deg, #fff2c6 0%, #fbbf24 100%);
-      border: 1px solid rgba(146, 64, 14, 0.35);
-    }
-    .odp-box-icon::after,
-    .odp-legend-icon::after{
-      content:'';
-      position:absolute;
-      left:50%;
-      bottom:4px;
-      width:11px;
-      height:4px;
-      transform:translateX(-50%);
-      border-radius:999px;
-      background: rgba(120, 53, 15, 0.25);
-      box-shadow: -7px 0 0 rgba(120, 53, 15, 0.2), 7px 0 0 rgba(120, 53, 15, 0.2);
+      display:inline-block;
+      background-image:url('/img/odp-pin.svg');
+      background-repeat:no-repeat;
+      background-position:center;
+      background-size:contain;
+      flex:0 0 auto;
     }
     .odp-box-icon{
-      width: 24px;
-      height: 20px;
-      font-size: 11px;
-    }
-    .odp-box-icon i{
-      position: relative;
-      z-index: 1;
-      line-height: 1;
-      transform: translateY(1px);
+      width: 28px;
+      height: 28px;
     }
     .odp-legend-icon{
-      width: 18px;
-      height: 14px;
-      flex: 0 0 18px;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
     }
     .odp-stat-icon{
-      width: 24px;
-      height: 20px;
+      width: 28px;
+      height: 28px;
     }
 
     .odps-panel { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-soft); margin-bottom: 12px; overflow: hidden; }
@@ -116,13 +118,68 @@
     .odps-meta-value { font-size:12px; color:#0f172a; font-weight:800; word-break:break-word; }
     .odps-card-actions { display:flex; gap:8px; margin-top:12px; }
     .odps-card-actions .btn { flex:1; justify-content:center; }
+    .map-live-layout { display:block; }
+    .map-main-panel { min-width:0; }
+    .staff-live-panel { background: var(--surface-strong); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow-soft); overflow:hidden; min-width:0; }
+    .staff-live-panel.is-collapsed { display:none; }
+    .staff-live-panel.map-staff-below { margin-top:12px; }
+    .staff-live-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:12px; border-bottom:1px solid var(--border); }
+    .staff-live-title { font-weight:900; font-size:13px; color:var(--text); display:inline-flex; align-items:center; gap:8px; }
+    .staff-live-sub { margin-top:4px; font-size:11px; color:var(--muted); font-weight:700; }
+    .staff-live-head .btn { white-space:nowrap; }
+    .staff-filter-bar { display:flex; flex-wrap:wrap; gap:8px; padding:12px 12px 0; }
+    .staff-filter-chip { border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:999px; padding:7px 10px; font-size:11px; font-weight:800; display:inline-flex; align-items:center; gap:6px; }
+    .staff-filter-chip.active { background:#eff6ff; border-color:rgba(37,99,235,.28); color:#1d4ed8; }
+    .staff-filter-chip strong { font-size:10px; color:inherit; opacity:.92; }
+    .staff-role-legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:12px 12px 0; }
+    .staff-role-legend-item { display:flex; align-items:center; gap:8px; min-width:0; border:1px solid #e2e8f0; background:#fff; border-radius:12px; padding:8px 10px; font-size:11px; font-weight:800; color:#334155; }
+    .staff-role-dot { width:11px; height:11px; border-radius:999px; display:inline-flex; flex:0 0 11px; box-shadow:0 0 0 2px rgba(255,255,255,.92), 0 0 0 3px rgba(148,163,184,.12); }
+    .staff-role-dot-tech { background:#2563eb; }
+    .staff-role-dot-agent { background:#10b981; }
+    .staff-role-dot-collector { background:#f59e0b; }
+    .staff-role-dot-cashier { background:#8b5cf6; }
+    .staff-role-dot-moving { background:#16a34a; }
+    .staff-role-dot-idle { background:#64748b; }
+    .staff-live-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 12px 0; }
+    .staff-live-toolbar-note { font-size:11px; color:var(--muted); font-weight:700; }
+    .staff-live-list { padding:12px; display:grid; gap:10px; max-height: 640px; overflow:auto; }
+    .staff-live-card { border:1px solid #e2e8f0; border-radius:16px; background:#fff; padding:12px; box-shadow:0 2px 4px rgba(0,0,0,0.03); }
+    .staff-live-card.is-hidden { opacity:.68; background:#f8fafc; }
+    .staff-live-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .staff-live-card-title { min-width:0; }
+    .staff-live-card-name { font-weight:900; font-size:13px; color:#0f172a; line-height:1.2; }
+    .staff-live-card-badges { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .staff-live-card-role { margin-top:4px; display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800; background:#f8fafc; border:1px solid #e2e8f0; color:#334155; }
+    .staff-live-motion { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:10px; font-weight:800; border:1px solid #e2e8f0; }
+    .staff-live-motion-moving { background:#ecfdf3; border-color:rgba(22,163,74,.18); color:#15803d; }
+    .staff-live-motion-idle { background:#f8fafc; border-color:rgba(100,116,139,.22); color:#475569; }
+    .staff-live-meta { display:grid; gap:6px; margin-top:10px; }
+    .staff-live-meta-item { display:flex; gap:8px; align-items:flex-start; color:#334155; font-size:12px; }
+    .staff-live-meta-item i { margin-top:2px; color:#64748b; }
+    .staff-live-head-actions { display:flex; align-items:center; gap:8px; }
+    .staff-live-card-tools { display:flex; align-items:center; gap:6px; }
+    .btn-icon-toggle.is-off { background:#f8fafc; color:#64748b; border-color:#cbd5e1; }
+    .btn-icon-toggle.is-on { background:#eff6ff; color:#2563eb; border-color:rgba(37,99,235,.22); }
+    .staff-live-actions { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin-top:12px; }
+    .staff-live-empty { padding:18px 14px; text-align:center; color:#64748b; font-size:12px; font-weight:700; }
+    .staff-live-last { padding:0 12px 12px; font-size:11px; color:var(--muted); font-weight:700; }
     @media (max-width: 768px) {
-      #map { height: 56vh; min-height: 320px; border-radius: 16px; }
+      #map { height: 58vh; min-height: 340px; border-radius: 16px; }
       .topbar { align-items:flex-start; gap: 10px; }
       .topbar .tb-right { width:100%; }
       .topbar .tb-right .btn { width:100%; justify-content:center; }
-      .legend-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .map-tools-bar { flex-direction:column; align-items:stretch; }
+      .map-tools-actions { width:100%; display:grid; grid-template-columns:1fr; }
+      .map-search-form { width:100%; }
+      .legend-grid { display:none; }
       .map-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .map-stats .msc:nth-child(n+3) { display:none; }
+      .msc { padding: 11px 10px; gap: 10px; }
+      .msc-icon { width: 36px; height: 36px; flex-basis: 36px; font-size: 16px; border-radius: 11px; }
+      .msc-info .val { font-size: 16px; }
+      .msc-info .lbl { font-size: 9.5px; line-height: 1.2; }
+      .staff-role-legend { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .staff-live-list { max-height:none; }
       .odps-head { flex-wrap: wrap; }
       .odps-search { width: 100%; }
       .odps-hide-sm { display: none; }
@@ -131,20 +188,33 @@
       .odps-card-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
       .odps-card-actions .btn { width:100%; justify-content:center; }
       .leaflet-control-layers { max-width: calc(100vw - 48px); }
-      .cust-popup { width: min(280px, calc(100vw - 60px)); max-width: min(280px, calc(100vw - 60px)); }
+      .map-relocate-bar { left:10px; right:10px; top:12px; padding:11px 12px; border-radius:15px; flex-direction:column; align-items:stretch; }
+      .map-relocate-actions { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .map-relocate-actions .btn { width:100%; justify-content:center; }
+      .map-customer-action-bar { left:10px; right:10px; bottom:12px; transform:none; justify-content:space-between; border-radius:16px; padding:10px 12px; }
+      .map-customer-action-label { overflow:hidden; text-overflow:ellipsis; }
+      .map-customer-card { width: 220px; max-width: min(220px, calc(100vw - 92px)); max-height: min(44vh, 300px); padding: 10px; }
+      .cust-popup { width: 198px; max-width: min(198px, calc(100vw - 110px)); max-height: min(38vh, 220px); }
       .cp-head { align-items: flex-start; }
-      .cp-traffic-grid { grid-template-columns: 1fr; }
-      .cp-chart { padding: 9px; }
     }
     @media (max-width: 540px) {
       .page.admin-shell-page { padding-left: 0; padding-right: 0; }
       .map-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .msc { padding: 11px 10px; gap: 10px; border-radius: 16px; }
-      .msc-icon { width: 38px; height: 38px; flex-basis: 38px; font-size: 17px; }
-      .msc-info .val { font-size: 17px; }
-      .msc-info .lbl { font-size: 10px; }
-      .legend-grid { grid-template-columns: 1fr; gap: 8px; }
-      .lc { padding: 10px 11px; border-radius: 12px; }
+      .msc { padding: 10px 9px; gap: 8px; border-radius: 16px; align-items:flex-start; }
+      .msc-icon { width: 34px; height: 34px; flex-basis: 34px; font-size: 15px; }
+      .msc-info .val { font-size: 15px; }
+      .msc-info .lbl { font-size: 9px; }
+      .staff-live-head { flex-wrap:wrap; }
+      .staff-live-head-actions { width:100%; display:grid; grid-template-columns:1fr; }
+      .staff-live-head .btn { width:100%; justify-content:center; }
+      .staff-live-toolbar { flex-direction:column; align-items:stretch; }
+      .staff-role-legend { grid-template-columns:1fr; }
+      .staff-live-actions { grid-template-columns:1fr; }
+      .cp-avatar { width: 32px; height: 32px; font-size: 16px; border-radius: 10px; }
+      .cp-name { font-size: 12px; }
+      .cp-chip { font-size: 10px; padding: 4px 7px; }
+      .cp-meta-item { font-size: 11px; gap: 7px; }
+      .cp-meta-item span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
       .odps-panel { border-radius: 16px; }
       .odps-head { padding: 11px; }
       .odps-mobile-list { padding: 11px; }
@@ -185,39 +255,130 @@
     #picker-map { height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; z-index: 1; }
     #edit-picker-map { height: 250px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #cbd5e1; z-index: 1; }
     #cable-drawing-map { height: 450px; border-radius: 8px; border: 1px solid #cbd5e1; z-index: 1; background: #e5e7eb; }
-    .picker-icon-odp { display:block; width:24px; height:20px; }
+    .picker-icon-odp { display:block; width:30px; height:30px; }
 
-    .marker-odp { display:block; width:24px; height:20px; }
-    .marker-cust-active { color: #3b82f6; font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
-    .marker-cust-suspended { color: #ef4444; font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .marker-odp { display:block; width:30px; height:30px; }
+    .custom-div-icon { background: transparent !important; border: 0 !important; }
+    .custom-div-icon,
+    .custom-div-icon * { pointer-events: auto; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+    .customer-div-icon,
+    .customer-div-icon * { pointer-events: none !important; user-select: none; -webkit-user-select: none; }
+    .customer-marker-stack { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; min-width:136px; transform: translateY(-2px); }
+    .marker-cust-icon { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; font-size:20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .marker-cust-active { color: #3b82f6; }
+    .marker-cust-suspended { color: #ef4444; }
+    .marker-cust-good { color: #22c55e; }
+    .marker-cust-warning { color: #f59e0b; }
+    .customer-div-icon.is-relocating .marker-cust-icon { transform: scale(1.16); filter: drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 10px rgba(37,99,235,.5)); }
+    .customer-div-icon.is-relocating .customer-name-inline { display:inline-flex; align-items:center; justify-content:center; background:#1d4ed8; }
+    .customer-name-inline { display:none; margin-top:4px; max-width:136px; padding:3px 8px; border-radius:999px; background:rgba(15,23,42,.92); color:#fff; box-shadow:0 8px 20px rgba(15,23,42,.24); font-size:11px; font-weight:800; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .customer-div-icon.show-label .customer-name-inline { display:inline-flex; align-items:center; justify-content:center; }
+    .customer-label-icon,
+    .customer-label-icon * { pointer-events: none !important; user-select: none; -webkit-user-select: none; }
+    .customer-name-badge { display:inline-flex; align-items:center; justify-content:center; min-height:22px; max-width:132px; padding:4px 8px; border-radius:999px; background:rgba(15,23,42,.94); color:#fff; box-shadow:0 8px 20px rgba(15,23,42,.24); font-size:10px; font-weight:800; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .marker-staff { font-size: 21px; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.26)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .marker-staff-tech { color: #2563eb; }
+    .marker-staff-agent { color: #10b981; }
+    .marker-staff-collector { color: #f59e0b; }
+    .marker-staff-cashier { color: #8b5cf6; }
+    .staff-popup { width: 280px; max-width: 280px; box-sizing: border-box; }
+    .staff-popup-head { display:flex; align-items:center; gap:10px; padding:6px 0 10px; border-bottom:1px solid rgba(148,163,184,0.35); }
+    .staff-avatar { width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:18px; background:linear-gradient(135deg, rgba(37,99,235,0.18), rgba(16,185,129,0.18)); color:#0f172a; border:1px solid rgba(148,163,184,0.35); }
+    .staff-title { min-width:0; flex:1; }
+    .staff-name { font-weight:900; font-size:14px; color:#0f172a; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .staff-role { margin-top:5px; display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:800; background:rgba(255,255,255,0.92); border:1px solid rgba(148,163,184,0.35); color:#0f172a; }
+    .staff-meta { display:grid; gap:7px; padding-top:10px; }
+    .staff-meta-item { display:flex; gap:8px; align-items:flex-start; color:#334155; }
+    .staff-meta-item i { margin-top:2px; color:#64748b; }
+    .staff-meta-item span { overflow:hidden; text-overflow:ellipsis; }
     .popup-content { font-size: 13px; }
     .popup-content h6 { margin: 0 0 5px 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-    .popup-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
-    .cust-popup { width: 300px; max-width: 300px; box-sizing: border-box; }
-    .cp-head { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.35); }
-    .cp-avatar { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(6,182,212,0.18)); color: #0f172a; border: 1px solid rgba(148, 163, 184, 0.35); }
+    .popup-actions { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .popup-actions .btn { min-height: 42px; display:flex; align-items:center; justify-content:center; gap:6px; border-radius:14px; font-size:13px; font-weight:800; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .popup-actions .btn i { font-size:14px; line-height:1; }
+    .popup-actions .btn-popup-detail { background:#0f172a; color:#fff !important; border:1px solid #0f172a; }
+    .popup-actions .btn-popup-detail:hover { background:#111827; border-color:#111827; color:#fff !important; }
+    .popup-actions .btn-popup-route { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff !important; border:1px solid #4f46e5; }
+    .popup-actions .btn-popup-route:hover { filter:brightness(.98); color:#fff !important; }
+    .popup-actions .btn-popup-wa { background:#25D366; color:#0b1220 !important; border:1px solid #1fb85a; }
+    .popup-actions .btn-popup-wa:hover { background:#1fb85a; border-color:#199f4d; }
+    .popup-actions-secondary { grid-template-columns:1fr; margin-top:8px; }
+    .popup-actions .btn-popup-move { background:#f8fafc; color:#0f172a !important; border:1px solid #cbd5e1; }
+    .popup-actions .btn-popup-move:hover { background:#eef2ff; border-color:#a5b4fc; color:#0f172a !important; }
+    .popup-actions-note { margin-top:8px; padding:8px 10px; border-radius:12px; background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; font-size:11px; font-weight:800; text-align:center; }
+    .map-customer-hit-layer { position:absolute; inset:0; z-index:420; pointer-events:none; }
+    .map-customer-hit { position:absolute; width:42px; height:42px; margin-left:-21px; margin-top:-21px; border:0; border-radius:999px; background:transparent; pointer-events:auto; touch-action:manipulation; -webkit-tap-highlight-color: transparent; }
+    .map-customer-hit:focus-visible { outline:2px solid rgba(37,99,235,.45); outline-offset:2px; }
+    .map-customer-card-shell { position:absolute; left:0; top:0; z-index:500; pointer-events:auto; }
+    .map-customer-card-shell.hidden { display:none; }
+    .map-customer-card { width: 244px; max-width: min(244px, calc(100vw - 76px)); max-height: min(54vh, 320px); overflow-y:auto; overflow-x:hidden; border-radius:18px; background: rgba(255,255,255,.97); border:1px solid rgba(226,232,240,.92); box-shadow: 0 18px 36px rgba(15,23,42,.22); padding: 11px; pointer-events:auto; backdrop-filter: blur(8px); }
+    .map-customer-close-fab { position:absolute; right:-14px; top:-14px; width:46px; height:46px; border-radius:999px; border:1px solid rgba(203,213,225,.95); background:#fff; color:#334155; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow: 0 12px 26px rgba(15,23,42,.18); cursor:pointer; pointer-events:auto; touch-action:manipulation; z-index:2; }
+    .map-customer-close-fab.hidden { display:none; }
+    .map-customer-close-fab:hover { background:#f8fafc; }
+    .map-customer-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding-bottom:9px; border-bottom:1px solid rgba(148,163,184,.24); }
+    .map-customer-card .cp-head { padding:0; border-bottom:0; }
+    .cp-close-btn { flex:0 0 auto; width:42px; height:42px; border-radius:999px; border:1px solid rgba(148,163,184,.4); background:#fff; color:#334155; display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 6px 18px rgba(15,23,42,.12); cursor:pointer; pointer-events:auto; touch-action:manipulation; -webkit-tap-highlight-color: transparent; }
+    .cp-close-btn:hover { background:#f8fafc; }
+    .cp-close-btn:active { transform:scale(.97); }
+    .leaflet-customer-popup .leaflet-popup-content-wrapper { border-radius: 18px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.22); }
+    .leaflet-customer-popup .leaflet-popup-content { margin: 10px 11px; }
+    .leaflet-customer-popup .leaflet-popup-tip { box-shadow: 0 10px 22px rgba(15,23,42,.18); }
+    .cust-popup { width: 222px; max-width: 222px; box-sizing: border-box; max-height: min(46vh, 260px); overflow: auto; scrollbar-width: thin; }
+    .cp-head { display: flex; align-items: center; gap: 10px; padding: 2px 0 9px; border-bottom: 1px solid rgba(148, 163, 184, 0.35); }
+    .cp-avatar { width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: linear-gradient(135deg, rgba(59,130,246,0.18), rgba(6,182,212,0.18)); color: #0f172a; border: 1px solid rgba(148, 163, 184, 0.35); }
     .cp-title { min-width: 0; flex: 1; }
-    .cp-name { font-weight: 900; font-size: 14px; color: #0f172a; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cp-name { font-weight: 900; font-size: 13px; color: #0f172a; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-    .cp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; font-weight: 800; font-size: 11px; line-height: 1; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(255,255,255,0.9); color: #0f172a; }
+    .cp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 7px; border-radius: 999px; font-weight: 800; font-size: 10px; line-height: 1; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(255,255,255,0.9); color: #0f172a; }
     .cp-chip i { font-size: 12px; opacity: 0.9; }
     .cp-chip-active { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); color: #065f46; }
     .cp-chip-suspended { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: #7f1d1d; }
-    .cp-meta { display: grid; grid-template-columns: 1fr; gap: 6px; padding-top: 10px; }
-    .cp-meta-item { display: flex; gap: 8px; align-items: flex-start; color: #334155; }
-    .cp-meta-item i { margin-top: 2px; color: #64748b; }
+    .cp-meta { display: grid; grid-template-columns: 1fr; gap: 5px; padding-top: 8px; }
+    .cp-meta-item { display: flex; gap: 8px; align-items: flex-start; color: #334155; font-size: 13px; font-weight: 700; line-height: 1.35; }
+    .cp-meta-item i { margin-top: 2px; color: #475569; font-size: 14px; }
     .cp-meta-item span { overflow: hidden; text-overflow: ellipsis; }
-    .cp-traffic { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(148, 163, 184, 0.35); }
-    .cp-traffic-head { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 12px; color: #0f172a; margin-bottom: 8px; }
-    .cp-traffic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .cp-chart { position: relative; border-radius: 14px; padding: 10px; border: 1px solid rgba(148, 163, 184, 0.35); background: linear-gradient(180deg, rgba(248,250,252,0.95), rgba(255,255,255,0.95)); overflow: hidden; box-sizing: border-box; min-width: 0; }
-    .cp-chart-label { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 11px; color: #0f172a; margin-bottom: 6px; }
-    .cp-chart-label i { font-size: 13px; }
-    .cp-spark { width: 100%; height: 70px; display: block; }
-    .cp-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; color: #64748b; background: rgba(255,255,255,0.72); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; }
-    .cp-overlay.on { opacity: 1; }
+    .cp-rx-good { color: #15803d; font-weight: 900; }
+    .cp-rx-warning { color: #b45309; font-weight: 900; }
+    .cp-rx-unknown { color: #64748b; font-weight: 800; }
     .btn-wa { background: #25D366; border: 1px solid #25D366; color: #0b1220 !important; font-weight: 800; }
     .btn-wa:hover { background: #1fb85a; border-color: #1fb85a; color: #0b1220 !important; }
+    .leaflet-odp-popup .leaflet-popup-content-wrapper { border-radius:16px; box-shadow:0 14px 28px rgba(15,23,42,.2); }
+    .leaflet-odp-popup .leaflet-popup-content { margin:8px 9px; }
+    .leaflet-odp-popup .leaflet-popup-tip { box-shadow:0 10px 22px rgba(15,23,42,.18); }
+    .odp-popup { width:218px; max-width:218px; box-sizing:border-box; overflow:hidden; }
+    .odp-popup-head { display:flex; flex-direction:column; gap:5px; padding:1px 0 8px; border-bottom:1px solid rgba(148,163,184,.24); }
+    .odp-popup-badge { display:inline-flex; align-items:center; width:max-content; padding:3px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:9px; font-weight:900; letter-spacing:.02em; }
+    .odp-popup-name { font-size:15px; font-weight:900; line-height:1.05; color:#0f172a; word-break:break-word; }
+    .odp-popup-link { display:inline-flex; align-items:center; gap:5px; color:#2563eb; font-size:11px; font-weight:800; text-decoration:none; }
+    .odp-popup-link:hover { color:#1d4ed8; text-decoration:underline; }
+    .odp-copy-btn { margin-top:1px; display:inline-flex; align-items:center; gap:5px; width:max-content; padding:4px 8px; border-radius:9px; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; font-size:10px; font-weight:800; }
+    .odp-copy-btn:hover { background:#eef2ff; color:#334155; }
+    .odp-usage-card { margin-top:8px; padding:8px; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; }
+    .odp-usage-head { display:flex; align-items:center; justify-content:space-between; gap:6px; color:#334155; font-size:11px; font-weight:800; }
+    .odp-usage-head strong { color:#16a34a; font-size:13px; }
+    .odp-usage-bar { margin-top:7px; height:7px; border-radius:999px; background:#e5e7eb; overflow:hidden; }
+    .odp-usage-bar > span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#22c55e,#16a34a); }
+    .odp-usage-foot { margin-top:6px; display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:10px; font-weight:800; color:#64748b; }
+    .odp-usage-foot strong { color:#16a34a; }
+    .odp-popup-section { padding-top:8px; border-top:1px solid rgba(148,163,184,.24); margin-top:8px; }
+    .odp-popup-section-title { font-size:11px; font-weight:900; color:#334155; margin-bottom:6px; }
+    .odp-popup-meta { display:grid; gap:6px; }
+    .odp-popup-meta-row { display:flex; gap:6px; align-items:flex-start; font-size:11px; color:#475569; font-weight:700; }
+    .odp-popup-meta-row i { margin-top:2px; color:#64748b; }
+    .odp-popup-list { display:grid; gap:4px; }
+    .odp-popup-list-item { display:flex; align-items:flex-start; gap:6px; font-size:11px; color:#334155; font-weight:700; }
+    .odp-popup-list-dot { width:7px; height:7px; border-radius:999px; background:#fb923c; flex:0 0 7px; margin-top:5px; }
+    .odp-popup-list-more { margin-top:2px; font-size:10px; color:#64748b; font-weight:800; }
+    .odp-popup-empty { font-size:11px; color:#94a3b8; font-weight:700; }
+    .odp-popup-actions { display:grid; grid-template-columns:1fr; gap:6px; margin-top:10px; }
+    .odp-popup-actions-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+    .btn-odp-primary { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff !important; border:1px solid #2563eb; font-weight:900; }
+    .btn-odp-primary:hover { filter:brightness(.98); color:#fff !important; }
+    .btn-odp-success { background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff !important; border:1px solid #16a34a; font-weight:900; }
+    .btn-odp-success:hover { filter:brightness(.98); color:#fff !important; }
+    .btn-odp-danger { background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff !important; border:1px solid #dc2626; font-weight:900; }
+    .btn-odp-danger:hover { filter:brightness(.98); color:#fff !important; }
+    .odp-popup-actions .btn { min-height:34px; padding:7px 8px; border-radius:12px; font-size:11px; }
 
     /* Flowing line animation */
     @keyframes flow {
@@ -251,7 +412,7 @@
 
     <div class="map-stats">
         <div class="msc">
-            <div class="msc-icon msc-w"><span class="odp-box-icon odp-stat-icon"><i class="bi bi-hdd-rack-fill"></i></span></div>
+            <div class="msc-icon msc-w"><span class="odp-box-icon odp-stat-icon" aria-hidden="true"></span></div>
             <div class="msc-info">
                 <div class="val"><%= odps.length %></div>
                 <div class="lbl"><%= t('admin.map.stats.total_odp', 'Total ODP') %></div>
@@ -271,6 +432,13 @@
                 <div class="lbl"><%= t('admin.map.stats.suspended_customers', 'Isolir / Nonaktif') %></div>
             </div>
         </div>
+        <div class="msc">
+            <div class="msc-icon msc-p"><i class="bi bi-geo-alt-fill"></i></div>
+            <div class="msc-info">
+                <div class="val"><%= Array.isArray(staffLocations) ? staffLocations.length : 0 %></div>
+                <div class="lbl">Karyawan Live</div>
+            </div>
+        </div>
     </div>
 
     <div class="legend-grid">
@@ -280,15 +448,131 @@
         </div>
         <div class="lc">
             <i style="background: #3b82f6;"></i>
-            <span><%= t('admin.map.legend.active', 'Aktif') %></span>
+            <span>Pelanggan Aktif</span>
         </div>
         <div class="lc">
             <i style="background: #ef4444;"></i>
-            <span><%= t('admin.map.legend.suspended', 'Isolir') %></span>
+            <span>Pelanggan Isolir</span>
+        </div>
+        <div class="lc">
+            <i style="background: #2563eb;"></i>
+            <span>Teknisi</span>
+        </div>
+        <div class="lc">
+            <i style="background: #10b981;"></i>
+            <span>Agent</span>
+        </div>
+        <div class="lc">
+            <i style="background: #f59e0b;"></i>
+            <span>Kolektor</span>
+        </div>
+        <div class="lc">
+            <i style="background: #8b5cf6;"></i>
+            <span>Kasir</span>
         </div>
     </div>
 
-    <div id="map"></div>
+    <div class="map-tools-bar">
+      <form class="map-search-form" onsubmit="return submitMapSearch(event)">
+        <i class="bi bi-search map-search-icon"></i>
+        <input
+          id="mapCustomerSearch"
+          class="map-search-input"
+          type="text"
+          list="mapCustomerSearchList"
+          placeholder="Cari pelanggan, PPPoE, tag, atau nomor HP"
+          autocomplete="off"
+        >
+        <button type="submit" class="btn btn-sm btn-p map-search-submit">Cari</button>
+      </form>
+      <div class="map-tools-actions">
+        <button type="button" class="btn btn-sm btn-g map-panel-toggle" id="mapStaffPanelToggle" onclick="toggleStaffPanel()">Karyawan Live</button>
+      </div>
+      <datalist id="mapCustomerSearchList">
+        <% customers.forEach((cust) => { %>
+          <option value="<%= cust.name || '' %>"><%= [cust.pppoe_username, cust.genieacs_tag, cust.phone].filter(Boolean).join(' • ') %></option>
+        <% }) %>
+      </datalist>
+    </div>
+
+    <div class="map-live-layout">
+      <div class="map-main-panel">
+        <div class="map-shell">
+          <div id="map"></div>
+          <div class="map-customer-action-bar hidden" id="mapCustomerActionBar">
+            <div class="map-customer-action-label" id="mapCustomerActionLabel">Pelanggan dipilih</div>
+            <button type="button" class="btn btn-sm btn-customer-action-odp" id="mapCustomerActionOdpBtn" data-customer-action-odp="1" data-customer-id=""><i class="bi bi-diagram-3"></i> Sambung ODP</button>
+            <button type="button" class="btn btn-sm btn-g" id="mapCustomerActionCableBtn" data-customer-action-cable="1" data-customer-id=""><i class="bi bi-bezier2"></i> Jalur Kabel</button>
+            <button type="button" class="btn btn-sm btn-customer-action-move" id="mapCustomerActionMoveBtn" data-customer-action-move="1" data-customer-id="" onclick="return triggerCustomerActionMove(this, event)" ontouchstart="return triggerCustomerActionMove(this, event)" onpointerdown="return triggerCustomerActionMove(this, event)"><i class="bi bi-arrows-move"></i> Pindah Lokasi</button>
+          </div>
+          <div class="map-relocate-bar hidden" id="mapRelocateBar">
+            <div class="map-relocate-copy">
+              <div class="map-relocate-title"><i class="bi bi-arrows-move"></i> Pindah posisi pelanggan</div>
+              <div class="map-relocate-meta" id="mapRelocateMeta">Tap titik baru di peta, lalu simpan.</div>
+            </div>
+            <div class="map-relocate-actions">
+              <button type="button" class="btn btn-sm btn-relocate-cancel" onclick="window.cancelCustomerRelocate()">Batal</button>
+              <button type="button" class="btn btn-sm btn-relocate-save" id="mapRelocateSaveBtn" onclick="window.saveCustomerRelocate()" disabled>Simpan</button>
+            </div>
+          </div>
+          <div class="map-relocate-bar hidden" id="mapOdpLinkBar">
+            <div class="map-relocate-copy">
+              <div class="map-relocate-title"><i class="bi bi-diagram-3"></i> Sambungkan pelanggan ke ODP</div>
+              <div class="map-relocate-meta" id="mapOdpLinkMeta">Tap ODP tujuan, lalu simpan.</div>
+            </div>
+            <div class="map-relocate-actions">
+              <button type="button" class="btn btn-sm btn-relocate-cancel" onclick="window.cancelCustomerOdpLink()">Batal</button>
+              <button type="button" class="btn btn-sm btn-odp-link-save" id="mapOdpLinkSaveBtn" onclick="window.saveCustomerOdpLink()" disabled>Simpan</button>
+            </div>
+          </div>
+          <div class="map-relocate-bar hidden" id="mapBackboneLinkBar">
+            <div class="map-relocate-copy">
+              <div class="map-relocate-title"><i class="bi bi-share"></i> Buat jalur ODP ke ODP / backbone</div>
+              <div class="map-relocate-meta" id="mapBackboneLinkMeta">Tap ODP tujuan untuk mulai menggambar backbone.</div>
+            </div>
+            <div class="map-relocate-actions">
+              <button type="button" class="btn btn-sm btn-relocate-cancel" onclick="window.cancelBackboneLinkMode()">Batal</button>
+            </div>
+          </div>
+          <div class="map-customer-hit-layer" id="mapCustomerHitLayer"></div>
+          <div class="map-customer-card-shell hidden" id="mapCustomerCardShell">
+            <div class="map-customer-card" id="mapCustomerCard"></div>
+          </div>
+        </div>
+      </div>
+      <div class="staff-live-panel map-staff-below" id="staffLivePanel">
+        <div class="staff-live-head">
+          <div>
+            <div class="staff-live-title"><i class="bi bi-people-fill"></i> Karyawan Live</div>
+            <div class="staff-live-sub">Lokasi teknisi, agent, kolektor, dan kasir yang aktif membagikan lokasi.</div>
+          </div>
+          <div class="staff-live-head-actions">
+            <button type="button" class="btn btn-sm btn-g" onclick="refreshStaffLocations(false)"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+          </div>
+        </div>
+        <div class="staff-filter-bar">
+          <button type="button" class="staff-filter-chip active" data-staff-role="all" onclick="setStaffRoleFilter('all')">Semua <strong id="staffCountAll">0</strong></button>
+          <button type="button" class="staff-filter-chip" data-staff-role="technician" onclick="setStaffRoleFilter('technician')">Teknisi <strong id="staffCountTechnician">0</strong></button>
+          <button type="button" class="staff-filter-chip" data-staff-role="agent" onclick="setStaffRoleFilter('agent')">Agent <strong id="staffCountAgent">0</strong></button>
+          <button type="button" class="staff-filter-chip" data-staff-role="collector" onclick="setStaffRoleFilter('collector')">Kolektor <strong id="staffCountCollector">0</strong></button>
+          <button type="button" class="staff-filter-chip" data-staff-role="cashier" onclick="setStaffRoleFilter('cashier')">Kasir <strong id="staffCountCashier">0</strong></button>
+        </div>
+        <div class="staff-role-legend">
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-tech"></span><span>Teknisi</span></div>
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-agent"></span><span>Agent</span></div>
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-collector"></span><span>Kolektor</span></div>
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-cashier"></span><span>Kasir</span></div>
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-moving"></span><span>Bergerak</span></div>
+          <div class="staff-role-legend-item"><span class="staff-role-dot staff-role-dot-idle"></span><span>Diam</span></div>
+        </div>
+        <div class="staff-live-toolbar">
+          <div class="staff-live-toolbar-note">Tap ikon mata untuk tampil atau sembunyikan karyawan tertentu.</div>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="resetHiddenStaffFilters()"><i class="bi bi-eye"></i> Tampilkan Semua</button>
+        </div>
+        <div class="staff-live-list" id="staffLiveList"></div>
+        <div class="staff-live-last" id="staffLiveLast">Belum ada pembaruan live.</div>
+      </div>
+    </div>
     
     <div class="odps-panel" style="margin-top: 12px;">
       <div class="odps-head">
@@ -425,12 +709,27 @@
     </div>
     <div class="mbody">
       <div id="cable-drawing-map"></div>
-      <p class="text-muted mt-2 small"><i class="bi bi-info-circle"></i> Tarik titik oranye untuk mengubah jalur. Klik pada garis untuk menambah titik lekukan baru.</p>
+      <p class="text-muted mt-2 small" id="cableDrawingHint"><i class="bi bi-info-circle"></i> Tarik titik oranye untuk mengubah jalur. Klik pada garis untuk menambah titik lekukan baru.</p>
+      <div id="cableDrawingMetaFields" style="display:none; margin-top:10px;">
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">Jenis Jalur</label>
+            <select id="drawingLinkKind" class="fc">
+              <option value="backbone">Backbone</option>
+              <option value="distribution">ODP ke ODP</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="fl">Ukuran Kabel</label>
+            <input type="text" id="drawingCableSize" class="fc" placeholder="Contoh: 24 Core">
+          </div>
+        </div>
+      </div>
     </div>
     <div class="mf">
       <button type="button" class="btn btn-sm btn-outline-primary" onclick="addMorePoints()"><i class="bi bi-plus-circle"></i> Tambah Titik Lekukan</button>
       <button type="button" class="btn btn-g" onclick="closeModal('cablePathModal')">Batal</button>
-      <button type="button" class="btn btn-p" onclick="saveCablePath()">Simpan Jalur Kabel</button>
+      <button type="button" class="btn btn-p" onclick="saveDrawingPath()">Simpan Jalur Kabel</button>
     </div>
   </div>
 </div>
@@ -438,6 +737,8 @@
 <script id="settings-data" type="application/json"><%- JSON.stringify(settings) %></script>
 <script id="customers-data" type="application/json"><%- JSON.stringify(customers).replace(/<\/script/g, '<\\/script').replace(/<!--/g, '<\\!--') %></script>
 <script id="odps-data" type="application/json"><%- JSON.stringify(odps).replace(/<\/script/g, '<\\/script').replace(/<!--/g, '<\\!--') %></script>
+<script id="network-links-data" type="application/json"><%- JSON.stringify(networkLinks || []).replace(/<\/script/g, '<\\/script').replace(/<!--/g, '<\\!--') %></script>
+<script id="staff-locations-data" type="application/json"><%- JSON.stringify(staffLocations || []).replace(/<\/script/g, '<\\/script').replace(/<!--/g, '<\\!--') %></script>
 <script>
   const I18N = {
     layerOsm: "<%= t('admin.map.layers.osm', 'OpenStreetMap') %>",
@@ -461,11 +762,34 @@
 
   // Initialize Map
   const map = L.map('map', {
-    editable: true
+    editable: true,
+    tap: false
   }).setView([officeCoords.lat, officeCoords.lng], 13);
+  map.createPane('customerLabelPane');
+  map.getPane('customerLabelPane').style.zIndex = '640';
+  map.getPane('customerLabelPane').style.pointerEvents = 'none';
 
   let currentEditingPolyline = null;
   let currentEditingCustomer = null;
+  let activeCustomerCardId = null;
+  let activeCustomerMarker = null;
+  let activeCustomerAnchorMarker = null;
+  let selectedCustomerId = null;
+  let selectedCustomerAnchorMarker = null;
+  const customerMarkers = [];
+  const customerMarkerRefs = new Map();
+  let lastCustomerMapTapAt = 0;
+  let suppressCustomerOpenUntil = 0;
+  let customerLabelRetryTimer = null;
+  let relocatingCustomerId = null;
+  let relocatingCustomerLatLng = null;
+  let relocatingPreviewMarker = null;
+  let linkingCustomerId = null;
+  let linkingTargetOdpId = null;
+  let linkingBackboneSourceOdpId = null;
+  let drawingMode = 'customer';
+  let currentEditingBackbone = null;
+  const MAP_STATE_KEY = 'admin-network-map-state-v3';
 
   // Layers
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -487,140 +811,750 @@
     [I18N.layerHybrid]: googleHybrid
   };
 
-  L.control.layers(baseMaps).addTo(map);
-
   let customers = [];
   let odps = [];
+  let networkLinks = [];
+  let staffLocations = [];
   try {
     customers = JSON.parse(document.getElementById('customers-data').textContent || '[]');
     odps = JSON.parse(document.getElementById('odps-data').textContent || '[]');
+    networkLinks = JSON.parse(document.getElementById('network-links-data').textContent || '[]');
+    staffLocations = JSON.parse(document.getElementById('staff-locations-data').textContent || '[]');
   } catch (e) {
     console.error("Data mapping error:", e);
   }
 
+  const odpLayer = L.layerGroup().addTo(map);
+  const backboneLayer = L.layerGroup().addTo(map);
+  const customerLayer = L.layerGroup().addTo(map);
+  const customerTouchLayer = L.layerGroup().addTo(map);
+  const customerLabelLayer = L.layerGroup().addTo(map);
+  const customerRelocateLayer = L.layerGroup().addTo(map);
+  const staffLayer = L.layerGroup().addTo(map);
+
   // Add ODP Markers
   function renderOdpBoxIcon(className = '') {
     const extra = className ? ` ${className}` : '';
-    return `<span class="odp-box-icon${extra}"><i class="bi bi-hdd-rack-fill"></i></span>`;
+    return `<span class="odp-box-icon${extra}" aria-hidden="true"></span>`;
   }
 
-  const odpMarkers = {}; // Store ODP coordinates for line mapping
+  function loadSavedMapState() {
+    try {
+      const raw = window.sessionStorage ? sessionStorage.getItem(MAP_STATE_KEY) : '';
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Number.isFinite(Number(parsed.lat)) || !Number.isFinite(Number(parsed.lng)) || !Number.isFinite(Number(parsed.zoom))) {
+        return null;
+      }
+      return {
+        lat: Number(parsed.lat),
+        lng: Number(parsed.lng),
+        zoom: Number(parsed.zoom),
+        selectedCustomerId: Number(parsed.selectedCustomerId || 0) || null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function saveMapState(extra = {}) {
+    try {
+      if (!window.sessionStorage || !map) return;
+      const center = map.getCenter();
+      const payload = {
+        lat: Number(center.lat.toFixed(6)),
+        lng: Number(center.lng.toFixed(6)),
+        zoom: Number(map.getZoom() || 13),
+        selectedCustomerId: selectedCustomerId || null,
+        ...extra
+      };
+      sessionStorage.setItem(MAP_STATE_KEY, JSON.stringify(payload));
+    } catch {}
+  }
+
+  function restoreSelectedCustomerFromState(state) {
+    if (!state?.selectedCustomerId) return;
+    const ref = customerMarkerRefs.get(String(state.selectedCustomerId));
+    if (!ref?.touchMarker) return;
+    selectedCustomerId = Number(state.selectedCustomerId);
+    selectedCustomerAnchorMarker = ref.touchMarker;
+    requestAnimationFrame(() => {
+      try { openCustomerCard(ref.touchMarker); } catch {}
+    });
+  }
+
+  function getMapLinkStyle(link) {
+    const kind = String(link?.link_kind || '').trim().toLowerCase();
+    const sizeText = String(link?.cable_size || '').trim();
+    const parsedSize = Number((sizeText.match(/\d+/) || [0])[0] || 0);
+    const weight = Math.max(3, Math.min(9, parsedSize ? Math.round(parsedSize / 12) + 2 : kind === 'backbone' ? 6 : 4));
+    if (kind === 'backbone') {
+      return { color: '#8b5cf6', weight, opacity: 0.9, dashArray: null };
+    }
+    return { color: '#14b8a6', weight, opacity: 0.88, dashArray: '10, 8' };
+  }
+
+  function buildBackbonePopupHtml(link) {
+    const kindText = String(link?.link_kind || '').trim().toLowerCase() === 'backbone' ? 'Backbone' : 'ODP ke ODP';
+    const sizeText = String(link?.cable_size || '').trim() || '-';
+    return `
+      <div class="odp-popup">
+        <div class="odp-popup-head">
+          <span class="odp-popup-badge">${escapeHtml(kindText)}</span>
+          <div class="odp-popup-name">${escapeHtml(String(link?.from_odp_name || 'ODP').trim())} → ${escapeHtml(String(link?.to_odp_name || 'ODP').trim())}</div>
+        </div>
+        <div class="odp-popup-section">
+          <div class="odp-popup-meta">
+            <div class="odp-popup-meta-row"><i class="bi bi-diagram-3"></i><span>${escapeHtml(kindText)}</span></div>
+            <div class="odp-popup-meta-row"><i class="bi bi-hdd-network"></i><span>${escapeHtml(sizeText)}</span></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function normalizeCustomerPath(pathCoords, customerCoord, odpCoord) {
+    const valid = Array.isArray(pathCoords) ? pathCoords.filter((item) => Array.isArray(item) && item.length >= 2) : [];
+    if (valid.length < 2) return [odpCoord, customerCoord];
+    const first = valid[0];
+    const last = valid[valid.length - 1];
+    const firstToOdp = Math.hypot(Number(first[0] || 0) - Number(odpCoord[0] || 0), Number(first[1] || 0) - Number(odpCoord[1] || 0));
+    const lastToOdp = Math.hypot(Number(last[0] || 0) - Number(odpCoord[0] || 0), Number(last[1] || 0) - Number(odpCoord[1] || 0));
+    return firstToOdp <= lastToOdp ? valid : valid.slice().reverse();
+  }
+
+  function getOdpConnectedCustomers(odpId) {
+    return customers
+      .filter((cust) => Number(cust.odp_id || 0) === Number(odpId || 0))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id-ID', { sensitivity: 'base' }));
+  }
+
+  function buildOdpPopupHtml(odp) {
+    const connectedCustomers = getOdpConnectedCustomers(odp.id);
+    const previewCustomers = connectedCustomers.slice(0, 4);
+    const hiddenCount = Math.max(0, connectedCustomers.length - previewCustomers.length);
+    const capacity = Math.max(1, Number(odp.port_capacity || 16) || 16);
+    const usedCount = connectedCustomers.length;
+    const remaining = Math.max(0, capacity - usedCount);
+    const usagePercent = Math.max(0, Math.min(100, (usedCount / capacity) * 100));
+    const linkedPort = String(odp.pon_port || '').trim();
+    const linkedOlt = String(odp.olt_name || '').trim();
+    const connectionSource = [linkedOlt, linkedPort].filter(Boolean).join(' • ') || '-';
+    const coordinates = `${Number(odp.lat || 0).toFixed(6)}, ${Number(odp.lng || 0).toFixed(6)}`;
+    const mapsLink = buildMapsLink(odp.lat, odp.lng);
+    const customersHtml = previewCustomers.length
+      ? previewCustomers.map((cust) => {
+          const label = String(cust.pppoe_username || cust.name || `Customer #${cust.id}`).trim();
+          return `<div class="odp-popup-list-item"><span class="odp-popup-list-dot"></span><span>${escapeHtml(label)}</span></div>`;
+        }).join('') + (hiddenCount > 0 ? `<div class="odp-popup-list-more">+${hiddenCount} pelanggan lainnya</div>` : '')
+      : '<div class="odp-popup-empty">Belum ada pelanggan terhubung.</div>';
+    const safePayload = encodeURIComponent(JSON.stringify({
+      id: Number(odp.id || 0),
+      name: odp.name || '',
+      lat: odp.lat || '',
+      lng: odp.lng || '',
+      description: odp.description || '',
+      olt_id: odp.olt_id || '',
+      olt_name: odp.olt_name || '',
+      pon_port: odp.pon_port || '',
+      port_capacity: capacity
+    }));
+
+    return `
+      <div class="odp-popup">
+        <div class="odp-popup-head">
+          <span class="odp-popup-badge">ODP Box</span>
+          <div class="odp-popup-name">${escapeHtml(odp.name || 'ODP')}</div>
+          <a href="${mapsLink}" target="_blank" class="odp-popup-link"><i class="bi bi-pin-map"></i><span>${escapeHtml(coordinates)}</span></a>
+          <button type="button" class="odp-copy-btn" onclick="copyOdpInfo(${Number(odp.id || 0)})"><i class="bi bi-copy"></i> Copy Info</button>
+        </div>
+        <div class="odp-usage-card">
+          <div class="odp-usage-head">
+            <span>Slot Usage</span>
+            <span><strong>${usedCount}</strong> / ${capacity}</span>
+          </div>
+          <div class="odp-usage-bar"><span style="width:${usagePercent.toFixed(2)}%"></span></div>
+          <div class="odp-usage-foot">
+            <span>Available:</span>
+            <strong>${remaining} port${remaining === 1 ? '' : 's'}</strong>
+          </div>
+        </div>
+        <div class="odp-popup-section">
+          <div class="odp-popup-section-title">Connected from:</div>
+          <div class="odp-popup-meta">
+            <div class="odp-popup-meta-row"><i class="bi bi-diagram-3"></i><span>${escapeHtml(connectionSource)}</span></div>
+          </div>
+        </div>
+        <div class="odp-popup-section">
+          <div class="odp-popup-section-title">Connected to ONTs (${usedCount}):</div>
+          <div class="odp-popup-list">${customersHtml}</div>
+        </div>
+        <div class="odp-popup-actions">
+          <button type="button" class="btn btn-sm btn-odp-primary" onclick="editOdpFromPopup('${safePayload}')"><i class="bi bi-pencil-square"></i> Edit ODP</button>
+          <div class="odp-popup-actions-row">
+            <button type="button" class="btn btn-sm btn-g" onclick="startBackboneLinkFromOdp(${Number(odp.id || 0)})"><i class="bi bi-share"></i> Jalur Backbone</button>
+          </div>
+          <div class="odp-popup-actions-row">
+            <button type="button" class="btn btn-sm btn-odp-success" onclick="editOdpLocationFromPopup('${safePayload}')"><i class="bi bi-geo-alt"></i> Edit Lokasi</button>
+            <button type="button" class="btn btn-sm btn-odp-danger" onclick="deleteOdpFromPopup(${Number(odp.id || 0)}, '${encodeURIComponent(String(odp.name || 'ODP'))}')"><i class="bi bi-trash"></i> Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const odpMarkers = {}; // Store ODP coordinates and marker refs for line mapping
   odps.forEach(odp => {
     if (odp.lat && odp.lng) {
-      odpMarkers[odp.id] = [parseFloat(odp.lat), parseFloat(odp.lng)];
+      const odpCoord = [parseFloat(odp.lat), parseFloat(odp.lng)];
       const marker = L.marker([odp.lat, odp.lng], {
+        bubblingMouseEvents: false,
         icon: L.divIcon({
           html: renderOdpBoxIcon('marker-odp'),
           className: 'custom-div-icon',
           iconSize: [24, 20],
           iconAnchor: [12, 10]
         })
-      }).addTo(map);
+      }).addTo(odpLayer);
+      odpCoord.marker = marker;
+      odpCoord.odp = odp;
+      odpMarkers[String(odp.id)] = odpCoord;
       
-      marker.bindPopup(`
-        <div class="popup-content">
-          <h6>${odp.name}</h6>
-          <div><strong>${I18N.popupDescription}:</strong> ${odp.description || '-'}</div>
-          <div><strong>${I18N.popupLocation}:</strong> ${odp.lat}, ${odp.lng}</div>
-          <div class="popup-actions">
-            <button class="btn btn-sm btn-p" onclick='editOdp(${JSON.stringify(odp)})'>${I18N.popupEdit}</button>
-          </div>
-        </div>
-      `);
+      marker.bindPopup(buildOdpPopupHtml(odp), {
+        className: 'leaflet-odp-popup',
+        closeButton: true,
+        autoClose: true,
+        closeOnClick: true,
+        keepInView: true,
+        maxWidth: 300,
+        minWidth: 252,
+        offset: L.point(0, -6),
+        autoPanPaddingTopLeft: L.point(18, 18),
+        autoPanPaddingBottomRight: L.point(18, 18)
+      });
+      marker.on('click', (event) => {
+        if (linkingBackboneSourceOdpId) {
+          if (event) L.DomEvent.stop(event);
+          const sourceId = Number(linkingBackboneSourceOdpId || 0);
+          const targetId = Number(odp.id || 0);
+          if (sourceId && targetId && sourceId !== targetId) {
+            const existing = (networkLinks || []).find((item) =>
+              (Number(item.from_odp_id || 0) === sourceId && Number(item.to_odp_id || 0) === targetId)
+              || (Number(item.from_odp_id || 0) === targetId && Number(item.to_odp_id || 0) === sourceId)
+            );
+            linkingBackboneSourceOdpId = null;
+            updateBackboneLinkBar();
+            startBackboneDrawing(sourceId, targetId, {
+              linkKind: existing?.link_kind || 'backbone',
+              cableSize: existing?.cable_size || '',
+              pathJson: existing?.path_json || ''
+            });
+          }
+          return;
+        }
+        if (!linkingCustomerId) return;
+        if (event) L.DomEvent.stop(event);
+        window.selectCustomerOdpTarget(odp.id);
+        try { marker.closePopup(); } catch {}
+      });
+      marker.on('popupopen', () => {
+        if (linkingCustomerId) {
+          try { marker.closePopup(); } catch {}
+        }
+      });
     }
+  });
+
+  networkLinks.forEach((link) => {
+    const fromLat = Number(link?.from_odp_lat);
+    const fromLng = Number(link?.from_odp_lng);
+    const toLat = Number(link?.to_odp_lat);
+    const toLng = Number(link?.to_odp_lng);
+    if (!Number.isFinite(fromLat) || !Number.isFinite(fromLng) || !Number.isFinite(toLat) || !Number.isFinite(toLng)) return;
+    let pathCoords = [[fromLat, fromLng], [toLat, toLng]];
+    if (link?.path_json) {
+      try {
+        const parsed = JSON.parse(link.path_json);
+        if (Array.isArray(parsed) && parsed.length >= 2) pathCoords = parsed;
+      } catch {}
+    }
+    const style = getMapLinkStyle(link);
+    const polyline = L.polyline(pathCoords, {
+      color: style.color,
+      weight: style.weight,
+      opacity: style.opacity,
+      dashArray: style.dashArray,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(backboneLayer);
+    polyline.bindPopup(buildBackbonePopupHtml(link), {
+      className: 'leaflet-odp-popup',
+      closeButton: true,
+      autoClose: true,
+      closeOnClick: true,
+      keepInView: true,
+      maxWidth: 260,
+      minWidth: 220
+    });
   });
 
   // Add Customer Markers
   customers.forEach(cust => {
     if (cust.lat && cust.lng) {
       const is_active = cust.status === 'active';
-      const iconClass = is_active ? 'marker-cust-active' : 'marker-cust-suspended';
-      const downMaxMbps = (cust.speed_down && Number(cust.speed_down) > 0) ? Math.max(1, Math.round(Number(cust.speed_down) / 1000)) : 10;
-      const upMaxMbps = (cust.speed_up && Number(cust.speed_up) > 0) ? Math.max(1, Math.round(Number(cust.speed_up) / 1000)) : 10;
+      const signalTone = getCustomerSignalTone(cust);
+      const iconClass = signalTone === 'warning'
+        ? 'marker-cust-warning'
+        : signalTone === 'good'
+          ? 'marker-cust-good'
+          : is_active
+            ? 'marker-cust-active'
+            : 'marker-cust-suspended';
       const waLink = buildWaLink(cust.phone, cust.name);
       const mapsLink = buildMapsLink(cust.lat, cust.lng);
       
       // Draw line to ODP if connected
-      if (cust.odp_id && odpMarkers[cust.odp_id]) {
-        let pathCoords = [[parseFloat(cust.lat), parseFloat(cust.lng)], odpMarkers[cust.odp_id]];
+      let customerPolyline = null;
+      if (cust.odp_id && odpMarkers[String(cust.odp_id)]) {
+        const customerCoord = [parseFloat(cust.lat), parseFloat(cust.lng)];
+        const odpCoord = odpMarkers[String(cust.odp_id)];
+        let pathCoords = [odpCoord, customerCoord];
         
         if (cust.cable_path) {
           try {
             pathCoords = JSON.parse(cust.cable_path);
           } catch(e) {}
         }
+        pathCoords = normalizeCustomerPath(pathCoords, customerCoord, odpCoord);
 
-        const polyline = L.polyline(pathCoords, {
+        customerPolyline = L.polyline(pathCoords, {
           color: is_active ? '#3b82f6' : '#ef4444',
           weight: 3,
           opacity: 0.8,
           dashArray: '10, 10',
-          className: 'flowing-line'
-        }).addTo(map);
-
-        polyline.on('click', (e) => {
-          if (currentEditingPolyline === polyline) {
-             L.DomEvent.stopPropagation(e);
-          }
-        });
+          className: 'flowing-line',
+          interactive: false
+        }).addTo(customerLayer);
       }
 
       const marker = L.marker([cust.lat, cust.lng], {
+        interactive: false,
+        keyboard: false,
+        riseOnHover: true,
+        bubblingMouseEvents: false,
         icon: L.divIcon({
-          html: `<i class="bi bi-person-fill ${iconClass}"></i>`,
-          className: 'custom-div-icon',
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
+          html: `
+            <div class="customer-marker-stack">
+              <span class="marker-cust-icon ${iconClass}"><i class="bi bi-router-fill"></i></span>
+              <span class="customer-name-inline">${escapeHtml(toShortText(cust.name || 'Pelanggan', 20))}</span>
+            </div>
+          `,
+          className: 'customer-div-icon',
+          iconSize: [136, 48],
+          iconAnchor: [68, 12]
         })
-      }).addTo(map);
+      }).addTo(customerLayer);
 
-      marker.bindPopup(`
-        <div class="cust-popup">
-          <div class="cp-head">
-            <div class="cp-avatar"><i class="bi bi-person-fill"></i></div>
-            <div class="cp-title">
-              <div class="cp-name">${cust.name}</div>
-              <div class="cp-badges">
-                <span class="cp-chip ${is_active ? 'cp-chip-active' : 'cp-chip-suspended'}"><i class="bi bi-shield-check"></i>${is_active ? I18N.statusActive : I18N.statusSuspended}</span>
-                <span class="cp-chip"><i class="bi bi-box-seam"></i>${cust.package_name || '-'}</span>
-              </div>
-            </div>
-          </div>
+      marker._customerId = cust.id;
+      marker._customerData = {
+        customer: cust,
+        isActive: is_active,
+        waLink,
+        mapsLink
+      };
+      const touchMarker = L.circleMarker([cust.lat, cust.lng], {
+        radius: 22,
+        stroke: false,
+        fill: true,
+        fillColor: '#2563eb',
+        fillOpacity: 0.01,
+        opacity: 0,
+        interactive: true,
+        bubblingMouseEvents: false
+      }).addTo(customerTouchLayer);
 
-          <div class="cp-meta">
-            <div class="cp-meta-item"><i class="bi bi-router"></i><span>${cust.pppoe_username || '-'}</span></div>
-            <div class="cp-meta-item"><i class="bi bi-tag"></i><span>${cust.genieacs_tag || '-'}</span></div>
-            <div class="cp-meta-item"><i class="bi bi-receipt"></i><span>${Number(cust.unpaid_count || 0)} belum bayar</span></div>
-            <div class="cp-meta-item"><i class="bi bi-geo-alt"></i><span>${cust.address || '-'}</span></div>
-          </div>
+      touchMarker._customerId = cust.id;
+      touchMarker._customerData = marker._customerData;
+      touchMarker._visualMarkerRef = marker;
+      touchMarker._polylineRef = customerPolyline;
+      touchMarker.on('click', (event) => {
+        if (relocatingCustomerId) {
+          const targetLatLng = event?.latlng || touchMarker.getLatLng();
+          setCustomerRelocatePoint(targetLatLng);
+          return;
+        }
+        if (Date.now() < suppressCustomerOpenUntil) return;
+        lastCustomerMapTapAt = Date.now();
+        if (event && event.originalEvent) {
+          if (typeof event.originalEvent.preventDefault === 'function') event.originalEvent.preventDefault();
+          if (typeof event.originalEvent.stopPropagation === 'function') event.originalEvent.stopPropagation();
+        }
+        openCustomerCard(touchMarker);
+      });
 
-          <div class="cp-traffic">
-            <div class="cp-traffic-head"><i class="bi bi-activity"></i><span>Trafik Realtime</span></div>
-            <div class="cp-traffic-grid">
-              <div class="cp-chart">
-                <div class="cp-chart-label"><i class="bi bi-download"></i><span>Download</span></div>
-                <canvas class="cp-spark" id="cust_${cust.id}_dl_chart" width="160" height="70" data-max="${downMaxMbps}"></canvas>
-                <div class="cp-overlay" id="cust_${cust.id}_dl_state"></div>
-              </div>
-              <div class="cp-chart">
-                <div class="cp-chart-label"><i class="bi bi-upload"></i><span>Upload</span></div>
-                <canvas class="cp-spark" id="cust_${cust.id}_ul_chart" width="160" height="70" data-max="${upMaxMbps}"></canvas>
-                <div class="cp-overlay" id="cust_${cust.id}_ul_state"></div>
-              </div>
-            </div>
-          </div>
+      customerMarkers.push(touchMarker);
+      customerMarkerRefs.set(String(cust.id), {
+        customer: cust,
+        visualMarker: marker,
+        touchMarker,
+        polyline: customerPolyline,
+        odpId: cust.odp_id
+      });
+    }
+  });
 
-          <div class="popup-actions">
-             <button onclick="startCableDrawing(${cust.id}, ${cust.lat}, ${cust.lng}, ${cust.odp_id})" class="btn btn-sm btn-p"><i class="bi bi-pencil-fill me-1"></i>Gambar Jalur</button>
-             <a href="/admin/customers?search=${encodeURIComponent(cust.name || '')}" class="btn btn-sm btn-g"><i class="bi bi-eye me-1"></i>Detail</a>
-             <a href="${waLink}" target="_blank" class="btn btn-sm btn-wa"><i class="bi bi-whatsapp"></i></a>
+  const roleIconMap = {
+    technician: 'bi-person-workspace',
+    agent: 'bi-person-badge',
+    collector: 'bi-person-walking',
+    cashier: 'bi-person-vcard'
+  };
+
+  function formatLastSeen(seconds) {
+    const safe = Math.max(0, Number(seconds || 0) || 0);
+    if (safe < 60) return `${safe} dtk lalu`;
+    if (safe < 3600) return `${Math.max(1, Math.round(safe / 60))} mnt lalu`;
+    return `${Math.max(1, Math.round(safe / 3600))} jam lalu`;
+  }
+
+  function buildStaffMapsLink(lat, lng, name) {
+    const query = [lat, lng].every((value) => Number.isFinite(Number(value)))
+      ? `${lat},${lng}`
+      : String(name || '').trim();
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`;
+  }
+
+  let allStaffLocations = Array.isArray(staffLocations) ? staffLocations.slice() : [];
+  let currentStaffRoleFilter = 'all';
+  const hiddenStaffKeys = new Set();
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function getStaffKey(staff) {
+    const role = String(staff?.role || '').trim().toLowerCase() || 'staff';
+    const employeeId = Number(staff?.employee_id || 0) || 0;
+    const username = String(staff?.username || '').trim().toLowerCase();
+    return `${role}:${employeeId || username || '0'}`;
+  }
+
+  function getStaffMotionMeta(staff) {
+    const age = Math.max(0, Number(staff?.last_seen_seconds || 0) || 0);
+    const moving = age <= 180;
+    return moving
+      ? {
+          key: 'moving',
+          label: 'Bergerak',
+          icon: 'bi-activity',
+          className: 'staff-live-motion-moving'
+        }
+      : {
+          key: 'idle',
+          label: 'Diam',
+          icon: 'bi-pause-circle',
+          className: 'staff-live-motion-idle'
+        };
+  }
+
+  function computeStaffCounts(rows) {
+    const counts = { all: 0, technician: 0, agent: 0, collector: 0, cashier: 0 };
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const role = String(row?.role || '').trim().toLowerCase();
+      counts.all += 1;
+      if (Object.prototype.hasOwnProperty.call(counts, role)) counts[role] += 1;
+    }
+    return counts;
+  }
+
+  function updateStaffCounts(counts) {
+    const safe = counts || computeStaffCounts(allStaffLocations);
+    const map = {
+      all: 'staffCountAll',
+      technician: 'staffCountTechnician',
+      agent: 'staffCountAgent',
+      collector: 'staffCountCollector',
+      cashier: 'staffCountCashier'
+    };
+    Object.entries(map).forEach(([role, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(safe[role] || 0);
+    });
+    const summary = document.querySelector('.map-stats .msc:last-child .val');
+    if (summary) summary.textContent = String(safe.all || 0);
+  }
+
+  function syncStaffFilterUi() {
+    document.querySelectorAll('[data-staff-role]').forEach((button) => {
+      button.classList.toggle('active', button.getAttribute('data-staff-role') === currentStaffRoleFilter);
+    });
+  }
+
+  let staffPanelCollapsed = window.matchMedia('(max-width: 768px)').matches;
+
+  function syncStaffPanelToggle() {
+    const panel = document.getElementById('staffLivePanel');
+    const button = document.getElementById('mapStaffPanelToggle');
+    if (!panel || !button) return;
+    panel.classList.toggle('is-collapsed', !!staffPanelCollapsed);
+    button.textContent = staffPanelCollapsed ? 'Tampilkan Karyawan Live' : 'Sembunyikan Karyawan Live';
+  }
+
+  window.toggleStaffPanel = function toggleStaffPanel() {
+    staffPanelCollapsed = !staffPanelCollapsed;
+    syncStaffPanelToggle();
+    return false;
+  };
+
+  function normalizeSearchText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function findCustomerByQuery(query) {
+    const needle = normalizeSearchText(query);
+    if (!needle) return null;
+    let best = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const customer of customers) {
+      const fields = [
+        String(customer.name || ''),
+        String(customer.pppoe_username || ''),
+        String(customer.genieacs_tag || ''),
+        String(customer.phone || ''),
+        String(customer.address || '')
+      ];
+      for (const rawField of fields) {
+        const field = normalizeSearchText(rawField);
+        if (!field) continue;
+        if (field === needle) return customer;
+        const idx = field.indexOf(needle);
+        if (idx >= 0) {
+          const score = idx + Math.max(0, field.length - needle.length) / 100;
+          if (score < bestScore) {
+            best = customer;
+            bestScore = score;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  window.focusCustomerById = function focusCustomerById(id) {
+    const ref = customerMarkerRefs.get(String(id));
+    if (!ref || !ref.touchMarker) return false;
+    const latlng = ref.touchMarker.getLatLng();
+    setSelectedCustomer(ref.touchMarker);
+    map.setView(latlng, Math.max(17, Number(map.getZoom() || 0)), { animate: true });
+    openCustomerCard(ref.touchMarker);
+    return true;
+  };
+
+  window.submitMapSearch = function submitMapSearch(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    const input = document.getElementById('mapCustomerSearch');
+    const query = input ? input.value : '';
+    const customer = findCustomerByQuery(query);
+    if (!customer) {
+      alert('Pelanggan tidak ditemukan di peta.');
+      return false;
+    }
+    window.focusCustomerById(customer.id);
+    return false;
+  };
+
+  function buildStaffPopupHtml(staff) {
+    const lat = Number(staff.lat);
+    const lng = Number(staff.lng);
+    const role = String(staff.role || '').trim().toLowerCase();
+    const roleLabel = String(staff.role_label || role || 'Karyawan');
+    const markerIcon = roleIconMap[role] || 'bi-person-badge';
+    const mapsLink = buildStaffMapsLink(lat, lng, staff.name);
+    const phoneDigits = String(staff.phone || '').replace(/\D/g, '');
+    const waHref = phoneDigits ? `https://wa.me/${encodeURIComponent(phoneDigits)}` : '';
+    const motion = getStaffMotionMeta(staff);
+
+    return `
+      <div class="staff-popup">
+        <div class="staff-popup-head">
+          <div class="staff-avatar"><i class="bi ${markerIcon}"></i></div>
+          <div class="staff-title">
+            <div class="staff-name">${escapeHtml(staff.name || 'Karyawan')}</div>
+            <div class="staff-role"><i class="bi bi-broadcast-pin"></i>${escapeHtml(roleLabel)}</div>
           </div>
         </div>
-      `);
+        <div class="staff-meta">
+          <div class="staff-meta-item"><i class="bi bi-person-badge"></i><span>${escapeHtml(staff.username || '-')}</span></div>
+          <div class="staff-meta-item"><i class="bi bi-telephone"></i><span>${escapeHtml(staff.phone || '-')}</span></div>
+          <div class="staff-meta-item"><i class="bi bi-crosshair"></i><span>Akurasi ${Math.max(0, Math.round(Number(staff.accuracy || 0) || 0))} m</span></div>
+          <div class="staff-meta-item"><i class="bi ${motion.icon}"></i><span>${motion.label}</span></div>
+          <div class="staff-meta-item"><i class="bi bi-clock-history"></i><span>${escapeHtml(formatLastSeen(staff.last_seen_seconds))}</span></div>
+        </div>
+        <div class="popup-actions">
+          <a href="${mapsLink}" target="_blank" class="btn btn-sm btn-g"><i class="bi bi-sign-turn-right me-1"></i>Rute</a>
+          ${waHref ? `<a href="${waHref}" target="_blank" class="btn btn-sm btn-wa"><i class="bi bi-whatsapp"></i></a>` : ''}
+        </div>
+      </div>
+    `;
+  }
 
-      marker.on('popupopen', () => startCustomerTrafficPopup(cust.id));
-      marker.on('popupclose', () => stopCustomerTrafficPopup(cust.id));
+  function buildStaffListCard(staff) {
+    const role = String(staff.role || '').trim().toLowerCase();
+    const roleLabel = String(staff.role_label || role || 'Karyawan');
+    const markerIcon = roleIconMap[role] || 'bi-person-badge';
+    const mapsLink = buildStaffMapsLink(staff.lat, staff.lng, staff.name);
+    const phoneDigits = String(staff.phone || '').replace(/\D/g, '');
+    const waHref = phoneDigits ? `https://wa.me/${encodeURIComponent(phoneDigits)}` : '';
+    const staffKey = getStaffKey(staff);
+    const motion = getStaffMotionMeta(staff);
+    const isHidden = hiddenStaffKeys.has(staffKey);
+
+    return `
+      <div class="staff-live-card ${isHidden ? 'is-hidden' : ''}">
+        <div class="staff-live-card-head">
+          <div class="staff-live-card-title">
+            <div class="staff-live-card-name">${escapeHtml(staff.name || 'Karyawan')}</div>
+            <div class="staff-live-card-badges">
+              <div class="staff-live-card-role"><i class="bi ${markerIcon}"></i>${escapeHtml(roleLabel)}</div>
+              <div class="staff-live-motion ${motion.className}"><i class="bi ${motion.icon}"></i>${motion.label}</div>
+            </div>
+          </div>
+          <div class="staff-live-card-tools">
+            <button type="button" class="btn btn-sm btn-ghost" onclick="focusStaffLocation('${escapeHtml(staffKey)}')"><i class="bi bi-crosshair"></i></button>
+            <button type="button" class="btn btn-sm btn-icon-toggle ${isHidden ? 'is-off' : 'is-on'}" onclick="toggleStaffVisibility('${escapeHtml(staffKey)}')" title="${isHidden ? 'Tampilkan' : 'Sembunyikan'}"><i class="bi ${isHidden ? 'bi-eye-slash' : 'bi-eye'}"></i></button>
+          </div>
+        </div>
+        <div class="staff-live-meta">
+          <div class="staff-live-meta-item"><i class="bi bi-person-badge"></i><span>${escapeHtml(staff.username || '-')}</span></div>
+          <div class="staff-live-meta-item"><i class="bi bi-telephone"></i><span>${escapeHtml(staff.phone || '-')}</span></div>
+          <div class="staff-live-meta-item"><i class="bi bi-crosshair"></i><span>Akurasi ${Math.max(0, Math.round(Number(staff.accuracy || 0) || 0))} m</span></div>
+          <div class="staff-live-meta-item"><i class="bi bi-clock-history"></i><span>${escapeHtml(formatLastSeen(staff.last_seen_seconds))}</span></div>
+        </div>
+        <div class="staff-live-actions">
+          <a href="${mapsLink}" target="_blank" class="btn btn-sm btn-g"><i class="bi bi-sign-turn-right me-1"></i>Rute</a>
+          ${waHref ? `<a href="${waHref}" target="_blank" class="btn btn-sm btn-wa"><i class="bi bi-whatsapp"></i> WA</a>` : `<button type="button" class="btn btn-sm btn-ghost" disabled><i class="bi bi-whatsapp"></i> WA</button>`}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderStaffLocations() {
+    const list = document.getElementById('staffLiveList');
+    const last = document.getElementById('staffLiveLast');
+    const counts = computeStaffCounts(allStaffLocations);
+    const filtered = (Array.isArray(allStaffLocations) ? allStaffLocations : []).filter((item) => {
+      if (currentStaffRoleFilter === 'all') return true;
+      return String(item?.role || '').trim().toLowerCase() === currentStaffRoleFilter;
+    });
+    const visibleStaff = filtered.filter((item) => !hiddenStaffKeys.has(getStaffKey(item)));
+
+    updateStaffCounts(counts);
+    syncStaffFilterUi();
+    staffLayer.clearLayers();
+    (Array.isArray(allStaffLocations) ? allStaffLocations : []).forEach((item) => {
+      item._markerRef = null;
+    });
+
+    for (const staff of visibleStaff) {
+      const lat = Number(staff.lat);
+      const lng = Number(staff.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const role = String(staff.role || '').trim().toLowerCase();
+      const markerIcon = roleIconMap[role] || 'bi-person-badge';
+      const markerClass = `marker-staff marker-staff-${role || 'technician'}`;
+      const marker = L.marker([lat, lng], {
+        bubblingMouseEvents: false,
+        icon: L.divIcon({
+          html: `<i class="bi ${markerIcon} ${markerClass}"></i>`,
+          className: 'custom-div-icon',
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        })
+      }).addTo(staffLayer);
+      marker.bindPopup(buildStaffPopupHtml(staff));
+      staff._markerRef = marker;
     }
+
+    if (list) {
+      list.innerHTML = filtered.length
+        ? filtered.map(buildStaffListCard).join('')
+        : '<div class="staff-live-empty">Belum ada karyawan live untuk filter ini.</div>';
+    }
+    if (last) {
+      last.textContent = `Update lokasi: ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • Ditampilkan ${visibleStaff.length}/${filtered.length}`;
+    }
+  }
+
+  window.setStaffRoleFilter = function setStaffRoleFilter(role) {
+    currentStaffRoleFilter = String(role || 'all').trim().toLowerCase() || 'all';
+    renderStaffLocations();
+  };
+
+  window.toggleStaffVisibility = function toggleStaffVisibility(staffKey) {
+    const key = String(staffKey || '').trim();
+    if (!key) return;
+    if (hiddenStaffKeys.has(key)) hiddenStaffKeys.delete(key);
+    else hiddenStaffKeys.add(key);
+    renderStaffLocations();
+  };
+
+  window.resetHiddenStaffFilters = function resetHiddenStaffFilters() {
+    hiddenStaffKeys.clear();
+    renderStaffLocations();
+  };
+
+  window.focusStaffLocation = function focusStaffLocation(staffKey) {
+    const key = String(staffKey || '').trim();
+    if (hiddenStaffKeys.has(key)) {
+      hiddenStaffKeys.delete(key);
+      renderStaffLocations();
+    }
+    const staff = allStaffLocations.find((item) => getStaffKey(item) === key);
+    if (!staff || !staff._markerRef) return;
+    const lat = Number(staff.lat);
+    const lng = Number(staff.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    map.setView([lat, lng], Math.max(16, map.getZoom() || 16), { animate: true });
+    staff._markerRef.openPopup();
+  };
+
+  async function refreshStaffLocations(showError = false) {
+    try {
+      const response = await fetch('/admin/api/staff-locations', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Gagal memuat lokasi karyawan.');
+      allStaffLocations = Array.isArray(payload.locations) ? payload.locations : [];
+      renderStaffLocations();
+    } catch (error) {
+      if (showError) {
+        alert(error.message || 'Gagal memuat lokasi karyawan.');
+      }
+    }
+  }
+
+  const overlayMaps = {
+    'ODP': odpLayer,
+    'Backbone': backboneLayer,
+    'Pelanggan': customerLayer,
+    'Karyawan': staffLayer
+  };
+
+  L.control.layers(baseMaps, overlayMaps).addTo(map);
+  syncStaffPanelToggle();
+  renderStaffLocations();
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refreshStaffLocations(false);
+  }, 30000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshStaffLocations(false);
   });
 
   // Cable Drawing Modal Map
@@ -668,11 +1602,38 @@
     });
   }
 
+  function setCableDrawingMode(mode, options = {}) {
+    drawingMode = mode === 'backbone' ? 'backbone' : 'customer';
+    const titleEl = document.querySelector('#cablePathModal .mt');
+    const hintEl = document.getElementById('cableDrawingHint');
+    const metaWrap = document.getElementById('cableDrawingMetaFields');
+    const kindEl = document.getElementById('drawingLinkKind');
+    const sizeEl = document.getElementById('drawingCableSize');
+    if (titleEl) {
+      titleEl.innerHTML = drawingMode === 'backbone'
+        ? '<i class="bi bi-diagram-3"></i> Gambar Jalur Backbone'
+        : '<i class="bi bi-pencil-fill"></i> Gambar Jalur Kabel Pelanggan';
+    }
+    if (hintEl) {
+      hintEl.innerHTML = drawingMode === 'backbone'
+        ? '<i class="bi bi-info-circle"></i> Tarik titik oranye untuk mengikuti jalan. Simpan jalur backbone setelah rute sesuai.'
+        : '<i class="bi bi-info-circle"></i> Tarik titik oranye untuk mengubah jalur. Klik pada garis untuk menambah titik lekukan baru.';
+    }
+    if (metaWrap) metaWrap.style.display = drawingMode === 'backbone' ? 'block' : 'none';
+    if (drawingMode === 'backbone') {
+      if (kindEl) kindEl.value = options.linkKind || 'backbone';
+      if (sizeEl) sizeEl.value = options.cableSize || '';
+    }
+  }
+
   function startCableDrawing(customerId, lat, lng, odpId) {
-    const odpCoord = odpMarkers[odpId];
+    const odpCoord = odpMarkers[String(odpId)];
     if (!odpCoord) return alert('Data ODP tidak ditemukan');
 
     currentEditingCustomer = customerId;
+    currentEditingBackbone = null;
+    setCableDrawingMode('customer');
+    saveMapState({ selectedCustomerId: customerId });
     openModal('cablePathModal');
 
     setTimeout(() => {
@@ -691,9 +1652,11 @@
           try { pathCoords = JSON.parse(customer.cable_path); } catch(e) {}
         }
         
+        const customerCoord = [parseFloat(lat), parseFloat(lng)];
         if (pathCoords.length <= 2) {
-          pathCoords = interpolatePoints([parseFloat(lat), parseFloat(lng)], odpCoord, 5);
+          pathCoords = interpolatePoints(odpCoord, customerCoord, 5);
         }
+        pathCoords = normalizeCustomerPath(pathCoords, customerCoord, odpCoord);
 
         drawingPolyline = L.polyline(pathCoords, {
           color: '#f59e0b', weight: 6, dashArray: '5, 5', interactive: false
@@ -708,6 +1671,51 @@
 
       } catch (err) {
         console.error("Drawing map error:", err);
+      }
+    }, 600);
+  }
+
+  function startBackboneDrawing(fromOdpId, toOdpId, options = {}) {
+    const fromOdp = getOdpById(fromOdpId);
+    const toOdp = getOdpById(toOdpId);
+    if (!fromOdp || !toOdp) return alert('ODP backbone tidak ditemukan');
+    const fromCoord = [Number(fromOdp.lat), Number(fromOdp.lng)];
+    const toCoord = [Number(toOdp.lat), Number(toOdp.lng)];
+    if (!Number.isFinite(fromCoord[0]) || !Number.isFinite(fromCoord[1]) || !Number.isFinite(toCoord[0]) || !Number.isFinite(toCoord[1])) {
+      return alert('Koordinat ODP backbone belum lengkap.');
+    }
+    currentEditingCustomer = null;
+    currentEditingBackbone = {
+      fromOdpId: Number(fromOdpId),
+      toOdpId: Number(toOdpId)
+    };
+    setCableDrawingMode('backbone', options);
+    saveMapState();
+    openModal('cablePathModal');
+    setTimeout(() => {
+      try {
+        if (drawingMap) drawingMap.remove();
+        drawingMap = L.map('cable-drawing-map').setView(fromCoord, 17);
+        L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(drawingMap);
+        let pathCoords = [];
+        if (options.pathJson) {
+          try { pathCoords = JSON.parse(options.pathJson); } catch {}
+        }
+        if (!Array.isArray(pathCoords) || pathCoords.length <= 2) {
+          pathCoords = interpolatePoints(fromCoord, toCoord, 6);
+        }
+        drawingPolyline = L.polyline(pathCoords, {
+          color: '#8b5cf6', weight: 6, interactive: false
+        }).addTo(drawingMap);
+        renderEditorMarkers();
+        setTimeout(() => {
+          drawingMap.invalidateSize();
+          drawingMap.fitBounds(drawingPolyline.getBounds(), { padding: [50, 50] });
+        }, 200);
+      } catch (err) {
+        console.error('Backbone drawing map error:', err);
       }
     }, 600);
   }
@@ -727,33 +1735,43 @@
     renderEditorMarkers();
   }
 
-  async function saveCablePath() {
-    if (!drawingPolyline || !currentEditingCustomer) return;
-    
+  async function saveDrawingPath() {
+    if (!drawingPolyline) return;
     const latlngs = drawingPolyline.getLatLngs().map(ll => [ll.lat, ll.lng]);
     const pathJson = JSON.stringify(latlngs);
-
     try {
+      if (drawingMode === 'backbone') {
+        if (!currentEditingBackbone?.fromOdpId || !currentEditingBackbone?.toOdpId) throw new Error('Jalur backbone belum lengkap');
+        const res = await fetch('/admin/api/map-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            fromOdpId: currentEditingBackbone.fromOdpId,
+            toOdpId: currentEditingBackbone.toOdpId,
+            linkKind: document.getElementById('drawingLinkKind')?.value || 'backbone',
+            cableSize: document.getElementById('drawingCableSize')?.value || '',
+            path: latlngs
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan jalur backbone.');
+        alert('Jalur backbone berhasil disimpan!');
+        saveMapState();
+        location.reload();
+        return;
+      }
+
+      if (!currentEditingCustomer) throw new Error('Pelanggan jalur kabel tidak valid');
       const res = await fetch(`/admin/api/customers/${currentEditingCustomer}/cable-path`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ path: pathJson })
       });
-      
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        const data = await res.json();
-        if (data.ok) {
-          alert('Jalur kabel berhasil disimpan!');
-          location.reload();
-        } else {
-          alert('Gagal menyimpan: ' + data.error);
-        }
-      } else {
-        const text = await res.text();
-        console.error("Server returned non-JSON response:", text);
-        alert('Gagal menyimpan: Server mengembalikan respon tidak valid (HTML/404). Periksa konsol browser.');
-      }
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || 'Gagal menyimpan jalur kabel.');
+      alert('Jalur kabel berhasil disimpan!');
+      saveMapState({ selectedCustomerId: currentEditingCustomer || selectedCustomerId || null });
+      location.reload();
     } catch (e) {
       alert('Error: ' + e.message);
     }
@@ -838,6 +1856,7 @@
   }
 
   function openModal(id) { 
+    saveMapState();
     document.getElementById(id).style.display = 'flex'; 
     if (id === 'addOdpModal') {
       const lat = document.getElementById('new_lat').value || officeCoords.lat;
@@ -847,6 +1866,18 @@
   }
 
   function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+  (function bindMapStateSubmitPersistence() {
+    const forms = [
+      document.querySelector('#addOdpModal form'),
+      document.getElementById('editOdpForm')
+    ].filter(Boolean);
+    forms.forEach((form) => {
+      form.addEventListener('submit', () => {
+        saveMapState();
+      });
+    });
+  })();
 
   function editOdp(odp) {
     document.getElementById('editOdpForm').action = '/admin/odps/' + odp.id + '/update';
@@ -866,6 +1897,82 @@
     editOdp(found);
   }
 
+  function getOdpById(id) {
+    const n = Number(id);
+    if (!Number.isFinite(n) || !Array.isArray(odps)) return null;
+    return odps.find((item) => Number(item.id) === n) || null;
+  }
+
+  function parseOdpPopupPayload(raw) {
+    if (!raw) return null;
+    try {
+      return JSON.parse(decodeURIComponent(String(raw)));
+    } catch {
+      return null;
+    }
+  }
+
+  window.copyOdpInfo = async function copyOdpInfo(id) {
+    const odp = getOdpById(id);
+    if (!odp) return false;
+    const connectedCustomers = getOdpConnectedCustomers(odp.id);
+    const capacity = Math.max(1, Number(odp.port_capacity || 16) || 16);
+    const usageText = `${connectedCustomers.length}/${capacity}`;
+    const coords = `${Number(odp.lat || 0).toFixed(6)}, ${Number(odp.lng || 0).toFixed(6)}`;
+    const source = [String(odp.olt_name || '').trim(), String(odp.pon_port || '').trim()].filter(Boolean).join(' • ') || '-';
+    const text = [
+      `ODP: ${odp.name || '-'}`,
+      `Koordinat: ${coords}`,
+      `Connected from: ${source}`,
+      `Slot usage: ${usageText}`,
+      `Pelanggan: ${connectedCustomers.map((cust) => cust.pppoe_username || cust.name || `#${cust.id}`).join(', ') || '-'}`
+    ].join('\n');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        alert('Info ODP berhasil disalin.');
+      } else {
+        throw new Error('clipboard_unavailable');
+      }
+    } catch {
+      prompt('Salin info ODP ini:', text);
+    }
+    return false;
+  };
+
+  window.editOdpFromPopup = function editOdpFromPopup(raw) {
+    const payload = parseOdpPopupPayload(raw);
+    if (!payload) return false;
+    editOdp(payload);
+    return false;
+  };
+
+  window.editOdpLocationFromPopup = function editOdpLocationFromPopup(raw) {
+    const payload = parseOdpPopupPayload(raw);
+    if (!payload) return false;
+    editOdp(payload);
+    setTimeout(() => {
+      if (editPickerMap) {
+        editPickerMap.setView([Number(payload.lat || officeCoords.lat), Number(payload.lng || officeCoords.lng)], 18);
+        editPickerMap.invalidateSize();
+      }
+    }, 320);
+    return false;
+  };
+
+  window.deleteOdpFromPopup = function deleteOdpFromPopup(id, encodedName) {
+    const name = decodeURIComponent(String(encodedName || 'ODP'));
+    if (!Number(id)) return false;
+    if (!confirm(`Hapus ODP ${name}?`)) return false;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/admin/odps/${Number(id)}/delete`;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
+    return false;
+  };
+
   function editOdpFromBtn(btn) {
     if (!btn || !btn.dataset) return;
     editOdpById(btn.dataset.odpId);
@@ -875,6 +1982,43 @@
     if (!btn || !btn.dataset) return;
     focusOdp(btn.dataset.odpId);
   }
+
+  function updateBackboneLinkBar() {
+    const bar = document.getElementById('mapBackboneLinkBar');
+    const meta = document.getElementById('mapBackboneLinkMeta');
+    const shell = document.querySelector('.map-shell');
+    if (!bar || !meta) return;
+    if (!linkingBackboneSourceOdpId) {
+      bar.classList.add('hidden');
+      if (shell && !relocatingCustomerId && !linkingCustomerId) shell.classList.remove('is-relocating');
+      return;
+    }
+    const source = getOdpById(linkingBackboneSourceOdpId);
+    meta.textContent = source
+      ? `Pilih ODP tujuan dari ${source.name}. Setelah itu jalur backbone akan dibuka untuk digambar.`
+      : 'Tap ODP tujuan untuk mulai menggambar backbone.';
+    if (shell) shell.classList.add('is-relocating');
+    bar.classList.remove('hidden');
+  }
+
+  window.startBackboneLinkFromOdp = function startBackboneLinkFromOdp(odpId) {
+    const sourceId = Number(odpId || 0);
+    if (!Number.isFinite(sourceId) || sourceId <= 0) return false;
+    stopCustomerRelocate(true);
+    stopCustomerOdpLink();
+    linkingBackboneSourceOdpId = sourceId;
+    suppressCustomerOpenUntil = Date.now() + 900;
+    saveMapState();
+    try { map.closePopup(); } catch {}
+    updateBackboneLinkBar();
+    return false;
+  };
+
+  window.cancelBackboneLinkMode = function cancelBackboneLinkMode() {
+    linkingBackboneSourceOdpId = null;
+    updateBackboneLinkBar();
+    return false;
+  };
 
   // Right Click to get coordinates
   map.on('contextmenu', function(e) {
@@ -887,14 +2031,24 @@
   });
 
   // Auto zoom to markers if exist
-  const group = L.featureGroup([...map._layers].filter(l => l instanceof L.Marker || l instanceof L.CircleMarker));
-  if (group.getLayers().length > 0) {
+  const initialSavedMapState = loadSavedMapState();
+  const baseLayerPool = Object.values(map?._layers || {}).filter((layer) => layer instanceof L.Marker || layer instanceof L.CircleMarker);
+  const group = L.featureGroup(baseLayerPool);
+  if (initialSavedMapState) {
+    map.setView([initialSavedMapState.lat, initialSavedMapState.lng], initialSavedMapState.zoom, { animate: false });
+  } else if (group.getLayers().length > 0) {
     map.fitBounds(group.getBounds().pad(0.1));
   }
 
   // Fix for blank map on load
   setTimeout(() => {
     map.invalidateSize();
+    if (initialSavedMapState) {
+      map.setView([initialSavedMapState.lat, initialSavedMapState.lng], initialSavedMapState.zoom, { animate: false });
+      restoreSelectedCustomerFromState(initialSavedMapState);
+    } else {
+      saveMapState();
+    }
   }, 500);
 
   window.onclick = function(e) {
@@ -1104,6 +2258,863 @@
     if (!Number.isFinite(la) || !Number.isFinite(lo)) return 'javascript:void(0)';
     return `https://www.google.com/maps?q=${encodeURIComponent(String(la))},${encodeURIComponent(String(lo))}`;
   }
+
+  function parseRxPowerValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw || raw === '-' || raw.toLowerCase() === 'n/a' || raw.toLowerCase() === 'unknown') return null;
+    const match = raw.replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+    if (!match) return null;
+    const parsed = Number(match[0]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function getCustomerSignalTone(customer) {
+    const rx = parseRxPowerValue(customer?.device_rx_power);
+    if (String(customer?.status || '').toLowerCase() !== 'active') return 'suspended';
+    if (rx === null) return 'default';
+    return rx <= -26 ? 'warning' : 'good';
+  }
+
+  function formatCustomerRxPower(customer) {
+    const rx = parseRxPowerValue(customer?.device_rx_power);
+    if (rx === null) {
+      return { text: 'Belum ada data', className: 'cp-rx-unknown' };
+    }
+    return rx <= -26
+      ? { text: `${rx} dBm`, className: 'cp-rx-warning' }
+      : { text: `${rx} dBm`, className: 'cp-rx-good' };
+  }
+
+  function toShortText(value, maxLength = 64) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '-';
+    return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…` : text;
+  }
+
+  function buildCustomerCardHtml(payload) {
+    const cust = payload?.customer || {};
+    const isActive = !!payload?.isActive;
+    const waLink = payload?.waLink || 'javascript:void(0)';
+    const mapsLink = payload?.mapsLink || 'javascript:void(0)';
+    const rxMeta = formatCustomerRxPower(cust);
+    const packageName = toShortText(cust.package_name || '-', 24);
+    const pppoeName = toShortText(cust.pppoe_username || cust.genieacs_tag || '-', 28);
+    const addressText = toShortText(cust.address || '-', 86);
+    return `
+      <div class="map-customer-card-head">
+        <div class="cp-head">
+          <div class="cp-avatar"><i class="bi bi-router-fill"></i></div>
+          <div class="cp-title">
+            <div class="cp-name">${escapeHtml(toShortText(cust.name || 'Pelanggan', 28))}</div>
+            <div class="cp-badges">
+              <span class="cp-chip ${isActive ? 'cp-chip-active' : 'cp-chip-suspended'}"><i class="bi bi-shield-check"></i>${isActive ? I18N.statusActive : I18N.statusSuspended}</span>
+              <span class="cp-chip"><i class="bi bi-box-seam"></i>${escapeHtml(packageName)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cust-popup">
+        <div class="cp-meta">
+          <div class="cp-meta-item"><i class="bi bi-router"></i><span>${escapeHtml(pppoeName)}</span></div>
+          <div class="cp-meta-item"><i class="bi bi-broadcast"></i><span class="${rxMeta.className}">${escapeHtml(rxMeta.text)}</span></div>
+          <div class="cp-meta-item"><i class="bi bi-geo-alt"></i><span>${escapeHtml(addressText)}</span></div>
+          <div class="cp-meta-item"><i class="bi bi-receipt"></i><span>${Number(cust.unpaid_count || 0)} belum bayar</span></div>
+        </div>
+        <div class="popup-actions">
+          <a href="/admin/customers?search=${encodeURIComponent(cust.name || '')}" class="btn btn-sm btn-popup-detail"><i class="bi bi-card-text"></i>Detail</a>
+          <a href="${mapsLink}" target="_blank" class="btn btn-sm btn-popup-route"><i class="bi bi-sign-turn-right"></i>Rute</a>
+          <a href="${waLink}" target="_blank" class="btn btn-sm btn-popup-wa"><i class="bi bi-whatsapp"></i>WA</a>
+        </div>
+        <div class="popup-actions-note">Gunakan tombol <strong>Sambung ODP</strong>, <strong>Jalur Kabel</strong>, atau <strong>Pindah Lokasi</strong> di bawah peta.</div>
+      </div>
+    `;
+  }
+
+  function setActiveCustomerMarker(marker) {
+    if (activeCustomerMarker && activeCustomerMarker !== marker) {
+      activeCustomerMarker.setZIndexOffset(0);
+    }
+    activeCustomerMarker = marker || null;
+    if (activeCustomerMarker) {
+      activeCustomerMarker.setZIndexOffset(1200);
+    }
+  }
+
+  function setSelectedCustomer(marker) {
+    if (!marker || !marker._customerData || !marker._customerData.customer) return;
+    const customerId = Number(marker._customerData.customer.id || 0);
+    if (!customerId) return;
+    selectedCustomerId = customerId;
+    selectedCustomerAnchorMarker = marker;
+    setActiveCustomerMarker(marker._visualMarkerRef || marker);
+    updateCustomerActionBar();
+    saveMapState({ selectedCustomerId: customerId });
+  }
+
+  function clearSelectedCustomer() {
+    selectedCustomerId = null;
+    selectedCustomerAnchorMarker = null;
+    if (!relocatingCustomerId) {
+      setActiveCustomerMarker(null);
+    }
+    updateCustomerActionBar();
+    saveMapState({ selectedCustomerId: null });
+  }
+
+  window.closeCustomerCard = function closeCustomerCard() {
+    suppressCustomerOpenUntil = Date.now() + 450;
+    try { map.closePopup(); } catch {}
+    activeCustomerCardId = null;
+    activeCustomerAnchorMarker = null;
+    updateCustomerActionBar();
+    saveMapState();
+  };
+
+  window.forceCloseCustomerCard = function forceCloseCustomerCard(event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    closeCustomerCard();
+    return false;
+  };
+
+  function updateCustomerActionBar() {
+    const bar = document.getElementById('mapCustomerActionBar');
+    const label = document.getElementById('mapCustomerActionLabel');
+    const moveBtn = document.getElementById('mapCustomerActionMoveBtn');
+    const odpBtn = document.getElementById('mapCustomerActionOdpBtn');
+    const cableBtn = document.getElementById('mapCustomerActionCableBtn');
+    if (!bar || !label || !moveBtn || !odpBtn || !cableBtn) return;
+    if (relocatingCustomerId || linkingCustomerId || linkingBackboneSourceOdpId || !selectedCustomerId) {
+      bar.classList.add('hidden');
+      return;
+    }
+    const ref = customerMarkerRefs.get(String(selectedCustomerId));
+    if (!ref) {
+      bar.classList.add('hidden');
+      return;
+    }
+    label.textContent = `Dipilih: ${ref.customer?.name || 'Pelanggan'}`;
+    moveBtn.setAttribute('data-customer-id', String(selectedCustomerId));
+    odpBtn.setAttribute('data-customer-id', String(selectedCustomerId));
+    cableBtn.setAttribute('data-customer-id', String(selectedCustomerId));
+    cableBtn.style.display = Number(ref.odpId || 0) > 0 ? '' : 'none';
+    bar.classList.remove('hidden');
+  }
+
+  function setOdpLinkTargetMarker(odpId) {
+    Object.values(odpMarkers || {}).forEach((entry) => {
+      const marker = entry?.marker;
+      const element = marker && typeof marker.getElement === 'function' ? marker.getElement() : null;
+      if (!element) return;
+      element.classList.toggle('is-odp-link-target', String(entry?.odp?.id || '') === String(odpId || ''));
+    });
+  }
+
+  function updateOdpLinkBar() {
+    const bar = document.getElementById('mapOdpLinkBar');
+    const meta = document.getElementById('mapOdpLinkMeta');
+    const saveBtn = document.getElementById('mapOdpLinkSaveBtn');
+    const shell = document.querySelector('.map-shell');
+    if (!bar || !meta || !saveBtn) return;
+    if (!linkingCustomerId) {
+      bar.classList.add('hidden');
+      saveBtn.disabled = true;
+      setOdpLinkTargetMarker(null);
+      if (shell && !relocatingCustomerId) shell.classList.remove('is-relocating');
+      return;
+    }
+    const ref = customerMarkerRefs.get(String(linkingCustomerId));
+    const customerName = ref?.customer?.name || 'Pelanggan';
+    const odpEntry = linkingTargetOdpId ? odpMarkers[String(linkingTargetOdpId)] : null;
+    const odpName = odpEntry?.odp?.name ? String(odpEntry.odp.name).trim() : '';
+    if (shell) shell.classList.add('is-relocating');
+    meta.textContent = odpName
+      ? `${customerName} akan disambungkan ke ODP ${odpName}. Tekan simpan untuk menerapkan.`
+      : `Tap ODP tujuan untuk ${customerName}, lalu simpan.`;
+    saveBtn.disabled = !linkingTargetOdpId;
+    setOdpLinkTargetMarker(linkingTargetOdpId);
+    bar.classList.remove('hidden');
+  }
+
+  function stopCustomerOdpLink() {
+    linkingCustomerId = null;
+    linkingTargetOdpId = null;
+    updateOdpLinkBar();
+    updateCustomerActionBar();
+  }
+
+  window.cancelCustomerOdpLink = function cancelCustomerOdpLink() {
+    stopCustomerOdpLink();
+    return false;
+  };
+
+  window.startCustomerOdpLink = function startCustomerOdpLink(id, event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    const customerId = Number(id);
+    const ref = customerMarkerRefs.get(String(customerId));
+    if (!customerId || !ref) return false;
+    stopCustomerRelocate(true);
+    selectedCustomerId = customerId;
+    selectedCustomerAnchorMarker = ref.touchMarker;
+    linkingCustomerId = customerId;
+    linkingTargetOdpId = ref.odpId ? Number(ref.odpId) : null;
+    closeCustomerCard();
+    setActiveCustomerMarker(ref._visualMarkerRef || ref.visualMarker || ref.touchMarker);
+    updateOdpLinkBar();
+    updateCustomerActionBar();
+    map.setView(ref.touchMarker.getLatLng(), Math.max(16, Number(map.getZoom() || 0)), { animate: true });
+    return false;
+  };
+
+  window.startActiveCustomerOdpLink = function startActiveCustomerOdpLink(event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    if (!selectedCustomerId) return false;
+    return window.startCustomerOdpLink(selectedCustomerId, event);
+  };
+
+  window.triggerCustomerActionOdp = function triggerCustomerActionOdp(button, event) {
+    if (button && button.blur) button.blur();
+    return window.startActiveCustomerOdpLink(event);
+  };
+
+  function handleActionOdpPress(event) {
+    const button = event?.target && event.target.closest ? event.target.closest('[data-customer-action-odp]') : null;
+    if (!button) return false;
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    window.startActiveCustomerOdpLink(event);
+    return true;
+  }
+
+  window.startActiveCustomerCablePath = function startActiveCustomerCablePath(event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    if (!selectedCustomerId) return false;
+    const ref = customerMarkerRefs.get(String(selectedCustomerId));
+    if (!ref || !Number(ref.odpId || 0)) {
+      alert('Pelanggan ini belum tersambung ke ODP.');
+      return false;
+    }
+    const latlng = ref.touchMarker.getLatLng();
+    startCableDrawing(selectedCustomerId, latlng.lat, latlng.lng, ref.odpId);
+    return false;
+  };
+
+  function handleActionCablePress(event) {
+    const button = event?.target && event.target.closest ? event.target.closest('[data-customer-action-cable]') : null;
+    if (!button) return false;
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    window.startActiveCustomerCablePath(event);
+    return true;
+  }
+
+  window.selectCustomerOdpTarget = function selectCustomerOdpTarget(odpId) {
+    if (!linkingCustomerId) return false;
+    const normalizedOdpId = Number(odpId);
+    if (!Number.isFinite(normalizedOdpId) || !odpMarkers[String(normalizedOdpId)]) return false;
+    linkingTargetOdpId = normalizedOdpId;
+    updateOdpLinkBar();
+    return false;
+  };
+
+  window.startActiveCustomerRelocate = function startActiveCustomerRelocate(event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    if (!selectedCustomerId) return false;
+    return window.startCustomerRelocate(selectedCustomerId, event);
+  };
+
+  window.triggerCustomerActionMove = function triggerCustomerActionMove(button, event) {
+    if (button && button.blur) button.blur();
+    return window.startActiveCustomerRelocate(event);
+  };
+
+  function handleActionMovePress(event) {
+    const button = event?.target && event.target.closest ? event.target.closest('[data-customer-action-move]') : null;
+    if (!button) return false;
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    window.startActiveCustomerRelocate(event);
+    return true;
+  }
+
+  function updateRelocateBar() {
+    const bar = document.getElementById('mapRelocateBar');
+    const meta = document.getElementById('mapRelocateMeta');
+    const saveBtn = document.getElementById('mapRelocateSaveBtn');
+    const shell = document.querySelector('.map-shell');
+    if (!bar || !meta || !saveBtn) return;
+    if (!relocatingCustomerId) {
+      if (shell) shell.classList.remove('is-relocating');
+      bar.classList.add('hidden');
+      saveBtn.disabled = true;
+      return;
+    }
+    if (shell) shell.classList.add('is-relocating');
+    const ref = customerMarkerRefs.get(String(relocatingCustomerId));
+    const name = ref?.customer?.name || 'Pelanggan';
+    const lat = relocatingCustomerLatLng ? Number(relocatingCustomerLatLng.lat).toFixed(6) : '-';
+    const lng = relocatingCustomerLatLng ? Number(relocatingCustomerLatLng.lng).toFixed(6) : '-';
+    meta.textContent = relocatingCustomerLatLng
+      ? `${name}: ${lat}, ${lng}. Geser titik biru atau tap titik baru di peta.`
+      : `Tap titik baru di peta untuk ${name}, lalu simpan.`;
+    saveBtn.disabled = !relocatingCustomerLatLng;
+    bar.classList.remove('hidden');
+  }
+
+  function ensureRelocatePreviewMarker() {
+    if (relocatingPreviewMarker) return relocatingPreviewMarker;
+    relocatingPreviewMarker = L.marker([officeCoords.lat, officeCoords.lng], {
+      draggable: true,
+      autoPan: true,
+      bubblingMouseEvents: false,
+      zIndexOffset: 1400,
+      icon: L.divIcon({
+        html: '<span class="customer-relocate-pin"><i class="bi bi-arrows-move"></i></span>',
+        className: 'customer-relocate-marker',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      })
+    }).addTo(customerRelocateLayer);
+    relocatingPreviewMarker.on('drag', (event) => {
+      const latlng = event?.target?.getLatLng?.();
+      if (!latlng) return;
+      relocatingCustomerLatLng = L.latLng(latlng.lat, latlng.lng);
+      updateRelocateBar();
+    });
+    relocatingPreviewMarker.on('dragend', (event) => {
+      const latlng = event?.target?.getLatLng?.();
+      if (!latlng) return;
+      relocatingCustomerLatLng = L.latLng(latlng.lat, latlng.lng);
+      updateRelocateBar();
+    });
+    return relocatingPreviewMarker;
+  }
+
+  function setRelocatingCustomerMarker(customerId) {
+    customerMarkerRefs.forEach((ref, key) => {
+      const element = ref?.visualMarker && typeof ref.visualMarker.getElement === 'function'
+        ? ref.visualMarker.getElement()
+        : null;
+      if (!element) return;
+      element.classList.toggle('is-relocating', String(key) === String(customerId || ''));
+    });
+  }
+
+  function stopCustomerRelocate(clearPreview = true) {
+    relocatingCustomerId = null;
+    relocatingCustomerLatLng = null;
+    setRelocatingCustomerMarker(null);
+    if (clearPreview && relocatingPreviewMarker) {
+      customerRelocateLayer.removeLayer(relocatingPreviewMarker);
+      relocatingPreviewMarker = null;
+    }
+    updateRelocateBar();
+    updateCustomerActionBar();
+  }
+
+  window.cancelCustomerRelocate = function cancelCustomerRelocate() {
+    stopCustomerRelocate(true);
+  };
+
+  function setCustomerRelocatePoint(latlng) {
+    if (!relocatingCustomerId || !latlng) return;
+    relocatingCustomerLatLng = L.latLng(latlng.lat, latlng.lng);
+    const preview = ensureRelocatePreviewMarker();
+    preview.setLatLng(relocatingCustomerLatLng);
+    updateRelocateBar();
+  }
+
+  window.startCustomerRelocate = function startCustomerRelocate(id, event) {
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    const customerId = Number(id);
+    const ref = customerMarkerRefs.get(String(customerId));
+    if (!customerId || !ref) return false;
+    stopCustomerOdpLink();
+    const startLatLng = ref.touchMarker.getLatLng();
+    selectedCustomerId = customerId;
+    selectedCustomerAnchorMarker = ref.touchMarker;
+    relocatingCustomerId = customerId;
+    relocatingCustomerLatLng = L.latLng(startLatLng.lat, startLatLng.lng);
+    suppressCustomerOpenUntil = Date.now() + 900;
+    setRelocatingCustomerMarker(customerId);
+    ensureRelocatePreviewMarker().setLatLng(relocatingCustomerLatLng);
+    closeCustomerCard();
+    updateRelocateBar();
+    updateCustomerActionBar();
+    map.setView(startLatLng, Math.max(17, Number(map.getZoom() || 0)), { animate: true });
+    return false;
+  };
+
+  function buildCustomerMapsLinkForMarker(ref) {
+    const latlng = ref?.touchMarker?.getLatLng?.();
+    if (!latlng) return 'javascript:void(0)';
+    return buildMapsLink(latlng.lat, latlng.lng);
+  }
+
+  function applyCustomerLocationChange(customerId, latlng) {
+    const ref = customerMarkerRefs.get(String(customerId));
+    if (!ref || !latlng) return;
+    const formattedLat = Number(latlng.lat).toFixed(6);
+    const formattedLng = Number(latlng.lng).toFixed(6);
+    ref.customer.lat = formattedLat;
+    ref.customer.lng = formattedLng;
+    ref.customer.cable_path = null;
+    ref.visualMarker.setLatLng(latlng);
+    ref.touchMarker.setLatLng(latlng);
+    if (ref.visualMarker?._customerData?.customer) {
+      ref.visualMarker._customerData.customer.lat = formattedLat;
+      ref.visualMarker._customerData.customer.lng = formattedLng;
+      ref.visualMarker._customerData.customer.cable_path = null;
+      ref.visualMarker._customerData.mapsLink = buildMapsLink(latlng.lat, latlng.lng);
+    }
+    if (ref.touchMarker?._customerData?.customer) {
+      ref.touchMarker._customerData.customer.lat = formattedLat;
+      ref.touchMarker._customerData.customer.lng = formattedLng;
+      ref.touchMarker._customerData.customer.cable_path = null;
+      ref.touchMarker._customerData.mapsLink = buildMapsLink(latlng.lat, latlng.lng);
+    }
+    const odpCoord = ref.odpId ? odpMarkers[String(ref.odpId)] : null;
+    if (odpCoord) {
+      if (ref.polyline) {
+        ref.polyline.setLatLngs([[latlng.lat, latlng.lng], odpCoord]);
+      } else {
+        const isActive = String(ref.customer.status || '').toLowerCase() === 'active';
+        ref.polyline = L.polyline([[latlng.lat, latlng.lng], odpCoord], {
+          color: isActive ? '#3b82f6' : '#ef4444',
+          weight: 3,
+          opacity: 0.8,
+          dashArray: '10, 10',
+          className: 'flowing-line',
+          interactive: false
+        }).addTo(customerLayer);
+        ref.touchMarker._polylineRef = ref.polyline;
+      }
+    }
+    if (activeCustomerCardId === customerId) {
+      activeCustomerAnchorMarker = ref.touchMarker;
+      requestAnimationFrame(() => positionCustomerCard(ref.touchMarker));
+    }
+    if (selectedCustomerId === customerId) {
+      selectedCustomerAnchorMarker = ref.touchMarker;
+    }
+    syncCustomerNameLabels();
+  }
+
+  function applyCustomerOdpLinkChange(customerId, odpId) {
+    const ref = customerMarkerRefs.get(String(customerId));
+    if (!ref) return;
+    const normalizedOdpId = odpId == null ? null : Number(odpId);
+    ref.customer.odp_id = normalizedOdpId;
+    ref.customer.cable_path = null;
+    ref.odpId = normalizedOdpId;
+    if (ref.visualMarker?._customerData?.customer) {
+      ref.visualMarker._customerData.customer.odp_id = normalizedOdpId;
+      ref.visualMarker._customerData.customer.cable_path = null;
+    }
+    if (ref.touchMarker?._customerData?.customer) {
+      ref.touchMarker._customerData.customer.odp_id = normalizedOdpId;
+      ref.touchMarker._customerData.customer.cable_path = null;
+    }
+    const customerLatLng = ref.touchMarker.getLatLng();
+    const odpCoord = normalizedOdpId ? odpMarkers[String(normalizedOdpId)] : null;
+    if (ref.polyline) {
+      customerLayer.removeLayer(ref.polyline);
+      ref.polyline = null;
+      ref.touchMarker._polylineRef = null;
+    }
+    if (odpCoord) {
+      const isActive = String(ref.customer.status || '').toLowerCase() === 'active';
+      ref.polyline = L.polyline([[customerLatLng.lat, customerLatLng.lng], odpCoord], {
+        color: isActive ? '#3b82f6' : '#ef4444',
+        weight: 3,
+        opacity: 0.8,
+        dashArray: '10, 10',
+        className: 'flowing-line',
+        interactive: false
+      }).addTo(customerLayer);
+      ref.touchMarker._polylineRef = ref.polyline;
+    }
+  }
+
+  window.saveCustomerRelocate = async function saveCustomerRelocate() {
+    if (!relocatingCustomerId || !relocatingCustomerLatLng) return false;
+    const saveBtn = document.getElementById('mapRelocateSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const response = await fetch(`/admin/api/customers/${relocatingCustomerId}/location`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: Number(relocatingCustomerLatLng.lat),
+          lng: Number(relocatingCustomerLatLng.lng),
+          clearCablePath: true
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || 'Gagal menyimpan posisi pelanggan.');
+      }
+      applyCustomerLocationChange(relocatingCustomerId, relocatingCustomerLatLng);
+      stopCustomerRelocate(true);
+      alert('Posisi pelanggan berhasil diperbarui.');
+    } catch (error) {
+      if (saveBtn) saveBtn.disabled = false;
+      alert(error.message || 'Gagal memperbarui posisi pelanggan.');
+    }
+    return false;
+  };
+
+  window.saveCustomerOdpLink = async function saveCustomerOdpLink() {
+    if (!linkingCustomerId || !linkingTargetOdpId) return false;
+    const saveBtn = document.getElementById('mapOdpLinkSaveBtn');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const response = await fetch(`/admin/api/customers/${linkingCustomerId}/odp-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          odpId: Number(linkingTargetOdpId),
+          clearCablePath: true
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || 'Gagal menyambungkan pelanggan ke ODP.');
+      }
+      applyCustomerOdpLinkChange(linkingCustomerId, linkingTargetOdpId);
+      const savedOdpId = linkingTargetOdpId;
+      const editingCustomerId = linkingCustomerId;
+      stopCustomerOdpLink();
+      if (Number.isFinite(Number(savedOdpId))) {
+        const target = odpMarkers[String(savedOdpId)];
+        if (target?.marker) {
+          try { target.marker.openPopup(); } catch {}
+        }
+      }
+      const ref = customerMarkerRefs.get(String(editingCustomerId));
+      const latlng = ref?.touchMarker?.getLatLng?.();
+      if (latlng) {
+        startCableDrawing(editingCustomerId, latlng.lat, latlng.lng, savedOdpId);
+      }
+    } catch (error) {
+      if (saveBtn) saveBtn.disabled = false;
+      alert(error.message || 'Gagal menyambungkan pelanggan ke ODP.');
+    }
+    return false;
+  };
+
+  function handleRelocateButtonPress(event) {
+    const button = event?.target && event.target.closest ? event.target.closest('[data-customer-relocate]') : null;
+    if (!button) return false;
+    const customerId = Number(button.getAttribute('data-customer-relocate') || 0);
+    if (!customerId) return false;
+    if (event) {
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    }
+    window.startCustomerRelocate(customerId, event);
+    return true;
+  }
+
+  document.addEventListener('click', (event) => {
+    handleActionOdpPress(event);
+    handleActionCablePress(event);
+    handleActionMovePress(event);
+    handleRelocateButtonPress(event);
+  }, true);
+
+  document.addEventListener('touchstart', (event) => {
+    handleActionOdpPress(event);
+    handleActionCablePress(event);
+    handleActionMovePress(event);
+    handleRelocateButtonPress(event);
+  }, { capture: true, passive: false });
+
+  document.addEventListener('touchend', (event) => {
+    handleActionOdpPress(event);
+    handleActionCablePress(event);
+    handleActionMovePress(event);
+  }, { capture: true, passive: false });
+
+  document.addEventListener('click', (event) => {
+    if (relocatingCustomerId || activeCustomerCardId == null) return;
+    const target = event.target;
+    if (!target || !target.closest) return;
+    if (target.closest('#mapCustomerActionBar')) return;
+    if (target.closest('.leaflet-popup')) return;
+    closeCustomerCard();
+  }, true);
+
+  function positionCustomerCard(marker) {
+    return marker;
+  }
+
+  function renderCustomerHitAreas() {
+    const layer = document.getElementById('mapCustomerHitLayer');
+    if (!layer) return;
+    layer.innerHTML = '';
+  }
+
+  function syncCustomerNameLabels() {
+    const showLabels = Number(map.getZoom() || 0) >= 13;
+    let missingElements = 0;
+    customerMarkers.forEach((marker) => {
+      const visualMarker = marker?._visualMarkerRef;
+      const element = visualMarker && typeof visualMarker.getElement === 'function' ? visualMarker.getElement() : null;
+      if (!element) {
+        missingElements += 1;
+        return;
+      }
+      element.classList.toggle('show-label', !!showLabels);
+    });
+    if (missingElements > 0 && !customerLabelRetryTimer) {
+      customerLabelRetryTimer = window.setTimeout(() => {
+        customerLabelRetryTimer = null;
+        syncCustomerNameLabels();
+      }, 180);
+    }
+  }
+
+  function refreshActiveCustomerCardPosition() {
+    if (!activeCustomerAnchorMarker || activeCustomerCardId == null) return;
+    try {
+      const popup = activeCustomerAnchorMarker.getPopup && activeCustomerAnchorMarker.getPopup();
+      if (popup && popup.isOpen && popup.isOpen()) {
+        activeCustomerAnchorMarker.openPopup();
+      }
+    } catch {}
+  }
+
+  function bindCustomerPopupInteractions(marker) {
+    if (!marker || !marker.getPopup) return;
+    const popup = marker.getPopup();
+    const popupEl = popup && typeof popup.getElement === 'function' ? popup.getElement() : null;
+    if (!popupEl) return;
+    popupEl.dataset.customerPopupBound = '1';
+    ['click', 'dblclick', 'pointerdown', 'touchstart', 'touchend'].forEach((eventName) => {
+      popupEl.addEventListener(eventName, (event) => {
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      }, { passive: eventName === 'touchstart' || eventName === 'touchend' });
+    });
+    const moveButton = popupEl.querySelector('[data-customer-relocate]');
+    if (moveButton) {
+      const customerId = Number(moveButton.getAttribute('data-customer-relocate') || 0);
+      const triggerRelocate = (event) => {
+        if (event) {
+          if (typeof event.preventDefault === 'function') event.preventDefault();
+          if (typeof event.stopPropagation === 'function') event.stopPropagation();
+          if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        }
+        window.startCustomerRelocate(customerId, event);
+        return false;
+      };
+      moveButton.addEventListener('click', triggerRelocate);
+      moveButton.addEventListener('touchstart', triggerRelocate, { passive: false });
+    }
+  }
+
+  function openCustomerCard(marker) {
+    if (Date.now() < suppressCustomerOpenUntil) return;
+    if (!marker || !marker._customerData || !marker._customerData.customer) return;
+    const payload = marker._customerData;
+    const customerId = Number(payload.customer.id || 0);
+    if (!customerId) return;
+    setSelectedCustomer(marker);
+    activeCustomerCardId = customerId;
+    activeCustomerAnchorMarker = marker;
+    updateCustomerActionBar();
+    const popupHtml = buildCustomerCardHtml(payload);
+    if (!marker.getPopup || !marker.getPopup()) {
+      marker.bindPopup(popupHtml, {
+        className: 'leaflet-customer-popup',
+        closeButton: true,
+        autoClose: true,
+        closeOnClick: true,
+        keepInView: true,
+        maxWidth: 280,
+        minWidth: 236,
+        offset: L.point(0, -8),
+        autoPanPaddingTopLeft: L.point(18, 18),
+        autoPanPaddingBottomRight: L.point(18, 18)
+      });
+      marker.on('popupopen', () => {
+        bindCustomerPopupInteractions(marker);
+      });
+      marker.on('popupclose', () => {
+        if (activeCustomerCardId === customerId) {
+          activeCustomerCardId = null;
+          activeCustomerAnchorMarker = null;
+          updateCustomerActionBar();
+        }
+      });
+    } else {
+      marker.setPopupContent(popupHtml);
+    }
+    marker.openPopup();
+    requestAnimationFrame(() => bindCustomerPopupInteractions(marker));
+  }
+
+  function findCustomerMarkerByTap(containerPoint, maxDistance = 26) {
+    if (!containerPoint || !customerMarkers.length) return null;
+    let nearestMarker = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const marker of customerMarkers) {
+      if (!marker) continue;
+      const markerPoint = map.latLngToContainerPoint(marker.getLatLng());
+      const dx = markerPoint.x - containerPoint.x;
+      const dy = markerPoint.y - containerPoint.y;
+      const distance = Math.sqrt((dx * dx) + (dy * dy));
+      if (distance <= maxDistance && distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestMarker = marker;
+      }
+    }
+    return nearestMarker;
+  }
+
+  function handleCustomerMapTap(containerPoint) {
+    if (relocatingCustomerId) {
+      const latlng = map.containerPointToLatLng(containerPoint);
+      setCustomerRelocatePoint(latlng);
+      return true;
+    }
+    if (linkingCustomerId) {
+      return false;
+    }
+    const marker = findCustomerMarkerByTap(containerPoint);
+    if (marker) {
+      openCustomerCard(marker);
+      return true;
+    }
+    if (activeCustomerCardId != null) {
+      closeCustomerCard();
+      return true;
+    }
+    if (selectedCustomerId != null) {
+      clearSelectedCustomer();
+      return true;
+    }
+    return false;
+  }
+
+  map.on('click', (event) => {
+    if (!relocatingCustomerId) {
+      if (Date.now() < suppressCustomerOpenUntil) return;
+      if (Date.now() - lastCustomerMapTapAt < 350) return;
+    }
+    lastCustomerMapTapAt = Date.now();
+    const containerPoint = map.latLngToContainerPoint(event.latlng);
+    handleCustomerMapTap(containerPoint);
+  });
+
+  map.on('moveend zoomend resize', () => {
+    renderCustomerHitAreas();
+    syncCustomerNameLabels();
+    refreshActiveCustomerCardPosition();
+    saveMapState();
+  });
+
+  (() => {
+    const mapElement = document.getElementById('map');
+    if (!mapElement) return;
+    let touchStartPoint = null;
+    let pointerStartPoint = null;
+
+    const isRelocateBlockedTarget = (target) => {
+      if (!target || !target.closest) return false;
+      return Boolean(
+        target.closest('.leaflet-control') ||
+        target.closest('.leaflet-popup') ||
+        target.closest('#mapCustomerActionBar') ||
+        target.closest('#mapRelocateBar')
+      );
+    };
+
+    const applyRelocatePointFromClient = (clientX, clientY) => {
+      if (!relocatingCustomerId) return false;
+      const rect = mapElement.getBoundingClientRect();
+      const point = L.point(clientX - rect.left, clientY - rect.top);
+      const latlng = map.containerPointToLatLng(point);
+      setCustomerRelocatePoint(latlng);
+      lastCustomerMapTapAt = Date.now();
+      return true;
+    };
+
+    mapElement.addEventListener('touchstart', (event) => {
+      const touch = event.touches && event.touches[0];
+      if (!touch) return;
+      touchStartPoint = { x: touch.clientX, y: touch.clientY };
+    }, { passive: true });
+
+    mapElement.addEventListener('touchend', (event) => {
+      if (!relocatingCustomerId && Date.now() < suppressCustomerOpenUntil) return;
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch) return;
+      if (isRelocateBlockedTarget(event.target)) return;
+      if (event.target && event.target.closest && event.target.closest('.leaflet-popup')) return;
+      const endPoint = { x: touch.clientX, y: touch.clientY };
+      const dx = touchStartPoint ? Math.abs(endPoint.x - touchStartPoint.x) : 0;
+      const dy = touchStartPoint ? Math.abs(endPoint.y - touchStartPoint.y) : 0;
+      touchStartPoint = null;
+      if (dx > 16 || dy > 16) return;
+      if (applyRelocatePointFromClient(endPoint.x, endPoint.y)) return;
+      const rect = mapElement.getBoundingClientRect();
+      const point = L.point(endPoint.x - rect.left, endPoint.y - rect.top);
+      lastCustomerMapTapAt = Date.now();
+      handleCustomerMapTap(point);
+    }, { passive: true });
+
+    mapElement.addEventListener('pointerdown', (event) => {
+      if (!event || event.pointerType === 'mouse') return;
+      pointerStartPoint = { x: event.clientX, y: event.clientY };
+    }, { passive: true });
+
+    mapElement.addEventListener('pointerup', (event) => {
+      if (!relocatingCustomerId || !event || event.pointerType === 'mouse') return;
+      if (isRelocateBlockedTarget(event.target)) return;
+      const dx = pointerStartPoint ? Math.abs(event.clientX - pointerStartPoint.x) : 0;
+      const dy = pointerStartPoint ? Math.abs(event.clientY - pointerStartPoint.y) : 0;
+      pointerStartPoint = null;
+      if (dx > 18 || dy > 18) return;
+      applyRelocatePointFromClient(event.clientX, event.clientY);
+    }, { passive: true });
+  })();
+
+  renderCustomerHitAreas();
+  syncCustomerNameLabels();
 </script>
 </body>
 </html>

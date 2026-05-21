@@ -884,5 +884,10 @@
     });
   })();
 </script>
+<%- include('../partials/employee_location_tracker', {
+  enabled: true,
+  endpoint: '/collector/api/location',
+  roleLabel: 'Kolektor'
+}) %>
 </body>
 </html>

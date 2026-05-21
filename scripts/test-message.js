@@ -40,7 +40,7 @@ const testMessage = `🧪 *TEST PESAN BOT*\n\n` +
     `• Koneksi WhatsApp berfungsi dengan baik\n` +
     `• Pengiriman pesan ke admin berhasil\n` +
     `• Bot siap digunakan\n\n` +
-    `🏢 *ALIJAYA DIGITAL NETWORK*`;
+    `🏢 *SICKAS*`;
 
 console.log('📝 Pesan test yang akan dikirim:');
 console.log(testMessage);

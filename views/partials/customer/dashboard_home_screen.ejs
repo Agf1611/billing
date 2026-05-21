@@ -1,4 +1,21 @@
 <section class="app-screen is-active" data-tab="home">
+  <%
+    const homeHasUnpaid = Boolean(typeof hasUnpaidInvoice !== 'undefined' ? hasUnpaidInvoice : (latestInvoice && String(latestInvoice.status || '').toLowerCase() === 'unpaid'));
+    const homeTotalUnpaid = Number(typeof totalUnpaidAmount !== 'undefined' ? totalUnpaidAmount : (homeHasUnpaid && latestInvoice ? latestInvoice.amount : 0)) || 0;
+    const homeBillingInvoice = homeHasUnpaid
+      ? (typeof primaryUnpaidInvoice !== 'undefined' && primaryUnpaidInvoice ? primaryUnpaidInvoice : latestInvoice)
+      : (typeof latestPaidInvoice !== 'undefined' && latestPaidInvoice ? latestPaidInvoice : latestInvoice);
+    const homeDueDate = homeBillingInvoice
+      ? new Date(
+          Number(homeBillingInvoice.period_year),
+          Number(homeBillingInvoice.period_month) - 1,
+          Math.min(
+            Number(homeBillingInvoice.due_day_snapshot || profileData.isolate_day || 28),
+            new Date(Number(homeBillingInvoice.period_year), Number(homeBillingInvoice.period_month), 0).getDate()
+          )
+        )
+      : null;
+  %>
   <div class="home-compact">
     <div class="home-intro">
       <h1>Selamat datang kembali,</h1>
@@ -47,20 +64,20 @@
           <div class="home-hero-info-grid">
             <div class="home-hero-info-box">
               <small>Status Tagihan</small>
-              <strong class="home-bill-state <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'warn' : 'okay' %>">
-                <%= latestInvoice && String(latestInvoice.status || '').toLowerCase() !== 'paid' ? 'Belum Bayar' : 'Aman' %>
+              <strong class="home-bill-state <%= homeHasUnpaid ? 'warn' : 'okay' %>">
+                <%= homeHasUnpaid ? 'Belum Bayar' : 'Lunas' %>
               </strong>
             </div>
             <div class="home-hero-info-box">
-              <small><%= latestInvoice ? 'Jatuh Tempo' : 'Status' %></small>
-              <strong><%= latestInvoice ? formatDate(new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month) - 1, Math.min(Number(latestInvoice.due_day_snapshot || profileData.isolate_day || 28), new Date(Number(latestInvoice.period_year), Number(latestInvoice.period_month), 0).getDate()))) : 'Tidak ada tagihan' %></strong>
+              <small><%= homeHasUnpaid ? 'Jatuh Tempo' : (homeBillingInvoice ? 'Terakhir Lunas' : 'Status') %></small>
+              <strong><%= homeHasUnpaid && homeDueDate ? formatDate(homeDueDate) : (homeBillingInvoice && homeBillingInvoice.paid_at ? formatDate(homeBillingInvoice.paid_at) : 'Tidak ada tagihan') %></strong>
             </div>
           </div>
           <div class="home-hero-payment-card">
-            <small>Nominal</small>
-            <strong><%= latestInvoice ? formatCurrency(latestInvoice.amount) : formatCurrency(monthlyPrice) %></strong>
-            <button class="primary-button home-pay-button" type="button" onclick="openAppTab('billing')">
-              <i class="bi bi-wallet2"></i> <%= latestInvoice ? 'Bayar' : 'Tagihan' %>
+            <small><%= homeHasUnpaid ? 'Total Tagihan' : 'Status Pembayaran' %></small>
+            <strong><%= homeHasUnpaid ? formatCurrency(homeTotalUnpaid) : 'Aman' %></strong>
+            <button class="primary-button home-pay-button" type="button" onclick="<%= homeHasUnpaid ? 'openPaymentModal()' : "openAppTab('billing')" %>">
+              <i class="bi <%= homeHasUnpaid ? 'bi-wallet2' : 'bi-receipt-cutoff' %>"></i> <%= homeHasUnpaid ? 'Bayar Sekarang' : 'Riwayat' %>
             </button>
           </div>
         </div>

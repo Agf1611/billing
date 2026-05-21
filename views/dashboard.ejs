@@ -50,9 +50,13 @@
   const usageEndDate = new Date();
   const liveDownloadCap = Number(trafficMaxDownMbps || Math.max(1, Math.round(Number(profileData.speed_down || 10000) / 1000) || 10));
   const liveUploadCap = Number(trafficMaxUpMbps || Math.max(1, Math.round(Number(profileData.speed_up || 10000) / 1000) || 10));
-  const unpaidInvoices = (invoices || []).filter((inv) => String(inv.status || '').toLowerCase() !== 'paid');
+  const unpaidInvoices = (invoices || []).filter((inv) => String(inv.status || '').toLowerCase() === 'unpaid');
   const paidInvoices = (invoices || []).filter((inv) => String(inv.status || '').toLowerCase() === 'paid');
-  const latestInvoice = unpaidInvoices[0] || (invoices || [])[0] || null;
+  const primaryUnpaidInvoice = unpaidInvoices[0] || null;
+  const latestPaidInvoice = paidInvoices[0] || null;
+  const latestInvoice = primaryUnpaidInvoice || latestPaidInvoice || null;
+  const hasUnpaidInvoice = unpaidInvoices.length > 0;
+  const totalUnpaidAmount = unpaidInvoices.reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
   const usersOnline = Array.isArray(connectedUsers) ? connectedUsers.filter((item) => String(item.status || '').toLowerCase() === 'online') : [];
   const connectedDeviceCount = Array.isArray(connectedUsers) ? connectedUsers.length : 0;
   const activeTickets = (tickets || []).filter((ticket) => !['resolved', 'closed', 'done'].includes(String(ticket.status || '').toLowerCase()));
@@ -60,6 +64,12 @@
   const isPppoeOnline = /online|connected|aktif/i.test(pppoeStatusText);
   const portalAccountStatus = String(profileData.status || customerData.status || 'active').trim().toLowerCase();
   const portalAccountLabel = portalAccountStatus === 'suspended' ? 'Isolir' : portalAccountStatus === 'inactive' ? 'Nonaktif' : 'Aktif';
+  const portalServiceActionLocked = portalAccountStatus === 'suspended' || portalAccountStatus === 'inactive';
+  const portalServiceLockText = portalAccountStatus === 'inactive'
+    ? 'Akun nonaktif. Pembayaran dan info tagihan tetap bisa dibuka, tetapi perubahan layanan perlu aktivasi admin.'
+    : portalAccountStatus === 'suspended'
+      ? 'Akun sedang isolir. Bayar tagihan untuk membuka kembali perubahan layanan.'
+      : '';
   const hasRouterPortalAccess = Boolean(
     (customerData.ssid && customerData.ssid !== '-') ||
     (customerData.serialNumber && customerData.serialNumber !== '-') ||
@@ -74,6 +84,8 @@
   const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
   const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
   const pushFeatureEnabled = Boolean(settings?.onesignal_enabled && settings?.onesignal_app_id);
+  const oneSignalAppId = String(settings?.onesignal_app_id || '').trim();
+  const oneSignalDirectEmbedEnabled = Boolean(pushFeatureEnabled && oneSignalAppId && [3001, 3002].includes(Number(settings?.server_port || 0)));
   const customerPushExternalId = profileData.id || customerData.id ? `customer-${profileData.id || customerData.id}` : '';
   const recentActivities = [];
 
@@ -115,6 +127,7 @@
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleString('id-ID', {
+      timeZone: 'Asia/Jakarta',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -176,7 +189,7 @@
     portalKey: 'customer',
     manifestPath: '/pwa/customer.webmanifest',
     scope: '/customer/',
-    themeColor: '#2f6bff',
+    themeColor: '#4f6ef7',
     appTitle: 'Portal Pelanggan',
     installLabel: 'Install Pelanggan'
   }) %>
@@ -194,36 +207,36 @@
   </script>
   <style>
     :root {
-      --app-bg: #eef4ff;
-      --app-surface: rgba(255, 255, 255, 0.92);
+      --app-bg: #eef3ff;
+      --app-surface: rgba(255, 255, 255, 0.94);
       --app-surface-strong: #ffffff;
-      --app-line: rgba(104, 129, 182, 0.16);
-      --app-text: #17223b;
-      --app-text-soft: #6a7897;
-      --app-blue: #2f6bff;
-      --app-blue-deep: #1d53dc;
-      --app-blue-soft: rgba(47, 107, 255, 0.12);
-      --app-danger: #f2485b;
-      --app-success: #20b26b;
-      --app-warning: #ff9e45;
-      --app-shadow: 0 24px 64px rgba(42, 74, 140, 0.16);
+      --app-line: rgba(170, 186, 215, 0.22);
+      --app-text: #1b2740;
+      --app-text-soft: #6b7b97;
+      --app-blue: #4f6ef7;
+      --app-blue-deep: #3654db;
+      --app-blue-soft: rgba(79, 110, 247, 0.12);
+      --app-danger: #e05d6d;
+      --app-success: #1ca56f;
+      --app-warning: #ec9a36;
+      --app-shadow: 0 24px 64px rgba(85, 104, 148, 0.16);
       --shell-width: min(100vw, 430px);
     }
 
     html[data-theme="dark"],
     body[data-theme="dark"] {
-      --app-bg: #07111f;
-      --app-surface: rgba(17, 27, 45, 0.92);
-      --app-surface-strong: #111d31;
-      --app-line: rgba(146, 176, 230, 0.14);
-      --app-text: #edf4ff;
-      --app-text-soft: #9aa9c8;
-      --app-blue: #69a5ff;
-      --app-blue-deep: #3c7df0;
-      --app-blue-soft: rgba(105, 165, 255, 0.14);
-      --app-danger: #ff6e7e;
-      --app-success: #33ca84;
-      --app-warning: #ffb25f;
+      --app-bg: #09111d;
+      --app-surface: rgba(17, 24, 39, 0.94);
+      --app-surface-strong: #111827;
+      --app-line: rgba(148, 163, 184, 0.16);
+      --app-text: #edf2ff;
+      --app-text-soft: #96a3bf;
+      --app-blue: #6f8dff;
+      --app-blue-deep: #4f6ef7;
+      --app-blue-soft: rgba(111, 141, 255, 0.16);
+      --app-danger: #ff7286;
+      --app-success: #35c98a;
+      --app-warning: #ffb34d;
       --app-shadow: 0 30px 70px rgba(0, 0, 0, 0.38);
     }
 
@@ -235,8 +248,8 @@
       margin: 0;
       min-height: 100%;
       background:
-        radial-gradient(circle at top left, rgba(130, 180, 255, 0.38) 0%, rgba(130, 180, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(100, 216, 255, 0.28) 0%, rgba(100, 216, 255, 0) 30%),
+        radial-gradient(circle at top left, rgba(111, 141, 255, 0.30) 0%, rgba(111, 141, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(77, 189, 255, 0.18) 0%, rgba(77, 189, 255, 0) 30%),
         linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
       font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif;
       color: var(--app-text);
@@ -246,9 +259,9 @@
     html[data-theme="dark"],
     body[data-theme="dark"] {
       background:
-        radial-gradient(circle at top left, rgba(60, 125, 240, 0.22) 0%, rgba(60, 125, 240, 0) 34%),
-        radial-gradient(circle at top right, rgba(43, 177, 255, 0.12) 0%, rgba(43, 177, 255, 0) 30%),
-        linear-gradient(180deg, #06111f 0%, #0c1628 100%);
+        radial-gradient(circle at top left, rgba(111, 141, 255, 0.18) 0%, rgba(111, 141, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(77, 189, 255, 0.10) 0%, rgba(77, 189, 255, 0) 30%),
+        linear-gradient(180deg, #09111d 0%, #111827 100%);
       color: var(--app-text);
     }
 
@@ -552,6 +565,8 @@
     body[data-theme="dark"] .portal-package-item,
     html[data-theme="dark"] .notification-item,
     body[data-theme="dark"] .notification-item,
+    html[data-theme="dark"] .notification-detail,
+    body[data-theme="dark"] .notification-detail,
     html[data-theme="dark"] .speedtest-frame.light-embed,
     body[data-theme="dark"] .speedtest-frame.light-embed {
       background: var(--app-surface) !important;
@@ -585,10 +600,18 @@
     }
 
     html[data-theme="dark"] .notification-summary-card strong,
-    body[data-theme="dark"] .notification-summary-card strong,
     html[data-theme="dark"] .notification-item strong,
-    body[data-theme="dark"] .notification-item strong {
+    body[data-theme="dark"] .notification-item strong,
+    html[data-theme="dark"] .notification-detail-subject,
+    body[data-theme="dark"] .notification-detail-subject,
+    html[data-theme="dark"] .notification-detail-sender strong,
+    body[data-theme="dark"] .notification-detail-sender strong {
       color: var(--app-text);
+    }
+
+    body[data-theme="dark"] .notification-summary-card strong,
+    html[data-theme="dark"] .notification-summary-card strong {
+      color: #fff;
     }
 
     html[data-theme="dark"] .notification-summary-card span,
@@ -598,12 +621,20 @@
     html[data-theme="dark"] .notification-item p,
     body[data-theme="dark"] .notification-item p,
     html[data-theme="dark"] .notification-time,
-    body[data-theme="dark"] .notification-time {
+    body[data-theme="dark"] .notification-time,
+    html[data-theme="dark"] .notification-detail-body,
+    body[data-theme="dark"] .notification-detail-body,
+    html[data-theme="dark"] .notification-detail-sender span,
+    body[data-theme="dark"] .notification-detail-sender span,
+    html[data-theme="dark"] .notification-detail-meta,
+    body[data-theme="dark"] .notification-detail-meta {
       color: var(--app-text-soft);
     }
 
     html[data-theme="dark"] .notification-arrow,
-    body[data-theme="dark"] .notification-arrow {
+    body[data-theme="dark"] .notification-arrow,
+    html[data-theme="dark"] .notification-detail-back,
+    body[data-theme="dark"] .notification-detail-back {
       background: rgba(105, 165, 255, 0.12);
       color: #7fb1ff;
     }
@@ -2916,20 +2947,24 @@
       gap: 6px;
       padding: 7px 11px;
       border-radius: 999px;
-      background: rgba(47, 107, 255, 0.08);
+      background: linear-gradient(180deg, rgba(79, 110, 247, 0.12), rgba(79, 110, 247, 0.07));
+      border: 1px solid rgba(79, 110, 247, 0.14);
       color: var(--app-blue);
       font-size: 11px;
       font-weight: 800;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
     }
 
     .billing-badge.status-unpaid {
-      background: rgba(255, 196, 0, 0.14);
-      color: #b7791f;
+      background: linear-gradient(180deg, rgba(236, 154, 54, 0.16), rgba(236, 154, 54, 0.08));
+      border-color: rgba(236, 154, 54, 0.18);
+      color: #b86a15;
     }
 
     .billing-badge.status-paid {
-      background: rgba(22, 163, 74, 0.12);
-      color: #15803d;
+      background: linear-gradient(180deg, rgba(28, 165, 111, 0.16), rgba(28, 165, 111, 0.08));
+      border-color: rgba(28, 165, 111, 0.18);
+      color: #158b5d;
     }
 
     .billing-actions {
@@ -2960,44 +2995,61 @@
     }
 
     .notification-summary-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
+      display: flex;
+      gap: 7px;
+      margin-bottom: 9px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .notification-summary-grid::-webkit-scrollbar,
+    .notification-filter-row::-webkit-scrollbar {
+      display: none;
     }
 
     .notification-summary-card {
-      padding: 12px 13px;
-      border-radius: 16px;
-      border: 1px solid rgba(47, 107, 255, 0.09);
+      flex: 0 0 auto;
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(79, 110, 247, 0.10);
       background: rgba(255, 255, 255, 0.86);
-      display: grid;
-      gap: 4px;
-      min-width: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       text-align: left;
+      box-shadow: none;
     }
 
     .notification-summary-card small {
       font-size: 10px;
       font-weight: 800;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
+      letter-spacing: 0;
+      text-transform: none;
       color: var(--app-text-soft);
+      white-space: nowrap;
     }
 
     .notification-summary-card strong {
-      font-size: 22px;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--app-blue);
+      color: #fff;
+      font-size: 12px;
       line-height: 1;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      color: var(--app-text);
+      font-weight: 900;
+      letter-spacing: 0;
     }
 
     .notification-summary-card span {
-      font-size: 11px;
-      line-height: 1.4;
-      font-weight: 700;
-      color: var(--app-text-soft);
+      display: none;
     }
 
     .notification-summary-card.kind-announcement { background: linear-gradient(180deg, rgba(59, 130, 246, 0.09) 0%, rgba(59, 130, 246, 0.04) 100%); }
@@ -3034,23 +3086,29 @@
 
     .notification-filter-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
+      flex-wrap: nowrap;
+      gap: 7px;
+      margin-bottom: 10px;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
 
     .notification-filter-chip {
-      border: 1px solid rgba(47, 107, 255, 0.12);
-      background: rgba(255, 255, 255, 0.8);
+      flex: 0 0 auto;
+      border: 1px solid rgba(79, 110, 247, 0.12);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.78));
       color: var(--app-text-soft);
       border-radius: 999px;
-      padding: 8px 12px;
-      font-size: 11px;
+      padding: 7px 10px;
+      font-size: 10.5px;
       font-weight: 800;
       letter-spacing: -0.01em;
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
     }
 
     .notification-filter-chip.is-active {
@@ -3079,11 +3137,12 @@
       align-items: start;
       width: 100%;
       padding: 14px;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.86);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.86));
       border: 1px solid rgba(47, 107, 255, 0.08);
       text-align: left;
       overflow: hidden;
+      box-shadow: 0 14px 30px rgba(85, 104, 148, 0.08);
     }
 
     .notification-item.unread::after {
@@ -3203,10 +3262,149 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: rgba(47, 107, 255, 0.08);
+      background: linear-gradient(180deg, rgba(79, 110, 247, 0.12), rgba(79, 110, 247, 0.07));
       color: var(--app-blue);
       margin-top: 2px;
       flex: 0 0 auto;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .notification-detail {
+      display: grid;
+      gap: 16px;
+      padding: 16px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.9));
+      border: 1px solid rgba(47, 107, 255, 0.1);
+      box-shadow: 0 18px 34px rgba(85, 104, 148, 0.1);
+    }
+
+    .notification-detail-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .notification-detail-back {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(47, 107, 255, 0.1);
+      color: var(--app-blue);
+      font-size: 17px;
+      flex: 0 0 auto;
+    }
+
+    .notification-detail-title {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .notification-detail-subject {
+      margin: 0;
+      color: var(--app-text);
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.24;
+    }
+
+    .notification-detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .notification-detail-sender {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+      padding: 12px;
+      border-radius: 18px;
+      background: rgba(47, 107, 255, 0.06);
+      border: 1px solid rgba(47, 107, 255, 0.08);
+    }
+
+    .notification-detail-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #2f6bff 0%, #10b981 100%);
+      color: #fff;
+      font-size: 18px;
+      flex: 0 0 auto;
+    }
+
+    .notification-detail-sender strong {
+      display: block;
+      color: var(--app-text);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .notification-detail-sender span {
+      display: block;
+      color: var(--app-text-soft);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .notification-detail-image {
+      width: 100%;
+      max-height: 280px;
+      border-radius: 20px;
+      object-fit: cover;
+      border: 1px solid rgba(47, 107, 255, 0.1);
+      background: rgba(47, 107, 255, 0.06);
+    }
+
+    .notification-detail-body {
+      color: var(--app-text);
+      font-size: 13px;
+      line-height: 1.68;
+      font-weight: 700;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .notification-detail-body a {
+      color: var(--app-blue);
+      font-weight: 900;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .notification-detail-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .notification-detail-action {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #2f6bff 0%, #10b981 100%);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
     }
 
     .app-notification-toast-wrap {
@@ -3312,16 +3510,18 @@
       border-radius: 999px;
       font-size: 11px;
       font-weight: 800;
-      background: rgba(47, 107, 255, 0.08);
+      background: linear-gradient(180deg, rgba(79, 110, 247, 0.12), rgba(79, 110, 247, 0.07));
+      border: 1px solid rgba(79, 110, 247, 0.14);
       color: var(--app-blue);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
 
     .ticket-status.pending,
-    .status-dot.pending { background: rgba(255, 158, 69, 0.14); color: #d36d10; }
+    .status-dot.pending { background: linear-gradient(180deg, rgba(236, 154, 54, 0.16), rgba(236, 154, 54, 0.08)); border-color: rgba(236, 154, 54, 0.18); color: #c56d12; }
     .ticket-status.closed,
-    .status-dot.closed { background: rgba(32, 178, 107, 0.14); color: #178755; }
+    .status-dot.closed { background: linear-gradient(180deg, rgba(28, 165, 111, 0.16), rgba(28, 165, 111, 0.08)); border-color: rgba(28, 165, 111, 0.18); color: #158b5d; }
     .ticket-status.open,
-    .status-dot.open { background: rgba(47, 107, 255, 0.08); color: var(--app-blue); }
+    .status-dot.open { background: linear-gradient(180deg, rgba(79, 110, 247, 0.12), rgba(79, 110, 247, 0.07)); border-color: rgba(79, 110, 247, 0.14); color: var(--app-blue); }
 
     .ticket-meta {
       margin-top: 8px;
@@ -3347,7 +3547,7 @@
       border-radius: 24px;
       text-align: center;
       border: 1px dashed rgba(47, 107, 255, 0.18);
-      background: rgba(255, 255, 255, 0.62);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 251, 255, 0.62));
       color: var(--app-text-soft);
     }
 
@@ -3528,6 +3728,15 @@
       box-shadow: none;
     }
 
+    .settings-submit[disabled],
+    .password-toggle-btn[disabled],
+    .settings-field input[disabled],
+    .settings-field textarea[disabled] {
+      cursor: not-allowed;
+      opacity: 0.58;
+      filter: grayscale(0.15);
+    }
+
     .stack-actions {
       display: grid;
       gap: 10px;
@@ -3535,8 +3744,8 @@
 
     .package-upgrade-card {
       margin-top: 16px;
-      padding: 16px;
-      border-radius: 22px;
+      padding: 14px;
+      border-radius: 24px;
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid rgba(104, 129, 182, 0.14);
       box-shadow: 0 16px 36px rgba(42, 74, 140, 0.1);
@@ -3545,10 +3754,8 @@
     }
 
     .package-upgrade-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
+      display: grid;
+      gap: 10px;
     }
 
     .package-upgrade-head h4 {
@@ -3561,22 +3768,22 @@
     .package-upgrade-head p {
       margin: 4px 0 0;
       color: var(--app-text-soft);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: 11px;
+      line-height: 1.35;
       font-weight: 700;
     }
 
     .current-package-chip {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 8px;
       padding: 9px 12px;
-      border-radius: 999px;
+      border-radius: 16px;
       background: rgba(47, 107, 255, 0.08);
       color: var(--app-blue);
       font-size: 11px;
       font-weight: 800;
-      white-space: nowrap;
+      width: 100%;
     }
 
     .portal-package-list {
@@ -3585,35 +3792,39 @@
     }
 
     .portal-package-item {
-      padding: 14px;
-      border-radius: 18px;
+      padding: 13px;
+      border-radius: 20px;
       border: 1px solid rgba(47, 107, 255, 0.12);
-      background: linear-gradient(180deg, rgba(47, 107, 255, 0.05) 0%, rgba(255, 255, 255, 0.96) 100%);
+      background: linear-gradient(180deg, rgba(47, 107, 255, 0.06) 0%, rgba(255, 255, 255, 0.98) 100%);
       box-shadow: 0 12px 24px rgba(42, 74, 140, 0.08);
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
 
     .portal-package-top {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
       gap: 12px;
     }
 
     .portal-package-top strong {
       display: block;
-      font-size: 16px;
-      font-weight: 800;
+      font-size: 15px;
+      font-weight: 900;
       letter-spacing: -0.03em;
     }
 
     .portal-package-desc {
       margin-top: 5px;
       color: var(--app-text-soft);
-      font-size: 12px;
-      line-height: 1.55;
+      font-size: 11px;
+      line-height: 1.35;
       font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
     .portal-package-price {
@@ -3623,9 +3834,9 @@
 
     .portal-package-price strong {
       display: block;
-      font-size: 17px;
+      font-size: 18px;
       color: var(--app-blue-deep);
-      font-weight: 800;
+      font-weight: 900;
     }
 
     .portal-package-price span {
@@ -3639,7 +3850,7 @@
     .portal-package-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 7px;
     }
 
     .portal-package-meta .status-detail {
@@ -3647,14 +3858,13 @@
       min-height: auto;
       padding: 8px 11px;
       border-radius: 14px;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 800;
       box-shadow: none;
     }
 
     .portal-package-form {
-      display: flex;
-      justify-content: flex-end;
+      display: block;
     }
 
     .portal-package-form .settings-submit {
@@ -3662,22 +3872,21 @@
       padding: 10px 14px;
       font-size: 12px;
       white-space: nowrap;
+      width: 100%;
     }
 
     .package-request-state {
       display: grid;
-      gap: 10px;
-      padding: 14px;
+      gap: 8px;
+      padding: 12px;
       border-radius: 18px;
       background: linear-gradient(180deg, rgba(47, 107, 255, 0.06) 0%, rgba(255, 255, 255, 0.98) 100%);
       border: 1px solid rgba(47, 107, 255, 0.12);
     }
 
     .package-request-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
+      display: grid;
+      gap: 8px;
     }
 
     .package-request-copy {
@@ -3695,28 +3904,28 @@
 
     .package-request-copy span {
       color: var(--app-text-soft);
-      font-size: 12px;
-      line-height: 1.55;
+      font-size: 11px;
+      line-height: 1.35;
       font-weight: 700;
     }
 
     .package-request-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
     }
 
     .package-request-cell {
       display: grid;
-      gap: 5px;
-      padding: 11px 12px;
+      gap: 4px;
+      padding: 10px;
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.75);
       border: 1px solid rgba(104, 129, 182, 0.14);
     }
 
     .package-request-label {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -3725,9 +3934,9 @@
 
     .package-request-value {
       color: var(--app-text);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 800;
-      line-height: 1.45;
+      line-height: 1.3;
     }
 
     .package-request-note {
@@ -3777,10 +3986,10 @@
 
     .android-nav {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 4px;
-      padding: 7px 8px;
-      border-radius: 22px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(64px, 1.18fr) minmax(0, 1fr) minmax(0, 1fr);
+      gap: 5px;
+      padding: 8px 9px 7px;
+      border-radius: 26px;
       background: rgba(255, 255, 255, 0.96);
       border: 1px solid rgba(47, 107, 255, 0.08);
       box-shadow: 0 16px 34px rgba(54, 86, 152, 0.15);
@@ -3791,19 +4000,28 @@
       border: 0;
       min-width: 0;
       background: transparent;
-      padding: 5px 3px;
-      border-radius: 14px;
+      padding: 6px 3px 5px;
+      border-radius: 17px;
       color: var(--app-text-soft);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 4px;
-      font-size: 10px;
+      gap: 5px;
+      font-size: 9.5px;
       font-weight: 800;
+      line-height: 1;
+      transition: transform .18s ease, background .18s ease, color .18s ease;
     }
 
     .android-nav button i {
+      width: 30px;
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: rgba(47, 107, 255, 0.06);
       font-size: 17px;
       line-height: 1;
     }
@@ -3813,12 +4031,40 @@
       background: rgba(47, 107, 255, 0.1);
     }
 
+    .android-nav button.is-main {
+      margin-top: -18px;
+      color: #fff;
+      background: transparent;
+    }
+
+    .android-nav button.is-main i {
+      width: 54px;
+      height: 54px;
+      border-radius: 22px;
+      color: #fff;
+      background: linear-gradient(135deg, #2f6bff 0%, #5b8dff 58%, #1bb3a6 100%);
+      box-shadow: 0 14px 28px rgba(47, 107, 255, 0.34);
+      font-size: 25px;
+    }
+
+    .android-nav button.is-main span {
+      margin-top: -1px;
+      color: var(--app-blue-deep);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .android-nav button.is-main.is-active {
+      background: transparent;
+    }
+
     .modal-content.app-modal {
       border: 0;
       border-radius: 28px;
       overflow: hidden;
-      background: linear-gradient(180deg, #fbfdff 0%, #edf4ff 100%);
-      box-shadow: 0 28px 60px rgba(54, 86, 152, 0.18);
+      background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(238,243,255,.95) 100%);
+      box-shadow: 0 28px 60px rgba(54, 86, 152, 0.20);
+      border: 1px solid rgba(79, 110, 247, 0.10);
     }
 
     .app-modal .modal-header,
@@ -3830,6 +4076,11 @@
 
     .app-modal .modal-body {
       padding: 18px 18px 24px;
+    }
+
+    .app-modal .modal-title {
+      font-weight: 900;
+      letter-spacing: -.03em;
     }
 
     .app-modal .btn-close {
@@ -3852,10 +4103,12 @@
     .payment-method-chip {
       padding: 7px 11px;
       border-radius: 999px;
-      background: rgba(47, 107, 255, 0.08);
+      background: linear-gradient(180deg, rgba(79, 110, 247, 0.12), rgba(79, 110, 247, 0.07));
+      border: 1px solid rgba(79, 110, 247, 0.14);
       color: var(--app-blue);
       font-size: 11px;
       font-weight: 800;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
     }
 
     .business-card {
@@ -4114,16 +4367,26 @@
       .quick-card .quick-icon { width: 40px; height: 40px; border-radius: 13px; font-size: 17px; }
       .quick-card h4 { font-size: 11px; }
       .quick-card p { font-size: 8.5px; }
-      .android-nav button { font-size: 8.5px; }
-      .android-nav button i { font-size: 15px; }
+      .android-nav-wrap { width: min(calc(100vw - 14px), 398px); bottom: calc(7px + env(safe-area-inset-bottom)); }
+      .android-nav { padding: 7px 7px 6px; gap: 3px; border-radius: 24px; }
+      .android-nav button { font-size: 8.5px; border-radius: 15px; }
+      .android-nav button i { width: 28px; height: 28px; border-radius: 13px; font-size: 15px; }
+      .android-nav button.is-main { margin-top: -16px; }
+      .android-nav button.is-main i { width: 52px; height: 52px; border-radius: 21px; font-size: 24px; }
+      .android-nav button.is-main span { font-size: 9.5px; }
       .speed-meter-grid { grid-template-columns: 1fr; }
       .speed-meter { grid-template-columns: minmax(0, 1fr) 94px; }
       .sparkline { width: 94px; height: 42px; }
       .status-detail { padding: 10px 13px; font-size: 11px; }
-      .package-upgrade-card { padding: 14px; border-radius: 20px; }
-      .package-upgrade-head { display: grid; gap: 8px; }
-      .portal-package-top { display: grid; gap: 8px; }
-      .portal-package-price { text-align: left; }
+      .package-upgrade-card { padding: 12px; border-radius: 20px; gap: 12px; }
+      .package-upgrade-head { gap: 8px; }
+      .package-upgrade-head h4 { font-size: 16px; }
+      .package-upgrade-head p { display: none; }
+      .current-package-chip { padding: 8px 10px; font-size: 10.5px; }
+      .package-request-grid { grid-template-columns: 1fr; }
+      .portal-package-top { gap: 8px; align-items: flex-start; }
+      .portal-package-price { text-align: right; }
+      .portal-package-desc { display: none; }
       .portal-package-form { justify-content: stretch; }
       .portal-package-form .settings-submit { width: 100%; }
       .traffic-gauge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -4148,11 +4411,11 @@
       .traffic-gauge-readout > span { font-size: 8px; }
       .traffic-gauge-meta { gap: 5px; font-size: 8px; }
       .traffic-gauge-meta span { min-height: 22px; padding: 0 8px; }
-      .notification-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .notification-summary-grid { gap: 6px; }
       .notification-toolbar { gap: 8px; }
       .notification-filter-row { gap: 6px; }
-      .notification-summary-card { padding: 10px 11px; border-radius: 15px; }
-      .notification-summary-card strong { font-size: 19px; }
+      .notification-summary-card { padding: 7px 9px; border-radius: 999px; }
+      .notification-summary-card strong { min-width: 21px; height: 21px; padding: 0 7px; font-size: 11px; }
       .notification-summary-card span { font-size: 10px; }
       .notification-item {
         grid-template-columns: auto minmax(0, 1fr);
@@ -4166,6 +4429,15 @@
       .notification-item p { font-size: 11px; }
       .notification-time,
       .notification-kind-badge { font-size: 9px; }
+      .notification-detail { padding: 13px; border-radius: 20px; gap: 13px; }
+      .notification-detail-head { gap: 10px; }
+      .notification-detail-back { width: 34px; height: 34px; border-radius: 12px; }
+      .notification-detail-subject { font-size: 15px; }
+      .notification-detail-meta { font-size: 10px; }
+      .notification-detail-sender { padding: 10px; border-radius: 16px; }
+      .notification-detail-avatar { width: 38px; height: 38px; border-radius: 14px; }
+      .notification-detail-body { font-size: 12px; line-height: 1.6; }
+      .notification-detail-action { width: 100%; justify-content: center; }
       .app-notification-toast-wrap {
         bottom: calc(96px + env(safe-area-inset-bottom));
         width: min(94vw, 340px);
@@ -4267,6 +4539,19 @@
       }
     }
   </style>
+  <% if (oneSignalDirectEmbedEnabled) { %>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer data-onesignal-web-sdk="true"></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.__CUSTOMER_ONESIGNAL_DIRECT_APP_ID = <%- JSON.stringify(oneSignalAppId) %>;
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: window.__CUSTOMER_ONESIGNAL_DIRECT_APP_ID,
+      });
+      window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED = true;
+    });
+  </script>
+  <% } %>
 </head>
 <body class="pwa-body">
   <div class="app-splash" id="appSplash" aria-hidden="true">
@@ -4308,6 +4593,11 @@
         pppoeStatusText,
         portalAccountLabel,
         latestInvoice,
+        primaryUnpaidInvoice,
+        latestPaidInvoice,
+        hasUnpaidInvoice,
+        totalUnpaidAmount,
+        unpaidInvoices,
         monthlyPrice,
         uploadBytes,
         downloadBytes,
@@ -4604,9 +4894,9 @@
           const packageRequestState = packageChangeState || {};
           const activePackageRequest = packageRequestState.activeRequest || null;
           const latestPackageRequest = packageRequestState.latestRequest || null;
-          const canRequestPackageNow = Boolean(packageRequestState.canRequestNow);
+          const canRequestPackageNow = Boolean(packageRequestState.canRequestNow) && !portalServiceActionLocked;
           const nextPackageEligibleText = packageRequestState.nextEligibleAtText || '';
-          const packageRequestReason = String(packageRequestState.reason || '').trim();
+          const packageRequestReason = portalServiceActionLocked ? portalServiceLockText : String(packageRequestState.reason || '').trim();
           const currentPortalPackageId = Number((packageRequestState.customer && packageRequestState.customer.package_id) || profileData.package_id || customerData.package_id || 0);
           const packageRequestStatusMap = {
             pending: 'Menunggu review admin',
@@ -4624,24 +4914,26 @@
             return 'warning';
           };
           const statusSourceRequest = activePackageRequest || latestPackageRequest || null;
-          const statusTitle = activePackageRequest
+          const statusTitle = portalServiceActionLocked
+            ? 'Perubahan paket dikunci'
+            : activePackageRequest
             ? 'Pengajuan perubahan paket sedang berjalan'
             : latestPackageRequest
               ? 'Status pengajuan paket terakhir'
               : 'Belum ada pengajuan aktif';
-          const statusCopy = activePackageRequest
-            ? `Pengajuan ke ${activePackageRequest.target_package_name || 'paket tujuan'} sedang diproses. Anda belum bisa membuat request baru sampai pengajuan ini selesai.`
+          const statusCopy = portalServiceActionLocked
+            ? portalServiceLockText
+            : activePackageRequest
+            ? `Ke ${activePackageRequest.target_package_name || 'paket tujuan'}`
             : latestPackageRequest
-              ? (canRequestPackageNow
-                  ? 'Pengajuan sebelumnya sudah selesai. Anda bisa membuat request baru jika memang perlu.'
-                  : `Permintaan paket berikutnya baru bisa dibuat lagi setelah ${nextPackageEligibleText || 'masa tunggu selesai'}.`)
-              : 'Anda hanya bisa memiliki 1 pengajuan aktif. Upgrade akan diproses setelah disetujui admin, sedangkan downgrade berlaku pada siklus tagihan berikutnya.';
+              ? (canRequestPackageNow ? 'Bisa pilih paket baru' : `Bisa lagi ${nextPackageEligibleText || 'nanti'}`)
+              : 'Pilih paket yang cocok.';
         %>
         <div class="package-upgrade-card" style="margin-top:0;">
           <div class="package-upgrade-head">
             <div>
               <h4>Pilihan Paket WiFi</h4>
-              <p>Ajukan perubahan paket dari portal pelanggan. Sistem akan menolak request ganda, membatasi 1 perubahan per masa tunggu, dan menyesuaikan proses upgrade atau downgrade sesuai aturan billing.</p>
+              <p>Pilih paket baru, admin akan memproses pengajuannya.</p>
             </div>
             <div class="current-package-chip">
               <i class="bi bi-check2-circle"></i>
@@ -4649,13 +4941,19 @@
             </div>
           </div>
 
+          <% if (portalServiceActionLocked || activePackageRequest || !canRequestPackageNow) { %>
           <div class="package-request-state">
             <div class="package-request-top">
               <div class="package-request-copy">
                 <strong><%= statusTitle %></strong>
                 <span><%= statusCopy %></span>
               </div>
-              <% if (statusSourceRequest) { %>
+              <% if (portalServiceActionLocked) { %>
+                <span class="status-detail warning">
+                  <i class="bi bi-lock"></i>
+                  <%= portalAccountLabel %>
+                </span>
+              <% } else if (statusSourceRequest) { %>
                 <span class="status-detail <%= packageRequestBadgeClass(String(statusSourceRequest.status || '').toLowerCase()) %>">
                   <i class="bi bi-arrow-repeat"></i>
                   <%= packageRequestStatusMap[String(statusSourceRequest.status || '').toLowerCase()] || String(statusSourceRequest.status || '').toUpperCase() %>
@@ -4673,6 +4971,7 @@
               <% } %>
             </div>
 
+            <% if (!portalServiceActionLocked && (activePackageRequest || !canRequestPackageNow)) { %>
             <div class="package-request-grid">
               <div class="package-request-cell">
                 <span class="package-request-label">Paket Saat Ini</span>
@@ -4691,6 +4990,7 @@
                 <span class="package-request-value"><%= statusSourceRequest?.effective_at ? new Date(statusSourceRequest.effective_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : (activePackageRequest ? 'Menunggu penjadwalan' : '-') %></span>
               </div>
             </div>
+            <% } %>
 
             <% if (packageRequestReason) { %>
               <div class="package-request-note">
@@ -4698,6 +4998,7 @@
               </div>
             <% } %>
           </div>
+          <% } %>
 
           <% if (!portalPackages || portalPackages.length === 0) { %>
             <div class="empty-card" style="margin:0;">
@@ -4712,14 +5013,16 @@
                   const pkgId = Number(pkg.id || 0);
                   const isCurrentPackage = pkgId === currentPortalPackageId;
                   const isRequestedTarget = activePackageRequest && Number(activePackageRequest.target_package_id || 0) === pkgId;
-                  const disableRequestButton = isCurrentPackage || isRequestedTarget || !canRequestPackageNow;
+                  const disableRequestButton = portalServiceActionLocked || isCurrentPackage || isRequestedTarget || !canRequestPackageNow;
                   const buttonLabel = isCurrentPackage
-                    ? 'Paket Aktif Saat Ini'
+                    ? 'Paket Aktif'
+                    : portalServiceActionLocked
+                      ? 'Terkunci'
                     : isRequestedTarget
-                      ? 'Sedang Diajukan'
+                      ? 'Menunggu'
                       : canRequestPackageNow
-                        ? 'Ajukan Perubahan Paket'
-                        : (nextPackageEligibleText ? `Bisa Lagi ${nextPackageEligibleText}` : 'Belum Bisa Diajukan');
+                        ? 'Pilih Paket'
+                        : (nextPackageEligibleText ? `Tunggu ${nextPackageEligibleText}` : 'Belum Bisa');
                 %>
                 <div class="portal-package-item <%= disableRequestButton ? 'is-disabled' : '' %>">
                   <div class="portal-package-top">
@@ -4746,7 +5049,7 @@
                       </span>
                     <% } %>
                   </div>
-                  <form class="portal-package-form" method="POST" action="/customer/packages/change" onsubmit="return confirm('Kirim pengajuan perubahan ke paket ini? Admin akan meninjau request Anda, dan request ganda akan ditolak otomatis.');">
+                  <form class="portal-package-form" method="POST" action="/customer/packages/change" onsubmit="return confirm('Kirim pengajuan perubahan paket ini?');">
                     <input type="hidden" name="package_id" value="<%= pkgId %>">
                     <button class="settings-submit" type="submit" <%= disableRequestButton ? 'disabled' : '' %>>
                       <i class="bi bi-arrow-repeat"></i> <%= buttonLabel %>
@@ -4764,7 +5067,6 @@
         </div>
       </section>
 
-      <% if (hasRouterPortalAccess) { %>
       <section class="app-screen" data-tab="settings">
         <div class="settings-card">
           <div class="billing-card-head">
@@ -4816,9 +5118,9 @@
             <form class="settings-form" method="POST" action="/customer/change-ssid">
               <div class="settings-field">
                 <label for="ssidField">Nama WiFi (SSID)</label>
-                <input id="ssidField" type="text" name="ssid" value="<%= customerData.ssid && customerData.ssid !== '-' ? customerData.ssid : '' %>" placeholder="Contoh: Rumah-Huda-WiFi" required>
+                <input id="ssidField" type="text" name="ssid" value="<%= customerData.ssid && customerData.ssid !== '-' ? customerData.ssid : '' %>" placeholder="Contoh: Rumah-Huda-WiFi" required <%= portalServiceActionLocked ? 'disabled' : '' %>>
               </div>
-              <button class="settings-submit" type="submit">
+              <button class="settings-submit" type="submit" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                 <i class="bi bi-broadcast-pin"></i> Simpan SSID
               </button>
             </form>
@@ -4827,14 +5129,14 @@
               <div class="settings-field">
                 <label for="wifiPasswordField">Password WiFi Baru</label>
                 <div class="password-input-wrap">
-                  <input id="wifiPasswordField" type="password" name="password" placeholder="Minimal 8 karakter" minlength="8" required>
-                  <button class="password-toggle-btn" type="button" aria-label="Lihat password" onclick="togglePasswordVisibility('wifiPasswordField', this)">
+                  <input id="wifiPasswordField" type="password" name="password" placeholder="Minimal 8 karakter" minlength="8" required <%= portalServiceActionLocked ? 'disabled' : '' %>>
+                  <button class="password-toggle-btn" type="button" aria-label="Lihat password" onclick="togglePasswordVisibility('wifiPasswordField', this)" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                     <i class="bi bi-eye"></i>
                   </button>
                 </div>
                 <div class="settings-field-note">Jika password belum berubah di perangkat setelah disimpan, coba restart modem / router Anda.</div>
               </div>
-              <button class="settings-submit" type="submit">
+              <button class="settings-submit" type="submit" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                 <i class="bi bi-shield-lock"></i> Update Password
               </button>
             </form>
@@ -4842,14 +5144,14 @@
 
           <div class="stack-actions" style="margin-top:14px;">
             <form method="POST" action="/customer/reboot" onsubmit="return confirm('Reboot perangkat pelanggan sekarang?')">
-              <button class="settings-submit secondary" type="submit" style="width:100%;">
+              <button class="settings-submit secondary" type="submit" style="width:100%;" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                 <i class="bi bi-arrow-repeat"></i> Reboot Perangkat
               </button>
             </form>
           </div>
 
           <div class="settings-inline-note">
-            Untuk keamanan, akun PPPoE, IP internet, dan serial perangkat tidak ditampilkan di aplikasi pelanggan.
+            <%= portalServiceActionLocked ? portalServiceLockText : 'Untuk keamanan, akun PPPoE, IP internet, dan serial perangkat tidak ditampilkan di aplikasi pelanggan.' %>
           </div>
         </div>
 
@@ -4909,23 +5211,22 @@
           </div>
         </div>
       </section>
-      <% } %>
     </main>
   </div>
 
   <nav class="android-nav-wrap" aria-label="Navigasi bawah">
     <div class="android-nav">
-      <button type="button" data-nav-tab="home" class="is-active">
-        <i class="bi bi-grid-1x2-fill"></i>
-        <span>Home</span>
-      </button>
       <button type="button" data-nav-tab="billing">
         <i class="bi bi-wallet2"></i>
         <span>Tagihan</span>
       </button>
-      <button type="button" data-nav-tab="traffic">
-        <i class="bi bi-activity"></i>
-        <span>Traffic</span>
+      <button type="button" data-nav-tab="settings">
+        <i class="bi bi-router"></i>
+        <span>Router</span>
+      </button>
+      <button type="button" data-nav-tab="home" class="is-active is-main">
+        <i class="bi bi-house-heart-fill"></i>
+        <span>Dashboard</span>
       </button>
       <button type="button" data-nav-tab="ticketing">
         <i class="bi bi-headset"></i>
@@ -5014,8 +5315,8 @@
       <div class="modal-content app-modal">
         <div class="modal-header">
           <div>
-            <h5 class="modal-title mb-1">Notifikasi</h5>
-            <div class="soft-muted" id="notificationModalHint"><%= notificationUnread %> notifikasi perlu perhatian</div>
+            <h5 class="modal-title mb-1">Inbox</h5>
+            <div class="soft-muted" id="notificationModalHint"><%= notificationUnread %> pesan perlu dibaca</div>
           </div>
           <button type="button" class="notification-header-action" id="markAllNotificationsBtn" onclick="markNotificationsRead()">
             <i class="bi bi-check2-all"></i> Tandai dibaca
@@ -5027,7 +5328,7 @@
           <% if (!notificationItems.length) { %>
             <div class="empty-card">
               <i class="bi bi-bell-slash"></i>
-              <strong>Belum ada notifikasi</strong>
+              <strong>Belum ada pesan</strong>
               <div>Info tagihan dan update tiket akan muncul di sini.</div>
             </div>
           <% } else { %>
@@ -5126,7 +5427,9 @@
     let notificationToastTimer = null;
     let knownNotificationSignatures = new Set((notificationState.items || []).map((item) => `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`));
     const PUSH_FEATURE_ENABLED = <%- JSON.stringify(pushFeatureEnabled) %>;
+    const ONESIGNAL_APP_ID = <%- JSON.stringify(oneSignalAppId) %>;
     const CUSTOMER_PUSH_EXTERNAL_ID = <%- JSON.stringify(customerPushExternalId) %>;
+    const ONESIGNAL_WEB_SDK_URL = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
     const TAB_META = {
       home: { eyebrow: 'Halaman Utama', title: 'Dashboard Pelanggan' },
       billing: { eyebrow: 'Pembayaran', title: 'Tagihan & Riwayat' },
@@ -5137,8 +5440,6 @@
       profile: { eyebrow: 'Profil', title: 'Profil Pelanggan' },
       settings: { eyebrow: 'Router', title: 'Router & WiFi' }
     };
-
-    const HAS_ROUTER_PORTAL_ACCESS = <%- JSON.stringify(hasRouterPortalAccess) %>;
 
     const LEGACY_HASH_MAP = {
       '#home-section': 'home',
@@ -5204,12 +5505,131 @@
       if (node) node.textContent = message;
     }
 
+    function isSecurePushOrigin() {
+      if (window.isSecureContext) return true;
+      return ['localhost', '127.0.0.1', '::1'].includes(String(window.location.hostname || '').trim().toLowerCase());
+    }
+
+    function isOneSignalOptedIn(OneSignal) {
+      const permission = OneSignal?.Notifications?.permission;
+      return Boolean(
+        OneSignal?.User?.PushSubscription?.optedIn === true ||
+        permission === true ||
+        permission === 'granted' ||
+        Notification.permission === 'granted'
+      );
+    }
+
+    function buildOneSignalInfo(OneSignal) {
+      return {
+        subscription: {
+          optedIn: isOneSignalOptedIn(OneSignal),
+          id: OneSignal?.User?.PushSubscription?.id || '',
+          token: OneSignal?.User?.PushSubscription?.token || ''
+        }
+      };
+    }
+
+    function loadOneSignalPageSdk() {
+      if (window.OneSignal || document.querySelector('script[data-onesignal-web-sdk="true"]')) {
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = ONESIGNAL_WEB_SDK_URL;
+        script.async = true;
+        script.defer = true;
+        script.dataset.onesignalWebSdk = 'true';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Gagal memuat SDK OneSignal'));
+        document.head.appendChild(script);
+      });
+    }
+
+    let oneSignalBridgePromise = null;
+    async function ensureCustomerPushBridge() {
+      if (!PUSH_FEATURE_ENABLED || !ONESIGNAL_APP_ID) return null;
+      if (window.median?.onesignal) return window.median.onesignal;
+      if (!isSecurePushOrigin()) return null;
+      if (oneSignalBridgePromise) return oneSignalBridgePromise;
+
+      oneSignalBridgePromise = (async () => {
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        await loadOneSignalPageSdk();
+
+        const OneSignal = await new Promise((resolve, reject) => {
+          window.OneSignalDeferred.push(async (OneSignalInstance) => {
+            try {
+              if (!window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED) {
+                await OneSignalInstance.init({
+                  appId: ONESIGNAL_APP_ID,
+                  notifyButton: { enable: false },
+                  allowLocalhostAsSecureOrigin: true,
+                  serviceWorkerPath: '/OneSignalSDKWorker.js',
+                  serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+                  serviceWorkerParam: { scope: '/' },
+                  autoResubscribe: true
+                });
+              }
+              resolve(OneSignalInstance);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+
+        const bridge = {
+          async login(externalId) {
+            if (externalId && typeof OneSignal.login === 'function') {
+              await OneSignal.login(String(externalId));
+            }
+            return buildOneSignalInfo(OneSignal);
+          },
+          async info() {
+            return buildOneSignalInfo(OneSignal);
+          },
+          async register() {
+            if (OneSignal?.Notifications?.requestPermission) {
+              await OneSignal.Notifications.requestPermission();
+            }
+            return buildOneSignalInfo(OneSignal);
+          },
+          async logout() {
+            if (typeof OneSignal.logout === 'function') {
+              await OneSignal.logout();
+            }
+            return true;
+          },
+          userPrivacyConsent: {
+            async grant() {
+              if (typeof OneSignal.setConsentGiven === 'function') {
+                OneSignal.setConsentGiven(true);
+              }
+              return true;
+            }
+          }
+        };
+
+        window.median = window.median || {};
+        window.median.onesignal = bridge;
+        return bridge;
+      })().catch((error) => {
+        console.warn('OneSignal web bridge gagal dipasang:', error);
+        oneSignalBridgePromise = null;
+        return null;
+      });
+
+      return oneSignalBridgePromise;
+    }
+
     async function syncCustomerPushIdentity() {
-      if (!PUSH_FEATURE_ENABLED || !CUSTOMER_PUSH_EXTERNAL_ID || !window.median?.onesignal?.login) return null;
+      if (!PUSH_FEATURE_ENABLED || !CUSTOMER_PUSH_EXTERNAL_ID) return null;
+      const pushBridge = await ensureCustomerPushBridge();
+      if (!pushBridge?.login) return null;
       try {
-        await window.median.onesignal.login(CUSTOMER_PUSH_EXTERNAL_ID);
-        if (window.median.onesignal.info) {
-          return await window.median.onesignal.info();
+        await pushBridge.login(CUSTOMER_PUSH_EXTERNAL_ID);
+        if (pushBridge.info) {
+          return await pushBridge.info();
         }
       } catch (error) {
         console.warn('OneSignal sync gagal:', error);
@@ -5222,8 +5642,9 @@
         setPushStatus('Belum diaktifkan oleh admin');
         return null;
       }
-      if (!window.median?.onesignal) {
-        setPushStatus('Aktif jika dibuka lewat aplikasi');
+      const pushBridge = await ensureCustomerPushBridge();
+      if (!pushBridge) {
+        setPushStatus('Aktif jika dibuka lewat browser HTTPS / aplikasi');
         return null;
       }
       const info = await syncCustomerPushIdentity();
@@ -5237,20 +5658,21 @@
         alert('Notifikasi aplikasi belum diaktifkan oleh admin.');
         return;
       }
-      if (!window.median?.onesignal) {
-        alert('Aktifkan dari aplikasi Median yang sudah di-install di HP Anda.');
+      const pushBridge = await ensureCustomerPushBridge();
+      if (!pushBridge) {
+        alert('Push notifikasi hanya bisa diaktifkan dari browser HTTPS, PWA, atau aplikasi yang mendukung OneSignal.');
         return;
       }
       setPushStatus('Meminta izin notifikasi...');
       try {
-        if (window.median.onesignal.userPrivacyConsent?.grant) {
-          await window.median.onesignal.userPrivacyConsent.grant();
+        if (pushBridge.userPrivacyConsent?.grant) {
+          await pushBridge.userPrivacyConsent.grant();
         }
       } catch (_) {}
       try {
         await syncCustomerPushIdentity();
-        if (window.median.onesignal.register) {
-          await window.median.onesignal.register();
+        if (pushBridge.register) {
+          await pushBridge.register();
         }
         const info = await refreshCustomerPushStatus();
         if (info?.subscription?.optedIn) {
@@ -5282,9 +5704,6 @@
 
     function openAppTab(tabName, updateHash = true) {
       let nextTab = TAB_META[tabName] ? tabName : 'home';
-      if (nextTab === 'settings' && !HAS_ROUTER_PORTAL_ACCESS) {
-        nextTab = 'home';
-      }
       closeAppMenu();
       closeAccountMenu();
       document.querySelectorAll('.app-screen').forEach((screen) => {
@@ -5354,6 +5773,20 @@
         .replace(/'/g, '&#39;');
     }
 
+    function formatDateTime(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
     function notificationKindLabel(kind) {
       if (kind === 'announcement') return 'Pengumuman';
       if (kind === 'password') return 'Password';
@@ -5391,6 +5824,105 @@
         password: list.filter((item) => item.kind === 'password').length,
         billing: list.filter((item) => item.kind === 'invoice' || item.kind === 'ticket' || item.kind === 'due-reminder').length
       };
+    }
+
+    function defaultNotificationSender(kind) {
+      if (kind === 'announcement') return { name: 'Admin', role: 'Pengumuman' };
+      if (kind === 'invoice' || kind === 'due-reminder') return { name: 'Billing', role: 'Tagihan' };
+      if (kind === 'ticket') return { name: 'Bantuan Pelanggan', role: 'Tiket' };
+      if (kind === 'password') return { name: 'Sistem Router', role: 'Router WiFi' };
+      if (kind === 'suspension' || kind === 'reactivation') return { name: 'Sistem Layanan', role: 'Status Layanan' };
+      return { name: 'Sistem', role: 'Info Pelanggan' };
+    }
+
+    function getNotificationSender(item) {
+      const payload = item && typeof item.payload === 'object' ? item.payload : {};
+      const fallback = defaultNotificationSender(item?.kind);
+      return {
+        name: String(item?.senderName || payload.sender_name || payload.senderName || payload.sender || fallback.name || 'Sistem').trim() || fallback.name,
+        role: String(item?.senderRole || payload.sender_role || payload.senderRole || fallback.role || 'Info Pelanggan').trim() || fallback.role
+      };
+    }
+
+    function getNotificationImageUrl(item) {
+      const payload = item && typeof item.payload === 'object' ? item.payload : {};
+      const raw = String(item?.imageUrl || payload.image_url || payload.imageUrl || payload.image || payload.media_url || payload.mediaUrl || '').trim();
+      if (!raw) return '';
+      if (raw.startsWith('/') || raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:image/')) return raw;
+      return '';
+    }
+
+    function getSenderInitials(name) {
+      const words = String(name || 'Sistem').trim().split(/\s+/).filter(Boolean);
+      return words.slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join('') || 'S';
+    }
+
+    function stripTrailingUrlPunctuation(url) {
+      let clean = String(url || '');
+      let trailing = '';
+      while (/[.,!?;:)]$/.test(clean)) {
+        trailing = clean.slice(-1) + trailing;
+        clean = clean.slice(0, -1);
+      }
+      return { clean, trailing };
+    }
+
+    function linkifyNotificationText(value) {
+      const escaped = escapeNotificationHtml(value || '');
+      return escaped.replace(/https?:\/\/[^\s<]+/gi, (url) => {
+        const { clean, trailing } = stripTrailingUrlPunctuation(url);
+        return `<a href="${clean}" target="_blank" rel="noopener noreferrer">${clean}</a>${trailing}`;
+      });
+    }
+
+    function renderNotificationDetail(index) {
+      const container = document.getElementById('notificationModalBodyContent');
+      if (!container) return;
+      const items = Array.isArray(notificationState.items) ? notificationState.items : [];
+      const item = items[Number(index)];
+      if (!item) {
+        renderNotificationModalContent();
+        return;
+      }
+      const sender = getNotificationSender(item);
+      const imageUrl = getNotificationImageUrl(item);
+      const targetTab = item.tab || 'home';
+      const body = String(item.body || '').trim() || 'Tidak ada isi pesan.';
+      const bodyHtml = linkifyNotificationText(body);
+      container.innerHTML = `
+        <article class="notification-detail">
+          <div class="notification-detail-head">
+            <button type="button" class="notification-detail-back" id="notificationBackBtn" aria-label="Kembali ke inbox">
+              <i class="bi bi-arrow-left"></i>
+            </button>
+            <div class="notification-detail-title">
+              <div class="notification-detail-meta">
+                <span class="notification-kind-badge kind-${escapeNotificationHtml(item.kind || 'system')}">${escapeNotificationHtml(notificationKindLabel(item.kind))}</span>
+                <span>${escapeNotificationHtml(formatDateTime(item.time))}</span>
+              </div>
+              <h6 class="notification-detail-subject">${escapeNotificationHtml(item.title || 'Info pelanggan')}</h6>
+            </div>
+          </div>
+          <div class="notification-detail-sender">
+            <span class="notification-detail-avatar">${escapeNotificationHtml(getSenderInitials(sender.name))}</span>
+            <div>
+              <strong>${escapeNotificationHtml(sender.name)}</strong>
+              <span>${escapeNotificationHtml(sender.role)}</span>
+            </div>
+          </div>
+          ${imageUrl ? `<img class="notification-detail-image" src="${escapeNotificationHtml(imageUrl)}" alt="Lampiran pesan">` : ''}
+          <div class="notification-detail-body">${bodyHtml}</div>
+          <div class="notification-detail-actions">
+            <button type="button" class="notification-detail-action" id="notificationOpenRelatedBtn" data-notification-tab="${escapeNotificationHtml(targetTab)}">
+              <i class="bi bi-box-arrow-up-right"></i> Buka terkait
+            </button>
+          </div>
+        </article>
+      `;
+      document.getElementById('notificationBackBtn')?.addEventListener('click', () => renderNotificationModalContent());
+      document.getElementById('notificationOpenRelatedBtn')?.addEventListener('click', (event) => {
+        goToNotification(event.currentTarget.dataset.notificationTab || 'home');
+      });
     }
 
     function renderNotificationBadge() {
@@ -5448,14 +5980,14 @@
 
       const items = Array.isArray(notificationState.items) ? notificationState.items : [];
       const unread = Math.max(0, Number(notificationState.unreadCount || 0) || 0);
-      if (hint) hint.textContent = `${unread} notifikasi perlu perhatian`;
+      if (hint) hint.textContent = `${unread} pesan perlu dibaca`;
       if (markAllButton) markAllButton.hidden = unread <= 0;
 
       if (!items.length) {
         container.innerHTML = `
           <div class="empty-card">
             <i class="bi bi-bell-slash"></i>
-            <strong>Belum ada notifikasi</strong>
+            <strong>Belum ada pesan</strong>
             <div>Info tagihan dan update tiket akan muncul di sini.</div>
           </div>
         `;
@@ -5502,8 +6034,11 @@
         </div>
       `;
 
-      const listHtml = filteredItems.map((item) => `
-        <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-tab="${escapeNotificationHtml(item.tab || 'home')}">
+      const listHtml = filteredItems.map((item) => {
+        const itemIndex = items.indexOf(item);
+        const sender = getNotificationSender(item);
+        return `
+        <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-index="${itemIndex}">
           <span class="notification-icon">
             <i class="bi ${notificationKindIcon(item.kind)}"></i>
           </span>
@@ -5513,11 +6048,13 @@
               <span class="notification-time">${escapeNotificationHtml(formatDateTime(item.time))}</span>
             </div>
             <strong>${escapeNotificationHtml(item.title || 'Info pelanggan')}</strong>
+            <span class="notification-time">Dari ${escapeNotificationHtml(sender.name)}</span>
             <p>${escapeNotificationHtml(item.body || '')}</p>
           </div>
           <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
         </button>
-      `).join('');
+      `;
+      }).join('');
 
       const bodyHtml = filteredItems.length
         ? `<div class="notification-list">${listHtml}</div>`
@@ -5531,8 +6068,8 @@
 
       container.innerHTML = `${summaryHtml}${filterHtml}${bodyHtml}`;
       bindNotificationFilterButtons();
-      container.querySelectorAll('[data-notification-tab]').forEach((button) => {
-        button.addEventListener('click', () => goToNotification(button.dataset.notificationTab || 'home'));
+      container.querySelectorAll('[data-notification-index]').forEach((button) => {
+        button.addEventListener('click', () => renderNotificationDetail(button.dataset.notificationIndex));
       });
     }
 

@@ -1,5 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+const {
+  DEFAULT_MAX_BYTES,
+  persistCompressedImageUpload
+} = require('../../services/imageUploadService');
 
 module.exports = function registerCustomerRoutes(router, deps = {}) {
   const {
@@ -38,24 +40,6 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     { name: 'ktp_photo_file', maxCount: 1 }
   ];
 
-  function toUploadImageExt(file) {
-    const extFromMime = String(file?.mimetype || '').split('/').pop().toLowerCase();
-    const extFromName = path.extname(String(file?.originalname || '')).toLowerCase().replace('.', '');
-    if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromName)) return extFromName;
-    if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromMime)) return extFromMime;
-    return 'jpg';
-  }
-
-  function persistCustomerImageUpload(file, prefix) {
-    if (!file || !file.buffer || Number(file.size || 0) <= 0) return '';
-    const uploadDir = path.join(__dirname, '..', '..', 'public', 'uploads');
-    fs.mkdirSync(uploadDir, { recursive: true });
-    const ext = toUploadImageExt(file);
-    const filename = `${prefix}-${Date.now()}.${ext}`;
-    fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
-    return `/uploads/${filename}`;
-  }
-
   function getUploadedFile(req, fieldName) {
     const files = req?.files;
     if (!files || !fieldName) return null;
@@ -64,16 +48,30 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     return null;
   }
 
+  function isNewInstallForPeriod(customer, month, year) {
+    const targetMonth = Number(month || 0) || 0;
+    const targetYear = Number(year || 0) || 0;
+    if (!targetMonth || !targetYear) return false;
+    const rawValue = String(customer?.install_date || customer?.created_at || customer?.createdAt || '').trim();
+    if (!rawValue) return false;
+    const date = new Date(rawValue);
+    if (Number.isNaN(date.getTime())) return false;
+    return (date.getMonth() + 1) === targetMonth && date.getFullYear() === targetYear;
+  }
+
   router.get('/customers', requireAdminSession, (req, res) => {
     const statusQueryProvided = Object.prototype.hasOwnProperty.call(req.query || {}, 'status');
     const {
       search = '',
       status: rawFilterStatus = '',
+      segment: rawFilterSegment = '',
       billingDayStart = '',
       billingDayEnd = '',
       month: rawMonth = '',
       year: rawYear = '',
-      page: rawPage = '1'
+      page: rawPage = '1',
+      sortBy: rawSortBy = 'name',
+      sortDir: rawSortDir = 'asc'
     } = req.query;
     const now = new Date();
     const selectedMonth = Math.min(12, Math.max(1, parseInt(rawMonth, 10) || (now.getMonth() + 1)));
@@ -82,11 +80,15 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const pageSize = 25;
     const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
     const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
+    const allowedSortBy = new Set(['name', 'address', 'package', 'status', 'billing']);
+    const sortBy = allowedSortBy.has(String(rawSortBy || '').trim()) ? String(rawSortBy).trim() : 'name';
+    const sortDir = String(rawSortDir || '').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
     const monthKey = String(selectedMonth).padStart(2, '0');
     const yearKey = String(selectedYear);
     const normalizedFilterStatus = statusQueryProvided
       ? (String(rawFilterStatus || '').trim().toLowerCase() === 'all' ? '' : String(rawFilterStatus || '').trim().toLowerCase())
       : 'active';
+    const normalizedFilterSegment = String(rawFilterSegment || '').trim().toLowerCase() === 'new' ? 'new' : '';
     const customers = customerSvc.getAllCustomers(search);
     const stats = customerSvc.getCustomerStats();
     const packages = customerSvc.getAllPackages();
@@ -108,6 +110,49 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       });
     }
 
+    if (normalizedFilterSegment === 'new') {
+      filteredCustomers = filteredCustomers.filter((customer) => isNewInstallForPeriod(customer, selectedMonth, selectedYear));
+    }
+
+    const compareText = (left, right) => String(left || '').localeCompare(String(right || ''), 'id', { sensitivity: 'base' });
+    const resolveStatusOrder = (customer) => {
+      const statusKey = String(customer?.status || '').trim().toLowerCase();
+      if (statusKey === 'suspended') return 0;
+      if (statusKey === 'active') return 1;
+      if (statusKey === 'inactive') return 2;
+      return 3;
+    };
+    const resolveIsolateDay = (customer) => {
+      if (Number(customer?.auto_isolate || 0) === 0) return 99;
+      const day = Number(customer?.isolate_day || 0);
+      return Number.isFinite(day) && day > 0 ? day : 99;
+    };
+
+    filteredCustomers = [...filteredCustomers].sort((left, right) => {
+      let result = 0;
+      if (sortBy === 'address') {
+        result = compareText(left?.address, right?.address);
+        if (result === 0) result = compareText(left?.name, right?.name);
+      } else if (sortBy === 'package') {
+        result = compareText(left?.package_name, right?.package_name);
+        if (result === 0) result = compareText(left?.name, right?.name);
+      } else if (sortBy === 'status') {
+        result = resolveIsolateDay(left) - resolveIsolateDay(right);
+        if (result === 0) result = resolveStatusOrder(left) - resolveStatusOrder(right);
+        if (result === 0) result = compareText(left?.name, right?.name);
+      } else if (sortBy === 'billing') {
+        const leftUnpaid = Number(left?.unpaid_count || 0);
+        const rightUnpaid = Number(right?.unpaid_count || 0);
+        result = leftUnpaid - rightUnpaid;
+        if (result === 0) result = resolveIsolateDay(left) - resolveIsolateDay(right);
+        if (result === 0) result = compareText(left?.name, right?.name);
+      } else {
+        result = compareText(left?.name, right?.name);
+        if (result === 0) result = compareText(left?.address, right?.address);
+      }
+      return sortDir === 'desc' ? (result * -1) : result;
+    });
+
     const activeRevenue = db.prepare(`
       SELECT COALESCE(SUM(COALESCE(p.price, 0)), 0) AS total
       FROM customers c
@@ -117,7 +162,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const newCustomers = db.prepare(`
       SELECT COUNT(*) AS c
       FROM customers
-      WHERE strftime('%m', created_at) = ? AND strftime('%Y', created_at) = ?
+      WHERE strftime('%m', COALESCE(NULLIF(install_date, ''), created_at)) = ?
+        AND strftime('%Y', COALESCE(NULLIF(install_date, ''), created_at)) = ?
     `).get(monthKey, yearKey);
     const unpaidInvoices = db.prepare(`
       SELECT COUNT(DISTINCT i.customer_id) AS count, COALESCE(SUM(i.amount), 0) AS total
@@ -185,12 +231,15 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       odps,
       search,
       filterStatus: normalizedFilterStatus,
+      filterSegment: normalizedFilterSegment,
       statusQueryProvided,
       selectedMonth,
       selectedYear,
       customerOverview,
       billingDayStart: normalizedBillingDayStart || '',
       billingDayEnd: normalizedBillingDayEnd || '',
+      sortBy,
+      sortDir,
       currentPage: safePage,
       totalPages,
       totalCustomersCount,
@@ -215,8 +264,16 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
   router.post('/customers', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
     try {
       req.body = req.body || {};
-      const housePhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'house_photo_file'), 'admin-house-photo');
-      const ktpPhotoUrl = persistCustomerImageUpload(getUploadedFile(req, 'ktp_photo_file'), 'admin-ktp-photo');
+      const housePhotoFile = getUploadedFile(req, 'house_photo_file');
+      const ktpPhotoFile = getUploadedFile(req, 'ktp_photo_file');
+      const housePhotoResult = housePhotoFile
+        ? await persistCompressedImageUpload(housePhotoFile, 'admin-house-photo', { maxBytes: DEFAULT_MAX_BYTES })
+        : null;
+      const ktpPhotoResult = ktpPhotoFile
+        ? await persistCompressedImageUpload(ktpPhotoFile, 'admin-ktp-photo', { maxBytes: DEFAULT_MAX_BYTES })
+        : null;
+      const housePhotoUrl = housePhotoResult?.publicUrl || '';
+      const ktpPhotoUrl = ktpPhotoResult?.publicUrl || '';
       req.body.nik = String(req.body.nik || '').trim();
       req.body.npwp = String(req.body.npwp || '').trim();
       req.body.house_photo_url = housePhotoUrl;
@@ -322,8 +379,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       const ktpPhotoFile = getUploadedFile(req, 'ktp_photo_file');
       req.body.nik = String(req.body.nik || '').trim();
       req.body.npwp = String(req.body.npwp || '').trim();
-      if (housePhotoFile) req.body.house_photo_url = persistCustomerImageUpload(housePhotoFile, 'admin-house-photo');
-      if (ktpPhotoFile) req.body.ktp_photo_url = persistCustomerImageUpload(ktpPhotoFile, 'admin-ktp-photo');
+      if (housePhotoFile) {
+        const housePhotoResult = await persistCompressedImageUpload(housePhotoFile, 'admin-house-photo', { maxBytes: DEFAULT_MAX_BYTES });
+        req.body.house_photo_url = housePhotoResult.publicUrl;
+      }
+      if (ktpPhotoFile) {
+        const ktpPhotoResult = await persistCompressedImageUpload(ktpPhotoFile, 'admin-ktp-photo', { maxBytes: DEFAULT_MAX_BYTES });
+        req.body.ktp_photo_url = ktpPhotoResult.publicUrl;
+      }
       if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
         const customerId = Number(req.params.id);
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;
@@ -757,8 +820,9 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         const done = sum.paidMonths.length;
         const already = sum.alreadyPaidMonths.length;
         const created = sum.createdMonths.length;
+        const voided = Number(sum.voidedMonths || 0);
         const total = Number(sum.totalAmount) || 0;
-        req.session._msg = { type: 'success', text: `Pembayaran berhasil untuk "${sum.customerName}" tahun ${sum.year}. Total: Rp ${total.toLocaleString('id-ID')} (${sum.totalMonths || 0} bulan). Dibayar: ${done} bulan, dibuat: ${created}, sudah lunas: ${already}.` };
+        req.session._msg = { type: 'success', text: `Pembayaran berhasil untuk "${sum.customerName}" tahun ${sum.year}. Total: Rp ${total.toLocaleString('id-ID')} (${sum.totalMonths || 0} bulan). Dibayar: ${done} bulan, dibuat: ${created}, sudah lunas: ${already}, hangus prabayar: ${voided}.` };
 
         if (customer && customer.phone && done > 0) {
           const paidInvoices = (Array.isArray(sum.paidMonths) ? sum.paidMonths : [])
@@ -797,7 +861,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       }
 
       const freshCustomer = customerSvc.getAllCustomers().find((item) => String(item.id) === String(req.params.id));
-      if (freshCustomer && freshCustomer.status === 'suspended' && freshCustomer.unpaid_count === 0) {
+      if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && freshCustomer.unpaid_count === 0) {
         await customerSvc.activateCustomer(req.params.id);
       }
     } catch (e) {

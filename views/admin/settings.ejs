@@ -153,7 +153,7 @@
         <button type="button" class="settings-category-btn" data-settings-target="integrasi"><i class="bi bi-router"></i> API & MikroTik</button>
         <button type="button" class="settings-category-btn" data-settings-target="whatsapp"><i class="bi bi-whatsapp"></i> WhatsApp</button>
         <button type="button" class="settings-category-btn" data-settings-target="telegram"><i class="bi bi-telegram"></i> Telegram</button>
-        <button type="button" class="settings-category-btn" data-settings-target="monitoring"><i class="bi bi-bell"></i> Webhook Log</button>
+        <button type="button" class="settings-category-btn" data-settings-target="monitoring"><i class="bi bi-bell"></i> Monitoring & Webhook</button>
         <a href="/admin/usage-audit" class="settings-category-btn"><i class="bi bi-clipboard2-pulse"></i> Audit Usage</a>
       </div>
     </div>
@@ -232,6 +232,40 @@
         <input type="hidden" name="remove_invoice_signature" id="remove_invoice_signature" value="0">
         <input type="hidden" name="remove_invoice_stamp" id="remove_invoice_stamp" value="0">
         <input type="hidden" name="remove_qris_static_qr" id="remove_qris_static_qr" value="0">
+
+        <div class="card mb16 settings-card-pane" data-settings-pane="monitoring">
+          <div class="card-hd"><h6><i class="bi bi-broadcast-pin"></i> Monitoring Gangguan Massal</h6></div>
+          <div class="card-bd">
+            <div class="form-row">
+              <div class="fg">
+                <label class="fl">Status Deteksi Otomatis</label>
+                <select class="fs" name="mass_outage_detection_enabled">
+                  <option value="true" <%= settings.mass_outage_detection_enabled === true ? 'selected' : '' %>>Aktif</option>
+                  <option value="false" <%= settings.mass_outage_detection_enabled !== true ? 'selected' : '' %>>Nonaktif</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Tunda Offline Stabil (menit)</label>
+                <input class="fc" type="number" min="1" step="1" name="mass_outage_delay_minutes" value="<%= settings.mass_outage_delay_minutes || 10 %>" placeholder="10">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="fg">
+                <label class="fl">Minimal Pelanggan Offline</label>
+                <input class="fc" type="number" min="1" step="1" name="mass_outage_threshold_count" value="<%= settings.mass_outage_threshold_count || 5 %>" placeholder="5">
+              </div>
+              <div class="fg">
+                <label class="fl">Minimal Persentase Offline (%)</label>
+                <input class="fc" type="number" min="1" max="100" step="1" name="mass_outage_threshold_percent" value="<%= settings.mass_outage_threshold_percent || 20 %>" placeholder="20">
+              </div>
+            </div>
+            <div class="fg">
+              <label class="fl">Alias Area Alamat</label>
+              <textarea class="fc" name="mass_outage_zone_aliases" rows="5" placeholder="warjeng=warung jengjeng&#10;kp cicadas=cicadas"><%= settings.mass_outage_zone_aliases || '' %></textarea>
+              <div class="hint">Hanya pelanggan aktif dengan PPPoE username yang dihitung. Pelanggan isolir atau nonaktif otomatis dikecualikan.</div>
+            </div>
+          </div>
+        </div>
 
         <div class="card mb16 settings-card-pane" data-settings-pane="telegram">
           <div class="card-hd"><h6><i class="bi bi-telegram"></i> <%= t('admin.settings.telegram.title', 'Pengaturan Telegram Bot (Backup Admin)') %></h6></div>
@@ -618,6 +652,18 @@
             <input class="fc" name="whatsapp_test_number" value="<%= settings.whatsapp_test_number || '' %>" placeholder="6281xxx">
             <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai khusus tombol test pesan agar tidak terkirim ke nomor bot atau pelanggan.</div>
           </div>
+          <div class="fg" style="grid-column: span 2;">
+            <label class="fl">WhatsApp API Key</label>
+            <div class="secret-field">
+              <input class="fc" type="password" name="whatsapp_api_key" value="<%= settings.whatsapp_api_key || '' %>" placeholder="Minimal 24 karakter">
+              <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat WhatsApp API key">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div style="font-size:10px; color:var(--muted); margin-top:4px">
+              Dipakai untuk API kirim pesan: <span class="mono">POST /api/whatsapp/send-message</span>. Kirim key lewat header <span class="mono">x-api-key</span> atau <span class="mono">Authorization: Bearer</span>.
+            </div>
+          </div>
           <div class="fg">
             <label class="fl">Jeda Antar Pesan Broadcast (Detik)</label>
             <input class="fc" type="number" name="whatsapp_broadcast_delay" value="<%= settings.whatsapp_broadcast_delay || 2 %>" min="1" max="60">
@@ -680,6 +726,18 @@
         <!-- Payment Gateway -->
         <div class="settings-panel-section" data-settings-pane="payment" style="grid-column: span 2">
           <h6 class="settings-pane-title"><i class="bi bi-wallet2"></i> Gateway Pembayaran & QRIS</h6>
+          <%
+            const qrisStaticConfigured = Boolean(String(settings.qris_static_qr_url || '').trim() || String(settings.qris_static_payload || '').trim());
+            const qrisStaticEnabled = settings.qris_static_enabled === false || settings.qris_static_enabled === 'false'
+              ? false
+              : qrisStaticConfigured;
+            const qrisServerPort = Number(settings.server_port || 0) || 0;
+            const qrisUniqueRangeText = qrisServerPort === 3002
+              ? '001-399'
+              : qrisServerPort === 3001
+                ? '400-599'
+                : '001-599';
+          %>
           
           <div class="form-row3" style="margin-bottom: 20px;">
             <div class="fg">
@@ -695,6 +753,25 @@
 
           <div style="background: rgba(0,0,0,0.02); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
             <h6 style="font-size:12px; margin-bottom: 10px;">QRIS Statis (Semi-Otomatis)</h6>
+            <div class="form-row3" style="margin-bottom:10px;">
+              <div class="fg">
+                <label class="fl">Status QRIS Statis</label>
+                <select class="fs" name="qris_static_enabled">
+                  <option value="true" <%= settings.qris_static_enabled === false ? '' : 'selected' %>>Aktif</option>
+                  <option value="false" <%= settings.qris_static_enabled === false ? 'selected' : '' %>>Nonaktif</option>
+                </select>
+                <div style="font-size:10px; color:var(--muted); margin-top:4px">Jika dinonaktifkan, QRIS Instan tidak ditawarkan ke pelanggan walaupun payload atau gambar QR masih tersimpan.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Range Kode Unik Instance Ini</label>
+                <input class="fc" value="<%= qrisUniqueRangeText %>" readonly>
+                <div style="font-size:10px; color:var(--muted); margin-top:4px">Port <span class="mono"><%= qrisServerPort || '-' %></span>: server 3002 memakai 001-399, server 3001 memakai 400-599.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Status Konfigurasi</label>
+                <input class="fc" value="<%= qrisStaticEnabled ? 'Aktif dan siap dipakai' : (qrisStaticConfigured ? 'Disimpan tetapi sedang nonaktif' : 'Belum ada konfigurasi QRIS') %>" readonly>
+              </div>
+            </div>
             <% if (settings.qris_static_qr_url) { %>
               <div class="asset-preview-card" style="margin-bottom:12px;">
                 <button type="button" class="asset-remove-btn" title="Hapus gambar QRIS" aria-label="Hapus gambar QRIS" onclick="removeQrisStaticQr()">
@@ -733,7 +810,7 @@
             <div class="form-row3" style="margin-top:10px">
               <div class="fg">
                 <label class="fl">Mode QRIS</label>
-                <input class="fc" value="<%= settings.qris_static_payload ? 'QRIS dinamis nominal otomatis' : 'QRIS gambar + nominal unik manual' %>" readonly>
+                <input class="fc" value="<%= !qrisStaticEnabled ? 'QRIS statis nonaktif' : (settings.qris_static_payload ? 'QRIS dinamis nominal otomatis' : 'QRIS gambar + nominal unik manual') %>" readonly>
               </div>
               <div class="fg">
                 <label class="fl">Secret Auto Verifikasi QRIS</label>

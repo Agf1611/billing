@@ -10,10 +10,50 @@ const db = require('../config/database');
 const MIKROTIK_CONNECT_TIMEOUT_MS = 1200;
 const connectionProbeCache = new Map();
 const listCache = new Map();
+const missingRouterNoticeCache = new Map();
 
 function cacheKey(routerId, name) {
   const rid = routerId == null || String(routerId).trim() === '' ? 'default' : String(routerId).trim();
   return `${name}:${rid}`;
+}
+
+function normalizeRouterId(routerId) {
+  const normalized = Number(routerId);
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : null;
+}
+
+function buildRouterNotFoundError(routerId) {
+  const normalizedRouterId = normalizeRouterId(routerId);
+  const error = new Error(`Router with ID ${normalizedRouterId ?? routerId} not found`);
+  error.code = 'ROUTER_NOT_FOUND';
+  error.routerId = normalizedRouterId;
+  return error;
+}
+
+function isRouterNotFoundError(error) {
+  return Boolean(error) && (error.code === 'ROUTER_NOT_FOUND' || String(error.message || '').includes('Router with ID'));
+}
+
+function logMissingRouterNotice(context, routerId) {
+  const normalizedRouterId = normalizeRouterId(routerId);
+  if (!normalizedRouterId) return;
+  const key = `${context}:${normalizedRouterId}`;
+  const now = Date.now();
+  const lastLoggedAt = Number(missingRouterNoticeCache.get(key) || 0);
+  if ((now - lastLoggedAt) < 60000) return;
+  missingRouterNoticeCache.set(key, now);
+  logger.warn(`[MikroTik] ${context}: router ${normalizedRouterId} sudah tidak ada. Referensi akan di-skip.`);
+}
+
+function invalidateRouterCaches(routerId = null) {
+  const normalizedRouterId = normalizeRouterId(routerId);
+  const keyPart = normalizedRouterId == null ? 'default' : String(normalizedRouterId);
+  for (const key of Array.from(listCache.keys())) {
+    if (String(key).endsWith(`:${keyPart}`)) listCache.delete(key);
+  }
+  for (const key of Array.from(missingRouterNoticeCache.keys())) {
+    if (String(key).endsWith(`:${keyPart}`)) missingRouterNoticeCache.delete(key);
+  }
 }
 
 function getCachedList(key, ttlMs) {
@@ -229,6 +269,7 @@ function resolveRouterConfig(routerId = null) {
   let host, port, user, password, routerOsMode;
   const settings = getSettingsWithCache();
   const globalRouterOsMode = normalizeRouterOsMode(settings.mikrotik_os_mode || '');
+  const normalizedRouterId = normalizeRouterId(routerId);
   const preferredRouter = db.prepare(`
     SELECT *
     FROM routers
@@ -239,9 +280,9 @@ function resolveRouterConfig(routerId = null) {
     LIMIT 1
   `).get();
 
-  if (routerId) {
-    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId);
-    if (!router) throw new Error(`Router with ID ${routerId} not found`);
+  if (normalizedRouterId) {
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(normalizedRouterId);
+    if (!router) throw buildRouterNotFoundError(normalizedRouterId);
     host = router.host;
     port = router.port || 8728;
     user = router.user;
@@ -530,6 +571,10 @@ async function getPppoeProfiles(routerId = null) {
     setCachedList(ck, mapped);
     return mapped;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getPppoeProfiles', routerId);
+      return [];
+    }
     logger.error('Error getting PPPoE profiles:', e);
     return [];
   }
@@ -553,6 +598,10 @@ async function getPppoeUsers(routerId = null) {
       disabled: r.disabled === 'true'
     }));
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getPppoeUsers', routerId);
+      return [];
+    }
     logger.error('Error getting PPPoE users:', e);
     return [];
   } finally {
@@ -672,6 +721,10 @@ async function getPppoeSecrets(routerId = null, options = {}) {
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getPppoeSecrets', routerId);
+      return [];
+    }
     logger.error('Error getting PPPoE secrets:', e);
     return [];
   }
@@ -804,6 +857,10 @@ async function getPppoeActive(routerId = null, options = {}) {
     setCachedList(ck, fallbackSessions);
     return fallbackSessions;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getPppoeActive', routerId);
+      return [];
+    }
     logger.error('Error getting active PPPoE sessions:', e);
     return [];
   }
@@ -1146,6 +1203,10 @@ async function getHotspotActive(routerId = null, options = {}) {
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getHotspotActive', routerId);
+      return [];
+    }
     logger.error('Error getting active Hotspot sessions:', e);
     return [];
   }
@@ -1251,6 +1312,10 @@ async function getHotspotUserProfiles(routerId = null) {
     setCachedList(ck, mapped);
     return mapped;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getHotspotUserProfiles', routerId);
+      return [];
+    }
     logger.error('Error getting Hotspot user profiles:', e);
     return [];
   } finally {
@@ -1313,6 +1378,10 @@ async function getHotspotUsers(routerId = null, options = {}) {
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getHotspotUsers', routerId);
+      return [];
+    }
     logger.error('Error getting Hotspot users:', e);
     return [];
   }
@@ -1406,6 +1475,10 @@ async function getHotspotProfiles(routerId = null) {
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getHotspotProfiles', routerId);
+      return [];
+    }
     logger.error('Error getting Hotspot profiles:', e);
     return [];
   } finally {
@@ -1480,7 +1553,34 @@ function updateRouter(id, data) {
 }
 
 function deleteRouter(id) {
-  return db.prepare('DELETE FROM routers WHERE id = ?').run(id);
+  const routerId = normalizeRouterId(id);
+  if (!routerId) throw buildRouterNotFoundError(id);
+  const existing = getRouterById(routerId);
+  if (!existing) throw buildRouterNotFoundError(routerId);
+
+  const nullableRouterTables = [
+    'customers',
+    'voucher_batches',
+    'vouchers',
+    'public_voucher_orders',
+    'agent_hotspot_prices',
+    'agent_transactions',
+    'mass_outage_incidents',
+    'technician_customer_requests'
+  ];
+
+  const cleanupTransaction = db.transaction(() => {
+    for (const tableName of nullableRouterTables) {
+      db.prepare(`UPDATE ${tableName} SET router_id = NULL WHERE router_id = ?`).run(routerId);
+    }
+    db.prepare('DELETE FROM pppoe_monitoring_state WHERE router_id = ? OR router_key = ?').run(routerId, `router:${routerId}`);
+    db.prepare('DELETE FROM hotspot_monitoring_state WHERE router_id = ? OR router_key = ?').run(routerId, `router:${routerId}`);
+    db.prepare('DELETE FROM routers WHERE id = ?').run(routerId);
+  });
+
+  cleanupTransaction();
+  invalidateRouterCaches(routerId);
+  return { changes: 1 };
 }
 
 /**
@@ -1806,6 +1906,8 @@ async function removeStaticIp(ip, routerId = null) {
 }
 
 module.exports = {
+  normalizeRouterId,
+  isRouterNotFoundError,
   checkConnection,
   getConnection,
   getPppoeProfiles,

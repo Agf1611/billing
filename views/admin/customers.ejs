@@ -59,6 +59,33 @@
     .mobile-add-customer{display:none}
     .page-tools{display:flex;gap:8px;flex-wrap:wrap}
     .page-tools .tool-label{display:inline}
+    .desktop-search-block{display:grid;gap:8px;min-width:0}
+    .desktop-filter-eyebrow{
+      display:block;
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    .desktop-filter-hint{
+      margin:0;
+      font-size:11px;
+      line-height:1.45;
+      color:var(--muted);
+    }
+    .desktop-filter-field{
+      display:grid;
+      gap:6px;
+      min-width:0;
+    }
+    .desktop-filter-field > span{
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
     .mobile-stack{display:none}
     .customer-card{background:var(--bg2);border:1px solid var(--border);border-radius:15px;padding:9px;display:grid;gap:6px}
     .customer-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -135,7 +162,8 @@
     }
     .quick-filter-row .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
     .quick-filter-row .btn.is-active .filter-chip-count{background:rgba(255,255,255,.18);color:#fff}
-    .mobile-filter-toggle{display:none;position:relative}
+    .mobile-filter-toggle{display:none;position:relative;align-items:center;gap:8px}
+    .mobile-filter-toggle .mobile-filter-toggle-label{display:none;font-weight:800}
     .mobile-filter-badge{
       position:absolute;
       top:-5px;
@@ -161,17 +189,416 @@
     .customer-filter-panel{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
     .customer-filter-panel::-webkit-scrollbar{display:none}
     .customer-filter-main-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:0}
-    .customer-filter-panel .mobile-filter-field{min-width:0}
+    .customer-filter-panel .mobile-filter-field{min-width:0;flex:0 0 auto}
+    .customer-filter-panel select.mobile-filter-field{
+      width:auto !important;
+      min-width:140px;
+      padding-right:36px;
+      appearance:auto;
+      -webkit-appearance:menulist;
+      text-indent:0;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .customer-filter-panel select.mobile-filter-field[name="status"]{min-width:140px}
+    .customer-filter-panel select.mobile-filter-field[name="segment"]{min-width:160px}
+    .customer-filter-panel select.mobile-filter-field[name="month"]{min-width:124px}
+    .customer-filter-panel select.mobile-filter-field[name="year"]{min-width:96px}
     .customer-filter-panel .mobile-date-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
     .customer-filter-panel .mobile-filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
     .customer-filter-panel .fs,
     .customer-filter-panel .fc,
     .customer-filter-panel .btn{white-space:nowrap}
+    .customer-table-action{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      line-height:1;
+    }
+    .customer-table-action i{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:16px;
+      height:16px;
+      font-size:14px;
+      line-height:1;
+      flex:0 0 16px;
+    }
+    .customer-reset-btn{
+      width:32px;
+      min-width:32px;
+      padding:0;
+    }
+    .customer-reset-btn .customer-table-action span:last-child{display:none}
     .customer-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
     .customer-filter-summary strong{font-size:13px;color:var(--text)}
     .customer-filter-summary span{font-size:12px;color:var(--muted)}
     .customer-filter-summary .summary-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .customer-filter-summary .summary-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(99,102,241,.12);color:var(--primary);font-size:11px;font-weight:700}
+    .table-empty-state{
+      display:grid;
+      justify-items:center;
+      gap:10px;
+      padding:18px 12px;
+      text-align:center;
+    }
+    .table-empty-state i{
+      width:48px;
+      height:48px;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      font-size:22px;
+      color:var(--primary);
+      background:rgba(99,102,241,.12);
+      box-shadow:inset 0 0 0 1px rgba(99,102,241,.12);
+    }
+    .table-empty-state strong{
+      font-size:15px;
+      line-height:1.3;
+      color:var(--text);
+    }
+    .table-empty-state span{
+      max-width:420px;
+      font-size:12px;
+      line-height:1.55;
+      color:var(--muted);
+    }
+    .customer-table{
+      position:relative;
+      overflow:auto;
+      scrollbar-gutter:stable;
+    }
+    .customer-table.is-loading::before{
+      content:'';
+      position:absolute;
+      inset:0;
+      background:rgba(7,12,24,.42);
+      backdrop-filter:blur(3px);
+      z-index:5;
+    }
+    .customer-table.is-loading::after{
+      content:attr(data-loading-text);
+      position:absolute;
+      top:24px;
+      right:24px;
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:12px 16px;
+      border-radius:14px;
+      background:rgba(15,23,42,.94);
+      color:#fff;
+      font-size:12px;
+      font-weight:800;
+      letter-spacing:.02em;
+      box-shadow:0 16px 34px rgba(15,23,42,.24);
+      z-index:6;
+    }
+    .customer-table.is-loading .dtbl{
+      pointer-events:none;
+    }
+    @media(min-width:769px){
+      .page-filter-card .card-hd{
+        align-items:flex-start;
+        gap:14px;
+      }
+      .page-tools{
+        align-items:center;
+        justify-content:flex-end;
+        gap:10px;
+      }
+      .page-tools .btn{
+        min-height:42px;
+        padding:0 14px;
+        border-radius:14px;
+        font-weight:700;
+      }
+      .desktop-search-block{
+        gap:0;
+      }
+      .desktop-search-block .desktop-filter-eyebrow,
+      .desktop-search-block .desktop-filter-hint{
+        display:none;
+      }
+      .customer-filter-form{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        flex-wrap:nowrap;
+      }
+      .customer-search-row{
+        display:flex;
+        align-items:center;
+        flex:0 0 300px;
+        max-width:300px;
+      }
+      .customer-search-row .desktop-search-block,
+      .customer-search-row .sinput{
+        width:100%;
+      }
+      .customer-search-row .sinput{
+        max-width:none !important;
+      }
+      .customer-filter-panel{
+        padding:0;
+        border:0;
+        border-radius:0;
+        background:transparent;
+        overflow:visible;
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex:1 1 auto;
+        min-width:0;
+      }
+      .customer-filter-main-row,
+      .customer-filter-panel .mobile-date-row{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex-wrap:nowrap;
+        width:auto;
+      }
+      .customer-filter-panel .mobile-filter-actions{
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:8px;
+        margin-left:auto;
+        width:auto;
+        flex:0 0 auto;
+      }
+      .customer-filter-panel .desktop-filter-field{
+        gap:0;
+      }
+      .customer-filter-panel .desktop-filter-field > span{
+        display:none;
+      }
+      .customer-filter-panel .desktop-filter-field .fs,
+      .customer-filter-panel .desktop-filter-field .fc{
+        width:auto !important;
+        min-height:38px;
+      }
+      .customer-filter-panel select[name="status"]{min-width:126px}
+      .customer-filter-panel select[name="segment"]{min-width:146px}
+      .customer-filter-panel select[name="month"]{min-width:118px}
+      .customer-filter-panel select[name="year"]{min-width:90px}
+      .customer-filter-panel input[name="billingDayStart"],
+      .customer-filter-panel input[name="billingDayEnd"]{
+        width:96px !important;
+      }
+      .customer-filter-summary{
+        margin-top:10px;
+        padding:10px 12px;
+        border-radius:16px;
+      }
+      .customer-filter-summary strong{
+        display:block;
+        font-size:15px;
+        margin-bottom:2px;
+      }
+      .quick-filter-row{
+        display:flex;
+        flex-wrap:nowrap;
+        overflow:auto;
+        scrollbar-width:none;
+        gap:8px;
+        margin-top:10px;
+        padding:6px;
+        padding-bottom:8px;
+        border:1px solid rgba(255,255,255,.06);
+        border-radius:16px;
+        background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.018));
+        align-items:center;
+      }
+      .quick-filter-row::-webkit-scrollbar{display:none}
+      .quick-filter-row .btn{
+        min-height:34px;
+        padding:5px 10px;
+        border-radius:12px;
+        justify-content:flex-start;
+        flex:0 0 auto;
+        background:transparent;
+        border-color:transparent;
+        box-shadow:none;
+      }
+      .quick-filter-row .btn i{
+        width:13px;
+        height:13px;
+        font-size:11px;
+        flex:0 0 13px;
+      }
+      .quick-filter-row .btn .filter-chip-label{
+        font-size:10.5px;
+        font-weight:800;
+      }
+      .quick-filter-row .btn .filter-chip-count{
+        min-width:22px;
+        height:18px;
+        padding:0 6px;
+        font-size:9.5px;
+        background:rgba(99,102,241,.14);
+      }
+      .quick-filter-row .btn:hover{
+        background:rgba(255,255,255,.045);
+        border-color:rgba(255,255,255,.05);
+      }
+      .quick-filter-row .btn.is-active{
+        border-color:rgba(99,102,241,.22);
+        background:rgba(99,102,241,.16);
+        color:#fff;
+        box-shadow:none;
+      }
+      .quick-filter-row .btn.is-active .filter-chip-count{
+        background:rgba(255,255,255,.16);
+      }
+      .customer-table .dtbl{
+        table-layout:fixed;
+      }
+      .customer-table .dtbl thead th{
+        padding:14px 16px;
+        font-size:11px;
+        font-weight:800;
+        letter-spacing:.07em;
+        text-transform:uppercase;
+        color:var(--muted);
+        position:sticky;
+        top:0;
+        z-index:2;
+        background:color-mix(in srgb, var(--bg2) 92%, transparent);
+        backdrop-filter:blur(10px);
+        box-shadow:0 1px 0 rgba(255,255,255,.04);
+      }
+      .customer-table .dtbl thead th:nth-child(1){width:52px}
+      .customer-table .dtbl thead th:nth-child(2){width:12%}
+      .customer-table .dtbl thead th:nth-child(3){width:15%}
+      .customer-table .dtbl thead th:nth-child(4){width:13%}
+      .customer-table .dtbl thead th:nth-child(5){width:12%}
+      .customer-table .dtbl thead th:nth-child(6){width:19%}
+      .customer-table .dtbl thead th:nth-child(7){width:14%}
+      .customer-table .dtbl thead th:nth-child(8){width:11%}
+      .customer-table .dtbl thead th:nth-child(9){width:176px}
+      .customer-table .dtbl tbody td{
+        padding:16px;
+        vertical-align:top;
+      }
+      .customer-table .dtbl tbody tr{
+        transition:background .18s ease, box-shadow .18s ease;
+      }
+      .customer-table .dtbl tbody tr:hover{
+        background:linear-gradient(90deg, rgba(99,102,241,.06), rgba(99,102,241,.02));
+        box-shadow:inset 4px 0 0 rgba(99,102,241,.55);
+      }
+      .customer-table-index{
+        font-size:12px;
+        font-weight:700;
+      }
+      .customer-table-primary{
+        font-size:14px;
+        font-weight:800;
+        line-height:1.35;
+        color:var(--text);
+      }
+      .customer-table-secondary,
+      .customer-table-package-note,
+      .customer-table-usage-note,
+      .customer-table-unpaid-note{
+        margin-top:4px;
+        font-size:11px;
+        line-height:1.5;
+        color:var(--muted);
+      }
+      .customer-table-tag{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        color:var(--primary);
+        font-weight:700;
+      }
+      .customer-table-phone{
+        font-size:13px !important;
+        font-weight:700;
+        line-height:1.35;
+        white-space:nowrap;
+        word-break:normal;
+        overflow-wrap:normal;
+        font-variant-numeric:tabular-nums;
+      }
+      .customer-table-package{
+        font-size:13px;
+        font-weight:700;
+        line-height:1.4;
+      }
+      .customer-table-usage{
+        max-width:132px;
+      }
+      .customer-table-usage strong{
+        display:block;
+        font-size:13px;
+        font-weight:800;
+        line-height:1.2;
+      }
+      .customer-table-address{
+        max-width:320px;
+        font-size:12px;
+        line-height:1.55;
+        color:var(--text);
+        white-space:normal;
+        word-break:break-word;
+        display:-webkit-box;
+        -webkit-box-orient:vertical;
+        -webkit-line-clamp:3;
+        overflow:hidden;
+      }
+      .customer-status-stack{
+        display:grid;
+        gap:8px;
+      }
+      .customer-status-meta{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        font-size:11px;
+        line-height:1.45;
+        color:var(--muted);
+      }
+      .customer-status-meta i{
+        color:var(--primary);
+      }
+      .customer-unpaid-stack{
+        display:grid;
+        justify-items:center;
+        gap:6px;
+        text-align:center;
+      }
+      .customer-action-cluster{
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+        align-items:flex-start;
+        min-width:160px;
+      }
+      .customer-action-cluster form{
+        display:inline-flex;
+        margin:0;
+      }
+      .customer-action-cluster .btn{
+        min-height:34px;
+        min-width:34px;
+        border-radius:11px;
+      }
+      .customer-action-cluster .customer-reset-btn{
+        width:auto;
+        padding:0 10px;
+      }
+      .customer-action-cluster .customer-table-action{
+        font-size:11px;
+        font-weight:700;
+      }
+    }
     .upload-preview-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;flex-wrap:wrap}
     .upload-preview-card{width:104px;min-height:104px;border-radius:16px;border:1px dashed rgba(148,163,184,.35);background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
     .upload-preview-card img{width:100%;height:104px;object-fit:cover;display:block}
@@ -181,6 +608,11 @@
     .upload-preview-name{font-size:11px;color:var(--text);line-height:1.4;word-break:break-word}
     .upload-preview-state{font-size:10px;color:var(--muted)}
     .upload-preview-clear{min-height:32px}
+    .sort-link{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;font-weight:inherit}
+    .sort-link:hover{text-decoration:none;color:var(--primary)}
+    .sort-link .sort-icon{font-size:11px;color:var(--muted)}
+    .sort-link.is-active{color:var(--primary)}
+    .sort-link.is-active .sort-icon{color:var(--primary)}
     body[data-theme="light"] .customer-card{
       background:rgba(255,255,255,.9);
       box-shadow:0 14px 30px rgba(165,162,211,.12);
@@ -301,6 +733,76 @@
       background:rgba(20,184,166,.14);
       color:#5eead4;
     }
+    @media(max-width:1100px){
+      #customerSearchForm{display:block !important;width:100%}
+      .customer-filter-form{display:block !important;width:100%}
+      .mobile-filter-toggle{
+        display:inline-flex;
+        flex:0 0 auto;
+        min-width:92px;
+        height:46px;
+        padding:0 14px;
+        justify-content:center;
+        border-radius:16px;
+      }
+      .mobile-filter-toggle .mobile-filter-toggle-label{display:inline}
+      .customer-search-row{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:start;
+        gap:8px;
+        width:100%;
+        margin-bottom:10px;
+      }
+      .customer-search-row .sinput{
+        min-width:0;
+        width:100%;
+        max-width:none !important;
+      }
+      .customer-filter-form .customer-search-row{max-width:none}
+      .customer-search-row .mobile-filter-toggle{align-self:stretch}
+      .customer-filter-panel{
+        display:none;
+        position:static !important;
+        float:none !important;
+        width:100%;
+        min-width:0;
+        gap:8px;
+        margin-top:10px;
+        padding:10px;
+        border:1px solid var(--border);
+        border-radius:16px;
+        background:rgba(255,255,255,.03);
+        overflow:visible;
+      }
+      .customer-filter-panel.show{display:grid !important;grid-template-columns:1fr}
+      .customer-filter-main-row{
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:8px;
+        width:100%;
+      }
+      .customer-filter-panel .mobile-filter-field{width:100%}
+      .customer-filter-panel .mobile-date-row{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
+      .customer-filter-panel .fs,
+      .customer-filter-panel .fc,
+      .customer-filter-panel .btn{width:100% !important;max-width:none !important}
+      .customer-filter-panel .btn{justify-content:center}
+      .customer-filter-panel .btn-apply-mobile{display:inline-flex}
+      .customer-filter-panel .mobile-filter-actions{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
+      }
+    }
     @media(max-width:768px){
       .topbar{
         display:grid;
@@ -348,83 +850,92 @@
       .location-action-btn{flex:1}
       .srow{align-items:stretch}
       .srow .sinput{max-width:none !important;flex:1 1 auto}
-      #customerSearchForm{display:block !important;width:100%}
-      .customer-filter-form{display:block !important;width:100%}
-      .mobile-filter-toggle{display:inline-flex;flex:0 0 46px;min-width:46px;height:46px;padding:0;justify-content:center}
-      .customer-search-row{
-        display:grid;
-        grid-template-columns:minmax(0,1fr) 46px;
-        align-items:start;
-        gap:8px;
-        width:100%;
-        margin-bottom:10px;
-      }
-      .customer-search-row .sinput{
-        min-width:0;
-        width:100%;
-        max-width:none !important;
-      }
-      .customer-filter-form .customer-search-row{max-width:none}
-      .customer-search-row .mobile-filter-toggle{align-self:stretch}
-      .customer-filter-panel{
-        display:none;
-        position:static !important;
-        float:none !important;
-        width:100%;
-        min-width:0;
-        gap:8px;
-        margin-top:10px;
-        padding:10px;
-        border:1px solid var(--border);
-        border-radius:16px;
-        background:rgba(255,255,255,.03);
-        overflow:visible;
-      }
-      .customer-filter-panel.show{display:grid !important;grid-template-columns:1fr}
-      .customer-filter-main-row{
-        display:grid;
-        grid-template-columns:repeat(3,minmax(0,1fr));
-        gap:8px;
-        width:100%;
-      }
-      .customer-filter-panel .mobile-filter-field{width:100%}
-      .customer-filter-panel .mobile-date-row{
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:8px;
-        margin-top:8px;
-        width:100%;
-      }
-      .customer-filter-panel .fs,
-      .customer-filter-panel .fc,
-      .customer-filter-panel .btn{width:100% !important;max-width:none !important}
-      .customer-filter-panel .btn{justify-content:center}
-      .customer-filter-panel .btn-apply-mobile{display:inline-flex}
-      .customer-filter-panel .mobile-filter-actions{
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:8px;
-        margin-top:8px;
-        width:100%;
-      }
       .quick-filter-row{
-        display:grid;
-        grid-template-columns:repeat(4,minmax(0,1fr));
-        gap:6px;
+        display:flex;
+        flex-wrap:nowrap;
+        overflow:auto;
+        scrollbar-width:none;
+        gap:8px;
+        padding:0 0 2px;
+        margin-top:10px;
+        border:0;
+        background:transparent;
       }
+      .quick-filter-row::-webkit-scrollbar{display:none}
       .quick-filter-row .btn{
-        width:100%;
-        justify-content:center;
-        min-height:42px;
-        padding:7px 6px;
-        font-size:10.5px;
+        position:relative;
+        width:58px;
+        min-width:58px;
+        min-height:56px;
+        padding:6px 4px 5px;
+        font-size:10px;
         gap:5px;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        border-radius:14px;
+      }
+      .quick-filter-row .btn i{
+        display:inline-flex;
+        width:18px;
+        height:18px;
+        font-size:16px;
+        flex:0 0 18px;
+      }
+      .quick-filter-row .btn .filter-chip-label{
+        display:block;
+        max-width:100%;
+        font-size:8px;
+        font-weight:800;
+        line-height:1.05;
+        letter-spacing:.01em;
+        text-align:center;
+        color:inherit;
+        white-space:normal;
+      }
+      .quick-filter-row .btn .filter-chip-count{
+        position:absolute;
+        top:5px;
+        right:5px;
+        margin-left:0;
+        margin-top:0;
+        min-width:20px;
+        height:18px;
+        padding:0 5px;
+        font-size:9px;
+        align-self:auto;
       }
       .tbl-wrap{display:none}
       .mobile-stack{display:grid;gap:8px;padding:0 0 12px}
+      .customer-actions{
+        grid-template-columns:repeat(6,minmax(0,1fr));
+        gap:4px;
+      }
+      .customer-actions .btn,.customer-actions form .btn{
+        height:40px;
+        min-height:40px;
+        border-radius:10px;
+      }
+      .customer-actions .action-mini{
+        flex-direction:column;
+        gap:1px;
+        line-height:1;
+      }
+      .customer-actions .action-mini i{
+        width:16px;
+        height:16px;
+        font-size:13px;
+        flex-basis:16px;
+      }
+      .customer-actions .action-mini .action-label{
+        display:block;
+        font-size:7.5px;
+        font-weight:700;
+        letter-spacing:0;
+      }
     }
     @media(max-width:576px){
-      .customer-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .customer-filter-main-row{grid-template-columns:repeat(2,minmax(0,1fr))}
       .customer-card{padding:8px;gap:6px}
       .customer-head strong{font-size:13px}
       .customer-sub{font-size:10px}
@@ -439,20 +950,20 @@
       .customer-meta small{font-size:8.5px;margin-bottom:2px}
       .customer-meta strong,.customer-meta span{font-size:10px}
       .customer-meta-grid{display:none}
-      .customer-actions{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
-      .customer-actions .btn,.customer-actions form .btn{height:42px;min-height:42px;border-radius:11px}
-      .customer-actions .action-mini{flex-direction:column;gap:2px;line-height:1}
+      .customer-actions{grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+      .customer-actions .btn,.customer-actions form .btn{height:40px;min-height:40px;border-radius:10px}
+      .customer-actions .action-mini{flex-direction:column;gap:1px;line-height:1}
       .customer-actions .action-mini i{
-        width:17px;
-        height:17px;
-        font-size:14px;
-        flex-basis:17px;
+        width:16px;
+        height:16px;
+        font-size:13px;
+        flex-basis:16px;
       }
       .customer-actions .action-mini .action-label{
         display:block;
-        font-size:8.5px;
+        font-size:7.5px;
         font-weight:700;
-        letter-spacing:.01em;
+        letter-spacing:0;
       }
       .page-tools{grid-template-columns:repeat(auto-fit,minmax(42px,1fr));gap:6px}
       .page-tools .btn{min-height:42px}
@@ -460,6 +971,11 @@
       .upload-preview-card img{height:92px}
     }
     @media(max-width:430px){
+      .mobile-filter-toggle{
+        min-width:46px;
+        padding:0 10px;
+      }
+      .mobile-filter-toggle .mobile-filter-toggle-label{display:none}
       .topbar .tb-title{
         font-size:0;
         display:flex;
@@ -476,36 +992,25 @@
         text-overflow:ellipsis;
       }
       .customer-filter-panel{gap:6px;padding:8px}
-      .customer-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+      .customer-filter-main-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
       .customer-filter-panel .mobile-date-row{
         grid-template-columns:1fr 1fr;
         gap:6px;
       }
-      .quick-filter-row{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+      .quick-filter-row{gap:6px}
       .quick-filter-row .btn{
-        min-height:44px;
-        padding:5px 2px;
-        gap:2px;
-        flex-direction:column;
-        align-items:center;
-        justify-content:center;
-      }
-      .quick-filter-row .btn .filter-chip-label{
-        max-width:100%;
-        font-size:8.5px;
-        line-height:1.05;
-        text-align:center;
-        white-space:nowrap;
+        width:54px;
+        min-width:54px;
+        min-height:54px;
       }
       .quick-filter-row .btn .filter-chip-count{
-        margin-left:0;
         min-width:18px;
-        height:16px;
-        padding:0 4px;
-        font-size:7.5px;
+        height:18px;
+        padding:0 5px;
+        font-size:9px;
       }
-      .quick-filter-row .btn i{
-        display:none;
+      .quick-filter-row .btn .filter-chip-label{
+        font-size:7.5px;
       }
       .customer-filter-panel .fs,
       .customer-filter-panel .fc{
@@ -552,18 +1057,14 @@
     <%
       const currentSearch = typeof search !== 'undefined' ? search : '';
       const currentFilterStatus = typeof filterStatus !== 'undefined' ? filterStatus : '';
+      const currentFilterSegment = typeof filterSegment !== 'undefined' ? filterSegment : '';
       const currentBillingDayStart = typeof billingDayStart !== 'undefined' ? billingDayStart : '';
       const currentBillingDayEnd = typeof billingDayEnd !== 'undefined' ? billingDayEnd : '';
       const currentSelectedMonth = typeof selectedMonth !== 'undefined' ? selectedMonth : (new Date().getMonth() + 1);
       const currentSelectedYear = typeof selectedYear !== 'undefined' ? selectedYear : new Date().getFullYear();
+      const currentSortBy = typeof sortBy !== 'undefined' ? sortBy : 'name';
+      const currentSortDir = typeof sortDir !== 'undefined' ? sortDir : 'asc';
       const currentPageNumber = typeof currentPage !== 'undefined' ? currentPage : 1;
-      const currentStatusLabel = currentFilterStatus === 'active'
-        ? 'Pelanggan Aktif'
-        : currentFilterStatus === 'inactive'
-          ? 'Pelanggan Nonaktif'
-          : currentFilterStatus === 'suspended'
-            ? 'Pelanggan Terisolir'
-            : 'Semua Pelanggan';
       const totalPageCount = typeof totalPages !== 'undefined' ? totalPages : 1;
       const totalCustomerRows = typeof totalCustomersCount !== 'undefined' ? totalCustomersCount : customers.length;
       const customerRowOffset = (currentPageNumber - 1) * (typeof pageSize !== 'undefined' ? pageSize : customers.length || 25);
@@ -590,6 +1091,15 @@
         : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
       const reportMonthLabel = customerMonthNames[(currentCustomerOverview.month || currentSelectedMonth || 1) - 1] || customerMonthNames[0];
       const reportYearLabel = currentCustomerOverview.year || currentSelectedYear || new Date().getFullYear();
+      const currentStatusLabel = currentFilterSegment === 'new'
+        ? `Pelanggan Baru ${reportMonthLabel} ${reportYearLabel}`
+        : currentFilterStatus === 'active'
+          ? 'Pelanggan Aktif'
+          : currentFilterStatus === 'inactive'
+            ? 'Pelanggan Nonaktif'
+            : currentFilterStatus === 'suspended'
+              ? 'Pelanggan Terisolir'
+              : 'Semua Pelanggan';
     %>
 
     <div class="customer-overview-shell">
@@ -610,6 +1120,11 @@
             <form method="GET" action="/admin/customers" class="customer-period-form">
               <input type="hidden" name="search" value="<%= currentSearch || '' %>">
               <input type="hidden" name="status" value="<%= currentFilterStatus || '' %>">
+              <input type="hidden" name="segment" value="<%= currentFilterSegment || '' %>">
+              <input type="hidden" name="billingDayStart" value="<%= currentBillingDayStart || '' %>">
+              <input type="hidden" name="billingDayEnd" value="<%= currentBillingDayEnd || '' %>">
+              <input type="hidden" name="sortBy" value="<%= currentSortBy || 'name' %>">
+              <input type="hidden" name="sortDir" value="<%= currentSortDir || 'asc' %>">
               <div class="period-group">
                 <label>Bulan :</label>
                 <select name="month">
@@ -735,9 +1250,12 @@
           status: currentFilterStatus || '',
           billingDayStart: currentBillingDayStart || '',
           billingDayEnd: currentBillingDayEnd || '',
+          segment: currentFilterSegment || '',
           month: currentSelectedMonth || '',
           year: currentSelectedYear || '',
           page: currentPageNumber || 1,
+          sortBy: currentSortBy || 'name',
+          sortDir: currentSortDir || 'asc',
           ...overrides
         };
         Object.entries(merged).forEach(([key, value]) => {
@@ -745,6 +1263,21 @@
         });
         const qs = params.toString();
         return `/admin/customers${qs ? '?' + qs : ''}`;
+      }
+
+      function getCustomerSortHref(columnKey) {
+        const nextDir = currentSortBy === columnKey && currentSortDir === 'asc' ? 'desc' : 'asc';
+        return buildCustomerFilterHref({ sortBy: columnKey, sortDir: nextDir, page: 1 });
+      }
+
+      function getCustomerSortIcon(columnKey) {
+        if (currentSortBy !== columnKey) return 'bi-arrow-down-up';
+        return currentSortDir === 'desc' ? 'bi-sort-down-alt' : 'bi-sort-up';
+      }
+
+      function getCustomerSortLabel(columnKey, baseLabel) {
+        if (currentSortBy !== columnKey) return baseLabel;
+        return `${baseLabel} ${currentSortDir === 'desc' ? 'Turun' : 'Naik'}`;
       }
     %>
 
@@ -763,43 +1296,72 @@
       </div>
       <div class="card-bd" style="padding-bottom:0">
           <form method="GET" action="/admin/customers" class="srow customer-filter-form" id="customerSearchForm" style="width:100%">
+            <input type="hidden" name="sortBy" value="<%= currentSortBy || 'name' %>">
+            <input type="hidden" name="sortDir" value="<%= currentSortDir || 'asc' %>">
             <div class="customer-search-row">
-              <div class="sinput" style="max-width:340px">
-                <i class="bi bi-search"></i>
-                <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, tag...') %>" value="<%= currentSearch %>">
-                <datalist id="customerSearchSuggestions"></datalist>
+              <div class="desktop-search-block">
+                <span class="desktop-filter-eyebrow">Pencarian Cepat</span>
+                <div class="sinput" style="max-width:340px">
+                  <i class="bi bi-search"></i>
+                  <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, tag...') %>" value="<%= currentSearch %>">
+                  <datalist id="customerSearchSuggestions"></datalist>
+                </div>
+                <p class="desktop-filter-hint">Cari pelanggan berdasarkan nama, nomor WhatsApp, username PPPoE, atau tag perangkat.</p>
               </div>
               <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleCustomerFilterPanel()" aria-label="Filter pelanggan">
                 <i class="bi bi-funnel"></i>
+                <span class="mobile-filter-toggle-label">Filter</span>
                 <span class="mobile-filter-badge" id="customerFilterBadge"></span>
               </button>
             </div>
             <div class="customer-filter-panel" id="customerFilterPanel">
               <div class="customer-filter-main-row">
-                <select class="fs mobile-filter-field" name="status" style="width:140px">
-                  <option value="active" <%= currentFilterStatus==='active' ? 'selected':'' %>><%= t('admin.customers.filter.active', 'Aktif') %></option>
-                  <option value="all" <%= !currentFilterStatus ? 'selected':'' %>><%= t('admin.customers.filter.all_status', 'Semua Status') %></option>
-                  <option value="suspended" <%= currentFilterStatus==='suspended' ? 'selected':'' %>><%= t('admin.customers.filter.suspended', 'Suspend') %></option>
-                  <option value="inactive" <%= currentFilterStatus==='inactive' ? 'selected':'' %>><%= t('admin.customers.filter.inactive', 'Nonaktif') %></option>
-                </select>
-                <select class="fs mobile-filter-field" name="month" style="width:124px">
-                  <% for (let m = 1; m <= 12; m++) { %>
-                  <option value="<%= m %>" <%= Number(currentSelectedMonth || 0) === m ? 'selected' : '' %>><%= customerMonthNames[m-1] %></option>
-                  <% } %>
-                </select>
-                <select class="fs mobile-filter-field" name="year" style="width:96px">
-                  <% for (let y = new Date().getFullYear(); y >= 2023; y--) { %>
-                  <option value="<%= y %>" <%= Number(currentSelectedYear || 0) === y ? 'selected' : '' %>><%= y %></option>
-                  <% } %>
-                </select>
+                <label class="desktop-filter-field">
+                  <span>Status Layanan</span>
+                  <select class="fs mobile-filter-field" name="status" style="width:140px">
+                    <option value="active" <%= currentFilterStatus==='active' ? 'selected':'' %>><%= t('admin.customers.filter.active', 'Aktif') %></option>
+                    <option value="all" <%= !currentFilterStatus ? 'selected':'' %>><%= t('admin.customers.filter.all_status', 'Semua Status') %></option>
+                    <option value="suspended" <%= currentFilterStatus==='suspended' ? 'selected':'' %>><%= t('admin.customers.filter.suspended', 'Suspend') %></option>
+                    <option value="inactive" <%= currentFilterStatus==='inactive' ? 'selected':'' %>><%= t('admin.customers.filter.inactive', 'Nonaktif') %></option>
+                  </select>
+                </label>
+                <label class="desktop-filter-field">
+                  <span>Kategori</span>
+                  <select class="fs mobile-filter-field" name="segment" style="width:160px">
+                    <option value="" <%= !currentFilterSegment ? 'selected' : '' %>>Semua Kategori</option>
+                    <option value="new" <%= currentFilterSegment === 'new' ? 'selected' : '' %>>Pelanggan Baru</option>
+                  </select>
+                </label>
+                <label class="desktop-filter-field">
+                  <span>Bulan Ringkasan</span>
+                  <select class="fs mobile-filter-field" name="month" style="width:124px">
+                    <% for (let m = 1; m <= 12; m++) { %>
+                    <option value="<%= m %>" <%= Number(currentSelectedMonth || 0) === m ? 'selected' : '' %>><%= customerMonthNames[m-1] %></option>
+                    <% } %>
+                  </select>
+                </label>
+                <label class="desktop-filter-field">
+                  <span>Tahun</span>
+                  <select class="fs mobile-filter-field" name="year" style="width:96px">
+                    <% for (let y = new Date().getFullYear(); y >= 2023; y--) { %>
+                    <option value="<%= y %>" <%= Number(currentSelectedYear || 0) === y ? 'selected' : '' %>><%= y %></option>
+                    <% } %>
+                  </select>
+                </label>
               </div>
               <div class="mobile-date-row">
-                <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl tagih dari" value="<%= currentBillingDayStart %>" style="width:130px">
-                <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl tagih sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
+                <label class="desktop-filter-field">
+                  <span>Tanggal Tagih Dari</span>
+                  <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl tagih dari" value="<%= currentBillingDayStart %>" style="width:130px">
+                </label>
+                <label class="desktop-filter-field">
+                  <span>Tanggal Tagih Sampai</span>
+                  <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl tagih sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
+                </label>
               </div>
               <div class="mobile-filter-actions">
                 <button class="btn btn-g btn-sm btn-apply-mobile" type="submit"><i class="bi bi-check2"></i> Terapkan</button>
-                <% if (currentSearch || currentFilterStatus !== 'active' || currentBillingDayStart || currentBillingDayEnd || Number(currentSelectedMonth || 0) !== (new Date().getMonth() + 1) || Number(currentSelectedYear || 0) !== new Date().getFullYear()) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
+                <% if (currentSearch || currentFilterStatus !== 'active' || currentFilterSegment || currentBillingDayStart || currentBillingDayEnd || Number(currentSelectedMonth || 0) !== (new Date().getMonth() + 1) || Number(currentSelectedYear || 0) !== new Date().getFullYear()) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
               </div>
             </div>
         </form>
@@ -810,49 +1372,83 @@
           </div>
           <div class="summary-meta">
             <span class="summary-chip"><i class="bi bi-calendar-check"></i> <%= reportMonthLabel %> <%= reportYearLabel %></span>
+            <% if (currentFilterSegment === 'new') { %>
+              <span class="summary-chip"><i class="bi bi-stars"></i> Pemasangan bulan ini</span>
+            <% } %>
             <% if (currentBillingDayStart || currentBillingDayEnd) { %>
               <span class="summary-chip"><i class="bi bi-funnel"></i> Tagihan <%= currentBillingDayStart || '1' %>-<%= currentBillingDayEnd || '31' %></span>
             <% } %>
           </div>
         </div>
         <div class="quick-filter-row page-chip-row">
-          <a href="<%= buildCustomerFilterHref({ status: 'active', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'active' ? 'is-active' : '' %>"><i class="bi bi-check-circle"></i><span class="filter-chip-label">Aktif</span><span class="filter-chip-count"><%= Number(stats.active || 0) %></span></a>
-          <a href="<%= buildCustomerFilterHref({ status: 'suspended', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'suspended' ? 'is-active' : '' %>"><i class="bi bi-pause-circle"></i><span class="filter-chip-label">Suspend</span><span class="filter-chip-count"><%= Number(stats.suspended || 0) %></span></a>
-          <a href="<%= buildCustomerFilterHref({ status: 'inactive', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'inactive' ? 'is-active' : '' %>"><i class="bi bi-x-circle"></i><span class="filter-chip-label">Nonaktif</span><span class="filter-chip-count"><%= Number(stats.inactive || 0) %></span></a>
-          <a href="<%= buildCustomerFilterHref({ status: 'all', page: 1 }) %>" class="btn btn-g btn-sm <%= !currentFilterStatus ? 'is-active' : '' %>"><i class="bi bi-arrow-repeat"></i><span class="filter-chip-label">Semua</span><span class="filter-chip-count"><%= Number(stats.total || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'active', segment: '', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'active' && !currentFilterSegment ? 'is-active' : '' %>" title="Pelanggan Aktif" aria-label="Pelanggan Aktif"><i class="bi bi-check-circle"></i><span class="filter-chip-label">Aktif</span><span class="filter-chip-count"><%= Number(stats.active || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'suspended', segment: '', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'suspended' && !currentFilterSegment ? 'is-active' : '' %>" title="Pelanggan Suspend" aria-label="Pelanggan Suspend"><i class="bi bi-pause-circle"></i><span class="filter-chip-label">Suspend</span><span class="filter-chip-count"><%= Number(stats.suspended || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'inactive', segment: '', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'inactive' && !currentFilterSegment ? 'is-active' : '' %>" title="Pelanggan Nonaktif" aria-label="Pelanggan Nonaktif"><i class="bi bi-x-circle"></i><span class="filter-chip-label">Nonaktif</span><span class="filter-chip-count"><%= Number(stats.inactive || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'all', segment: 'new', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterSegment === 'new' ? 'is-active' : '' %>" title="Pelanggan Baru" aria-label="Pelanggan Baru"><i class="bi bi-stars"></i><span class="filter-chip-label">Baru</span><span class="filter-chip-count"><%= Number(currentCustomerOverview.newCustomers || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'all', segment: '', page: 1 }) %>" class="btn btn-g btn-sm <%= !currentFilterStatus && !currentFilterSegment ? 'is-active' : '' %>" title="Semua Pelanggan" aria-label="Semua Pelanggan"><i class="bi bi-arrow-repeat"></i><span class="filter-chip-label">Semua</span><span class="filter-chip-count"><%= Number(stats.total || 0) %></span></a>
         </div>
       </div>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap customer-table">
         <table class="dtbl">
           <thead>
             <tr>
               <th>#</th>
-              <th><%= t('admin.customers.table.name', 'Nama') %></th>
+              <th>
+                <a href="<%= getCustomerSortHref('name') %>" class="sort-link <%= currentSortBy === 'name' ? 'is-active' : '' %>">
+                  <span><%= t('admin.customers.table.name', 'Nama') %></span>
+                  <i class="bi <%= getCustomerSortIcon('name') %> sort-icon"></i>
+                </a>
+              </th>
               <th><%= t('admin.customers.table.phone_tag', 'Telepon / Tag ONU') %></th>
-              <th><%= t('admin.customers.table.package', 'Paket') %></th>
+              <th>
+                <a href="<%= getCustomerSortHref('package') %>" class="sort-link <%= currentSortBy === 'package' ? 'is-active' : '' %>">
+                  <span><%= t('admin.customers.table.package', 'Paket') %></span>
+                  <i class="bi <%= getCustomerSortIcon('package') %> sort-icon"></i>
+                </a>
+              </th>
               <th>Usage (FUP)</th>
-              <th><%= t('admin.customers.table.address', 'Alamat') %></th>
-              <th><%= t('admin.customers.table.status', 'Status') %></th>
+              <th>
+                <a href="<%= getCustomerSortHref('address') %>" class="sort-link <%= currentSortBy === 'address' ? 'is-active' : '' %>">
+                  <span><%= t('admin.customers.table.address', 'Alamat') %></span>
+                  <i class="bi <%= getCustomerSortIcon('address') %> sort-icon"></i>
+                </a>
+              </th>
+              <th>
+                <a href="<%= getCustomerSortHref('status') %>" class="sort-link <%= currentSortBy === 'status' ? 'is-active' : '' %>">
+                  <span><%= t('admin.customers.table.status', 'Status') %> / Auto Isolir</span>
+                  <i class="bi <%= getCustomerSortIcon('status') %> sort-icon"></i>
+                </a>
+              </th>
               <th><%= t('admin.customers.table.unpaid', 'Tagihan Belum Bayar') %></th>
               <th><%= t('admin.customers.table.actions', 'Aksi') %></th>
             </tr>
           </thead>
           <tbody>
           <% if (customers.length === 0) { %>
-            <tr><td colspan="8" class="text-center text-muted" style="padding:32px"><%= t('admin.customers.empty', 'Belum ada pelanggan') %></td></tr>
+            <tr>
+              <td colspan="9" class="text-center text-muted" style="padding:32px">
+                <div class="table-empty-state">
+                  <i class="bi bi-people"></i>
+                  <strong><%= t('admin.customers.empty', 'Belum ada pelanggan') %></strong>
+                  <span>Daftar pelanggan akan tampil di sini setelah data cocok dengan filter yang dipilih atau setelah pelanggan baru ditambahkan.</span>
+                </div>
+              </td>
+            </tr>
           <% } %>
           <% customers.forEach((c, i) => { %>
             <tr>
-              <td class="text-muted"><%= customerRowOffset + i + 1 %></td>
-              <td class="fw6"><%= c.name %></td>
+              <td class="text-muted customer-table-index"><%= customerRowOffset + i + 1 %></td>
               <td>
-                <div><%= c.phone || '-' %></div>
-                <% if (c.genieacs_tag) { %><div style="font-size:11px;color:var(--primary)"><i class="bi bi-wifi"></i> <%= c.genieacs_tag %></div><% } %>
+                <div class="customer-table-primary"><%= c.name %></div>
+              </td>
+              <td>
+                <div class="customer-table-primary customer-table-phone"><%= c.phone || '-' %></div>
+                <% if (c.genieacs_tag) { %><div class="customer-table-secondary customer-table-tag"><i class="bi bi-wifi"></i> <%= c.genieacs_tag %></div><% } %>
               </td>
               <td>
                 <% if (c.package_name) { %>
-                  <div><%= c.package_name %></div>
-                  <div style="font-size:11px;color:var(--muted)"><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps &bull; Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %></div>
+                  <div class="customer-table-package"><%= c.package_name %></div>
+                  <div class="customer-table-package-note"><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps &bull; Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %></div>
                 <% } else { %><span class="text-muted">-</span><% } %>
               </td>
               <td>
@@ -861,7 +1457,8 @@
                   const limitGB = c.fup_limit_gb || 0;
                   const useFup = c.use_fup === 1;
                 %>
-                <div class="fw6" style="font-size:12px"><%= usedGB.toFixed(2) %> GB</div>
+                <div class="customer-table-usage">
+                <strong><%= usedGB.toFixed(2) %> GB</strong>
                 <% if (useFup && limitGB > 0) { 
                    const percent = Math.min(100, (usedGB / limitGB) * 100);
                    const barColor = percent > 90 ? 'var(--danger)' : percent > 70 ? 'var(--warning)' : 'var(--success)';
@@ -869,34 +1466,41 @@
                   <div class="usage-bar">
                     <div class="usage-fill" style="--p: <%= percent %>%; --b: <%= barColor %>;"></div>
                   </div>
-                  <div style="font-size:10px; color:var(--muted)">Limit: <%= limitGB %> GB</div>
+                  <div class="customer-table-usage-note">Limit: <%= limitGB %> GB</div>
                 <% } else { %>
-                  <div style="font-size:10px; color:var(--muted)">Unlimited</div>
+                  <div class="customer-table-usage-note">Unlimited</div>
                 <% } %>
+                </div>
               </td>
-              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= c.address || '-' %></td>
+              <td><div class="customer-table-address"><%= c.address || '-' %></div></td>
               <td>
+                <div class="customer-status-stack">
                 <% if (c.status==='active') { %><span class="badge bs"><i class="bi bi-circle-fill" style="font-size:7px"></i><%= t('admin.customers.filter.active', 'Aktif') %></span>
                 <% } else if (c.status==='suspended') { %><span class="badge bw"><%= t('admin.customers.filter.suspended', 'Suspend') %></span>
                 <% } else { %><span class="badge bm"><%= t('admin.customers.filter.inactive', 'Nonaktif') %></span><% } %>
-                <div style="font-size:10px;margin-top:4px">
+                <div class="customer-status-meta">
                   <i class="bi bi-clock-history"></i> <%= t('admin.customers.auto_isolate.label', 'Auto Isolir') %>:
                   <span class="<%= c.auto_isolate === 0 ? 'text-danger' : 'text-success' %>">
                     <%= c.auto_isolate === 0 ? t('admin.customers.auto_isolate.off', 'OFF') : t('admin.customers.auto_isolate.date_prefix', 'Tgl ') + (c.isolate_day || 10) %>
                   </span>
                 </div>
+                </div>
               </td>
               <td class="text-center">
+                <div class="customer-unpaid-stack">
                 <% if (c.unpaid_count > 0) { %>
                   <span class="badge bd"><%= c.unpaid_count %> <%= t('admin.customers.unpaid_suffix', 'tagihan') %></span>
+                  <div class="customer-table-unpaid-note">Perlu tindak lanjut</div>
                 <% } else { %><span class="text-muted" style="font-size:12px"><%= t('admin.customers.paid_label', 'Lunas') %></span><% } %>
+                </div>
               </td>
               <td>
+                <div class="customer-action-cluster">
                 <button class="btn btn-g btn-icon btn-sm" title="Detail Pelanggan" data-id="<%= c.id %>" onclick="openCustomerDetail(+this.dataset.id)"><i class="bi bi-eye"></i></button>
                 <button class="btn btn-s btn-icon btn-sm" title="<%= t('admin.customers.actions.generate_invoice', 'Generate Tagihan') %>" data-idx="<%= i %>" onclick="openGenInvoice(+this.dataset.idx)"><i class="bi bi-lightning-charge"></i></button>
                 <button class="btn btn-p btn-icon btn-sm" title="<%= t('admin.customers.actions.pay_invoice', 'Bayar Tagihan') %>" data-idx="<%= i %>" onclick="openPayInvoice(+this.dataset.idx)"><i class="bi bi-cash-coin"></i></button>
                 <form method="POST" action="/admin/customers/<%= c.id %>/usage/reset" style="display:inline" onsubmit="return confirm('Reset penggunaan data bulan ini untuk pelanggan ini?')">
-                  <button type="submit" class="btn btn-s btn-sm" title="Reset penggunaan data bulan ini"><i class="bi bi-arrow-clockwise"></i> Reset Usage</button>
+                  <button type="submit" class="btn btn-s btn-icon btn-sm customer-reset-btn" title="Reset penggunaan data bulan ini"><span class="customer-table-action"><i class="bi bi-arrow-clockwise"></i><span>Reset Usage</span></span></button>
                 </form>
                 <% if (typeof session !== 'undefined' && !session.isCashier) { %>
                 <% if (c.package_id && (c.package_promo_cycles || 0) > 0) { %>
@@ -916,6 +1520,7 @@
                   <button class="btn btn-d btn-icon btn-sm" title="<%= t('common.delete', 'Hapus') %>"><i class="bi bi-trash"></i></button>
                 </form>
                 <% } %>
+                </div>
               </td>
             </tr>
           <% }) %>
@@ -1057,7 +1662,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="add_ktp_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">JPG, PNG, atau WEBP</div>
+                <div class="upload-preview-state">JPG, PNG, atau WEBP • otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_ktp_photo_file','add_ktp_preview','add_ktp_preview_name','Preview KTP')">Hapus</button>
               </div>
             </div>
@@ -1071,7 +1676,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="add_house_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">Foto tampak depan atau patokan rumah</div>
+                <div class="upload-preview-state">Foto tampak depan • otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_house_photo_file','add_house_preview','add_house_preview_name','Preview Rumah')">Hapus</button>
               </div>
             </div>
@@ -1277,7 +1882,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="edit_ktp_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">Akan menampilkan file lama jika sudah ada</div>
+                <div class="upload-preview-state">File baru otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('e_ktp_photo_file','edit_ktp_preview','edit_ktp_preview_name','Preview KTP')">Hapus</button>
               </div>
             </div>
@@ -1292,7 +1897,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="edit_house_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">Akan menampilkan file lama jika sudah ada</div>
+                <div class="upload-preview-state">File baru otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('e_house_photo_file','edit_house_preview','edit_house_preview_name','Preview Rumah')">Hapus</button>
               </div>
             </div>
@@ -1592,7 +2197,7 @@ function syncCustomerMobileFilterLayout() {
   const dateRow = panel?.querySelector('.mobile-date-row');
   const actionRow = panel?.querySelector('.mobile-filter-actions');
   if (!form || !searchRow || !panel) return;
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = window.innerWidth <= 1100;
   searchRow.removeAttribute('style');
   panel.removeAttribute('style');
   dateRow?.removeAttribute('style');
@@ -1603,7 +2208,7 @@ function toggleCustomerFilterPanel(force) {
   const panel = document.getElementById('customerFilterPanel');
   if (!panel) return;
   syncCustomerMobileFilterLayout();
-  if (window.innerWidth > 768) return;
+  if (window.innerWidth > 1100) return;
   if (typeof force === 'boolean') {
     panel.classList.toggle('show', force);
     return;
@@ -1613,12 +2218,14 @@ function toggleCustomerFilterPanel(force) {
 
 function getActiveCustomerFilterCount() {
   const statusValue = String(document.querySelector('#customerSearchForm [name="status"]')?.value || '').trim();
+  const segmentValue = String(document.querySelector('#customerSearchForm [name="segment"]')?.value || '').trim();
   const monthValue = String(document.querySelector('#customerSearchForm [name="month"]')?.value || '').trim();
   const yearValue = String(document.querySelector('#customerSearchForm [name="year"]')?.value || '').trim();
   const billingDayStartValue = String(document.querySelector('#customerSearchForm [name="billingDayStart"]')?.value || '').trim();
   const billingDayEndValue = String(document.querySelector('#customerSearchForm [name="billingDayEnd"]')?.value || '').trim();
   let count = 0;
   if (statusValue && statusValue !== 'active') count += 1;
+  if (segmentValue) count += 1;
   if (monthValue && Number(monthValue) !== (new Date().getMonth() + 1)) count += 1;
   if (yearValue && Number(yearValue) !== new Date().getFullYear()) count += 1;
   if (billingDayStartValue) count += 1;
@@ -1796,18 +2403,118 @@ function setUploadPreview(previewId, nameId, sourceUrl, emptyLabel, fileName = '
   nameEl.textContent = 'Belum ada file dipilih';
 }
 
+function formatUploadSize(bytes) {
+  const size = Math.max(0, Number(bytes || 0) || 0);
+  if (size >= 1024 * 1024) return (size / (1024 * 1024)).toFixed(2) + ' MB';
+  return Math.max(1, Math.round(size / 1024)) + ' KB';
+}
+
+function readImageDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Gagal membaca gambar.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Gagal memuat gambar.'));
+    img.src = src;
+  });
+}
+
+async function compressImageForUpload(file, maxBytes = 500 * 1024) {
+  if (!file || !String(file.type || '').startsWith('image/')) return file;
+  if (Number(file.size || 0) <= maxBytes) return file;
+  const sourceUrl = await readImageDataUrl(file);
+  const image = await loadImageElement(sourceUrl);
+  let width = image.naturalWidth || image.width || 1600;
+  let height = image.naturalHeight || image.height || 1600;
+  const maxDimension = 1600;
+  if (Math.max(width, height) > maxDimension) {
+    const ratio = maxDimension / Math.max(width, height);
+    width = Math.max(1, Math.round(width * ratio));
+    height = Math.max(1, Math.round(height * ratio));
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return file;
+
+  let attemptWidth = width;
+  let attemptHeight = height;
+  let bestBlob = null;
+
+  while (Math.max(attemptWidth, attemptHeight) >= 720) {
+    canvas.width = attemptWidth;
+    canvas.height = attemptHeight;
+    ctx.clearRect(0, 0, attemptWidth, attemptHeight);
+    ctx.drawImage(image, 0, 0, attemptWidth, attemptHeight);
+
+    for (const quality of [0.86, 0.8, 0.74, 0.68, 0.62, 0.56, 0.5, 0.44]) {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob) continue;
+      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+      if (blob.size <= maxBytes) {
+        return new File([blob], String(file.name || 'upload').replace(/\.[^.]+$/, '') + '.jpg', {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        });
+      }
+    }
+
+    if (Math.max(attemptWidth, attemptHeight) <= 720) break;
+    attemptWidth = Math.max(1, Math.round(attemptWidth * 0.84));
+    attemptHeight = Math.max(1, Math.round(attemptHeight * 0.84));
+  }
+
+  if (bestBlob) {
+    return new File([bestBlob], String(file.name || 'upload').replace(/\.[^.]+$/, '') + '.jpg', {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    });
+  }
+  return file;
+}
+
+async function replaceInputFileWithCompressed(input, file) {
+  const compressed = await compressImageForUpload(file);
+  if (compressed && compressed !== file && typeof DataTransfer !== 'undefined') {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(compressed);
+    input.files = dataTransfer.files;
+    return compressed;
+  }
+  return compressed || file;
+}
+
 function bindUploadPreview(inputId, previewId, nameId, emptyLabel) {
   const input = document.getElementById(inputId);
   if (!input) return;
-  input.addEventListener('change', () => {
+  input.addEventListener('change', async () => {
     const file = input.files && input.files[0];
     if (!file) {
       setUploadPreview(previewId, nameId, '', emptyLabel);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setUploadPreview(previewId, nameId, String(reader.result || ''), emptyLabel, file.name || 'File dipilih');
-    reader.readAsDataURL(file);
+    try {
+      const optimizedFile = await replaceInputFileWithCompressed(input, file);
+      const previewUrl = await readImageDataUrl(optimizedFile);
+      setUploadPreview(
+        previewId,
+        nameId,
+        previewUrl,
+        emptyLabel,
+        `${optimizedFile.name || 'File dipilih'} • ${formatUploadSize(optimizedFile.size)}`
+      );
+    } catch (_error) {
+      const previewUrl = await readImageDataUrl(file);
+      setUploadPreview(previewId, nameId, previewUrl, emptyLabel, `${file.name || 'File dipilih'} • ${formatUploadSize(file.size)}`);
+    }
   });
 }
 
@@ -2108,6 +2815,13 @@ document.getElementById('customerSearchInput')?.addEventListener('input', (event
   syncCustomerSearchSuggestions(event.target.value);
 });
 
+function setCustomerTableLoading(message = 'Memuat daftar pelanggan...') {
+  const table = document.querySelector('.customer-table');
+  if (!table) return;
+  table.dataset.loadingText = String(message || 'Memuat daftar pelanggan...');
+  table.classList.add('is-loading');
+}
+
 function triggerCustomerAutoSearch(force = false) {
   const input = document.getElementById('customerSearchInput');
   const form = document.getElementById('customerSearchForm');
@@ -2118,6 +2832,7 @@ function triggerCustomerAutoSearch(force = false) {
   params.set('page', '1');
   const nextUrl = `${form.action}?${params.toString()}`;
   if (`${window.location.pathname}${window.location.search}` === `${form.action.replace(window.location.origin, '')}?${params.toString()}`) return;
+  setCustomerTableLoading('Menyegarkan daftar pelanggan...');
   window.location.assign(nextUrl);
 }
 
@@ -2135,7 +2850,7 @@ document.querySelectorAll('#customerFilterPanel select, #customerFilterPanel inp
   });
 });
 
-if (window.innerWidth > 768) {
+if (window.innerWidth > 1100) {
   document.querySelectorAll('#customerFilterPanel select').forEach((field) => {
     field.addEventListener('change', () => {
       const form = document.getElementById('customerSearchForm');
@@ -2146,7 +2861,14 @@ if (window.innerWidth > 768) {
 }
 
 document.getElementById('customerSearchForm')?.addEventListener('submit', () => {
-  if (window.innerWidth <= 768) toggleCustomerFilterPanel(false);
+  if (window.innerWidth <= 1100) toggleCustomerFilterPanel(false);
+  setCustomerTableLoading('Menerapkan filter pelanggan...');
+});
+
+document.querySelectorAll('.quick-filter-row a, .sort-link, .pagi a').forEach((link) => {
+  link.addEventListener('click', () => {
+    setCustomerTableLoading('Membuka data pelanggan...');
+  });
 });
 
 setTimeout(()=>document.querySelectorAll('.alert').forEach(a=>a.style.display='none'),4000);

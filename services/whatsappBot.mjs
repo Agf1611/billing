@@ -577,9 +577,86 @@ let notifiedAdminForQr = false;
 let whatsappLockFd = null;
 let whatsappLockPath = null;
 let whatsappLockOwned = false;
+let whatsappOutboxTimer = null;
+
+function getWhatsappSharedDir() {
+  const configured = String(getSetting('whatsapp_shared_dir', '') || '').trim();
+  if (configured) {
+    return path.isAbsolute(configured) ? configured : path.resolve(projectRoot, configured);
+  }
+  if (process.platform === 'win32') {
+    return path.resolve(projectRoot, 'data', 'whatsapp-ipc');
+  }
+  return '/tmp/billing-rtrw-whatsapp-ipc';
+}
+
+function getWhatsappOutboxDir() {
+  return path.join(getWhatsappSharedDir(), 'outbox');
+}
+
+function getWhatsappStatusMirrorPath() {
+  return path.join(getWhatsappSharedDir(), 'status.json');
+}
+
+function ensureWhatsappSharedPaths() {
+  const sharedDir = getWhatsappSharedDir();
+  const outboxDir = getWhatsappOutboxDir();
+  fs.mkdirSync(sharedDir, { recursive: true });
+  fs.mkdirSync(outboxDir, { recursive: true });
+  return { sharedDir, outboxDir, statusPath: getWhatsappStatusMirrorPath() };
+}
+
+function safeReadJson(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const raw = fs.readFileSync(filePath, 'utf8');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function getSharedWhatsappStatus() {
+  const data = safeReadJson(getWhatsappStatusMirrorPath());
+  return data && typeof data === 'object' ? data : null;
+}
+
+function writeSharedWhatsappStatus() {
+  try {
+    const { statusPath } = ensureWhatsappSharedPaths();
+    const previous = safeReadJson(statusPath);
+    const previousOwnerPid = Number(previous?.ownerPid || 0);
+    if (!whatsappLockOwned && previousOwnerPid && previousOwnerPid !== process.pid && isSharedWhatsappOwnerFresh(previous)) {
+      return;
+    }
+    const payload = {
+      connection: whatsappStatus.connection,
+      qr: whatsappStatus.qr || null,
+      user: whatsappStatus.user || null,
+      reason: whatsappStatus.reason || '',
+      reconnectAt: whatsappStatus.reconnectAt || null,
+      lastUpdate: new Date().toISOString(),
+      ownerPid: whatsappLockOwned ? process.pid : null,
+      ownerPort: whatsappLockOwned ? (Number(getSetting('server_port', 0)) || null) : null,
+      mode: whatsappLockOwned ? 'owner' : 'passive'
+    };
+    fs.writeFileSync(statusPath, JSON.stringify(payload), 'utf8');
+  } catch (error) {
+    logger.warn(`[WA] Gagal menulis status bersama: ${error.message || error}`);
+  }
+}
+
+function clearWhatsappOutboxTimer() {
+  if (whatsappOutboxTimer) {
+    clearInterval(whatsappOutboxTimer);
+    whatsappOutboxTimer = null;
+  }
+}
 
 function updateWhatsappStatus(patch = {}) {
   Object.assign(whatsappStatus, patch, { lastUpdate: new Date() });
+  writeSharedWhatsappStatus();
 }
 
 function clearReconnectTimer() {
@@ -588,6 +665,7 @@ function clearReconnectTimer() {
     reconnectTimer = null;
   }
   whatsappStatus.reconnectAt = null;
+  writeSharedWhatsappStatus();
 }
 
 function getWhatsappLockPath() {
@@ -602,6 +680,7 @@ function getWhatsappLockPath() {
 }
 
 function releaseWhatsappLock() {
+  clearWhatsappOutboxTimer();
   if (!whatsappLockOwned || !whatsappLockPath) return;
   try {
     if (whatsappLockFd !== null) {
@@ -619,6 +698,7 @@ function releaseWhatsappLock() {
   } catch {}
   whatsappLockOwned = false;
   whatsappLockPath = null;
+  writeSharedWhatsappStatus();
 }
 
 function parseExistingWhatsappLock(lockPath) {
@@ -636,12 +716,30 @@ function parseExistingWhatsappLock(lockPath) {
 function isWhatsappLockStale(lockData) {
   const pid = Number(lockData?.pid || 0);
   if (!Number.isFinite(pid) || pid <= 0) return true;
-  if (process.platform === 'win32') return false;
   try {
-    return !fs.existsSync(`/proc/${pid}`);
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    if (error && error.code === 'ESRCH') return true;
+    if (error && error.code === 'EPERM') return false;
+    if (process.platform === 'win32') return true;
+    return false;
+  }
+}
+
+function isSharedWhatsappOwnerFresh(sharedStatus) {
+  const ownerPid = Number(sharedStatus?.ownerPid || 0);
+  if (!Number.isFinite(ownerPid) || ownerPid <= 0) return false;
+  try {
+    process.kill(ownerPid, 0);
+    return true;
   } catch {
     return false;
   }
+}
+
+function isSharedWhatsappOpen(sharedStatus = getSharedWhatsappStatus()) {
+  return String(sharedStatus?.connection || '').toLowerCase() === 'open' && isSharedWhatsappOwnerFresh(sharedStatus);
 }
 
 function tryAcquireWhatsappLock() {
@@ -691,6 +789,117 @@ function tryAcquireWhatsappLock() {
     }
     return { ok: false, path: lockPath };
   }
+}
+
+function normalizeWaTarget(to) {
+  let digits = String(to || '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+  return {
+    digits,
+    jid: String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`
+  };
+}
+
+function makeOutboxFilePath(id) {
+  return path.join(getWhatsappOutboxDir(), `${id}.json`);
+}
+
+function makeOutboxResultPath(id) {
+  return path.join(getWhatsappOutboxDir(), `${id}.result.json`);
+}
+
+async function enqueueWhatsappOutbox(payload, waitMs = 15000) {
+  const { outboxDir } = ensureWhatsappSharedPaths();
+  const id = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  const jobPath = makeOutboxFilePath(id);
+  const resultPath = makeOutboxResultPath(id);
+  const job = {
+    id,
+    createdAt: new Date().toISOString(),
+    sourcePort: Number(getSetting('server_port', 0)) || null,
+    sourcePid: process.pid,
+    ...payload
+  };
+  fs.writeFileSync(jobPath, JSON.stringify(job), 'utf8');
+
+  const startedAt = Date.now();
+  while ((Date.now() - startedAt) < waitMs) {
+    await sleep(250);
+    const result = safeReadJson(resultPath);
+    if (!result) continue;
+    try { fs.unlinkSync(resultPath); } catch {}
+    return Boolean(result.ok);
+  }
+
+  return false;
+}
+
+async function processWhatsappOutboxJob(jobPath) {
+  if (!whatsappLockOwned || !currentSock || whatsappStatus.connection !== 'open') return false;
+  const job = safeReadJson(jobPath);
+  if (!job || !job.id) return false;
+  const resultPath = makeOutboxResultPath(job.id);
+  let ok = false;
+  try {
+    const target = normalizeWaTarget(job.to);
+    if (!target) throw new Error('invalid_target');
+    if (job.type === 'image') {
+      const buffer = Buffer.from(String(job.imageBase64 || ''), 'base64');
+      if (!buffer.length) throw new Error('invalid_image');
+      await withTimeout(
+        currentSock.sendMessage(target.jid, {
+          image: buffer,
+          mimetype: 'image/png',
+          caption: String(job.caption || '')
+        }),
+        getSetting('whatsapp_send_timeout_ms', 12000),
+        'kirim gambar WhatsApp'
+      );
+      ok = true;
+    } else {
+      const text = String(job.text || '').trim();
+      if (!text) throw new Error('empty_text');
+      await withTimeout(
+        currentSock.sendMessage(target.jid, { text }),
+        getSetting('whatsapp_send_timeout_ms', 12000),
+        'kirim pesan WhatsApp'
+      );
+      ok = true;
+    }
+  } catch (error) {
+    logger.warn(`[WA] Outbox gagal diproses (${job.id}): ${error.message || error}`);
+  } finally {
+    try { fs.writeFileSync(resultPath, JSON.stringify({ ok, at: new Date().toISOString() }), 'utf8'); } catch {}
+    try { fs.unlinkSync(jobPath); } catch {}
+  }
+  return ok;
+}
+
+async function flushWhatsappOutbox() {
+  if (!whatsappLockOwned || !currentSock || whatsappStatus.connection !== 'open') return;
+  const { outboxDir } = ensureWhatsappSharedPaths();
+  let files = [];
+  try {
+    files = fs.readdirSync(outboxDir)
+      .filter((name) => name.endsWith('.json') && !name.endsWith('.result.json'))
+      .sort();
+  } catch {
+    return;
+  }
+  for (const file of files) {
+    await processWhatsappOutboxJob(path.join(outboxDir, file));
+  }
+}
+
+function ensureWhatsappOutboxWorker() {
+  if (!whatsappLockOwned) return;
+  if (whatsappOutboxTimer) return;
+  whatsappOutboxTimer = setInterval(() => {
+    flushWhatsappOutbox().catch((error) => {
+      logger.warn(`[WA] Outbox flush error: ${error.message || error}`);
+    });
+  }, 1000);
 }
 
 function normalizeDisconnectCode(rawCode) {
@@ -787,14 +996,60 @@ async function waitForWhatsappOpen(maxWaitMs = 20000, pollMs = 1000) {
 
 export async function ensureWhatsAppReady(maxWaitMs = 20000) {
   if (currentSock && whatsappStatus.connection === 'open') return true;
+  if (!currentSock) {
+    const shared = getSharedWhatsappStatus();
+    if (isSharedWhatsappOpen(shared)) {
+      updateWhatsappStatus({
+        connection: 'open',
+        qr: null,
+        user: shared?.user || null,
+        reason: 'delegated_passive',
+        reconnectAt: null
+      });
+      return true;
+    }
+  }
+  if (!currentSock && String(whatsappStatus.reason || '').toLowerCase() === 'delegated_passive') {
+    const shared = getSharedWhatsappStatus();
+    if (isSharedWhatsappOpen(shared)) {
+      return true;
+    }
+    await startWhatsAppBot({ force: true }).catch((error) => {
+      logger.warn(`[WA] Gagal mengambil alih sesi passive: ${error.message || error}`);
+    });
+    return waitForWhatsappOpen(maxWaitMs, 1000);
+  }
 
   const state = String(whatsappStatus.connection || '').toLowerCase();
-  if (state === 'qr' || state === 'loggedout' || state === 'passive') return false;
+  if (state === 'qr' || state === 'loggedout') return false;
+  if (state === 'passive') {
+    const shared = getSharedWhatsappStatus();
+    if (isSharedWhatsappOpen(shared)) {
+      return true;
+    }
+    await startWhatsAppBot({ force: true }).catch((error) => {
+      logger.warn(`[WA] Gagal mengambil alih sesi passive: ${error.message || error}`);
+    });
+    return waitForWhatsappOpen(maxWaitMs, 1000);
+  }
 
   try {
     await startWhatsAppBot({ force: !currentSock || state === 'replaced' || state === 'close' });
   } catch (e) {
     logger.warn(`[WA] Gagal memancing koneksi bot: ${e.message || e}`);
+  }
+  if (!currentSock) {
+    const shared = getSharedWhatsappStatus();
+    if (isSharedWhatsappOpen(shared)) {
+      updateWhatsappStatus({
+        connection: 'open',
+        qr: null,
+        user: shared?.user || null,
+        reason: 'delegated_passive',
+        reconnectAt: null
+      });
+      return true;
+    }
   }
 
   return waitForWhatsappOpen(maxWaitMs, 1000);
@@ -803,11 +1058,9 @@ export async function ensureWhatsAppReady(maxWaitMs = 20000) {
 export async function sendWA(to, text) {
   const messageText = String(text || '').trim();
   if (!messageText) return false;
-  let digits = String(to || '').replace(/\D/g, '');
-  if (!digits) return false;
-  if (digits.startsWith('0')) {
-    digits = '62' + digits.slice(1);
-  }
+  const target = normalizeWaTarget(to);
+  if (!target) return false;
+  const digits = target.digits;
   const now = Date.now();
   pruneRecentOutgoingMessages(now);
   const dedupeKey = `${digits}|${messageText}`;
@@ -818,6 +1071,16 @@ export async function sendWA(to, text) {
   }
 
   const ready = await ensureWhatsAppReady(10000);
+  const passiveMode = !currentSock && (
+    String(whatsappStatus.connection || '').toLowerCase() === 'passive' ||
+    String(whatsappStatus.reason || '').toLowerCase() === 'delegated_passive'
+  );
+  if (passiveMode && ready) {
+    recentOutgoingMessages.set(dedupeKey, now);
+    const queued = await enqueueWhatsappOutbox({ type: 'text', to: digits, text: messageText }, 15000);
+    if (!queued) recentOutgoingMessages.delete(dedupeKey);
+    return queued;
+  }
   if (!ready || !currentSock || whatsappStatus.connection !== 'open') {
     logger.warn('WhatsApp: Gagal kirim pesan, bot belum terhubung.');
     return false;
@@ -825,9 +1088,8 @@ export async function sendWA(to, text) {
 
   recentOutgoingMessages.set(dedupeKey, now);
   try {
-    const jid = String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`;
     await withTimeout(
-      currentSock.sendMessage(jid, { text: messageText }),
+      currentSock.sendMessage(target.jid, { text: messageText }),
       getSetting('whatsapp_send_timeout_ms', 12000),
       'kirim pesan WhatsApp'
     );
@@ -849,11 +1111,9 @@ export async function sendWA(to, text) {
 
 export async function sendWAImage(to, imageBuffer, caption = '') {
   const captionText = String(caption || '').trim();
-  let digits = String(to || '').replace(/\D/g, '');
-  if (!digits) return false;
-  if (digits.startsWith('0')) {
-    digits = '62' + digits.slice(1);
-  }
+  const target = normalizeWaTarget(to);
+  if (!target) return false;
+  const digits = target.digits;
 
   const buffer = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer || []);
   if (!buffer.length) return sendWA(to, captionText);
@@ -868,6 +1128,21 @@ export async function sendWAImage(to, imageBuffer, caption = '') {
   }
 
   const ready = await ensureWhatsAppReady(10000);
+  const passiveMode = !currentSock && (
+    String(whatsappStatus.connection || '').toLowerCase() === 'passive' ||
+    String(whatsappStatus.reason || '').toLowerCase() === 'delegated_passive'
+  );
+  if (passiveMode && ready) {
+    recentOutgoingMessages.set(dedupeKey, now);
+    const queued = await enqueueWhatsappOutbox({
+      type: 'image',
+      to: digits,
+      caption: captionText,
+      imageBase64: buffer.toString('base64')
+    }, 20000);
+    if (!queued) recentOutgoingMessages.delete(dedupeKey);
+    return queued;
+  }
   if (!ready || !currentSock || whatsappStatus.connection !== 'open') {
     logger.warn('WhatsApp: Gagal kirim gambar, bot belum terhubung.');
     return false;
@@ -875,9 +1150,8 @@ export async function sendWAImage(to, imageBuffer, caption = '') {
 
   recentOutgoingMessages.set(dedupeKey, now);
   try {
-    const jid = String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`;
     await withTimeout(
-      currentSock.sendMessage(jid, {
+      currentSock.sendMessage(target.jid, {
         image: buffer,
         mimetype: 'image/png',
         caption: captionText
@@ -940,11 +1214,13 @@ export async function startWhatsAppBot(options = {}) {
 
   const lock = tryAcquireWhatsappLock();
   if (!lock.ok) {
+    const shared = getSharedWhatsappStatus();
+    const sharedOpen = isSharedWhatsappOpen(shared);
     updateWhatsappStatus({
-      connection: 'passive',
+      connection: sharedOpen ? 'open' : 'passive',
       qr: null,
-      user: null,
-      reason: 'lock_held',
+      user: shared?.user || null,
+      reason: sharedOpen ? 'delegated_passive' : 'lock_held',
       reconnectAt: null
     });
     logger.warn(`[WA] Instance ini mode pasif karena sesi WhatsApp sedang dipegang proses lain. lock=${lock.path}`);
@@ -1050,6 +1326,10 @@ export async function startWhatsAppBot(options = {}) {
         reason: 'connected'
       });
       logger.info('WhatsApp bot terhubung');
+      ensureWhatsappOutboxWorker();
+      flushWhatsappOutbox().catch((error) => {
+        logger.warn(`[WA] Flush outbox awal gagal: ${error.message || error}`);
+      });
 
       if (qrShownSinceStart && !notifiedAdminForQr) {
         notifiedAdminForQr = true;
@@ -1294,7 +1574,7 @@ export async function startWhatsAppBot(options = {}) {
             billingSvc.markAsPaid(targetInvId, 'WA Bot Admin', 'Paid via WhatsApp Command');
             
             const customer = customerSvc.getCustomerById(targetInv.customer_id);
-            if (customer && customer.status === 'suspended') {
+            if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
               const freshCustomer = customerSvc.getAllCustomers().find(c => c.id === targetInv.customer_id);
               if (freshCustomer && freshCustomer.unpaid_count === 0) {
                 await customerSvc.activateCustomer(targetInv.customer_id);
@@ -1337,7 +1617,8 @@ export async function startWhatsAppBot(options = {}) {
 
         if (parsed.admin && parsed.cmd === 'generate') {
           try {
-            const count = billingSvc.generateMonthlyInvoices(parseInt(parsed.month), parseInt(parsed.year));
+            const generated = billingSvc.generateMonthlyInvoices(parseInt(parsed.month), parseInt(parsed.year));
+            const count = typeof generated === 'number' ? generated : Number(generated?.count || 0);
             await reply(`✅ Berhasil generate *${count}* tagihan untuk periode ${parsed.month}/${parsed.year}.`);
           } catch (e) {
             await reply('❌ Gagal generate: ' + e.message);

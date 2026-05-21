@@ -1,0 +1,25 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="6" y="2" width="116" height="122" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#0F172A" flood-opacity="0.18"/>
+    </filter>
+    <linearGradient id="pinBlue" x1="64" y1="8" x2="64" y2="94" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#shadow)">
+    <path d="M64 10C39.15 10 19 29.93 19 54.5C19 84.52 50.71 102.45 60.16 113.18C62.2 115.47 65.8 115.47 67.84 113.18C77.29 102.45 109 84.52 109 54.5C109 29.93 88.85 10 64 10Z" fill="url(#pinBlue)"/>
+    <circle cx="64" cy="54" r="31" fill="#F8FAFC"/>
+    <rect x="48" y="26" width="32" height="56" rx="8" fill="#111827"/>
+    <rect x="53" y="16" width="22" height="18" rx="5" fill="#0B1220"/>
+    <rect x="53" y="74" width="22" height="18" rx="5" fill="#0B1220"/>
+    <rect x="41" y="32" width="46" height="44" rx="7" fill="#F3F4F6" stroke="#CBD5E1" stroke-width="2"/>
+    <text x="64" y="58" text-anchor="middle" font-size="11" font-family="Arial, sans-serif" font-weight="700" fill="#111827">ODP</text>
+    <path d="M64 98L48 104L64 112L80 104L64 98Z" fill="#3B82F6" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M47 88L28 95L43 108L60 103L47 88Z" fill="#16A34A" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M81 88L68 103L85 108L100 95L81 88Z" fill="#EF4444" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M43 108L27 102L31 116L49 120L64 112L43 108Z" fill="#EAB308" stroke="#FFFFFF" stroke-width="2"/>
+    <path d="M85 108L64 112L79 120L97 116L101 102L85 108Z" fill="#60A5FA" stroke="#FFFFFF" stroke-width="2"/>
+  </g>
+</svg>

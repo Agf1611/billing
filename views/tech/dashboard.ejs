@@ -1,8 +1,9 @@
 <%- include('partials/header') %>
 
 <% const operationalTasksList = typeof operationalTasks !== 'undefined' && Array.isArray(operationalTasks) ? operationalTasks : []; %>
+<% const outageIncidents = typeof openOutages !== 'undefined' && Array.isArray(openOutages) ? openOutages : []; %>
 
-<%
+<% 
   const taskTypeMap = {
     install: 'Pemasangan Baru',
     repair: 'Perbaikan',
@@ -24,6 +25,12 @@
     high: 'Tinggi',
     urgent: 'Urgent'
   };
+  const activeTaskPreview = operationalTasksList.slice(0, 3);
+  const todayTicketCount = Array.isArray(tickets) ? tickets.length : 0;
+  function buildRouteHref(value) {
+    const query = String(value || '').trim();
+    return query ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}` : '';
+  }
 %>
 
 <style>
@@ -34,7 +41,7 @@
     gap: 14px;
     padding: 16px;
     background:
-      linear-gradient(145deg, rgba(91, 140, 255, .16), rgba(39, 193, 131, .08)),
+      linear-gradient(145deg, rgba(111, 141, 255, .18), rgba(77, 189, 255, .08)),
       var(--tech-panel);
   }
 
@@ -45,7 +52,7 @@
     width: 164px;
     height: 164px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(91, 140, 255, .2) 0%, rgba(91, 140, 255, 0) 72%);
+    background: radial-gradient(circle, rgba(111, 141, 255, .22) 0%, rgba(111, 141, 255, 0) 72%);
     pointer-events: none;
   }
 
@@ -85,47 +92,138 @@
     max-width: 34rem;
   }
 
-  .tech-shortcut-grid {
+  .tech-command-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
     position: relative;
     z-index: 1;
   }
 
-  .tech-shortcut-card {
+  .tech-command-card {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 13px 12px;
-    border-radius: 18px;
+    gap: 9px;
+    padding: 14px 13px;
+    border-radius: 20px;
     border: 1px solid var(--tech-border);
-    background: rgba(255, 255, 255, .06);
-    min-height: 100px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .065), rgba(255, 255, 255, .04));
+    min-height: 108px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
   }
 
-  .tech-shortcut-icon {
-    width: 38px;
-    height: 38px;
+  .dash-outage-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .dash-outage-card {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(248, 113, 113, .22);
+    background: linear-gradient(180deg, rgba(127, 29, 29, .18), rgba(30, 41, 59, .92));
+  }
+
+  .dash-outage-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .dash-outage-title {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  .dash-outage-copy {
+    color: var(--tech-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .dash-outage-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(248, 113, 113, .14);
+    color: #fecaca;
+    border: 1px solid rgba(248, 113, 113, .22);
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .dash-outage-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .dash-outage-meta-box {
+    padding: 10px 11px;
+    border-radius: 14px;
+    border: 1px solid var(--tech-border);
+    background: rgba(255, 255, 255, .04);
+  }
+
+  .dash-outage-meta-box label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--tech-muted);
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .dash-outage-meta-box strong {
+    color: var(--tech-text);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .tech-command-icon {
+    width: 40px;
+    height: 40px;
     border-radius: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, .12);
-    color: var(--tech-text);
+    background: var(--tech-primary-soft);
+    color: var(--tech-primary);
     font-size: 18px;
   }
 
-  .tech-shortcut-title {
+  .tech-command-title {
     font-size: 13px;
     font-weight: 800;
     line-height: 1.2;
   }
 
-  .tech-shortcut-desc {
+  .tech-command-desc {
     color: var(--tech-muted);
     font-size: 11px;
     line-height: 1.45;
+  }
+
+  .tech-command-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: max-content;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.08);
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--tech-text);
   }
 
   .dash-section-head {
@@ -309,8 +407,108 @@
     letter-spacing: .06em;
   }
 
+  .dash-ticket-card {
+    display: grid;
+    gap: 10px;
+    padding: 13px 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.03));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  }
+
+  .dash-ticket-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .dash-ticket-name {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  .dash-ticket-meta,
+  .dash-ticket-message {
+    color: var(--tech-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .dash-ticket-message {
+    padding: 10px 11px;
+    border-radius: 16px;
+    border: 1px solid var(--tech-border);
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  }
+
+  .dash-split-modal-actions .btn,
+  .dash-split-modal-actions form {
+    flex: 1 1 0;
+    margin: 0;
+  }
+
+  .dash-split-modal-actions .btn-link {
+    min-height: 52px;
+    font-weight: 800;
+  }
+
+  .dash-empty-cta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .dash-empty-cta .btn {
+    min-height: 46px;
+    border-radius: 16px;
+    font-weight: 800;
+  }
+
+  .dash-ticket-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .dash-ticket-actions .btn,
+  .dash-ticket-actions a {
+    min-height: 44px;
+    border-radius: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 8px 6px;
+  }
+
+  .dash-action-mini {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    line-height: 1;
+  }
+
+  .dash-action-mini i {
+    font-size: 14px;
+  }
+
+  .dash-action-mini small {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+
   @media (max-width: 768px) {
     .dash-task-card {
+      grid-template-columns: 1fr;
+    }
+
+    .dash-outage-meta {
       grid-template-columns: 1fr;
     }
 
@@ -339,29 +537,29 @@
       font-size: 21px;
     }
 
-    .tech-shortcut-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    .tech-command-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
 
-    .tech-shortcut-card {
-      min-height: 92px;
+    .tech-command-card {
+      min-height: 96px;
       padding: 12px 10px;
       border-radius: 16px;
     }
 
-    .tech-shortcut-icon {
+    .tech-command-icon {
       width: 34px;
       height: 34px;
       border-radius: 12px;
       font-size: 16px;
     }
 
-    .tech-shortcut-title {
+    .tech-command-title {
       font-size: 12px;
     }
 
-    .tech-shortcut-desc {
+    .tech-command-desc {
       font-size: 10px;
     }
 
@@ -383,6 +581,15 @@
       grid-template-columns: 1fr;
       gap: 8px;
     }
+
+    .dash-ticket-actions {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .dash-empty-cta {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 
@@ -390,23 +597,29 @@
   <div class="tech-hero-copy">
     <span class="tech-hero-kicker"><i class="bi bi-lightning-charge"></i>Kerja lapangan</span>
     <div class="tech-hero-title">Halo, <%= techName %></div>
-    <div class="tech-hero-text">Pantau job, cek pelanggan, dan buka alat bantu teknisi dari satu dashboard yang lebih ringkas untuk penggunaan mobile.</div>
+    <div class="tech-hero-text">Buka aksi utama tanpa banyak pindah halaman.</div>
   </div>
-  <div class="tech-shortcut-grid">
-    <a href="/tech/customers/new" class="tech-shortcut-card">
-      <span class="tech-shortcut-icon"><i class="bi bi-person-plus"></i></span>
-      <span class="tech-shortcut-title">Tambah Pelanggan</span>
-      <span class="tech-shortcut-desc">Input pengajuan baru dari lokasi.</span>
+  <div class="tech-command-grid">
+    <a href="/tech/customers/new" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-person-plus"></i></span>
+      <span class="tech-command-title">Mulai Pemasangan</span>
+      <span class="tech-command-desc">Buka form pelanggan baru.</span>
     </a>
-    <a href="/tech/monitoring" class="tech-shortcut-card">
-      <span class="tech-shortcut-icon"><i class="bi bi-display"></i></span>
-      <span class="tech-shortcut-title">Monitoring</span>
-      <span class="tech-shortcut-desc">Cek status ONU dan koneksi.</span>
+    <a href="/tech/pool" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-broadcast-pin"></i></span>
+      <span class="tech-command-title">Tiket Hari Ini</span>
+      <span class="tech-command-desc">Lihat keluhan yang belum ditangani.</span>
+      <span class="tech-command-count"><i class="bi bi-bell"></i> <%= todayTicketCount %> tiket</span>
     </a>
-    <a href="/tech/map" class="tech-shortcut-card">
-      <span class="tech-shortcut-icon"><i class="bi bi-pin-map"></i></span>
-      <span class="tech-shortcut-title">Peta</span>
-      <span class="tech-shortcut-desc">Buka titik pelanggan di lapangan.</span>
+    <a href="/tech/customers" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-search"></i></span>
+      <span class="tech-command-title">Cari Pelanggan</span>
+      <span class="tech-command-desc">Buka detail, WA, dan rute cepat.</span>
+    </a>
+    <a href="/tech/monitoring" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-display"></i></span>
+      <span class="tech-command-title">Monitoring ONU</span>
+      <span class="tech-command-desc">Cek online, offline, dan tindakan cepat.</span>
     </a>
   </div>
 </div>
@@ -436,23 +649,70 @@
 
 <div class="dash-section-head">
   <h6 class="dash-section-title">
-    <i class="bi bi-clipboard-check me-1"></i> Job Operasional (<%= operationalTasksList.length %>)
+    <i class="bi bi-broadcast-pin me-1"></i> Gangguan Massal Aktif (<%= outageIncidents.length %>)
+  </h6>
+  <a href="/tech/api/outages" class="dash-section-link" target="_blank" rel="noopener">Lihat API</a>
+</div>
+
+<% if (outageIncidents.length === 0) { %>
+  <div class="text-center py-4">
+    <i class="bi bi-broadcast-pin text-primary" style="font-size: 34px;"></i>
+    <p class="text-secondary mt-2 small">Belum ada area gangguan massal aktif. Sistem hanya menghitung pelanggan aktif, bukan isolir atau nonaktif.</p>
+  </div>
+<% } else { %>
+  <div class="dash-outage-list">
+    <% outageIncidents.forEach((outage) => { %>
+      <div class="dash-outage-card">
+        <div class="dash-outage-top">
+          <div>
+            <div class="dash-outage-title"><%= outage.zoneLabel || outage.zoneKey || 'Area tidak diketahui' %></div>
+            <div class="dash-outage-copy">Prioritaskan cek jalur utama, ODP, sambungan feeder, atau perangkat distribusi di area ini.</div>
+          </div>
+          <span class="dash-outage-badge"><i class="bi bi-exclamation-triangle-fill"></i> <%= Number(outage.offlineCount || 0) %> pelanggan</span>
+        </div>
+        <div class="dash-outage-meta">
+          <div class="dash-outage-meta-box">
+            <label>Dampak</label>
+            <strong><%= Number(outage.offlineCount || 0) %> / <%= Number(outage.baselineCount || 0) %> aktif</strong>
+          </div>
+          <div class="dash-outage-meta-box">
+            <label>Persentase</label>
+            <strong><%= Number(outage.offlinePercent || 0).toFixed(1) %>%</strong>
+          </div>
+          <div class="dash-outage-meta-box">
+            <label>Sejak</label>
+            <strong><%= outage.detectedAt ? new Date(outage.detectedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-' %></strong>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+<% } %>
+
+<div class="dash-section-head">
+  <h6 class="dash-section-title">
+    <i class="bi bi-clipboard-check me-1"></i> Pekerjaan Aktif Saya (<%= activeTaskPreview.length %>)
   </h6>
   <a href="/tech/tasks" class="dash-section-link">Lihat semua</a>
 </div>
 
-<% if (operationalTasksList.length === 0) { %>
+<% if (activeTaskPreview.length === 0) { %>
   <div class="text-center py-4">
     <i class="bi bi-clipboard-check text-primary" style="font-size: 34px;"></i>
-    <p class="text-secondary mt-2 small">Belum ada job operasional yang ditugaskan. Jika admin membuat pemasangan baru, survey, atau perbaikan lapangan, job-nya akan muncul di sini.</p>
+    <p class="text-secondary mt-2 small">Belum ada pekerjaan aktif saat ini.</p>
+    <div class="dash-empty-cta">
+      <a href="/tech/pool" class="btn btn-primary"><i class="bi bi-broadcast-pin me-2"></i>Ambil Tiket Baru</a>
+      <a href="/tech/customers/new" class="btn btn-outline-primary"><i class="bi bi-person-plus me-2"></i>Tambah Pelanggan</a>
+    </div>
   </div>
 <% } else { %>
   <div class="dash-task-list">
-    <% operationalTasksList.forEach((task) => { %>
+    <% activeTaskPreview.forEach((task) => { %>
       <% const taskStatusKey = task.status === 'done' ? 'resolved' : task.status === 'in_progress' ? 'in_progress' : 'open'; %>
       <% const customerName = task.customer_name || task.linked_customer_name || 'Pelanggan umum'; %>
       <% const customerPhone = task.customer_phone || task.linked_customer_phone || ''; %>
       <% const shortLocation = task.customer_address || task.location_note || 'Lokasi menyusul'; %>
+      <% const routeHref = buildRouteHref(task.customer_address || task.location_note || customerName); %>
       <div class="t-card dash-task-card">
         <div class="dash-task-main">
           <div class="dash-task-row">
@@ -478,6 +738,11 @@
               <i class="bi bi-whatsapp"></i>
             </a>
           <% } %>
+          <% if (routeHref) { %>
+            <a href="<%= routeHref %>" target="_blank" rel="noopener" class="dash-task-icon" title="Buka rute">
+              <i class="bi bi-sign-turn-right"></i>
+            </a>
+          <% } %>
           <% if (task.status === 'assigned') { %>
             <form method="POST" action="/tech/tasks/<%= task.id %>/start">
               <button type="submit" class="btn btn-primary dash-task-btn"><i class="bi bi-play-circle"></i> Mulai</button>
@@ -494,10 +759,10 @@
 
       <div class="modal fade" id="dashTaskDetailModal<%= task.id %>" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-          <div class="modal-content surface-soft">
-            <div class="modal-header" style="border-color:var(--tech-border)">
+          <div class="modal-content tech-modal-card">
+            <div class="modal-header">
               <div>
-                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskStatusMap[task.status] || task.status %></div>
+                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> / <%= taskStatusMap[task.status] || task.status %></div>
                 <h6 class="modal-title mb-0"><%= task.title %></h6>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -574,7 +839,7 @@
                 </div>
               <% } %>
             </div>
-            <div class="modal-footer" style="border-color:var(--tech-border)">
+            <div class="modal-footer">
               <% if (customerPhone) { %>
                 <a href="<%= buildWhatsAppLink(customerPhone) %>" class="btn btn-outline-success btn-sm"><i class="bi bi-whatsapp me-1"></i> Hubungi</a>
               <% } %>
@@ -587,8 +852,8 @@
       <% if (task.status === 'in_progress') { %>
         <div class="modal fade" id="dashCompleteTaskModal<%= task.id %>" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content surface-soft">
-              <div class="modal-header" style="border-color:var(--tech-border)">
+            <div class="modal-content tech-modal-card">
+              <div class="modal-header">
                 <h6 class="modal-title mb-0">Selesaikan Job</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
               </div>
@@ -597,7 +862,7 @@
                   <label class="form-label text-secondary small">Catatan Penyelesaian</label>
                   <textarea class="form-control tech-textarea" name="completion_note" rows="3" placeholder="Contoh: pemasangan selesai, ONU normal, pelanggan sudah online"></textarea>
                 </div>
-                <div class="modal-footer" style="border-color:var(--tech-border)">
+                <div class="modal-footer">
                   <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
                   <button type="submit" class="btn btn-success btn-sm">Simpan Selesai</button>
                 </div>
@@ -621,35 +886,58 @@
   </div>
 <% } else { %>
   <% tickets.forEach(ticket => { %>
-    <div class="t-card">
-      <div class="d-flex justify-content-between align-items-start mb-2">
+    <% const ticketRouteHref = buildRouteHref(ticket.customer_address || ticket.customer_name || ''); %>
+    <div class="t-card dash-ticket-card">
+      <div class="dash-ticket-top">
         <span class="badge-status badge-<%= ticket.status %>">
           <% let statusLabel = ticket.status; if (ticket.status === 'open') statusLabel = t('tech.ticket.open', 'Belum Ditangani'); if (ticket.status === 'in_progress') statusLabel = t('tech.ticket.in_progress', 'Sedang Dikerjakan'); if (ticket.status === 'resolved') statusLabel = t('tech.ticket.resolved', 'Selesai'); %>
           <% if(ticket.status === 'in_progress') { %> <i class="bi bi-tools"></i> <%= statusLabel %> <% } else { %> <%= statusLabel %> <% } %>
         </span>
         <span class="text-secondary" style="font-size: 11px;"><%= new Date(ticket.created_at).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'}) %></span>
       </div>
-      
-      <div class="fw-bold mb-1" style="font-size: 15px;"><%= ticket.customer_name %></div>
-      <div class="text-secondary mb-2" style="font-size: 12px;">
+
+      <div class="dash-ticket-name"><%= ticket.customer_name %></div>
+      <div class="dash-ticket-meta">
         <i class="bi bi-geo-alt-fill me-1"></i><%= ticket.customer_address || t('tech.ticket.no_address', 'Tidak ada alamat') %><br>
         <i class="bi bi-telephone-fill me-1"></i><a href="<%= buildWhatsAppLink(ticket.customer_phone) %>" class="text-decoration-none text-info"><%= ticket.customer_phone || '-' %></a>
       </div>
-      
-      <div class="surface-soft p-2 rounded-3 mb-3" style="font-size: 13px;">
+
+      <div class="dash-ticket-message">
         <div class="fw-semibold text-primary"><%= ticket.subject %></div>
         <div><%= ticket.message %></div>
       </div>
-      
-      <button type="button" class="btn btn-success btn-action" data-bs-toggle="modal" data-bs-target="#resolveModal<%= ticket.id %>">
-        <i class="bi bi-check-circle-fill me-2"></i> <%= t('tech.ticket.mark_resolved', 'Tandai Selesai') %>
-      </button>
+      <div class="dash-ticket-actions">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#resolveModal<%= ticket.id %>" title="Selesai">
+          <span class="dash-action-mini"><i class="bi bi-check-circle-fill"></i><small>Selesai</small></span>
+        </button>
+        <% if (ticket.customer_phone) { %>
+          <a class="btn btn-outline-success" href="<%= buildWhatsAppLink(ticket.customer_phone) %>" title="WhatsApp">
+            <span class="dash-action-mini"><i class="bi bi-whatsapp"></i><small>WA</small></span>
+          </a>
+        <% } else { %>
+          <button type="button" class="btn btn-outline-secondary" disabled title="WhatsApp">
+            <span class="dash-action-mini"><i class="bi bi-whatsapp"></i><small>WA</small></span>
+          </button>
+        <% } %>
+        <% if (ticketRouteHref) { %>
+          <a class="btn btn-outline-info" href="<%= ticketRouteHref %>" target="_blank" rel="noopener" title="Rute">
+            <span class="dash-action-mini"><i class="bi bi-sign-turn-right"></i><small>Rute</small></span>
+          </a>
+        <% } else { %>
+          <button type="button" class="btn btn-outline-secondary" disabled title="Rute">
+            <span class="dash-action-mini"><i class="bi bi-sign-turn-right"></i><small>Rute</small></span>
+          </button>
+        <% } %>
+        <a class="btn btn-outline-primary" href="/tech/pool" title="Lihat">
+          <span class="dash-action-mini"><i class="bi bi-eye"></i><small>Detail</small></span>
+        </a>
+      </div>
 
       <!-- Modal Selesai -->
       <div class="modal fade" id="resolveModal<%= ticket.id %>" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content surface-soft">
-            <div class="modal-header" style="border-color:var(--tech-border)">
+          <div class="modal-content tech-modal-card">
+            <div class="modal-header">
               <h6 class="modal-title"><%= t('tech.ticket.resolve_title', 'Selesaikan Tugas') %></h6>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -657,7 +945,7 @@
               <i class="bi bi-check-circle-fill text-success" style="font-size: 40px;"></i>
               <p class="mt-3 mb-0" style="font-size: 14px;"><%= t('tech.ticket.resolve_confirm_prefix', 'Apakah Anda yakin tugas untuk keluhan') %> <b>"<%= ticket.subject %>"</b> pelanggan <b><%= ticket.customer_name %></b> <%= t('tech.ticket.resolve_confirm_suffix', 'sudah selesai dikerjakan?') %></p>
             </div>
-            <div class="modal-footer flex-nowrap p-0" style="border-color:var(--tech-border)">
+            <div class="modal-footer flex-nowrap p-0 dash-split-modal-actions">
               <button type="button" class="btn btn-link text-secondary text-decoration-none col-6 m-0" style="border-right:1px solid var(--tech-border)" data-bs-dismiss="modal"><%= t('tech.ticket.cancel', 'Batal') %></button>
               <form method="POST" action="/tech/tickets/<%= ticket.id %>/update" class="col-6 m-0">
                 <input type="hidden" name="status" value="resolved">

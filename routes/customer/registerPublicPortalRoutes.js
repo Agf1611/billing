@@ -7,6 +7,18 @@ function registerPublicPortalRoutes(router, deps) {
     signPublicToken
   } = deps;
 
+  function resolveLoggedInCustomer(req) {
+    const customerId = Number(req.session?.customerId || 0);
+    if (Number.isFinite(customerId) && customerId > 0) {
+      const byId = customerSvc.getCustomerById(customerId);
+      if (byId) return byId;
+    }
+
+    const loginId = String(req.session?.phone || '').trim();
+    if (!loginId) return null;
+    return customerSvc.findCustomerByAny(loginId) || null;
+  }
+
   router.get('/tos', (req, res) => {
     const settings = getSettingsWithCache();
     res.render('tos', {
@@ -44,6 +56,9 @@ function registerPublicPortalRoutes(router, deps) {
   });
 
   router.get('/login', (req, res) => {
+    if (resolveLoggedInCustomer(req)) {
+      return res.redirect('/customer/dashboard');
+    }
     const settings = getSettingsWithCache();
     res.render('login', { error: null, settings, form: { rememberMe: true } });
   });

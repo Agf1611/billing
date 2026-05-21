@@ -1,10 +1,44 @@
 <%- include('partials/header') %>
 
+<%
+  const shouldResetTechDraft = Boolean(msg && msg.type === 'success');
+  const safePackages = Array.isArray(packages) ? packages : [];
+  const safeRouters = Array.isArray(routers) ? routers : [];
+  const safeOdps = Array.isArray(odps) ? odps : [];
+  const safeOlts = Array.isArray(olts) ? olts : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+%>
+
 <style>
   .tech-create-hero{display:grid;gap:10px;padding:16px;background:linear-gradient(145deg, rgba(91,140,255,.16), rgba(39,193,131,.06)), var(--tech-panel)}
-  .tech-create-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
-  .tech-create-title{font-size:23px;font-weight:900;letter-spacing:-.04em;line-height:1.06;margin:0}
-  .tech-create-desc{color:var(--tech-muted);font-size:13px;line-height:1.55}
+  .tech-create-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;width:max-content}
+  .tech-create-title{font-size:22px;font-weight:900;letter-spacing:-.04em;line-height:1.06;margin:0}
+  .tech-create-desc{color:var(--tech-muted);font-size:12px;line-height:1.55}
+  .tech-create-section{padding:0}
+  .tech-create-section summary{list-style:none;cursor:pointer;padding:14px 14px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .tech-create-section summary::-webkit-details-marker{display:none}
+  .tech-create-section .chev{transition:transform .18s ease}
+  .tech-create-section[open] .chev{transform:rotate(180deg)}
+  .tech-create-section-body{padding:0 14px 14px}
+  .tech-create-section-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900}
+  .tech-create-section-sub{font-size:11px;color:var(--tech-muted);margin-top:4px}
+  .tech-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tech-create-grid .full{grid-column:1 / -1}
+  .tech-field-card{padding:10px;border-radius:18px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+  .tech-field-card label{display:block;margin-bottom:7px;font-size:11px;font-weight:800;color:var(--tech-muted)}
+  .tech-field-card .field-hint{margin-top:7px}
+  .tech-mode-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tech-mode-btn{min-height:46px;border-radius:16px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));color:var(--tech-text);font-size:12px;font-weight:800;padding:10px 12px}
+  .tech-mode-btn.active{border-color:rgba(111,141,255,.28);background:linear-gradient(180deg, rgba(111,141,255,.18), rgba(111,141,255,.08));color:var(--tech-primary)}
+  .tech-sync-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+  .tech-sync-card{padding:10px 11px;border-radius:16px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025))}
+  .tech-sync-card .label{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--tech-muted);margin-bottom:4px}
+  .tech-sync-card .value{font-size:11px;font-weight:800;line-height:1.35}
+  .tech-sync-card.ok .value{color:var(--tech-success)}
+  .tech-sync-card.warn .value{color:var(--tech-warning)}
+  .tech-sync-card.neutral .value{color:var(--tech-text)}
+  .tech-upload-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .tech-upload-actions .btn{border-radius:15px;min-height:44px;font-weight:800}
   .tech-upload-preview-row{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:10px}
   .tech-upload-preview-card{width:96px;min-height:96px;border-radius:18px;border:1px dashed rgba(148,163,184,.3);background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;overflow:hidden}
   .tech-upload-preview-card img{width:100%;height:96px;object-fit:cover;display:block}
@@ -13,286 +47,379 @@
   .tech-upload-preview-meta{display:flex;flex-direction:column;gap:4px;max-width:190px}
   .tech-upload-preview-name{font-size:11px;color:var(--tech-text);line-height:1.4;word-break:break-word}
   .tech-upload-preview-state{font-size:10px;color:#94a3b8}
+  .tech-form-actions{position:sticky;bottom:88px;z-index:20;margin-top:14px;padding:10px;border-radius:20px;border:1px solid var(--tech-border);background:rgba(15,23,42,.92);backdrop-filter:blur(18px);box-shadow:var(--tech-shadow)}
+  .tech-form-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tech-form-actions .btn{min-height:48px;border-radius:16px;font-weight:800}
+  .tech-optional-note{font-size:11px;color:var(--tech-muted);line-height:1.5}
+  .tech-map-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .tech-map-actions .btn{border-radius:15px;min-height:44px;font-weight:800}
+  .tech-hidden-file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
   @media (max-width:576px){
     .tech-create-hero{padding:14px}
-    .tech-create-title{font-size:21px}
+    .tech-create-title{font-size:20px}
+    .tech-create-grid{grid-template-columns:1fr}
+    .tech-sync-grid{grid-template-columns:1fr}
+    .tech-form-actions{bottom:92px}
   }
 </style>
 
 <div class="t-card tech-create-hero">
   <span class="tech-create-kicker"><i class="bi bi-person-plus"></i>Tambah Pelanggan</span>
-  <h2 class="tech-create-title">Pengajuan pelanggan baru langsung dari lapangan</h2>
-  <div class="tech-create-desc">Isi data pelanggan, akun internet, lokasi, dan ODP dengan lebih rapi dari tampilan mobile yang lebih fokus.</div>
+  <h2 class="tech-create-title">Pengajuan pelanggan baru</h2>
+  <div class="tech-create-desc">Isi data penting dulu, sisanya bisa dilengkapi di bagian opsional.</div>
 </div>
 
 <div class="t-card">
-  <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+  <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
     <div>
-      <div class="fw-bold" style="font-size:16px;"><i class="bi bi-person-plus text-primary me-2"></i>Form Pengajuan Pelanggan</div>
-      <div class="text-secondary small">Isi data sejelas mungkin. Admin akan review lebih cepat jika akun internet, alamat, dan lokasi sudah lengkap.</div>
+      <div class="fw-bold" style="font-size:16px;">Form Pengajuan</div>
+      <div class="text-secondary small">Fokus ke data yang benar-benar dipakai teknisi di lapangan.</div>
     </div>
     <span class="badge-status badge-open" style="white-space:nowrap">Butuh approval admin</span>
   </div>
-
-  <form method="POST" action="/tech/customers" enctype="multipart/form-data">
-    <div class="fw-bold mb-2" style="font-size:13px; letter-spacing:.3px;">Identitas Pelanggan</div>
-    <div class="mb-3">
-      <label class="form-label text-secondary small">Nama Pelanggan</label>
-      <input name="name" class="form-control rounded-4 tech-field" placeholder="Nama lengkap pelanggan" required>
-    </div>
-
-    <div class="row g-2">
-      <div class="col-6">
-        <label class="form-label text-secondary small">No. HP / WhatsApp</label>
-        <input name="phone" class="form-control rounded-4 tech-field" placeholder="08xxxxxxxxxx">
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Paket</label>
-        <select name="package_id" class="form-select rounded-4 tech-select" id="package_id">
-          <option value="">-- Pilih Paket --</option>
-          <% packages.forEach((p) => { %>
-            <option value="<%= p.id %>" data-profile="<%= p.pppoe_profile || '' %>"><%= p.name %> (Rp <%= Number(p.price || 0).toLocaleString('id-ID') %>)</option>
-          <% }) %>
-        </select>
-      </div>
-    </div>
-
-    <div class="mt-3">
-      <label class="form-label text-secondary small">Email</label>
-      <input name="email" class="form-control rounded-4 tech-field" type="email" placeholder="opsional">
-    </div>
-
-    <div class="mt-3">
-      <label class="form-label text-secondary small">Alamat</label>
-      <textarea name="address" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Nama jalan, patokan rumah, RT/RW, atau titik penting lainnya"></textarea>
-      <div class="field-hint">Semakin jelas alamat, semakin mudah teknisi lain atau admin menindaklanjuti tiket di masa depan.</div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">NIK</label>
-        <input name="nik" class="form-control rounded-4 tech-field" placeholder="Nomor KTP pelanggan">
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">NPWP</label>
-        <input name="npwp" class="form-control rounded-4 tech-field" placeholder="Opsional">
-      </div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Foto Rumah</label>
-        <input name="house_photo_file" id="tech_house_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
-        <div class="tech-upload-preview-row">
-          <div class="tech-upload-preview-card" id="tech_house_preview">
-            <div class="tech-upload-preview-empty"><i class="bi bi-house-door"></i><span>Preview Rumah</span></div>
-          </div>
-          <div class="tech-upload-preview-meta">
-            <div class="tech-upload-preview-name" id="tech_house_preview_name">Belum ada file dipilih</div>
-            <div class="tech-upload-preview-state">Foto tampak depan atau patokan rumah</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Upload KTP</label>
-        <input name="ktp_photo_file" id="tech_ktp_photo_file" type="file" accept="image/*" class="form-control rounded-4 tech-field">
-        <div class="tech-upload-preview-row">
-          <div class="tech-upload-preview-card" id="tech_ktp_preview">
-            <div class="tech-upload-preview-empty"><i class="bi bi-card-image"></i><span>Preview KTP</span></div>
-          </div>
-          <div class="tech-upload-preview-meta">
-            <div class="tech-upload-preview-name" id="tech_ktp_preview_name">Belum ada file dipilih</div>
-            <div class="tech-upload-preview-state">Pastikan foto jelas dan tidak blur</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="field-hint mt-2">NIK, NPWP, foto rumah, dan KTP sifatnya opsional, tapi sangat membantu admin saat verifikasi dan teknisi lain saat kunjungan ulang.</div>
-
-    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">Akun Internet</div>
-    <div class="mb-2">
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" role="switch" id="create_pppoe_secret" name="create_pppoe_secret" value="1" onchange="toggleSecretMode()">
-        <label class="form-check-label small" for="create_pppoe_secret">Buat secret PPPoE baru</label>
-      </div>
-      <div id="secretModeHint" class="field-hint">Mode default memakai secret yang sudah ada di MikroTik. Aktifkan tombol ini jika teknisi ingin mengajukan secret baru, dan secret baru akan dibuat aktif hanya setelah admin approve.</div>
-    </div>
-
-    <div class="row g-2">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Router (MikroTik)</label>
-        <select id="router_id" name="router_id" class="form-select rounded-4 tech-select" onchange="loadPppoeUsers(); loadPppoeProfiles()">
-          <option value="">Default Router</option>
-          <% (routers || []).forEach((r) => { %>
-            <option value="<%= r.id %>"><%= r.name %></option>
-          <% }) %>
-        </select>
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Akun PPPoE</label>
-        <input id="pppoe_username" name="pppoe_username" class="form-control rounded-4 tech-field" list="pppoeList" placeholder="Pilih / cari akun internet">
-        <datalist id="pppoeList"></datalist>
-        <div id="pppoeHint" class="field-hint"></div>
-      </div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Password PPPoE</label>
-        <input id="pppoe_password" name="pppoe_password" class="form-control rounded-4 tech-field" placeholder="Kosongkan bila sama dengan username">
-        <div class="field-hint">Bisa diisi sendiri. Jika kosong, sistem anggap password mengikuti username.</div>
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Profile Normal</label>
-        <select id="normal_pppoe_profile" name="normal_pppoe_profile" class="form-select rounded-4 tech-select">
-          <option value="">Ikuti profile paket</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Profile Isolir</label>
-        <select id="isolir_profile" name="isolir_profile" class="form-select rounded-4 tech-select">
-          <option value="BEATISOLIR">BEATISOLIR</option>
-        </select>
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Status Pelanggan</label>
-        <select name="status" class="form-select rounded-4 tech-select">
-          <option value="active">Aktif</option>
-          <option value="suspended">Suspend</option>
-          <option value="inactive">Nonaktif</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Isolir Otomatis</label>
-        <select name="auto_isolate" class="form-select rounded-4 tech-select">
-          <option value="1">Aktif</option>
-          <option value="0">Tidak Aktif</option>
-        </select>
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Tanggal Isolir (1-31)</label>
-        <input name="isolate_day" type="number" min="1" max="31" value="10" class="form-control rounded-4 tech-field">
-      </div>
-    </div>
-
-    <div class="row g-2 mt-1">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Tanggal Pasang</label>
-        <input name="install_date" type="date" class="form-control rounded-4 tech-field">
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">OLT</label>
-        <select name="olt_id" class="form-select rounded-4 tech-select">
-          <option value="">-- Tanpa OLT --</option>
-          <% (olts || []).forEach((o) => { %>
-            <option value="<%= o.id %>"><%= o.name %></option>
-          <% }) %>
-        </select>
-      </div>
-    </div>
-
-    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">
-      <i class="bi bi-geo-alt-fill text-warning me-2"></i>Lokasi Pelanggan
-    </div>
-    <div class="row g-2">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Latitude</label>
-        <input id="lat" name="lat" class="form-control rounded-4 tech-field" placeholder="-6.2">
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Longitude</label>
-        <input id="lng" name="lng" class="form-control rounded-4 tech-field" placeholder="106.8">
-      </div>
-    </div>
-    <button type="button" class="btn btn-outline-info btn-action" onclick="getLocation()">
-      <i class="bi bi-crosshair me-2"></i>Ambil lokasi HP
-    </button>
-
-    <div class="fw-bold mb-2 mt-4" style="font-size:13px; letter-spacing:.3px;">
-      <i class="bi bi-diagram-3-fill text-success me-2"></i>ODP & Port
-    </div>
-    <div class="mb-2">
-      <label class="form-label text-secondary small">ODP</label>
-      <select id="odp_id" name="odp_id" class="form-select rounded-4 tech-select" onchange="onOdpChanged()">
-        <option value="">-- Pilih ODP --</option>
-        <% odps.forEach((o) => { %>
-          <option value="<%= o.id %>" data-lat="<%= o.lat || '' %>" data-lng="<%= o.lng || '' %>" data-pon="<%= o.pon_port || '' %>" data-cap="<%= o.port_capacity || 16 %>"><%= o.name %></option>
-        <% }) %>
-      </select>
-      <div id="odpInfo" class="field-hint"></div>
-    </div>
-
-    <div class="row g-2">
-      <div class="col-6">
-        <label class="form-label text-secondary small">Port Pelanggan (ODP)</label>
-        <input id="pon_port" name="pon_port" class="form-control rounded-4 tech-field" placeholder="Contoh: 1">
-      </div>
-      <div class="col-6">
-        <label class="form-label text-secondary small">Update data ODP</label>
-        <select name="update_odp" id="update_odp" class="form-select rounded-4 tech-select" onchange="toggleOdpEdit()">
-          <option value="0">Tidak</option>
-          <option value="1">Ya</option>
-        </select>
-      </div>
-    </div>
-
-    <div id="odpEdit" class="mt-3" style="display:none">
-      <div class="row g-2">
-        <div class="col-6">
-          <label class="form-label text-secondary small">ODP Latitude</label>
-          <input id="odp_lat" name="odp_lat" class="form-control rounded-4 tech-field">
-        </div>
-        <div class="col-6">
-          <label class="form-label text-secondary small">ODP Longitude</label>
-          <input id="odp_lng" name="odp_lng" class="form-control rounded-4 tech-field">
-        </div>
-      </div>
-      <div class="row g-2 mt-1">
-        <div class="col-6">
-          <label class="form-label text-secondary small">ODP PON Port (Trunk)</label>
-          <input id="odp_pon_port" name="odp_pon_port" class="form-control rounded-4 tech-field" placeholder="opsional">
-        </div>
-        <div class="col-6">
-          <label class="form-label text-secondary small">Kapasitas Port ODP</label>
-          <input id="odp_port_capacity" name="odp_port_capacity" type="number" min="1" class="form-control rounded-4 tech-field" value="16">
-        </div>
-      </div>
-      <button type="button" class="btn btn-outline-warning btn-action" onclick="copyCustomerToOdp()">
-        <i class="bi bi-arrow-down-circle me-2"></i>Samakan lokasi ODP dengan lokasi pelanggan
-      </button>
-    </div>
-
-    <div class="mt-3">
-      <label class="form-label text-secondary small">Catatan</label>
-      <textarea name="notes" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Contoh: rumah belakang masjid, kabel sudah ditarik, ONU bawaan pelanggan, dan lainnya"></textarea>
-    </div>
-
-    <button type="submit" class="btn btn-primary btn-action mt-3">
-      <i class="bi bi-send-check me-2"></i>Kirim pengajuan
-    </button>
-  </form>
 </div>
+
+<form id="techCustomerForm" method="POST" action="/tech/customers" enctype="multipart/form-data">
+  <input class="form-check-input d-none" type="checkbox" role="switch" id="create_pppoe_secret" name="create_pppoe_secret" value="1">
+  <input name="house_photo_file" id="tech_house_photo_file" type="file" accept="image/*" capture="environment" class="tech-hidden-file">
+  <input name="ktp_photo_file" id="tech_ktp_photo_file" type="file" accept="image/*" capture="environment" class="tech-hidden-file">
+
+  <details class="t-card tech-create-section" open>
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-person-vcard"></i>Data Pelanggan</div>
+        <div class="tech-create-section-sub">Nama, nomor HP, paket, dan kontak dasar.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card full">
+          <label for="tech_name">Nama Pelanggan</label>
+          <input id="tech_name" name="name" class="form-control rounded-4 tech-field" placeholder="Nama lengkap pelanggan" required>
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_phone">No. HP / WhatsApp</label>
+          <input id="tech_phone" name="phone" class="form-control rounded-4 tech-field" placeholder="08xxxxxxxxxx">
+        </div>
+        <div class="tech-field-card">
+          <label for="package_id">Paket</label>
+          <select name="package_id" class="form-select rounded-4 tech-select" id="package_id">
+            <option value="">-- Pilih Paket --</option>
+            <% safePackages.forEach((p) => { %>
+              <option value="<%= p.id %>" data-profile="<%= p.pppoe_profile || '' %>"><%= p.name %> (Rp <%= Number(p.price || 0).toLocaleString('id-ID') %>)</option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="tech-field-card full">
+          <label for="tech_address">Alamat</label>
+          <textarea id="tech_address" name="address" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Nama jalan, patokan rumah, RT/RW, atau titik penting lainnya"></textarea>
+        </div>
+        <div class="tech-field-card full">
+          <label for="tech_email">Email</label>
+          <input id="tech_email" name="email" class="form-control rounded-4 tech-field" type="email" placeholder="Opsional">
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section" open>
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-router"></i>Akun Internet</div>
+        <div class="tech-create-section-sub">Pilih secret yang sudah ada atau ajukan secret baru.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-mode-switch">
+        <button type="button" class="tech-mode-btn active" id="techModeExisting" onclick="setSecretMode(false)">Pakai akun yang ada</button>
+        <button type="button" class="tech-mode-btn" id="techModeNew" onclick="setSecretMode(true)">Buat secret baru</button>
+      </div>
+      <div id="secretModeHint" class="field-hint">Pilih akun PPPoE yang sudah tersedia di MikroTik.</div>
+
+      <div class="tech-create-grid" style="margin-top:10px">
+        <div class="tech-field-card">
+          <label for="router_id">Router (MikroTik)</label>
+          <select id="router_id" name="router_id" class="form-select rounded-4 tech-select" onchange="loadPppoeUsers(); loadPppoeProfiles(); updateTechSyncState();">
+            <option value="">Default Router</option>
+            <% safeRouters.forEach((r) => { %>
+              <option value="<%= r.id %>"><%= r.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="tech-field-card">
+          <label for="pppoe_username">Akun PPPoE</label>
+          <input id="pppoe_username" name="pppoe_username" class="form-control rounded-4 tech-field" list="pppoeList" placeholder="Pilih / cari akun internet">
+          <datalist id="pppoeList"></datalist>
+          <div id="pppoeHint" class="field-hint"></div>
+        </div>
+        <div class="tech-field-card">
+          <label for="pppoe_password">Password PPPoE</label>
+          <input id="pppoe_password" name="pppoe_password" class="form-control rounded-4 tech-field" placeholder="Kosongkan bila sama dengan username">
+          <div class="field-hint">Jika kosong, sistem anggap password sama dengan username.</div>
+        </div>
+        <div class="tech-field-card">
+          <label for="normal_pppoe_profile">Profile Normal</label>
+          <select id="normal_pppoe_profile" name="normal_pppoe_profile" class="form-select rounded-4 tech-select">
+            <option value="">Ikuti profile paket</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tech-sync-grid">
+        <div class="tech-sync-card neutral" id="syncRouterCard">
+          <div class="label">Router</div>
+          <div class="value" id="syncRouterState">Mengambil dari router default</div>
+        </div>
+        <div class="tech-sync-card neutral" id="syncModeCard">
+          <div class="label">Mode Akun</div>
+          <div class="value" id="syncModeState">Pakai akun yang ada</div>
+        </div>
+        <div class="tech-sync-card neutral" id="syncPppoeCard">
+          <div class="label">Sinkron Akun</div>
+          <div class="value" id="syncPppoeState">Belum dipilih</div>
+        </div>
+        <div class="tech-sync-card neutral" id="syncProfileCard">
+          <div class="label">Sinkron Profile</div>
+          <div class="value" id="syncProfileState">Menunggu profile</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section" open>
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-geo-alt"></i>Lokasi</div>
+        <div class="tech-create-section-sub">Ambil lokasi dari HP atau buka peta cepat.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card">
+          <label for="lat">Latitude</label>
+          <input id="lat" name="lat" class="form-control rounded-4 tech-field" placeholder="-6.2">
+        </div>
+        <div class="tech-field-card">
+          <label for="lng">Longitude</label>
+          <input id="lng" name="lng" class="form-control rounded-4 tech-field" placeholder="106.8">
+        </div>
+      </div>
+      <div class="tech-map-actions">
+        <button type="button" class="btn btn-primary" onclick="getLocation()"><i class="bi bi-crosshair me-2"></i>Ambil Lokasi</button>
+        <button type="button" class="btn btn-outline-info" onclick="openMapPreview()"><i class="bi bi-map me-2"></i>Buka Peta</button>
+      </div>
+      <div class="tech-sync-grid">
+        <div class="tech-sync-card neutral" id="syncLocationCard">
+          <div class="label">Status Lokasi</div>
+          <div class="value" id="syncLocationState">Belum diambil</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section">
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-diagram-3"></i>ODP</div>
+        <div class="tech-create-section-sub">ODP, port, dan update data ODP bila diperlukan.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card full">
+          <label for="odp_id">ODP</label>
+          <select id="odp_id" name="odp_id" class="form-select rounded-4 tech-select" onchange="onOdpChanged()">
+            <option value="">-- Pilih ODP --</option>
+            <% safeOdps.forEach((o) => { %>
+              <option value="<%= o.id %>" data-lat="<%= o.lat || '' %>" data-lng="<%= o.lng || '' %>" data-pon="<%= o.pon_port || '' %>" data-cap="<%= o.port_capacity || 16 %>"><%= o.name %></option>
+            <% }) %>
+          </select>
+          <div id="odpInfo" class="field-hint"></div>
+        </div>
+        <div class="tech-field-card">
+          <label for="pon_port">Port Pelanggan (ODP)</label>
+          <input id="pon_port" name="pon_port" class="form-control rounded-4 tech-field" placeholder="Contoh: 1">
+        </div>
+        <div class="tech-field-card">
+          <label for="update_odp">Update data ODP</label>
+          <select name="update_odp" id="update_odp" class="form-select rounded-4 tech-select" onchange="toggleOdpEdit()">
+            <option value="0">Tidak</option>
+            <option value="1">Ya</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="odpEdit" class="mt-3" style="display:none">
+        <div class="tech-create-grid">
+          <div class="tech-field-card">
+            <label for="odp_lat">ODP Latitude</label>
+            <input id="odp_lat" name="odp_lat" class="form-control rounded-4 tech-field">
+          </div>
+          <div class="tech-field-card">
+            <label for="odp_lng">ODP Longitude</label>
+            <input id="odp_lng" name="odp_lng" class="form-control rounded-4 tech-field">
+          </div>
+          <div class="tech-field-card">
+            <label for="odp_pon_port">ODP PON Port (Trunk)</label>
+            <input id="odp_pon_port" name="odp_pon_port" class="form-control rounded-4 tech-field" placeholder="Opsional">
+          </div>
+          <div class="tech-field-card">
+            <label for="odp_port_capacity">Kapasitas Port ODP</label>
+            <input id="odp_port_capacity" name="odp_port_capacity" type="number" min="1" class="form-control rounded-4 tech-field" value="16">
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline-warning btn-action" onclick="copyCustomerToOdp()">
+          <i class="bi bi-arrow-down-circle me-2"></i>Samakan lokasi ODP dengan lokasi pelanggan
+        </button>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section">
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-camera"></i>Dokumentasi</div>
+        <div class="tech-create-section-sub">Foto rumah dan KTP dikompres otomatis maksimal 500 KB.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card">
+          <label>Foto Rumah</label>
+          <div class="tech-upload-actions">
+            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('tech_house_photo_file').click()"><i class="bi bi-camera me-2"></i>Foto Rumah</button>
+          </div>
+          <div class="tech-upload-preview-row">
+            <div class="tech-upload-preview-card" id="tech_house_preview">
+              <div class="tech-upload-preview-empty"><i class="bi bi-house-door"></i><span>Preview Rumah</span></div>
+            </div>
+            <div class="tech-upload-preview-meta">
+              <div class="tech-upload-preview-name" id="tech_house_preview_name">Belum ada file dipilih</div>
+              <div class="tech-upload-preview-state">Otomatis dikompres maksimal 500 KB</div>
+            </div>
+          </div>
+        </div>
+        <div class="tech-field-card">
+          <label>Foto KTP</label>
+          <div class="tech-upload-actions">
+            <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('tech_ktp_photo_file').click()"><i class="bi bi-camera me-2"></i>Foto KTP</button>
+          </div>
+          <div class="tech-upload-preview-row">
+            <div class="tech-upload-preview-card" id="tech_ktp_preview">
+              <div class="tech-upload-preview-empty"><i class="bi bi-card-image"></i><span>Preview KTP</span></div>
+            </div>
+            <div class="tech-upload-preview-meta">
+              <div class="tech-upload-preview-name" id="tech_ktp_preview_name">Belum ada file dipilih</div>
+              <div class="tech-upload-preview-state">Otomatis dikompres maksimal 500 KB</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tech-sync-grid">
+        <div class="tech-sync-card neutral" id="syncHouseCard">
+          <div class="label">Status Foto Rumah</div>
+          <div class="value" id="syncHouseState">Belum ada foto</div>
+        </div>
+        <div class="tech-sync-card neutral" id="syncKtpCard">
+          <div class="label">Status Foto KTP</div>
+          <div class="value" id="syncKtpState">Belum ada foto</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section">
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-sliders"></i>Opsional</div>
+        <div class="tech-create-section-sub">Data tambahan untuk admin dan kunjungan ulang.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card">
+          <label for="tech_nik">NIK</label>
+          <input id="tech_nik" name="nik" class="form-control rounded-4 tech-field" placeholder="Nomor KTP pelanggan">
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_npwp">NPWP</label>
+          <input id="tech_npwp" name="npwp" class="form-control rounded-4 tech-field" placeholder="Opsional">
+        </div>
+        <div class="tech-field-card">
+          <label for="isolir_profile">Profile Isolir</label>
+          <select id="isolir_profile" name="isolir_profile" class="form-select rounded-4 tech-select">
+            <option value="BEATISOLIR">BEATISOLIR</option>
+          </select>
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_status">Status Pelanggan</label>
+          <select id="tech_status" name="status" class="form-select rounded-4 tech-select">
+            <option value="active">Aktif</option>
+            <option value="suspended">Suspend</option>
+            <option value="inactive">Nonaktif</option>
+          </select>
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_auto_isolate">Isolir Otomatis</label>
+          <select id="tech_auto_isolate" name="auto_isolate" class="form-select rounded-4 tech-select">
+            <option value="1">Aktif</option>
+            <option value="0">Tidak Aktif</option>
+          </select>
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_isolate_day">Tanggal Isolir (1-31)</label>
+          <input id="tech_isolate_day" name="isolate_day" type="number" min="1" max="31" value="10" class="form-control rounded-4 tech-field">
+        </div>
+        <div class="tech-field-card">
+          <label for="install_date">Tanggal Pasang</label>
+          <input id="install_date" name="install_date" type="date" class="form-control rounded-4 tech-field">
+        </div>
+        <div class="tech-field-card">
+          <label for="olt_id">OLT</label>
+          <select id="olt_id" name="olt_id" class="form-select rounded-4 tech-select">
+            <option value="">-- Tanpa OLT --</option>
+            <% safeOlts.forEach((o) => { %>
+              <option value="<%= o.id %>"><%= o.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="tech-field-card full">
+          <label for="tech_notes">Catatan</label>
+          <textarea id="tech_notes" name="notes" class="form-control rounded-4 tech-textarea" rows="2" placeholder="Contoh: rumah belakang masjid, kabel sudah ditarik, ONU bawaan pelanggan"></textarea>
+        </div>
+      </div>
+      <div class="tech-optional-note mt-2">Bagian ini aman dilengkapi belakangan jika teknisi sedang mengejar kecepatan input di lapangan.</div>
+    </div>
+  </details>
+
+  <div class="tech-form-actions">
+    <div class="tech-form-actions-grid">
+      <button type="button" class="btn btn-outline-light" onclick="saveTechDraft(true)"><i class="bi bi-save me-2"></i>Simpan Draft</button>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-send-check me-2"></i>Kirim Pengajuan</button>
+    </div>
+  </div>
+</form>
 
 <div class="t-card mt-3">
   <div class="fw-bold mb-2" style="font-size:14px"><i class="bi bi-clock-history text-info me-2"></i>Pengajuan Terakhir</div>
-  <% if (!requests || requests.length === 0) { %>
+  <% if (safeRequests.length === 0) { %>
     <div class="text-secondary small">Belum ada pengajuan pelanggan.</div>
   <% } else { %>
     <div class="d-flex flex-column gap-2">
-      <% requests.forEach((r) => { const payload = JSON.parse(String(r.payload_json || '{}') || '{}'); %>
+      <% safeRequests.forEach((r) => { const payload = JSON.parse(String(r.payload_json || '{}') || '{}'); %>
         <div class="rounded-4 p-3 surface-soft">
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               <div class="fw-bold"><%= r.customer_name %></div>
-              <div class="text-secondary small"><%= r.package_name || 'Tanpa paket' %> • <%= r.customer_phone || '-' %></div>
+              <div class="text-secondary small"><%= r.package_name || 'Tanpa paket' %> &bull; <%= r.customer_phone || '-' %></div>
               <div class="text-secondary small">Mode secret: <%= payload.create_pppoe_secret ? 'Buat baru saat approval admin' : 'Pakai secret yang sudah ada' %></div>
-              <div class="text-secondary small">Akun: <%= r.pppoe_username || payload.pppoe_username || '-' %> • Password: <%= payload.pppoe_password || '(ikut username)' %></div>
+              <div class="text-secondary small">Akun: <%= r.pppoe_username || payload.pppoe_username || '-' %> &bull; Password: <%= payload.pppoe_password || '(ikut username)' %></div>
             </div>
             <span class="badge <%= r.status === 'approved' ? 'text-bg-success' : (r.status === 'rejected' ? 'text-bg-danger' : 'text-bg-warning') %>"><%= String(r.status || '').toUpperCase() %></span>
           </div>
@@ -306,6 +433,9 @@
 </div>
 
 <script>
+  const TECH_CUSTOMER_DRAFT_KEY = 'tech-customer-draft-v2';
+  const techDraftShouldReset = <%- JSON.stringify(shouldResetTechDraft) %>;
+
   function applyPackageProfileHint() {
     const packageSelect = document.getElementById('package_id');
     const profileSelect = document.getElementById('normal_pppoe_profile');
@@ -338,19 +468,161 @@
     nameEl.textContent = 'Belum ada file dipilih';
   }
 
-  function bindTechUploadPreview(inputId, previewId, nameId, emptyLabel) {
+  function formatTechUploadSize(bytes) {
+    const size = Math.max(0, Number(bytes || 0) || 0);
+    if (size >= 1024 * 1024) return (size / (1024 * 1024)).toFixed(2) + ' MB';
+    return Math.max(1, Math.round(size / 1024)) + ' KB';
+  }
+
+  function readTechImageDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Gagal membaca gambar.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadTechImageElement(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Gagal memuat gambar.'));
+      img.src = src;
+    });
+  }
+
+  async function compressTechImageForUpload(file, maxBytes = 500 * 1024) {
+    if (!file || !String(file.type || '').startsWith('image/')) return file;
+    if (Number(file.size || 0) <= maxBytes) return file;
+    const sourceUrl = await readTechImageDataUrl(file);
+    const image = await loadTechImageElement(sourceUrl);
+    let width = image.naturalWidth || image.width || 1600;
+    let height = image.naturalHeight || image.height || 1600;
+    const maxDimension = 1600;
+    if (Math.max(width, height) > maxDimension) {
+      const ratio = maxDimension / Math.max(width, height);
+      width = Math.max(1, Math.round(width * ratio));
+      height = Math.max(1, Math.round(height * ratio));
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+
+    let attemptWidth = width;
+    let attemptHeight = height;
+    let bestBlob = null;
+
+    while (Math.max(attemptWidth, attemptHeight) >= 720) {
+      canvas.width = attemptWidth;
+      canvas.height = attemptHeight;
+      ctx.clearRect(0, 0, attemptWidth, attemptHeight);
+      ctx.drawImage(image, 0, 0, attemptWidth, attemptHeight);
+
+      for (const quality of [0.86, 0.8, 0.74, 0.68, 0.62, 0.56, 0.5, 0.44]) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!blob) continue;
+        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+        if (blob.size <= maxBytes) {
+          return new File([blob], String(file.name || 'upload').replace(/\.[^.]+$/, '') + '.jpg', {
+            type: 'image/jpeg',
+            lastModified: Date.now()
+          });
+        }
+      }
+
+      if (Math.max(attemptWidth, attemptHeight) <= 720) break;
+      attemptWidth = Math.max(1, Math.round(attemptWidth * 0.84));
+      attemptHeight = Math.max(1, Math.round(attemptHeight * 0.84));
+    }
+
+    if (bestBlob) {
+      return new File([bestBlob], String(file.name || 'upload').replace(/\.[^.]+$/, '') + '.jpg', {
+        type: 'image/jpeg',
+        lastModified: Date.now()
+      });
+    }
+    return file;
+  }
+
+  async function replaceTechInputFile(input, file) {
+    const compressed = await compressTechImageForUpload(file);
+    if (compressed && compressed !== file && typeof DataTransfer !== 'undefined') {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(compressed);
+      input.files = dataTransfer.files;
+      return compressed;
+    }
+    return compressed || file;
+  }
+
+  function updateSyncCard(cardId, valueId, status, text) {
+    const card = document.getElementById(cardId);
+    const value = document.getElementById(valueId);
+    if (card) card.className = `tech-sync-card ${status}`;
+    if (value) value.textContent = text;
+  }
+
+  function updateTechSyncState() {
+    const routerSelect = document.getElementById('router_id');
+    const routerLabel = routerSelect?.value ? routerSelect.options[routerSelect.selectedIndex]?.textContent || 'Router dipilih' : 'Mengambil dari router default';
+    updateSyncCard('syncRouterCard', 'syncRouterState', routerSelect?.value ? 'ok' : 'neutral', routerLabel);
+
+    const isCreateMode = Boolean(document.getElementById('create_pppoe_secret')?.checked);
+    updateSyncCard('syncModeCard', 'syncModeState', isCreateMode ? 'ok' : 'neutral', isCreateMode ? 'Buat secret baru' : 'Pakai akun yang ada');
+
+    const pppoeUsername = String(document.getElementById('pppoe_username')?.value || '').trim();
+    updateSyncCard('syncPppoeCard', 'syncPppoeState', pppoeUsername ? 'ok' : 'warn', pppoeUsername ? pppoeUsername : 'Belum dipilih');
+
+    const profileValue = String(document.getElementById('normal_pppoe_profile')?.value || '').trim();
+    updateSyncCard('syncProfileCard', 'syncProfileState', profileValue ? 'ok' : 'neutral', profileValue || 'Ikuti profile paket');
+
+    const lat = String(document.getElementById('lat')?.value || '').trim();
+    const lng = String(document.getElementById('lng')?.value || '').trim();
+    updateSyncCard('syncLocationCard', 'syncLocationState', lat && lng ? 'ok' : 'warn', lat && lng ? `${lat}, ${lng}` : 'Belum diambil');
+  }
+
+  function updateDocSyncState(type, label) {
+    updateSyncCard(
+      type === 'house' ? 'syncHouseCard' : 'syncKtpCard',
+      type === 'house' ? 'syncHouseState' : 'syncKtpState',
+      label ? 'ok' : 'warn',
+      label || 'Belum ada foto'
+    );
+  }
+
+  function bindTechUploadPreview(inputId, previewId, nameId, emptyLabel, syncType) {
     const input = document.getElementById(inputId);
     if (!input) return;
-    input.addEventListener('change', () => {
+    input.addEventListener('change', async () => {
       const file = input.files && input.files[0];
       if (!file) {
         setTechUploadPreview(previewId, nameId, '', emptyLabel);
+        updateDocSyncState(syncType, '');
+        saveTechDraft();
         return;
       }
-      const reader = new FileReader();
-      reader.onload = () => setTechUploadPreview(previewId, nameId, String(reader.result || ''), emptyLabel, file.name || 'File dipilih');
-      reader.readAsDataURL(file);
+      try {
+        const optimizedFile = await replaceTechInputFile(input, file);
+        const previewUrl = await readTechImageDataUrl(optimizedFile);
+        const label = `${optimizedFile.name || 'File dipilih'} / ${formatTechUploadSize(optimizedFile.size)} / siap upload`;
+        setTechUploadPreview(previewId, nameId, previewUrl, emptyLabel, label);
+        updateDocSyncState(syncType, `${formatTechUploadSize(optimizedFile.size)} / siap upload`);
+      } catch (_error) {
+        const previewUrl = await readTechImageDataUrl(file);
+        const label = `${file.name || 'File dipilih'} / ${formatTechUploadSize(file.size)}`;
+        setTechUploadPreview(previewId, nameId, previewUrl, emptyLabel, label);
+        updateDocSyncState(syncType, formatTechUploadSize(file.size));
+      }
+      saveTechDraft();
     });
+  }
+
+  function setSecretMode(isCreateMode) {
+    const createSecret = document.getElementById('create_pppoe_secret');
+    if (createSecret) createSecret.checked = Boolean(isCreateMode);
+    toggleSecretMode();
   }
 
   function toggleSecretMode() {
@@ -360,6 +632,8 @@
     const hint = document.getElementById('pppoeHint');
     const modeHint = document.getElementById('secretModeHint');
     const isCreateMode = Boolean(createSecret?.checked);
+    document.getElementById('techModeExisting')?.classList.toggle('active', !isCreateMode);
+    document.getElementById('techModeNew')?.classList.toggle('active', isCreateMode);
 
     if (usernameInput) {
       usernameInput.setAttribute('list', isCreateMode ? '' : 'pppoeList');
@@ -370,14 +644,16 @@
     }
     if (hint) {
       hint.innerText = isCreateMode
-        ? 'Mode secret baru aktif. Username tidak perlu sudah ada di MikroTik, dan secret baru akan dibuat setelah admin menyetujui pengajuan.'
-        : 'Mode memakai secret yang sudah ada. Silakan pilih akun PPPoE yang sudah tersedia di MikroTik.';
+        ? 'Isi username baru. Secret akan dibuat saat admin menyetujui pengajuan.'
+        : 'Pilih akun PPPoE yang sudah tersedia di MikroTik.';
     }
     if (modeHint) {
       modeHint.innerText = isCreateMode
-        ? 'Secret baru belum langsung dibuat saat teknisi kirim form. Sistem hanya menyimpan pengajuan, lalu admin akan membuat dan mengaktifkannya saat approve.'
-        : 'Mode default memakai secret yang sudah ada di MikroTik. Aktifkan tombol ini jika teknisi ingin mengajukan secret baru, dan secret baru akan dibuat aktif hanya setelah admin approve.';
+        ? 'Mode secret baru aktif.'
+        : 'Mode memakai akun yang sudah ada.';
     }
+    updateTechSyncState();
+    saveTechDraft();
   }
 
   async function getLocation() {
@@ -391,27 +667,33 @@
     navigator.geolocation.getCurrentPosition((pos) => {
       document.getElementById('lat').value = pos.coords.latitude;
       document.getElementById('lng').value = pos.coords.longitude;
+      updateTechSyncState();
+      saveTechDraft();
     }, (err) => {
-      const inMedianApp = Boolean(window.median?.android?.geoLocation?.promptLocationServices);
-      if (inMedianApp && window.median?.open?.appSettings) {
-        const openSettings = confirm('Izin lokasi belum aktif. Buka pengaturan aplikasi untuk mengaktifkannya?');
-        if (openSettings) {
-          try { window.median.open.appSettings(); } catch (_) {}
-        }
-        return;
-      }
       alert('Gagal mengambil lokasi: ' + (err.message || err));
     }, { enableHighAccuracy: true, timeout: 8000 });
+  }
+
+  function openMapPreview() {
+    const lat = String(document.getElementById('lat')?.value || '').trim();
+    const lng = String(document.getElementById('lng')?.value || '').trim();
+    if (!lat || !lng) {
+      alert('Ambil lokasi dulu sebelum membuka peta.');
+      return;
+    }
+    window.open(`https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`, '_blank', 'noopener');
   }
 
   function toggleOdpEdit() {
     const v = document.getElementById('update_odp').value;
     document.getElementById('odpEdit').style.display = v === '1' ? 'block' : 'none';
+    saveTechDraft();
   }
 
   function copyCustomerToOdp() {
     document.getElementById('odp_lat').value = document.getElementById('lat').value;
     document.getElementById('odp_lng').value = document.getElementById('lng').value;
+    saveTechDraft();
   }
 
   async function onOdpChanged() {
@@ -425,16 +707,20 @@
 
     const infoEl = document.getElementById('odpInfo');
     infoEl.innerText = '';
-    if (!odpId) return;
+    if (!odpId) {
+      saveTechDraft();
+      return;
+    }
     try {
       const res = await fetch(`/tech/api/odps/${encodeURIComponent(odpId)}/ports`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal ambil info ODP');
       const used = Array.isArray(data.usedPorts) ? data.usedPorts.join(', ') : '';
-      infoEl.innerText = `Port terpakai: ${data.usedCount}/${data.capacity} • Sisa: ${data.remaining}${used ? ' • (' + used + ')' : ''}`;
+      infoEl.innerText = `Port terpakai: ${data.usedCount}/${data.capacity} / Sisa: ${data.remaining}${used ? ' / (' + used + ')' : ''}`;
     } catch (e) {
       infoEl.innerText = e.message;
     }
+    saveTechDraft();
   }
 
   async function loadPppoeUsers() {
@@ -445,10 +731,12 @@
     if (createSecret?.checked) {
       if (list) list.replaceChildren();
       if (hint) hint.innerText = 'Mode secret baru aktif. Tidak perlu mengambil daftar akun dari MikroTik.';
+      updateTechSyncState();
       return;
     }
-    if (hint) hint.innerText = 'Memuat akun internet dari MikroTik...';
+    if (hint) hint.innerText = routerId ? 'Memuat akun internet...' : 'Memuat akun internet dari router default...';
     if (list) list.replaceChildren();
+    updateSyncCard('syncPppoeCard', 'syncPppoeState', 'neutral', 'Memuat akun...');
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-users?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-users`;
       const res = await fetch(url);
@@ -464,13 +752,12 @@
         });
       }
       if (hint) hint.innerText = users.length ? `Tersedia ${users.length} akun PPPoE yang belum dipakai.` : 'Tidak ada akun PPPoE tersedia.';
+      updateTechSyncState();
     } catch (e) {
       if (hint) hint.innerText = e.message;
+      updateSyncCard('syncPppoeCard', 'syncPppoeState', 'warn', 'Gagal memuat akun');
     }
   }
-
-  bindTechUploadPreview('tech_house_photo_file', 'tech_house_preview', 'tech_house_preview_name', 'Preview Rumah');
-  bindTechUploadPreview('tech_ktp_photo_file', 'tech_ktp_preview', 'tech_ktp_preview_name', 'Preview KTP');
 
   async function loadPppoeProfiles() {
     const routerId = document.getElementById('router_id')?.value || '';
@@ -481,6 +768,7 @@
 
     if (normalSel) normalSel.replaceChildren();
     if (isolirSel) isolirSel.replaceChildren();
+    updateSyncCard('syncProfileCard', 'syncProfileState', 'neutral', 'Memuat profile...');
 
     try {
       const url = routerId ? `/tech/api/mikrotik/pppoe-profiles?routerId=${encodeURIComponent(routerId)}` : `/tech/api/mikrotik/pppoe-profiles`;
@@ -522,7 +810,8 @@
       if (normalSel) normalSel.value = previousNormal || '';
       if (isolirSel) isolirSel.value = previousIsolir || 'BEATISOLIR';
       applyPackageProfileHint();
-    } catch (e) {
+      updateTechSyncState();
+    } catch (_e) {
       if (normalSel) {
         const option = document.createElement('option');
         option.value = '';
@@ -535,14 +824,89 @@
         option.textContent = 'BEATISOLIR';
         isolirSel.appendChild(option);
       }
+      updateSyncCard('syncProfileCard', 'syncProfileState', 'warn', 'Gagal memuat profile');
     }
   }
 
-  document.getElementById('package_id')?.addEventListener('change', applyPackageProfileHint);
+  function collectTechDraftPayload() {
+    const form = document.getElementById('techCustomerForm');
+    const payload = {};
+    Array.from(form.querySelectorAll('input, select, textarea')).forEach((field) => {
+      if (!field.name) return;
+      if (field.type === 'file') return;
+      if (field.type === 'checkbox') {
+        payload[field.name] = field.checked ? field.value : '';
+        return;
+      }
+      payload[field.name] = field.value;
+    });
+    return payload;
+  }
 
+  function saveTechDraft(showToast = false) {
+    try {
+      localStorage.setItem(TECH_CUSTOMER_DRAFT_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(),
+        data: collectTechDraftPayload()
+      }));
+      if (showToast) alert('Draft tersimpan di perangkat ini.');
+    } catch (_e) {}
+  }
+
+  function restoreTechDraft() {
+    if (techDraftShouldReset) {
+      localStorage.removeItem(TECH_CUSTOMER_DRAFT_KEY);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(TECH_CUSTOMER_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const data = parsed && parsed.data ? parsed.data : {};
+      Object.entries(data).forEach(([name, value]) => {
+        const field = document.querySelector(`[name="${name}"]`);
+        if (!field) return;
+        if (field.type === 'checkbox') {
+          field.checked = Boolean(value);
+        } else {
+          field.value = value == null ? '' : String(value);
+        }
+      });
+    } catch (_e) {}
+  }
+
+  function bindTechDraftAutosave() {
+    const form = document.getElementById('techCustomerForm');
+    let timer = null;
+    form.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(saveTechDraft, 250);
+      updateTechSyncState();
+    });
+    form.addEventListener('change', () => {
+      saveTechDraft();
+      updateTechSyncState();
+    });
+  }
+
+  document.getElementById('package_id')?.addEventListener('change', () => {
+    applyPackageProfileHint();
+    updateTechSyncState();
+  });
+
+  restoreTechDraft();
+  bindTechDraftAutosave();
+  bindTechUploadPreview('tech_house_photo_file', 'tech_house_preview', 'tech_house_preview_name', 'Preview Rumah', 'house');
+  bindTechUploadPreview('tech_ktp_photo_file', 'tech_ktp_preview', 'tech_ktp_preview_name', 'Preview KTP', 'ktp');
   toggleSecretMode();
   loadPppoeUsers();
   loadPppoeProfiles();
+  toggleOdpEdit();
+  updateTechSyncState();
+
+  document.getElementById('techCustomerForm')?.addEventListener('submit', () => {
+    localStorage.setItem('tech-customer-last-submit', String(Date.now()));
+  });
 </script>
 
 <%- include('partials/bottom_nav') %>

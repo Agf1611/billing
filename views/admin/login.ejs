@@ -1,90 +1,238 @@
 <!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
-
+<%
+  const logoSrc = logoUrl || '/img/logo.png';
+%>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title><%= t('common.login', 'Login') %> Admin | <%= company %>
-  </title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title><%= t('common.login', 'Login') %> Admin | <%= company %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="/css/admin.css">
   <style>
-    body {
-      background: radial-gradient(circle at top right, #1e1b4b, #0d1117);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+    :root {
+      --page-bg: #09111d;
+      --page-bg-2: #111827;
+      --surface: rgba(17, 24, 39, 0.94);
+      --surface-soft: rgba(255, 255, 255, 0.05);
+      --line: rgba(148, 163, 184, 0.16);
+      --text-main: #edf2ff;
+      --text-soft: #96a3bf;
+      --text-faint: #b4c0d8;
+      --blue: #6f8dff;
+      --blue-deep: #4f6ef7;
+      --shadow: 0 30px 70px rgba(0, 0, 0, 0.38);
+      --shell-width: min(100vw, 430px);
     }
 
-    .login-box {
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      color: var(--text-main);
+      font-family: "Plus Jakarta Sans", "Manrope", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(111, 141, 255, 0.22) 0%, rgba(111, 141, 255, 0) 34%),
+        radial-gradient(circle at top right, rgba(77, 189, 255, 0.12) 0%, rgba(77, 189, 255, 0) 28%),
+        linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-2) 100%);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.2;
+      background-image:
+        linear-gradient(rgba(111, 141, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(111, 141, 255, 0.05) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 14px;
+    }
+
+    .login-shell {
+      position: relative;
+      width: var(--shell-width);
+      min-height: calc(100vh - 28px);
+      min-height: calc(100dvh - 28px);
+      display: flex;
+      align-items: center;
+    }
+
+    .login-main {
       width: 100%;
-      max-width: 400px;
-      animation: fadeIn 0.6s ease-out;
+      display: grid;
+      gap: 12px;
+    }
+
+    .brand-panel {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 24px;
+      background: rgba(17, 24, 39, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand-logo {
+      width: 64px;
+      height: 64px;
+      flex: 0 0 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(111, 141, 255, 0.08));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 18px 34px rgba(79, 110, 247, 0.14);
+    }
+
+    .brand-logo img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+    }
+
+    .brand-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .brand-copy strong {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(111, 141, 255, 0.12);
+      border: 1px solid rgba(111, 141, 255, 0.18);
+      color: var(--blue);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .brand-copy h1 {
+      margin: 0 0 4px;
+      font-size: 22px;
+      line-height: 1.04;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .brand-copy p {
+      margin: 0;
+      color: var(--text-soft);
+      font-size: 12px;
+      line-height: 1.45;
     }
 
     .login-card {
-      background: rgba(22, 27, 34, 0.8);
-      backdrop-filter: blur(12px);
+      background: var(--surface);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
-      padding: 40px 32px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
     }
 
-    .login-head {
+    .login-card-head {
+      padding: 18px 18px 10px;
       text-align: center;
-      margin-bottom: 32px;
     }
 
-    .login-icon {
-      width: 64px;
-      height: 64px;
-      background: linear-gradient(135deg, var(--primary), #818cf8);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      margin: 0 auto 20px;
-      box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
-    }
-
-    .login-title {
-      font-size: 20px;
-      font-weight: 700;
+    .portal-icon {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(111, 141, 255, 0.18), rgba(79, 110, 247, 0.3));
+      border: 1px solid rgba(111, 141, 255, 0.2);
       color: #fff;
-      margin-bottom: 4px;
+      font-size: 24px;
+      box-shadow: 0 20px 34px rgba(79, 110, 247, 0.22);
     }
 
-    .login-sub {
-      font-size: 13px;
-      color: var(--muted);
+    .login-card-head h2 {
+      margin: 0 0 5px;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
     }
 
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .login-card-head p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-soft);
     }
 
-    .alert-d {
-      background: rgba(248, 81, 73, 0.1);
-      color: #ff7b72;
-      border: 1px solid rgba(248, 81, 73, 0.2);
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 13px;
-      margin-bottom: 20px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .form-container {
+      padding: 12px 18px 18px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-faint);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .field-wrap {
+      position: relative;
+    }
+
+    .field-wrap i {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-soft);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .fc {
+      width: 100%;
+      min-height: 54px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(15, 23, 42, 0.88);
+      color: var(--text-main);
+      padding: 14px 14px 14px 42px;
+      font-size: 14px;
+      outline: none;
+      box-shadow: none;
+      transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+
+    .fc::placeholder { color: rgba(150, 163, 191, 0.85); }
+
+    .fc:focus {
+      border-color: rgba(111, 141, 255, 0.42);
+      box-shadow: 0 0 0 4px rgba(111, 141, 255, 0.12);
+      background: rgba(17, 24, 39, 0.96);
     }
 
     .remember-row {
@@ -92,105 +240,192 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin: -8px 0 20px;
-      color: var(--muted);
-      font-size: 13px;
+      margin: 2px 0 14px;
+      color: var(--text-soft);
+      font-size: 12px;
     }
 
     .remember-check {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
+      gap: 9px;
       cursor: pointer;
       user-select: none;
+      font-weight: 700;
+      color: var(--text-main);
     }
 
     .remember-check input {
       width: 16px;
       height: 16px;
-      accent-color: var(--primary);
-      cursor: pointer;
+      margin: 0;
+      accent-color: var(--blue);
+    }
+
+    .btn-login {
+      width: 100%;
+      min-height: 52px;
+      border: none;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 800;
+      box-shadow: 0 20px 34px rgba(79, 110, 247, 0.24);
+    }
+
+    .btn-login:hover,
+    .btn-login:focus {
+      background: linear-gradient(135deg, #5f7dfa 0%, #4462eb 100%);
+    }
+
+    .alert-d {
+      background: rgba(255, 114, 134, 0.12);
+      color: #ffc5cf;
+      border: 1px solid rgba(255, 114, 134, 0.18);
+      padding: 12px 13px;
+      border-radius: 16px;
+      font-size: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .support-note {
+      margin-top: 12px;
+      padding: 12px 13px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--text-soft);
+      text-align: center;
     }
 
     .back-btn {
-      display: block;
-      text-align: center;
-      margin-top: 24px;
-      font-size: 12px;
-      color: var(--muted);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-
-    .back-btn:hover {
-      color: var(--primary);
-    }
-
-    .w-100 {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
       width: 100%;
+      min-height: 46px;
+      border-radius: 16px;
+      border: 1px solid rgba(111, 141, 255, 0.14);
+      background: rgba(111, 141, 255, 0.08);
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 576px) {
+      body { padding: 12px; }
+      .login-shell {
+        min-height: calc(100vh - 24px);
+        min-height: calc(100dvh - 24px);
+      }
+      .brand-panel,
+      .login-card-head,
+      .form-container {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+      .brand-panel {
+        gap: 12px;
+        align-items: center;
+      }
+      .brand-logo {
+        width: 58px;
+        height: 58px;
+        flex-basis: 58px;
+      }
+      .brand-logo img {
+        width: 44px;
+        height: 44px;
+      }
+      .brand-copy h1 { font-size: 20px; }
+      .login-card-head h2 { font-size: 18px; }
+      .remember-row {
+        display: grid;
+        gap: 8px;
+      }
     }
   </style>
 </head>
-
 <body>
-
-  <div class="login-box">
-    <div class="login-card">
-      <div class="login-head">
-        <div class="login-icon">
-          <i class="bi bi-shield-lock-fill"></i>
+  <div class="login-shell">
+    <main class="login-main">
+      <section class="brand-panel">
+        <div class="brand-logo">
+          <img src="<%= logoSrc %>" alt="Logo <%= company %>">
         </div>
-        <h1 class="login-title">
-          <%= company %>
-        </h1>
-        <p class="login-sub"><%= t('admin.login.subtitle', 'Administrator Portal') %></p>
-      </div>
-
-      <% if (typeof error !=='undefined' && error) { %>
-        <div class="alert-d">
-          <i class="bi bi-exclamation-circle"></i>
-          <%= error %>
+        <div class="brand-copy">
+          <strong><i class="bi bi-grid-1x2-fill"></i> Admin Panel</strong>
+          <h1><%= company %></h1>
+          <p>Akses admin sistem.</p>
         </div>
-      <% } %>
+      </section>
 
-      <form method="POST" action="/admin/login">
-        <div class="fg">
-          <label class="fl"><%= t('admin.login.username', 'Username') %></label>
-          <div style="position:relative">
-            <i class="bi bi-person" style="position:absolute;left:13px;top:10px;color:var(--muted)"></i>
-            <input class="fc" name="username" placeholder="admin" required style="padding-left:40px"
-              value="<%= (form && form.username) ? form.username : '' %>">
-          </div>
+      <section class="login-card">
+        <div class="login-card-head">
+          <div class="portal-icon"><i class="bi bi-shield-check"></i></div>
+          <h2>Masuk ke Portal Admin</h2>
+          <p>Masuk dengan akun admin atau kasir.</p>
         </div>
 
-        <div class="fg" style="margin-bottom:18px">
-          <label class="fl"><%= t('admin.login.password', 'Password') %></label>
-          <div style="position:relative">
-            <i class="bi bi-key" style="position:absolute;left:13px;top:10px;color:var(--muted)"></i>
-            <input class="fc" type="password" name="password" placeholder="........" required
-              style="padding-left:40px">
-          </div>
+        <div class="form-container">
+          <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert-d">
+              <i class="bi bi-exclamation-octagon"></i>
+              <%= error %>
+            </div>
+          <% } %>
+
+          <form method="POST" action="/admin/login">
+            <div class="field">
+              <label class="field-label" for="admin-username"><%= t('admin.login.username', 'Username') %></label>
+              <label class="field-wrap">
+                <i class="bi bi-person-circle"></i>
+                <input id="admin-username" class="fc" name="username" placeholder="Masukkan username admin" autocomplete="username" required value="<%= (form && form.username) ? form.username : '' %>">
+              </label>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="admin-password"><%= t('admin.login.password', 'Password') %></label>
+              <label class="field-wrap">
+                <i class="bi bi-key-fill"></i>
+                <input id="admin-password" class="fc" type="password" name="password" placeholder="Masukkan password" autocomplete="current-password" required>
+              </label>
+            </div>
+
+            <div class="remember-row">
+              <label class="remember-check">
+                <input type="checkbox" name="remember_me" <%= (form && form.rememberMe) ? 'checked' : '' %>>
+                <span>Tetap ingat saya</span>
+              </label>
+              <span>Simpan sesi di perangkat ini.</span>
+            </div>
+
+            <button type="submit" class="btn-login">
+              <i class="bi bi-box-arrow-in-right"></i>
+              <span><%= t('admin.login.sign_in', 'Masuk') %></span>
+            </button>
+          </form>
+
+          <a href="/customer/login" class="back-btn">
+            <i class="bi bi-arrow-left-circle"></i>
+            <span><%= t('admin.login.back_customer', 'Kembali ke Portal Pelanggan') %></span>
+          </a>
         </div>
-
-        <div class="remember-row">
-          <label class="remember-check">
-            <input type="checkbox" name="remember_me" <%= (form && form.rememberMe) ? 'checked' : '' %>>
-            <span>Tetap ingat saya</span>
-          </label>
-          <span>Login bertahan lebih lama</span>
-        </div>
-
-        <button type="submit" class="btn btn-p w-100" style="padding:12px;justify-content:center">
-          <i class="bi bi-box-arrow-in-right"></i> <%= t('admin.login.sign_in', 'Masuk Sekarang') %>
-        </button>
-      </form>
-
-      <a href="/customer/login" class="back-btn">
-        <i class="bi bi-arrow-left"></i> <%= t('admin.login.back_customer', 'Kembali ke Portal Pelanggan') %>
-      </a>
-    </div>
+      </section>
+    </main>
   </div>
-
 </body>
-
 </html>

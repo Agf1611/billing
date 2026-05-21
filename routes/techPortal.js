@@ -9,10 +9,20 @@ const mikrotikService = require('../services/mikrotikService');
 const billingSvc = require('../services/billingService');
 const db = require('../config/database');
 const oltSvc = require('../services/oltService');
-const fs = require('fs');
-const path = require('path');
+const employeeLocationSvc = require('../services/employeeLocationService');
+const massOutageSvc = require('../services/massOutageService');
 const multer = require('multer');
-const techUpload = multer({ storage: multer.memoryStorage() });
+const {
+  DEFAULT_MAX_BYTES,
+  persistCompressedImageUpload
+} = require('../services/imageUploadService');
+const {
+  buildTechnicianPushExternalId
+} = require('../services/pushNotificationService');
+const techUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 }
+});
 
 router.get('/manifest.webmanifest', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -53,6 +63,7 @@ function flashMsg(req) {
 }
 
 function company() { return getSetting('company_header', 'ISP App'); }
+function companyLogo() { return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png'; }
 
 function isTruthyFormValue(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
@@ -71,37 +82,24 @@ function getTechNav(techId) {
 
 function renderTechPage(req, res, view, payload = {}) {
   const techId = Number(req.session?.techId || 0) || 0;
+  const oneSignalAppId = String(getSetting('onesignal_app_id', '') || '').trim();
+  const oneSignalEnabled = getSetting('onesignal_enabled', false) === true && Boolean(oneSignalAppId);
   return res.render(view, {
     company: company(),
     techName: req.session?.techName || '',
+    techPushEnabled: oneSignalEnabled,
+    techOneSignalAppId: oneSignalAppId,
+    techPushExternalId: techId ? buildTechnicianPushExternalId({ id: techId }) : '',
     techNav: techId ? getTechNav(techId) : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 },
     operationalTasks: [],
     ...payload
   });
 }
 
-function toUploadImageExt(file) {
-  const extFromMime = String(file?.mimetype || '').split('/').pop().toLowerCase();
-  const extFromName = path.extname(String(file?.originalname || '')).toLowerCase().replace('.', '');
-  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromName)) return extFromName;
-  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromMime)) return extFromMime;
-  return 'jpg';
-}
-
-function persistTechUpload(file, prefix) {
-  if (!file || !file.buffer || Number(file.size || 0) <= 0) return '';
-  const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
-  fs.mkdirSync(uploadDir, { recursive: true });
-  const ext = toUploadImageExt(file);
-  const filename = `${prefix}-${Date.now()}.${ext}`;
-  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
-  return `/uploads/${filename}`;
-}
-
 // --- AUTH ---
 router.get('/login', (req, res) => {
   if (req.session && req.session.isTechnician) return res.redirect('/tech');
-  res.render('tech/login', { title: 'Teknisi Login', company: company(), error: null });
+  res.render('tech/login', { title: 'Teknisi Login', company: company(), logoUrl: companyLogo(), error: null, form: {} });
 });
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
@@ -113,10 +111,16 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
     req.session.techName = tech.name;
     return res.redirect('/tech');
   }
-  res.render('tech/login', { title: 'Teknisi Login', company: company(), error: 'Username atau password salah!' });
+  res.render('tech/login', { title: 'Teknisi Login', company: company(), logoUrl: companyLogo(), error: 'Username atau password salah!', form: { username } });
 });
 
 router.get('/logout', (req, res) => {
+  const techId = Number(req.session?.techId || 0) || 0;
+  if (techId) {
+    try {
+      employeeLocationSvc.clearEmployeeLocation('technician', techId, 'logout');
+    } catch (_error) {}
+  }
   req.session.destroy();
   res.redirect('/tech/login');
 });
@@ -127,15 +131,35 @@ router.get('/', requireTechSession, (req, res) => {
   const stats = techSvc.getTechStats(techId);
   const myTickets = techSvc.getAssignedTickets(techId);
   const operationalTasks = (techSvc.getTechnicianTasks(techId, { status: 'all' }) || []).slice(0, 4);
+  const openOutages = massOutageSvc.listOpenIncidents().slice(0, 6);
 
   renderTechPage(req, res, 'tech/dashboard', {
     title: 'Dashboard Teknisi', 
     activePage: 'dashboard',
     stats,
     operationalTasks,
+    openOutages,
     tickets: myTickets,
     msg: flashMsg(req)
   });
+});
+
+router.get('/api/outages', requireTechSession, (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 20, 100));
+    const status = String(req.query.status || 'open').trim().toLowerCase();
+    const outages = status === 'recent'
+      ? massOutageSvc.listRecentIncidents(limit)
+      : massOutageSvc.listOpenIncidents().slice(0, limit);
+    res.json({
+      success: true,
+      status,
+      count: outages.length,
+      outages
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message || 'Gagal memuat data gangguan massal.' });
+  }
 });
 
 router.get('/tasks', requireTechSession, (req, res) => {
@@ -204,6 +228,39 @@ router.get('/customers', requireTechSession, (req, res) => {
     filterStatus: status,
     msg: flashMsg(req)
   });
+});
+
+router.post('/api/location', requireTechSession, express.json({ limit: '32kb' }), (req, res) => {
+  try {
+    const techId = Number(req.session?.techId || 0) || 0;
+    if (!techId) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+    if (req.body && req.body.enabled === false) {
+      employeeLocationSvc.clearEmployeeLocation('technician', techId, String(req.body.reason || 'disabled'));
+      return res.json({ ok: true, disabled: true });
+    }
+
+    const tech = techSvc.getTechById(techId);
+    if (!tech) return res.status(404).json({ ok: false, error: 'technician_not_found' });
+
+    const location = employeeLocationSvc.upsertEmployeeLocation({
+      role: 'technician',
+      employeeId: techId,
+      username: tech.username,
+      name: tech.name || req.session?.techName || 'Teknisi',
+      phone: tech.phone || '',
+      lat: req.body?.lat,
+      lng: req.body?.lng,
+      accuracy: req.body?.accuracy,
+      source: 'portal-tech',
+      userAgent: req.headers['user-agent'] || '',
+      note: String(req.body?.note || '').trim()
+    });
+
+    return res.json({ ok: true, location });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error.message || 'Gagal menyimpan lokasi teknisi.' });
+  }
 });
 
 // --- ACTIONS ---
@@ -354,8 +411,14 @@ router.post('/customers', requireTechSession, techUpload.fields([
     const name = String(req.body.name || '').trim();
     if (!name) throw new Error('Nama pelanggan wajib diisi');
 
-    const housePhotoUrl = persistTechUpload(req.files?.house_photo_file?.[0], 'tech-house-photo');
-    const ktpPhotoUrl = persistTechUpload(req.files?.ktp_photo_file?.[0], 'tech-ktp-photo');
+    const housePhotoResult = req.files?.house_photo_file?.[0]
+      ? await persistCompressedImageUpload(req.files.house_photo_file[0], 'tech-house-photo', { maxBytes: DEFAULT_MAX_BYTES })
+      : null;
+    const ktpPhotoResult = req.files?.ktp_photo_file?.[0]
+      ? await persistCompressedImageUpload(req.files.ktp_photo_file[0], 'tech-ktp-photo', { maxBytes: DEFAULT_MAX_BYTES })
+      : null;
+    const housePhotoUrl = housePhotoResult?.publicUrl || '';
+    const ktpPhotoUrl = ktpPhotoResult?.publicUrl || '';
 
     const customerData = {
       name,
@@ -439,20 +502,23 @@ const customerDevice = require('../services/customerDeviceService');
 
 router.get('/api/mikrotik/pppoe-users', requireTechSession, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const parsedRouterId = req.query.routerId ? Number(req.query.routerId) : null;
+    const requestedRouterId = Number.isFinite(parsedRouterId) && parsedRouterId > 0 ? parsedRouterId : null;
+    const routerId = requestedRouterId && mikrotikService.getRouterById(requestedRouterId) ? requestedRouterId : null;
     const users = await mikrotikService.getPppoeUsers(routerId);
-    const usedRows = db.prepare('SELECT pppoe_username FROM customers WHERE router_id IS ? AND pppoe_username IS NOT NULL AND TRIM(pppoe_username) != ""').all(routerId);
+    const usedRows = db.prepare("SELECT pppoe_username FROM customers WHERE router_id IS ? AND pppoe_username IS NOT NULL AND TRIM(pppoe_username) != ''").all(routerId);
     const used = new Set(usedRows.map(r => String(r.pppoe_username).trim()).filter(Boolean));
     const filtered = (Array.isArray(users) ? users : []).filter(u => u && u.name && !used.has(String(u.name).trim()));
     res.json(filtered);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Gagal memuat akun PPPoE.' });
   }
 });
 
 router.get('/api/mikrotik/pppoe-profiles', requireTechSession, async (req, res) => {
   try {
-    const routerId = req.query.routerId ? Number(req.query.routerId) : null;
+    const requestedRouterId = req.query.routerId ? Number(req.query.routerId) : null;
+    const routerId = requestedRouterId && mikrotikService.getRouterById(requestedRouterId) ? requestedRouterId : null;
     const profiles = await mikrotikService.getPppoeProfiles(routerId);
     res.json(profiles);
   } catch (e) {
@@ -483,6 +549,68 @@ router.get('/api/customers/:id/detail', requireTechSession, async (req, res) => 
   }
 });
 
+async function activateCustomerWhenNoUnpaid(customerId) {
+  const freshCustomer = customerSvc.getCustomerById(customerId);
+  const stillUnpaid = billingSvc.getUnpaidInvoicesByCustomerId(customerId);
+  if (freshCustomer && ['suspended', 'inactive'].includes(String(freshCustomer.status || '').toLowerCase()) && !stillUnpaid.length) {
+    await customerSvc.activateCustomer(customerId);
+  }
+  return stillUnpaid;
+}
+
+router.post('/api/customers/:id/pay-unpaid-first', requireTechSession, express.json(), async (req, res) => {
+  try {
+    const customerId = Number(req.params.id || 0);
+    if (!Number.isFinite(customerId) || customerId <= 0) throw new Error('ID pelanggan tidak valid');
+
+    const customer = customerSvc.getCustomerById(customerId);
+    if (!customer) throw new Error('Pelanggan tidak ditemukan');
+
+    const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customerId);
+    const invoice = Array.isArray(unpaidInvoices) ? unpaidInvoices[0] : null;
+    if (!invoice) throw new Error('Tidak ada tagihan belum lunas untuk pelanggan ini');
+
+    const techName = String(req.session.techName || '').trim() || 'Teknisi';
+    const paidBy = `Teknisi ${techName}`;
+    const rawNotes = String(req.body?.notes || '').trim();
+    const notes = rawNotes || `Lunas oleh teknisi ${techName}`;
+
+    billingSvc.markAsPaid(invoice.id, paidBy, notes, {
+      type: 'technician',
+      id: req.session.techId,
+      name: req.session.techName,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || ''
+    });
+
+    const paidInvoice = billingSvc.getInvoiceById(invoice.id);
+    if (String(paidInvoice?.status || '').trim().toLowerCase() !== 'paid') {
+      throw new Error('Tagihan belum tersimpan sebagai lunas. Silakan coba lagi.');
+    }
+
+    const stillUnpaid = await activateCustomerWhenNoUnpaid(customerId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      invoice: {
+        id: Number(paidInvoice.id || invoice.id),
+        status: String(paidInvoice.status || 'paid').trim().toLowerCase(),
+        paidAt: paidInvoice.paid_at || null,
+        paidBy: paidInvoice.paid_by_name || paidBy,
+        periodMonth: Number(paidInvoice.period_month || invoice.period_month || 0) || 0,
+        periodYear: Number(paidInvoice.period_year || invoice.period_year || 0) || 0,
+        amount: Number(paidInvoice.amount || invoice.amount || 0) || 0
+      },
+      customer: {
+        id: customerId,
+        unpaidCount: stillUnpaid.length
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
 router.post('/api/customers/:id/invoices/:invoiceId/pay', requireTechSession, express.json(), async (req, res) => {
   try {
     const customerId = Number(req.params.id || 0);
@@ -499,6 +627,7 @@ router.post('/api/customers/:id/invoices/:invoiceId/pay', requireTechSession, ex
     const paidBy = `Teknisi ${techName}`;
     const rawNotes = String(req.body?.notes || '').trim();
     const notes = rawNotes || `Lunas oleh teknisi ${techName}`;
+    const wasPaid = String(invoice.status || '').trim().toLowerCase() === 'paid';
     billingSvc.markAsPaid(invoiceId, paidBy, notes, {
       type: 'technician',
       id: req.session.techId,
@@ -507,15 +636,28 @@ router.post('/api/customers/:id/invoices/:invoiceId/pay', requireTechSession, ex
       userAgent: req.headers['user-agent'] || ''
     });
 
-    const freshCustomer = customerSvc.getCustomerById(customerId);
-    if (freshCustomer && freshCustomer.status === 'suspended') {
-      const stillUnpaid = billingSvc.getUnpaidInvoicesByCustomerId(customerId);
-      if (!stillUnpaid.length) {
-        await customerSvc.activateCustomer(customerId);
-      }
+    const paidInvoice = billingSvc.getInvoiceById(invoiceId);
+    if (String(paidInvoice?.status || '').trim().toLowerCase() !== 'paid') {
+      throw new Error('Tagihan belum tersimpan sebagai lunas. Silakan coba lagi.');
     }
 
-    res.json({ success: true });
+    const stillUnpaid = await activateCustomerWhenNoUnpaid(customerId);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      invoice: {
+        id: Number(paidInvoice.id || invoiceId),
+        status: String(paidInvoice.status || 'paid').trim().toLowerCase(),
+        paidAt: paidInvoice.paid_at || null,
+        paidBy: paidInvoice.paid_by_name || paidBy,
+        alreadyPaid: wasPaid
+      },
+      customer: {
+        id: customerId,
+        unpaidCount: stillUnpaid.length
+      }
+    });
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
   }

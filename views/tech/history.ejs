@@ -1,32 +1,113 @@
 <%- include('partials/header') %>
 
-<div class="mb-4">
-  <h5 class="mb-0 fw-bold"><%= t('tech.history_page.title', 'Riwayat Tugas') %></h5>
-  <div class="text-secondary" style="font-size: 12px;"><%= t('tech.history_page.subtitle', '50 tugas terakhir yang sudah diselesaikan') %></div>
+<style>
+  .history-head-card{
+    display:grid;
+    gap:10px;
+    padding:16px;
+    background:linear-gradient(145deg, rgba(53,201,138,.14), rgba(111,141,255,.08)), var(--tech-panel);
+  }
+  .history-head-kicker{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    width:max-content;
+    padding:7px 11px;
+    border-radius:999px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.1);
+    color:var(--tech-success);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+  }
+  .history-head-title{
+    margin:0;
+    font-size:22px;
+    font-weight:900;
+    letter-spacing:-.04em;
+    line-height:1.08;
+  }
+  .history-head-text{
+    color:var(--tech-muted);
+    font-size:12px;
+    line-height:1.55;
+  }
+  .history-list{
+    display:grid;
+    gap:10px;
+  }
+  .history-card{
+    display:grid;
+    gap:10px;
+    padding:13px 14px;
+    background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.03));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .history-card-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .history-date{
+    color:var(--tech-muted);
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .history-name{
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:-.02em;
+  }
+  .history-subject{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    color:var(--tech-muted);
+    font-size:12px;
+    line-height:1.45;
+  }
+  .history-empty{
+    text-align:center;
+    padding:44px 20px;
+  }
+  .history-empty i{
+    font-size:42px;
+    color:var(--tech-primary);
+  }
+</style>
+
+<div class="t-card history-head-card">
+  <span class="history-head-kicker"><i class="bi bi-clock-history"></i>Riwayat</span>
+  <h5 class="history-head-title"><%= t('tech.history_page.title', 'Riwayat Tugas') %></h5>
+  <div class="history-head-text"><%= t('tech.history_page.subtitle', '50 tugas terakhir yang sudah diselesaikan') %></div>
 </div>
 
 <% if (tickets.length === 0) { %>
-  <div class="text-center py-5">
-    <i class="bi bi-clock-history text-secondary" style="font-size: 40px;"></i>
-    <p class="text-secondary mt-2 small"><%= t('tech.history_page.empty', 'Belum ada riwayat tugas yang diselesaikan.') %></p>
+  <div class="t-card history-empty">
+    <i class="bi bi-clock-history"></i>
+    <p class="text-secondary mt-2 small mb-0"><%= t('tech.history_page.empty', 'Belum ada riwayat tugas yang diselesaikan.') %></p>
   </div>
 <% } else { %>
-  <% tickets.forEach(ticket => { %>
-    <div class="t-card border-success border-opacity-25" style="opacity: 0.8;">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="badge-status badge-resolved">
-          <i class="bi bi-check-circle-fill"></i> <%= t('tech.ticket.resolved', 'Selesai') %>
-        </span>
-        <span class="text-secondary" style="font-size: 11px;"><%= new Date(ticket.updated_at).toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) %></span>
+  <div class="history-list">
+    <% tickets.forEach(ticket => { %>
+      <div class="t-card history-card">
+        <div class="history-card-top">
+          <span class="badge-status badge-resolved">
+            <i class="bi bi-check-circle-fill"></i> <%= t('tech.ticket.resolved', 'Selesai') %>
+          </span>
+          <span class="history-date"><%= new Date(ticket.updated_at).toLocaleString('id-ID', {day: '2-digit', month: 'short', year: 'numeric'}) %></span>
+        </div>
+        <div class="history-name"><%= ticket.customer_name %></div>
+        <div class="history-subject">
+          <i class="bi bi-tools"></i>
+          <span><%= ticket.subject %></span>
+        </div>
       </div>
-      
-      <div class="fw-bold mb-1" style="font-size: 14px;"><%= ticket.customer_name %></div>
-      
-      <div class="text-secondary" style="font-size: 12px;">
-        <i class="bi bi-tools me-1"></i><%= ticket.subject %>
-      </div>
-    </div>
-  <% }) %>
+    <% }) %>
+  </div>
 <% } %>
 
 <%- include('partials/bottom_nav') %>

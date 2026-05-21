@@ -824,10 +824,22 @@
     return firstRealOption ? String(firstRealOption.value || '').trim() : '';
   }
 
+  function hasRouterOption(value) {
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue) return true;
+    const select = document.getElementById('global-router-id');
+    if (!select) return false;
+    return Array.from(select.options || []).some((option) => String(option.value || '').trim() === normalizedValue);
+  }
+
   function ensureMonitoringRouterSelected() {
     const select = document.getElementById('global-router-id');
     if (!select) return '';
-    const current = String(select.value || '').trim();
+    let current = String(select.value || '').trim();
+    if (current && !hasRouterOption(current)) {
+      select.value = '';
+      current = '';
+    }
     if (current) return current;
     const fallback = getDefaultRouterId();
     if (fallback) select.value = fallback;
@@ -1026,6 +1038,10 @@
     }
     if (metadata.collectorStatus === 'warming_up') {
       setMonitoringSyncStatus('syncing', `Collector MikroTik sedang menyiapkan snapshot awal.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      return metadata;
+    }
+    if (metadata.collectorStatus === 'missing') {
+      setMonitoringSyncStatus('idle', `Router yang dipilih sudah tidak ada. Menampilkan data kosong yang aman.${sourceText}`, monitoringSync.lastSuccessAt);
       return metadata;
     }
     setMonitoringSyncStatus('error', `Collector MikroTik belum bisa membaca router.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);

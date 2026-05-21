@@ -6550,12 +6550,12 @@
         ? [
             { href: '/admin/billing', icon: 'bi-file-earmark-plus', label: 'Buka Tagihan' },
             { href: '/admin/customers', icon: 'bi-people', label: 'Lihat Pelanggan' },
-            { href: '/admin/bookkeeping', icon: 'bi-cash-coin', label: 'Pembayaran' },
+            { href: '/admin/bookkeeping', icon: 'bi-cash-coin', label: 'Pembukuan' },
             { href: '/admin/agents', icon: 'bi-person-badge', label: 'Monitor Agent' }
           ]
         : [
             { href: '/admin/billing', icon: 'bi-file-earmark-plus', label: 'Buat Tagihan' },
-            { href: '/admin/whatsapp/broadcast', icon: 'bi-whatsapp', label: 'Pengingat WA' },
+            { href: '/admin/whatsapp/broadcast', icon: 'bi-megaphone', label: 'Pengumuman' },
             { href: '/admin/customers/create', icon: 'bi-person-plus', label: 'Tambah Pelanggan' },
             { href: '/admin/tickets', icon: 'bi-life-preserver', label: 'Buka Tiket' },
             { href: '/admin/reports', icon: 'bi-bar-chart-line', label: 'Laporan' }
@@ -6564,7 +6564,7 @@
         ? [
             { href: '/admin/customers', icon: 'bi-people', label: 'Pelanggan', tone: 'violet' },
             { href: '/admin/billing', icon: 'bi-receipt', label: 'Tagihan', tone: 'mint', badge: Number(ops.unpaidInvoices || 0) },
-            { href: '/admin/bookkeeping', icon: 'bi-cash-coin', label: 'Pembayaran', tone: 'amber' },
+            { href: '/admin/bookkeeping', icon: 'bi-cash-coin', label: 'Pembukuan', tone: 'amber' },
             { href: '/admin/agents', icon: 'bi-person-badge', label: 'Agent', tone: 'sky' }
           ]
         : [
@@ -6579,6 +6579,7 @@
           ]; %>
 
       <% const dashboardTickets = (typeof recentActiveTickets !== 'undefined' && Array.isArray(recentActiveTickets)) ? recentActiveTickets : []; %>
+      <% const dashboardOutages = (typeof openOutages !== 'undefined' && Array.isArray(openOutages)) ? openOutages : []; %>
       <% const dashboardRecentPaymentsPreview = dashboardRecentPayments; %>
       <% const collectionRate = Number(finance.total_invoices || 0) > 0 ? Math.round((Number(finance.paid_count || 0) / Number(finance.total_invoices || 1)) * 100) : 0; %>
       <% const previousFinance = dashboardChart.find((item) => Number(item.month || 0) === Math.max(1, dashboardMonth - 1)) || null; %>
@@ -6890,6 +6891,48 @@
 
         <div class="dash-category-panel" data-dashboard-panel="gangguan">
           <div class="dash-category-grid">
+            <article class="dash-board-card dash-tickets-card">
+              <div class="dash-board-head">
+                <div>
+                  <h6>Gangguan Massal Aktif</h6>
+                  <p>Area aktif yang banyak pelanggan online-nya turun bersamaan.</p>
+                </div>
+                <a href="/admin/settings#settings-monitoring" class="btn btn-g btn-sm">Atur Deteksi</a>
+              </div>
+              <% if (dashboardOutages.length === 0) { %>
+                <div class="dash-ticket-list-compact">
+                  <div class="dash-empty">Belum ada gangguan massal aktif yang terdeteksi.</div>
+                </div>
+              <% } else { %>
+                <div class="dash-ticket-list-compact">
+                  <% dashboardOutages.forEach((outage) => { %>
+                    <div class="dash-ticket-item">
+                      <div class="dash-ticket-item-top">
+                        <div class="dash-ticket-code">
+                          <strong><%= outage.zoneLabel || outage.zoneKey || 'Area tidak diketahui' %></strong>
+                          <small><%= outage.routerKey || 'default' %></small>
+                        </div>
+                        <div class="dash-ticket-item-status">
+                          <span class="dash-status-pill danger"><%= Number(outage.offlineCount || 0) %> pelanggan</span>
+                        </div>
+                      </div>
+                      <div class="dash-ticket-subject">Gangguan stabil <%= Number(outage.offlinePercent || 0).toFixed(1) %>% dari baseline aktif.</div>
+                      <div class="dash-ticket-item-meta">
+                        <div class="dash-ticket-meta-box">
+                          <label>Sejak</label>
+                          <strong><%= outage.detectedAt ? new Date(outage.detectedAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-' %></strong>
+                        </div>
+                        <div class="dash-ticket-meta-box">
+                          <label>Baseline</label>
+                          <strong><%= Number(outage.offlineCount || 0) %> / <%= Number(outage.baselineCount || 0) %> pelanggan aktif</strong>
+                        </div>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </article>
+
             <article class="dash-board-card dash-tickets-card">
               <div class="dash-board-head">
                 <div>

@@ -18,12 +18,19 @@
   const incomeCount = Number(summary?.income_count || 0);
   const expenseCount = Number(summary?.expense_count || 0);
   const dashboardData = dashboard || {};
+  const ledgerDashboard = cashLedger || {};
   const incomeBreakdown = dashboardData.income || {};
   const expenseBreakdown = dashboardData.expense || {};
   const comparison = dashboardData.comparison || {};
   const actorBreakdown = Array.isArray(dashboardData.actors) ? dashboardData.actors : [];
   const recentPayments = Array.isArray(dashboardData.recentPayments) ? dashboardData.recentPayments : [];
   const approvalBreakdown = Array.isArray(dashboardData.approvals) ? dashboardData.approvals : [];
+  const rolePaymentBreakdown = Array.isArray(ledgerDashboard.rolePayments) ? ledgerDashboard.rolePayments : [];
+  const cashBalances = Array.isArray(ledgerDashboard.balances) ? ledgerDashboard.balances : [];
+  const adminCashBalance = ledgerDashboard.adminBalance || null;
+  const settlementSummary = ledgerDashboard.settlementSummary || {};
+  const settlementRows = Array.isArray(ledgerDashboard.settlements) ? ledgerDashboard.settlements : [];
+  const settlementOptions = Array.isArray(settlementSourceOptions) ? settlementSourceOptions : [];
   const incomeCards = [
     { label: 'Pembayaran Tunai', amount: Number(incomeBreakdown.cash?.amount || 0), count: Number(incomeBreakdown.cash?.count || 0), icon: 'bi-cash-stack', tone: 'cash' },
     { label: 'Pembayaran Online', amount: Number(incomeBreakdown.online?.amount || 0), count: Number(incomeBreakdown.online?.count || 0), icon: 'bi-qr-code-scan', tone: 'online' },
@@ -389,6 +396,138 @@
       color: var(--text);
       text-align: right;
     }
+    .bk-filter-cta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .bk-role-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-role-card,
+    .bk-balance-card,
+    .bk-settlement-card {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 13px 14px;
+      background: var(--surface-soft);
+      min-width: 0;
+    }
+    .bk-role-card strong,
+    .bk-balance-card strong,
+    .bk-settlement-card strong {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .bk-role-card .bk-role-amount,
+    .bk-balance-card .bk-balance-amount,
+    .bk-settlement-card .bk-settlement-amount {
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .bk-role-card .bk-role-meta,
+    .bk-balance-card .bk-role-meta,
+    .bk-settlement-card .bk-role-meta {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .bk-balance-shell,
+    .bk-settlement-shell {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 16px;
+    }
+    .bk-balance-list,
+    .bk-settlement-list {
+      display: grid;
+      gap: 10px;
+    }
+    .bk-balance-head,
+    .bk-settlement-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .bk-balance-role {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--primary);
+    }
+    .bk-balance-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(124, 116, 255, 0.10);
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .bk-balance-status.zero {
+      background: rgba(34, 197, 94, 0.10);
+      color: #22c55e;
+    }
+    .bk-balance-status.partial {
+      background: rgba(245, 158, 11, 0.12);
+      color: #f59e0b;
+    }
+    .bk-balance-chip-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .bk-balance-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .bk-balance-chip b {
+      color: var(--text);
+      font-weight: 800;
+    }
+    .bk-balance-inactive {
+      color: #fb7185;
+      font-weight: 800;
+    }
+    .bk-form-inline {
+      display: grid;
+      gap: 12px;
+    }
+    .bk-form-inline-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-form-inline-grid .full {
+      grid-column: 1 / -1;
+    }
+    .bk-settlement-card .btn {
+      width: 100%;
+      justify-content: center;
+    }
     .bk-list-card .card-hd,
     .bk-list-card .card-bd {
       padding: 16px 18px;
@@ -612,6 +751,13 @@
       .bk-summary-grid {
         grid-template-columns: 1fr;
       }
+      .bk-role-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-balance-shell,
+      .bk-settlement-shell {
+        grid-template-columns: 1fr;
+      }
     }
     @media (max-width: 900px) {
       .bk-filter-form {
@@ -623,6 +769,9 @@
         flex: 1 1 100%;
       }
       .bk-actor-grid {
+        grid-template-columns: 1fr;
+      }
+      .bk-form-inline-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -710,6 +859,9 @@
       .bk-list-head {
         align-items: flex-start;
       }
+      .bk-role-grid {
+        grid-template-columns: 1fr 1fr;
+      }
     }
     @media (max-width: 576px) {
       .bk-filter-panel {
@@ -746,6 +898,9 @@
       .bk-mobile-head,
       .bk-inline-item {
         flex-direction: column;
+      }
+      .bk-role-grid {
+        grid-template-columns: 1fr;
       }
       .bk-amount,
       .bk-inline-amount {
@@ -790,11 +945,16 @@
             <strong>Periode Pembukuan</strong>
             <span><%= monthLabel %> <%= selectedYear %> - <%= pageEntries.length %> entri tampil</span>
           </div>
-          <% if (!pageSession.isCashier) { %>
-          <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
-            <i class="bi bi-plus-circle"></i> Tambah Pembukuan
-          </a>
-          <% } %>
+          <div class="bk-filter-cta">
+            <a href="/admin/bookkeeping/export?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
+              <i class="bi bi-file-earmark-excel"></i> Export
+            </a>
+            <% if (!pageSession.isCashier) { %>
+            <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
+              <i class="bi bi-plus-circle"></i> Tambah Pembukuan
+            </a>
+            <% } %>
+          </div>
         </div>
         <form method="GET" action="/admin/bookkeeping" class="bk-filter-form" id="bkFilterForm">
           <div class="bk-filter-search-row">
@@ -881,6 +1041,170 @@
           </div>
         </section>
       </div>
+
+      <section class="bk-card">
+        <div class="bk-list-card card-bd">
+          <div class="bk-list-head">
+            <div class="bk-subtitle" style="margin-bottom:0">
+              <strong>Pembayaran per Peran</strong>
+              <span>Ringkas peran yang menerima pembayaran lunas pada periode terpilih.</span>
+            </div>
+            <div class="bk-chip-row">
+              <span class="bk-chip"><i class="bi bi-person-badge"></i> <strong><%= rolePaymentBreakdown.length %></strong> peran aktif</span>
+              <span class="bk-chip"><i class="bi bi-cash-coin"></i> Setor <strong>Rp <%= Number(settlementSummary.totalAmount || 0).toLocaleString('id-ID') %></strong></span>
+            </div>
+          </div>
+          <% if (!rolePaymentBreakdown.length) { %>
+            <div class="bk-empty">
+              <i class="bi bi-people"></i>
+              <strong>Belum ada pembayaran per peran</strong>
+              <span>Pembayaran oleh admin, kasir, kolektor, dan teknisi akan dirangkum di sini.</span>
+            </div>
+          <% } else { %>
+            <div class="bk-role-grid">
+              <% rolePaymentBreakdown.forEach((item) => { %>
+                <article class="bk-role-card">
+                  <strong><%= item.label %></strong>
+                  <div class="bk-role-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                  <div class="bk-role-meta"><%= Number(item.count || 0) %> transaksi • <%= Number(item.actorCount || 0) %> petugas</div>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="bk-card">
+        <div class="bk-list-card card-bd">
+          <div class="bk-subtitle">
+            <strong>Saldo Kas Petugas</strong>
+            <span>Kas admin bersih dan saldo petugas yang belum/setengah disetor.</span>
+          </div>
+          <div class="bk-balance-shell">
+            <div class="bk-balance-list">
+              <article class="bk-balance-card">
+                <div class="bk-balance-head">
+                  <div>
+                    <span class="bk-balance-role">Admin</span>
+                    <strong><%= adminCashBalance?.label || 'Admin' %></strong>
+                  </div>
+                  <span class="bk-balance-status <%= Number(adminCashBalance?.currentBalance || 0) <= 0 ? 'zero' : '' %>">Kas admin bersih</span>
+                </div>
+                <div class="bk-balance-amount">Rp <%= Number(adminCashBalance?.currentBalance || 0).toLocaleString('id-ID') %></div>
+                <div class="bk-role-meta">Pembayaran langsung admin + setor masuk - pengeluaran admin.</div>
+                <div class="bk-balance-chip-row">
+                  <span class="bk-balance-chip">Invoice <b>Rp <%= Number(adminCashBalance?.invoiceIncome || 0).toLocaleString('id-ID') %></b></span>
+                  <span class="bk-balance-chip">Manual <b>Rp <%= Number(adminCashBalance?.manualIncome || 0).toLocaleString('id-ID') %></b></span>
+                  <span class="bk-balance-chip">Setor masuk <b>Rp <%= Number(adminCashBalance?.settlementIn || 0).toLocaleString('id-ID') %></b></span>
+                  <span class="bk-balance-chip">Keluar <b>Rp <%= Number(adminCashBalance?.expense || 0).toLocaleString('id-ID') %></b></span>
+                </div>
+              </article>
+              <% if (!cashBalances.filter((item) => item.role !== 'admin').length) { %>
+                <div class="bk-empty">
+                  <i class="bi bi-wallet2"></i>
+                  <strong>Belum ada saldo petugas</strong>
+                  <span>Saldo kas kasir, kolektor, dan teknisi akan muncul otomatis saat ada pembayaran atau setoran.</span>
+                </div>
+              <% } else { %>
+                <% cashBalances.filter((item) => item.role !== 'admin').forEach((item) => { %>
+                  <article class="bk-balance-card">
+                    <div class="bk-balance-head">
+                      <div>
+                        <span class="bk-balance-role"><%= item.roleLabel %></span>
+                        <strong><%= item.label %></strong>
+                      </div>
+                      <span class="bk-balance-status <%= item.currentBalance <= 0 ? 'zero' : (String(item.statusLabel || '').toLowerCase().includes('sebagian') ? 'partial' : '') %>"><%= item.statusLabel %></span>
+                    </div>
+                    <div class="bk-balance-amount">Rp <%= Number(item.currentBalance || 0).toLocaleString('id-ID') %></div>
+                    <div class="bk-role-meta">
+                      <% if (!item.isActive) { %><span class="bk-balance-inactive">Nonaktif</span> • <% } %>
+                      Invoice Rp <%= Number(item.invoiceIncome || 0).toLocaleString('id-ID') %> • Manual Rp <%= Number(item.manualIncome || 0).toLocaleString('id-ID') %>
+                    </div>
+                    <div class="bk-balance-chip-row">
+                      <span class="bk-balance-chip">Setor keluar <b>Rp <%= Number(item.settlementOut || 0).toLocaleString('id-ID') %></b></span>
+                      <span class="bk-balance-chip">Setor masuk <b>Rp <%= Number(item.settlementIn || 0).toLocaleString('id-ID') %></b></span>
+                      <span class="bk-balance-chip">Pengeluaran <b>Rp <%= Number(item.expense || 0).toLocaleString('id-ID') %></b></span>
+                    </div>
+                  </article>
+                <% }) %>
+              <% } %>
+            </div>
+
+            <div class="bk-settlement-list">
+              <% if (!pageSession.isCashier) { %>
+              <article class="bk-settlement-card">
+                <div class="bk-settlement-head">
+                  <div>
+                    <strong>Setor ke Admin</strong>
+                    <div class="bk-role-meta">Admin mencatat uang fisik yang diterima dari petugas.</div>
+                  </div>
+                  <span class="bk-balance-status">Input manual</span>
+                </div>
+                <form method="POST" action="/admin/bookkeeping/settlements" class="bk-form-inline">
+                  <input type="hidden" name="month" value="<%= selectedMonth %>">
+                  <input type="hidden" name="year" value="<%= selectedYear %>">
+                  <div class="bk-form-inline-grid">
+                    <div class="full">
+                      <label class="fl">Petugas sumber</label>
+                      <select class="fc" name="from_holder" id="settlementHolderSelect" onchange="syncSettlementHolderFields()" required>
+                        <option value="">Pilih petugas</option>
+                        <% settlementOptions.forEach((item) => { %>
+                          <option value="<%= item.role %>:<%= item.entityId %>"><%= item.label %><%= item.isActive ? '' : ' (nonaktif)' %></option>
+                        <% }) %>
+                      </select>
+                      <input type="hidden" name="from_role" id="settlementFromRole">
+                      <input type="hidden" name="from_entity_id" id="settlementFromEntityId">
+                    </div>
+                    <div>
+                      <label class="fl">Tanggal setor</label>
+                      <input class="fc" type="date" name="settlement_date" value="<%= new Date().toISOString().slice(0, 10) %>" required>
+                    </div>
+                    <div>
+                      <label class="fl">Nominal setor</label>
+                      <input class="fc" type="number" min="1" name="amount" placeholder="Contoh: 300000" required>
+                    </div>
+                    <div class="full">
+                      <label class="fl">Catatan</label>
+                      <textarea class="fc" name="notes" rows="3" placeholder="Contoh: setor tunai putaran sore"></textarea>
+                    </div>
+                  </div>
+                  <button class="btn btn-p" type="submit"><i class="bi bi-box-arrow-in-down-right"></i> Catat Setor</button>
+                </form>
+              </article>
+              <% } %>
+
+              <article class="bk-settlement-card">
+                <div class="bk-settlement-head">
+                  <div>
+                    <strong>Riwayat Setor</strong>
+                    <div class="bk-role-meta"><%= Number(settlementSummary.totalCount || 0) %> transaksi setor pada periode ini.</div>
+                  </div>
+                  <span class="bk-balance-status <%= Number(settlementSummary.totalAmount || 0) <= 0 ? 'zero' : '' %>">Rp <%= Number(settlementSummary.totalAmount || 0).toLocaleString('id-ID') %></span>
+                </div>
+                <% if (!settlementRows.length) { %>
+                  <div class="bk-empty" style="padding:18px 14px">
+                    <strong>Belum ada setoran</strong>
+                    <span>Saat kasir, kolektor, atau teknisi setor ke admin, riwayatnya tampil di sini.</span>
+                  </div>
+                <% } else { %>
+                  <div class="bk-inline-list">
+                    <% settlementRows.forEach((item) => { %>
+                      <div class="bk-inline-item">
+                        <div>
+                          <strong><%= item.fromLabel %> → <%= item.toLabel %></strong>
+                          <span><%= item.settlementDate || '-' %> • Dicatat oleh <b><%= item.createdByName || 'Admin' %></b></span>
+                          <span><%= item.notes || 'Tanpa catatan' %></span>
+                        </div>
+                        <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
+                      </div>
+                    <% }) %>
+                  </div>
+                <% } %>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <details class="bk-toggle">
         <summary>
@@ -1035,7 +1359,12 @@
                           <% if (entry.customer_name) { %><span class="bk-entry-sub"><%= entry.customer_name %></span><% } %>
                         </div>
                       </td>
-                      <td><span class="bk-entry-main"><%= entry.created_by_name || '-' %></span></td>
+                      <td>
+                        <div class="bk-entry-copy">
+                          <span class="bk-entry-main"><%= entry.created_by_name || '-' %></span>
+                          <% if (entry.holder_label) { %><span class="bk-entry-sub">Kas dipegang: <%= entry.holder_label %></span><% } %>
+                        </div>
+                      </td>
                       <td class="num bk-amount <%= entry.type === 'income' ? 'income' : 'expense' %>">Rp <%= Number(entry.amount || 0).toLocaleString('id-ID') %></td>
                       <td class="num">
                         <% if (!pageSession.isCashier && String(entry.source_type || '') !== 'invoice') { %>
@@ -1073,6 +1402,12 @@
                       <div class="bk-mobile-label">Petugas</div>
                       <div class="bk-mobile-value"><%= entry.created_by_name || '-' %></div>
                     </div>
+                    <% if (entry.holder_label) { %>
+                      <div class="bk-mobile-cell">
+                        <div class="bk-mobile-label">Kas dipegang</div>
+                        <div class="bk-mobile-value"><%= entry.holder_label %></div>
+                      </div>
+                    <% } %>
                     <div class="bk-mobile-cell">
                       <div class="bk-mobile-label">Sumber</div>
                       <div class="bk-mobile-value"><%= entry.source_type || 'manual' %></div>
@@ -1124,9 +1459,20 @@ function toggleBookkeepingFilterPanel(force) {
   panel.classList.toggle('show');
 }
 
+function syncSettlementHolderFields() {
+  const source = document.getElementById('settlementHolderSelect');
+  const roleInput = document.getElementById('settlementFromRole');
+  const entityInput = document.getElementById('settlementFromEntityId');
+  if (!source || !roleInput || !entityInput) return;
+  const [role = '', entityId = ''] = String(source.value || '').split(':');
+  roleInput.value = role;
+  entityInput.value = entityId;
+}
+
 window.addEventListener('resize', syncBookkeepingMobileFilterLayout);
 document.addEventListener('DOMContentLoaded', () => {
   syncBookkeepingMobileFilterLayout();
+  syncSettlementHolderFields();
   document.getElementById('bkFilterForm')?.addEventListener('submit', () => {
     if (window.innerWidth <= 768) toggleBookkeepingFilterPanel(false);
   });

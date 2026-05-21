@@ -103,6 +103,10 @@ function getAllCashiers() {
   return listUsers('cashiers');
 }
 
+function getCashierById(id) {
+  return sanitizeUserRow(getUserById('cashiers', id));
+}
+
 function createCashier(data) {
   const passwordHash = resolveNextPasswordHash(data, null, 'Password kasir');
   const stmt = db.prepare('INSERT INTO cashiers (username, password, password_hash, name, phone) VALUES (?, ?, ?, ?, ?)');
@@ -141,6 +145,10 @@ function authenticateCashier(username, password) {
 
 function getAllCollectors() {
   return listUsers('collectors');
+}
+
+function getCollectorById(id) {
+  return sanitizeUserRow(getUserById('collectors', id));
 }
 
 function createCollector(data) {
@@ -276,11 +284,13 @@ module.exports = {
   updateTechnician,
   deleteTechnician,
   getAllCashiers,
+  getCashierById,
   createCashier,
   updateCashier,
   deleteCashier,
   authenticateCashier,
   getAllCollectors,
+  getCollectorById,
   createCollector,
   updateCollector,
   deleteCollector,

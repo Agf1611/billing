@@ -13,7 +13,7 @@ const { normalizePhoneDigits } = require('./phoneService');
  */
 function getFallbackEmail(phone) {
   const digits = phone.replace(/\D/g, '');
-  return `cust${digits}@alijaya.net`;
+  return `cust${digits}@sickas.net`;
 }
 
 /**

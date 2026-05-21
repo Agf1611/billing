@@ -1573,5 +1573,10 @@
       updateActiveFromScroll();
     })();
   </script>
+  <%- include('../partials/employee_location_tracker', {
+    enabled: true,
+    endpoint: '/agent/api/location',
+    roleLabel: 'Agent'
+  }) %>
 </body>
 </html>

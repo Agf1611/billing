@@ -15,7 +15,9 @@
     overflow:auto;
     border-radius:28px;
     border:1px solid var(--border, var(--tech-border, rgba(148,163,184,.18)));
-    background:var(--bg2, var(--tech-bg-soft, #111827));
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 100%),
+      var(--bg2, var(--tech-bg-soft, #111827));
     box-shadow:0 34px 88px rgba(15,23,42,.34);
     overscroll-behavior:contain
   }
@@ -38,13 +40,13 @@
   .customer-detail-network-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .customer-detail-data-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .customer-detail-body{padding:16px;background:var(--bg, var(--tech-bg, #0f172a))}
-  .customer-detail-section{background:var(--bg2, var(--tech-bg-soft, #111827));border:1px solid var(--border, var(--tech-border, rgba(148,163,184,.16)));border-radius:18px;padding:12px 12px 10px;margin-bottom:10px;box-shadow:0 10px 26px rgba(15,23,42,.08)}
+  .customer-detail-section{background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));border:1px solid var(--border, var(--tech-border, rgba(148,163,184,.16)));border-radius:20px;padding:12px 12px 10px;margin-bottom:10px;box-shadow:0 10px 26px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.04)}
   .customer-detail-section h4{margin:0 0 10px;font-size:14px;font-weight:900;display:flex;align-items:center;gap:8px}
   .customer-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
   .customer-section-head h4{margin:0}
-  .customer-inline-action{border:1px solid rgba(148,163,184,.16);background:rgba(255,255,255,.06);color:inherit;border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;display:inline-flex;align-items:center;gap:6px}
-  .customer-detail-cell{padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(148,163,184,.12)}
-  .customer-detail-cell.emphasis{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.16)}
+  .customer-inline-action{border:1px solid rgba(148,163,184,.16);background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));color:inherit;border-radius:999px;padding:6px 10px;font-size:10px;font-weight:800;display:inline-flex;align-items:center;gap:6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+  .customer-detail-cell{padding:9px 10px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));border:1px solid rgba(148,163,184,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+  .customer-detail-cell.emphasis{background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.08));border-color:rgba(255,255,255,.16)}
   .customer-detail-cell .label{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted, var(--tech-muted, #94a3b8));margin-bottom:3px}
   .customer-detail-cell .value{font-size:12px;font-weight:700;line-height:1.32;word-break:break-word}
   .customer-detail-cell .value.status-chip{display:flex;align-items:flex-start}
@@ -55,11 +57,12 @@
   .customer-detail-cell.compact .label{margin-bottom:3px}
   .customer-detail-cell.compact .value{font-size:11.5px}
   .customer-docs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .customer-doc-card{border-radius:18px;border:1px solid rgba(148,163,184,.14);padding:10px;background:rgba(255,255,255,.03)}
-  .customer-doc-card img{width:100%;height:160px;object-fit:cover;border-radius:14px;display:block}
-  .customer-doc-empty{height:160px;border-radius:14px;border:1px dashed rgba(148,163,184,.24);display:grid;place-items:center;color:var(--muted,var(--tech-muted,#94a3b8));font-size:12px}
+  .customer-doc-card{border-radius:18px;border:1px solid rgba(148,163,184,.14);padding:10px;background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+  .customer-doc-media{min-height:180px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.02);overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+  .customer-doc-card img{display:block;max-width:100%;width:auto;height:auto;max-height:min(52vh,420px);object-fit:contain;border-radius:14px}
+  .customer-doc-empty{min-height:180px;width:100%;border-radius:14px;border:1px dashed rgba(148,163,184,.24);display:grid;place-items:center;color:var(--muted,var(--tech-muted,#94a3b8));font-size:12px}
   .customer-billing-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-  .customer-live-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(16,185,129,.18);border:1px solid rgba(52,211,153,.22);font-size:11px;font-weight:800;color:#bbf7d0}
+  .customer-live-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:linear-gradient(180deg, rgba(16,185,129,.20), rgba(16,185,129,.12));border:1px solid rgba(52,211,153,.22);font-size:11px;font-weight:800;color:#bbf7d0;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
   .customer-collapsible{padding:0}
   .customer-collapsible summary{list-style:none;cursor:pointer;padding:14px 14px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
   .customer-collapsible summary::-webkit-details-marker{display:none}
@@ -67,21 +70,22 @@
   .customer-collapsible[open] summary .chev{transform:rotate(180deg)}
   .customer-collapsible-body{padding:0 14px 12px}
   .customer-billing-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-  .billing-month{padding:10px 11px;border-radius:16px;border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.03)}
+  .billing-month{padding:10px 11px;border-radius:18px;border:1px solid rgba(148,163,184,.14);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .billing-month .head{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-bottom:6px}
   .billing-month .name{font-size:12px;font-weight:800}
   .billing-month .status{font-size:10px;font-weight:800;padding:4px 7px;border-radius:999px}
-  .billing-month .status.paid{background:rgba(34,197,94,.14);color:#22c55e}
-  .billing-month .status.unpaid{background:rgba(245,158,11,.14);color:#f59e0b}
-  .billing-month .status.isolated{background:rgba(239,68,68,.14);color:#ef4444}
-  .billing-month .status.missing{background:rgba(148,163,184,.14);color:var(--muted,var(--tech-muted,#94a3b8))}
+  .billing-month .status.paid{background:linear-gradient(180deg, rgba(34,197,94,.16), rgba(34,197,94,.08));color:#22c55e;border:1px solid rgba(34,197,94,.16)}
+  .billing-month .status.unpaid{background:linear-gradient(180deg, rgba(245,158,11,.16), rgba(245,158,11,.08));color:#f59e0b;border:1px solid rgba(245,158,11,.16)}
+  .billing-month .status.isolated{background:linear-gradient(180deg, rgba(239,68,68,.16), rgba(239,68,68,.08));color:#ef4444;border:1px solid rgba(239,68,68,.16)}
+  .billing-month .status.void{background:linear-gradient(180deg, rgba(148,163,184,.16), rgba(148,163,184,.08));color:#94a3b8;border:1px solid rgba(148,163,184,.18)}
+  .billing-month .status.missing{background:linear-gradient(180deg, rgba(148,163,184,.16), rgba(148,163,184,.08));color:var(--muted,var(--tech-muted,#94a3b8));border:1px solid rgba(148,163,184,.16)}
   .billing-month .meta{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));line-height:1.45}
-  .billing-pay-btn{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:var(--primary,var(--tech-primary,#3b82f6));color:#fff;font-size:12px;font-weight:800}
+  .billing-pay-btn{margin-top:8px;width:100%;border:0;border-radius:14px;padding:9px 10px;background:linear-gradient(135deg, var(--primary,var(--tech-primary,#3b82f6)), rgba(111,141,255,.96));color:#fff;font-size:12px;font-weight:800;box-shadow:0 14px 26px rgba(59,130,246,.18)}
   .device-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-  .device-action-card{padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.14);background:rgba(255,255,255,.035)}
+  .device-action-card{padding:11px 12px;border-radius:18px;border:1px solid rgba(148,163,184,.14);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .device-action-card label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,var(--tech-muted,#94a3b8));margin-bottom:6px}
-  .device-action-card input{width:100%;border-radius:12px;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.06);color:inherit;padding:10px 11px}
-  .device-action-card button{margin-top:8px;width:100%;border:0;border-radius:12px;padding:8px 10px;background:rgba(59,130,246,.18);color:inherit;font-weight:800}
+  .device-action-card input{width:100%;border-radius:14px;border:1px solid rgba(148,163,184,.18);background:rgba(255,255,255,.06);color:inherit;padding:10px 11px}
+  .device-action-card button{margin-top:8px;width:100%;border:0;border-radius:14px;padding:9px 10px;background:linear-gradient(180deg, rgba(59,130,246,.22), rgba(59,130,246,.14));color:inherit;font-weight:800;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
   .customer-detail-muted{color:var(--muted,var(--tech-muted,#94a3b8))}
   .customer-mobile-secondary{display:block}
   .customer-avatar{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.18);font-size:28px;overflow:hidden;flex:0 0 auto}
@@ -140,30 +144,30 @@
     display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:900;
     border:1px solid transparent
   }
-  .customer-network-status.online{background:rgba(34,197,94,.14);color:#22c55e;border-color:rgba(34,197,94,.22)}
-  .customer-network-status.offline{background:rgba(239,68,68,.14);color:#ef4444;border-color:rgba(239,68,68,.22)}
-  .customer-network-status.warn{background:rgba(245,158,11,.14);color:#f59e0b;border-color:rgba(245,158,11,.22)}
+  .customer-network-status.online{background:linear-gradient(180deg, rgba(34,197,94,.16), rgba(34,197,94,.08));color:#22c55e;border-color:rgba(34,197,94,.22)}
+  .customer-network-status.offline{background:linear-gradient(180deg, rgba(239,68,68,.16), rgba(239,68,68,.08));color:#ef4444;border-color:rgba(239,68,68,.22)}
+  .customer-network-status.warn{background:linear-gradient(180deg, rgba(245,158,11,.16), rgba(245,158,11,.08));color:#f59e0b;border-color:rgba(245,158,11,.22)}
   .customer-detail-cardline{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .customer-detail-cardline .value{margin-top:0!important}
   .customer-traffic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-  .customer-traffic-card{padding:11px 12px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.04);min-width:0}
+  .customer-traffic-card{padding:11px 12px;border-radius:18px;border:1px solid rgba(148,163,184,.12);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .customer-traffic-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,var(--tech-muted,#94a3b8))}
   .customer-traffic-card .value{font-size:18px;font-weight:900;line-height:1.1;margin-top:6px}
   .customer-traffic-card .sub{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));margin-top:4px}
   .customer-traffic-card.download .value{color:#60a5fa}
   .customer-traffic-card.upload .value{color:#4ade80}
   .customer-list-rows{display:grid;gap:10px}
-  .customer-list-row{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
+  .customer-list-row{padding:12px 13px;border-radius:18px;border:1px solid rgba(148,163,184,.12);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .customer-list-row .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
   .customer-list-row .title{font-size:13px;font-weight:800}
   .customer-list-row .meta{font-size:11px;color:var(--muted,var(--tech-muted,#94a3b8));margin-top:4px;line-height:1.45}
   .customer-tech-status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:800}
-  .customer-tech-status.open{background:rgba(245,158,11,.14);color:#f59e0b}
-  .customer-tech-status.in_progress{background:rgba(59,130,246,.14);color:#60a5fa}
-  .customer-tech-status.resolved{background:rgba(34,197,94,.14);color:#22c55e}
-  .customer-tech-status.closed{background:rgba(100,116,139,.14);color:#94a3b8}
+  .customer-tech-status.open{background:linear-gradient(180deg, rgba(245,158,11,.16), rgba(245,158,11,.08));color:#f59e0b}
+  .customer-tech-status.in_progress{background:linear-gradient(180deg, rgba(59,130,246,.16), rgba(59,130,246,.08));color:#60a5fa}
+  .customer-tech-status.resolved{background:linear-gradient(180deg, rgba(34,197,94,.16), rgba(34,197,94,.08));color:#22c55e}
+  .customer-tech-status.closed{background:linear-gradient(180deg, rgba(100,116,139,.16), rgba(100,116,139,.08));color:#94a3b8}
   .customer-doc-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
-  .customer-note-box{padding:12px 13px;border-radius:16px;border:1px solid rgba(148,163,184,.12);background:rgba(255,255,255,.035)}
+  .customer-note-box{padding:12px 13px;border-radius:18px;border:1px solid rgba(148,163,184,.12);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .customer-note-box .big{font-size:13px;font-weight:700;line-height:1.5}
   :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-overlay{background:rgba(94,112,146,.22)}
   :is(body[data-theme="light"], html[data-theme="light"]) .customer-detail-shell{
@@ -307,7 +311,9 @@
     .customer-detail-cell.emphasis .value{font-size:14px}
     .customer-mobile-secondary{display:none}
     .customer-span-2,.customer-span-3{grid-column:span 2}
-    .customer-doc-card img,.customer-doc-empty{height:132px}
+    .customer-doc-media{min-height:132px}
+    .customer-doc-card img{max-height:min(42vh,260px)}
+    .customer-doc-empty{min-height:132px}
     .customer-billing-months{grid-template-columns:1fr}
     .customer-collapsible summary{padding:10px 10px 8px}
     .customer-collapsible-body{padding:0 10px 8px}
@@ -462,6 +468,7 @@
   function customerDetailInvoiceStatus(invoice) {
     if (!invoice) return { label: 'Belum Ada Tagihan', cls: 'missing' };
     if (String(invoice.status || '').toLowerCase() === 'paid') return { label: 'Lunas', cls: 'paid' };
+    if (String(invoice.status || '').toLowerCase() === 'void') return { label: 'Hangus Prabayar', cls: 'void' };
     return { label: 'Belum Lunas', cls: 'unpaid' };
   }
 
@@ -586,6 +593,11 @@
     loadCustomerDetail(customerDetailState.year, false);
   }
 
+  function openCustomerPaymentDetail(customerId, year = null) {
+    customerDetailState.activeTab = CUSTOMER_DETAIL_OPTIONS.allowPayment ? 'pay' : 'detail';
+    openCustomerDetail(customerId, year);
+  }
+
   function closeCustomerDetailModal() {
     if (customerDetailState.refreshTimer) {
       clearInterval(customerDetailState.refreshTimer);
@@ -639,6 +651,7 @@
           'X-Requested-With': 'fetch'
         },
         credentials: 'same-origin',
+        cache: 'no-store',
         signal: controller.signal
       });
       const json = await parseCustomerDetailResponse(res);
@@ -897,7 +910,7 @@
                     <div>${row.invoiceId ? customerDetailRupiah(row.amount) : 'Belum ada invoice'}</div>
                     <div>${row.paidAt ? 'Lunas: ' + customerDetailDateTime(row.paidAt, '-') : (row.dueDay ? 'Jatuh tempo tgl ' + row.dueDay : '')}</div>
                   </div>
-                  ${CUSTOMER_DETAIL_OPTIONS.allowPayment && row.invoiceId && row.status !== 'paid' ? `<button type="button" class="billing-pay-btn" onclick="customerDetailMarkPaid(${Number(row.invoiceId)})">Lunaskan</button>` : ''}
+                  ${CUSTOMER_DETAIL_OPTIONS.allowPayment && row.invoiceId && row.status !== 'paid' && row.status !== 'void' ? `<button type="button" class="billing-pay-btn" onclick="customerDetailMarkPaid(${Number(row.invoiceId)})">Lunaskan</button>` : ''}
                 </div>
               `).join('')}
             </div>
@@ -1006,11 +1019,15 @@
             <div class="customer-docs">
               <div class="customer-doc-card">
                 <div class="customer-doc-title"><span class="customer-detail-muted" style="font-size:12px">Foto Rumah</span></div>
-                ${customer.housePhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.housePhotoUrl)}" alt="Foto rumah">` : '<div class="customer-doc-empty">Belum ada foto rumah</div>'}
+                <div class="customer-doc-media">
+                  ${customer.housePhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.housePhotoUrl)}" alt="Foto rumah">` : '<div class="customer-doc-empty">Belum ada foto rumah</div>'}
+                </div>
               </div>
               <div class="customer-doc-card">
                 <div class="customer-doc-title"><span class="customer-detail-muted" style="font-size:12px">Foto KTP</span></div>
-                ${customer.ktpPhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.ktpPhotoUrl)}" alt="Foto KTP">` : '<div class="customer-doc-empty">Belum ada foto KTP</div>'}
+                <div class="customer-doc-media">
+                  ${customer.ktpPhotoUrl ? `<img src="${escapeCustomerDetailHtml(customer.ktpPhotoUrl)}" alt="Foto KTP">` : '<div class="customer-doc-empty">Belum ada foto KTP</div>'}
+                </div>
               </div>
             </div>
           </div>
@@ -1075,7 +1092,9 @@
       const res = await fetch(`${CUSTOMER_DETAIL_OPTIONS.paymentApiBase}/${encodeURIComponent(String(customerId))}/invoices/${encodeURIComponent(String(invoiceId))}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: note })
+        body: JSON.stringify({ notes: note }),
+        credentials: 'same-origin',
+        cache: 'no-store'
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.success === false) throw new Error(json?.error || 'Gagal melunaskan tagihan');

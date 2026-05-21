@@ -1,237 +1,197 @@
 <!DOCTYPE html>
 <html lang="id">
+<%
+  const logoSrc = logoUrl || '/img/logo.png';
+%>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <%- include('../admin/partials/theme_init') %>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <%- include('../partials/pwa_portal', {
     portalKey: 'collector',
     manifestPath: '/pwa/collector.webmanifest',
     scope: '/collector/',
-    themeColor: '#0f172a',
+    themeColor: '#4f6ef7',
     appTitle: 'Portal Kolektor'
   }) %>
   <title><%= title %> | <%= company %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     :root{
-      --bg:#08111f;
-      --surface:rgba(16,26,46,.94);
-      --surface-soft:#16243d;
-      --border:rgba(148,163,184,.16);
-      --text:#e7eefb;
-      --muted:#99a9c4;
-      --primary:#5b6dfb;
-      --primary-2:#3b82f6;
-      --danger:#ef4444;
-      --danger-soft:rgba(239,68,68,.12);
-      --shadow:0 28px 64px rgba(1,7,18,.28);
+      --page-bg:#eef3ff;
+      --page-bg-2:#ffffff;
+      --surface:rgba(255,255,255,.95);
+      --surface-soft:#f8fbff;
+      --line:rgba(170,186,215,.24);
+      --text-main:#1b2740;
+      --text-soft:#6b7b97;
+      --text-faint:#8a98b3;
+      --primary:#4f6ef7;
+      --primary-2:#6f8dff;
+      --accent:#ec9a36;
+      --shadow:0 26px 60px rgba(85,104,148,.16);
+      --shell-width:min(100vw, 430px);
     }
     *{box-sizing:border-box}
     html,body{
-      margin:0;
       min-height:100%;
+      margin:0;
+      color:var(--text-main);
+      font-family:"Plus Jakarta Sans","Manrope",system-ui,-apple-system,sans-serif;
       background:
-        radial-gradient(820px 400px at 0% 0%, rgba(91,109,251,.18), rgba(8,17,31,0) 58%),
-        radial-gradient(760px 360px at 100% 0%, rgba(59,130,246,.14), rgba(8,17,31,0) 52%),
-        linear-gradient(180deg, #0b1526 0%, var(--bg) 100%);
-      color:var(--text);
-      font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+        radial-gradient(circle at top left, rgba(111,141,255,.22) 0%, rgba(111,141,255,0) 34%),
+        radial-gradient(circle at top right, rgba(236,154,54,.10) 0%, rgba(236,154,54,0) 28%),
+        linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
+      -webkit-tap-highlight-color:transparent;
     }
-    body[data-theme="light"]{
-      --bg:#eef4ff;
-      --surface:rgba(255,255,255,.96);
-      --surface-soft:#f7faff;
-      --border:rgba(110,140,198,.16);
-      --text:#13233f;
-      --muted:#6f819b;
-      --danger-soft:rgba(239,68,68,.10);
-      --shadow:0 24px 58px rgba(44,72,122,.14);
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      opacity:.18;
+      background-image:
+        linear-gradient(rgba(79,110,247,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,110,247,.04) 1px, transparent 1px);
+      background-size:30px 30px;
     }
     body{
-      padding:18px 14px;
       display:flex;
-      align-items:center;
       justify-content:center;
+      padding:14px;
     }
     .login-shell{
-      width:min(100%, 388px);
-      display:grid;
-      gap:12px;
-    }
-    .login-topbar{
+      width:var(--shell-width);
+      min-height:calc(100vh - 28px);
+      min-height:calc(100dvh - 28px);
       display:flex;
-      justify-content:flex-end;
-    }
-    .icon-btn{
-      width:38px;
-      height:38px;
-      border-radius:13px;
-      border:1px solid var(--border);
-      background:rgba(255,255,255,.04);
-      color:var(--text);
-      display:inline-flex;
       align-items:center;
-      justify-content:center;
     }
-    body[data-theme="light"] .icon-btn{background:rgba(91,109,251,.04)}
+    .login-main{width:100%;display:grid;gap:12px}
+    .brand-panel{
+      display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:24px;
+      background:rgba(255,255,255,.82);border:1px solid rgba(255,255,255,.72);
+      box-shadow:0 18px 38px rgba(85,104,148,.10);backdrop-filter:blur(18px);
+    }
+    .brand-logo{
+      width:64px;height:64px;flex:0 0 64px;display:grid;place-items:center;border-radius:20px;
+      background:linear-gradient(145deg, rgba(255,255,255,.98), rgba(238,243,255,.94));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.92), 0 18px 34px rgba(79,110,247,.12);
+    }
+    .brand-logo img{width:48px;height:48px;object-fit:contain}
+    .brand-copy{min-width:0;flex:1}
+    .brand-copy strong{
+      display:inline-flex;align-items:center;gap:7px;margin-bottom:7px;padding:7px 11px;border-radius:999px;
+      background:rgba(79,110,247,.10);border:1px solid rgba(79,110,247,.14);color:var(--primary);
+      font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
+    }
+    .brand-copy h1{margin:0 0 4px;font-size:22px;line-height:1.04;font-weight:800;letter-spacing:-.04em}
+    .brand-copy p{margin:0;color:var(--text-soft);font-size:12px;line-height:1.45}
     .login-card{
-      background:var(--surface);
-      border:1px solid var(--border);
-      border-radius:28px;
-      padding:22px 18px 18px;
-      box-shadow:var(--shadow);
-      backdrop-filter:blur(12px);
+      background:var(--surface);border:1px solid rgba(255,255,255,.74);border-radius:28px;
+      box-shadow:var(--shadow);backdrop-filter:blur(18px);overflow:hidden;
     }
-    .brand{
-      width:56px;
-      height:56px;
-      margin:0 auto 14px;
-      border-radius:20px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:24px;
-      color:#dce8ff;
-      background:linear-gradient(135deg, rgba(91,109,251,.22), rgba(59,130,246,.18));
-      border:1px solid rgba(91,109,251,.28);
-      box-shadow:0 14px 30px rgba(59,130,246,.18);
+    .login-card-head{padding:18px 18px 10px;text-align:center}
+    .portal-icon{
+      width:60px;height:60px;margin:0 auto 14px;display:grid;place-items:center;border-radius:20px;
+      background:linear-gradient(135deg, rgba(79,110,247,.16), rgba(236,154,54,.18));
+      border:1px solid rgba(79,110,247,.16);color:var(--accent);font-size:24px;
+      box-shadow:0 18px 32px rgba(79,110,247,.14);
     }
-    .title{
-      text-align:center;
-      font-size:24px;
-      font-weight:900;
-      letter-spacing:-.04em;
-      line-height:1.05;
+    .login-card-head h2{margin:0 0 5px;font-size:20px;font-weight:800;letter-spacing:-.03em}
+    .login-card-head p{margin:0;font-size:12px;line-height:1.5;color:var(--text-soft)}
+    .form-container{padding:12px 18px 18px}
+    .field{margin-bottom:12px}
+    .field-label{
+      display:block;margin-bottom:7px;font-size:11px;font-weight:800;color:var(--text-faint);
+      letter-spacing:.08em;text-transform:uppercase;
     }
-    .subtitle{
-      margin:6px auto 18px;
-      max-width:260px;
-      text-align:center;
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.55;
-    }
-    .field{display:grid;gap:7px;margin-bottom:11px}
-    .label{
-      font-size:11px;
-      font-weight:800;
-      text-transform:uppercase;
-      letter-spacing:.08em;
-      color:var(--muted);
+    .field-wrap{position:relative}
+    .field-wrap i{
+      position:absolute;left:14px;top:50%;transform:translateY(-50%);
+      color:var(--text-soft);font-size:15px;pointer-events:none;
     }
     .fc{
-      width:100%;
-      border-radius:16px;
-      border:1px solid var(--border);
-      background:var(--surface-soft);
-      color:var(--text);
-      padding:12px 13px;
-      font-size:14px;
-      outline:none;
+      width:100%;min-height:54px;border-radius:18px;border:1px solid var(--line);background:var(--surface-soft);
+      color:var(--text-main);padding:14px 14px 14px 42px;font-size:14px;outline:none;box-shadow:none;
+      transition:border-color .2s ease, box-shadow .2s ease, background .2s ease;
     }
-    .fc:focus{border-color:rgba(91,109,251,.48)}
+    .fc::placeholder{color:var(--text-soft)}
+    .fc:focus{border-color:rgba(79,110,247,.38);background:#fff;box-shadow:0 0 0 4px rgba(79,110,247,.10)}
     .btn-login{
-      width:100%;
-      margin-top:4px;
-      min-height:46px;
-      border:0;
-      border-radius:16px;
-      color:#fff;
-      font-size:14px;
-      font-weight:900;
-      background:linear-gradient(135deg, var(--primary), var(--primary-2));
-      box-shadow:0 18px 34px rgba(59,130,246,.22);
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
+      width:100%;min-height:52px;border:none;border-radius:18px;color:#fff;font-size:14px;font-weight:800;
+      display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      background:linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+      box-shadow:0 20px 34px rgba(79,110,247,.22);
     }
     .alert-box{
-      border-radius:16px;
-      padding:11px 12px;
-      margin-bottom:12px;
-      font-size:12px;
-      line-height:1.5;
-      background:var(--danger-soft);
-      border:1px solid rgba(239,68,68,.18);
-      color:var(--danger);
+      border-radius:16px;padding:12px 13px;margin-bottom:12px;font-size:12px;line-height:1.5;
+      background:rgba(224,93,109,.10);border:1px solid rgba(224,93,109,.16);color:#b84657;
+      display:flex;align-items:center;gap:9px;
     }
     .helper{
-      margin-top:14px;
-      text-align:center;
-      font-size:11px;
-      color:var(--muted);
-      line-height:1.6;
+      margin-top:12px;padding:12px 13px;border-radius:18px;background:linear-gradient(180deg, rgba(79,110,247,.05), rgba(236,154,54,.03));
+      border:1px solid rgba(79,110,247,.10);text-align:center;font-size:11px;color:var(--text-soft);line-height:1.55;
+    }
+    @media (max-width:576px){
+      body{padding:12px}
+      .login-shell{min-height:calc(100vh - 24px);min-height:calc(100dvh - 24px)}
+      .brand-panel,.login-card-head,.form-container{padding-left:14px;padding-right:14px}
+      .brand-logo{width:58px;height:58px;flex-basis:58px}
+      .brand-logo img{width:44px;height:44px}
+      .brand-copy h1{font-size:20px}
+      .login-card-head h2{font-size:18px}
     }
   </style>
 </head>
 <body>
   <div class="login-shell">
-    <div class="login-topbar">
-      <button class="icon-btn" type="button" data-theme-toggle aria-label="Ganti tema">
-        <i class="bi bi-sun"></i>
-      </button>
-    </div>
-
-    <div class="login-card">
-      <div class="brand"><i class="bi bi-person-lines-fill"></i></div>
-      <div class="title">Portal Kolektor</div>
-      <div class="subtitle">Masuk cepat untuk cek tagihan, cari pelanggan, dan kirim pengajuan pembayaran dari HP.</div>
-
-      <% if (error) { %>
-        <div class="alert-box"><%= error %></div>
-      <% } %>
-
-      <form method="POST" action="/collector/login">
-        <div class="field">
-          <label class="label" for="collector-username">Username</label>
-          <input id="collector-username" class="fc" name="username" autocomplete="username" required placeholder="Masukkan username kolektor">
+    <main class="login-main">
+      <section class="brand-panel">
+        <div class="brand-logo">
+          <img src="<%= logoSrc %>" alt="Logo <%= company %>">
         </div>
-        <div class="field">
-          <label class="label" for="collector-password">Password</label>
-          <input id="collector-password" type="password" class="fc" name="password" autocomplete="current-password" required placeholder="Masukkan password">
+        <div class="brand-copy">
+          <strong><i class="bi bi-wallet2"></i> Portal Kolektor</strong>
+          <h1><%= company %></h1>
+          <p>Akses kolektor.</p>
         </div>
-        <button class="btn-login" type="submit">
-          <i class="bi bi-box-arrow-in-right"></i>
-          <span>Masuk ke Portal</span>
-        </button>
-      </form>
+      </section>
 
-      <div class="helper"><%= company %> · tampilan dibuat lebih ringkas untuk operasional lapangan dan layar mobile.</div>
-    </div>
+      <section class="login-card">
+        <div class="login-card-head">
+          <div class="portal-icon"><i class="bi bi-cash-coin"></i></div>
+          <h2>Masuk ke Akun Kolektor</h2>
+          <p>Masuk dengan akun kolektor.</p>
+        </div>
+
+        <div class="form-container">
+          <% if (error) { %>
+            <div class="alert-box"><i class="bi bi-exclamation-octagon"></i><span><%= error %></span></div>
+          <% } %>
+
+          <form method="POST" action="/collector/login">
+            <div class="field">
+              <label class="field-label" for="collector-username">Username</label>
+              <label class="field-wrap">
+                <i class="bi bi-person-vcard-fill"></i>
+                <input id="collector-username" class="fc" name="username" autocomplete="username" required placeholder="Masukkan username kolektor" value="<%= (form && form.username) ? form.username : '' %>">
+              </label>
+            </div>
+            <div class="field">
+              <label class="field-label" for="collector-password">Password</label>
+              <label class="field-wrap">
+                <i class="bi bi-shield-lock-fill"></i>
+                <input id="collector-password" type="password" class="fc" name="password" autocomplete="current-password" required placeholder="Masukkan password">
+              </label>
+            </div>
+            <button class="btn-login" type="submit"><i class="bi bi-box-arrow-in-right"></i><span>Masuk</span></button>
+          </form>
+        </div>
+      </section>
+    </main>
   </div>
-
-  <script>
-    (function() {
-      const savedTheme = localStorage.getItem('admin-theme')
-        || document.documentElement.dataset.adminTheme
-        || 'dark';
-
-      function syncTheme(theme) {
-        document.documentElement.dataset.adminTheme = theme;
-        document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
-        if (document.body) document.body.dataset.theme = theme;
-        document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-          const icon = button.querySelector('i');
-          if (icon) icon.className = theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun';
-        });
-      }
-
-      syncTheme(savedTheme);
-      document.addEventListener('click', (event) => {
-        const toggle = event.target.closest('[data-theme-toggle]');
-        if (!toggle) return;
-        event.preventDefault();
-        const currentTheme = document.body?.dataset.theme || document.documentElement.dataset.adminTheme || 'dark';
-        const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
-        localStorage.setItem('admin-theme', nextTheme);
-        syncTheme(nextTheme);
-      });
-      window.addEventListener('storage', (event) => {
-        if (event.key === 'admin-theme') syncTheme(event.newValue || 'dark');
-      });
-    })();
-  </script>
 </body>
 </html>

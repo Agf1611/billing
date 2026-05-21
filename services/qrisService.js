@@ -9,6 +9,35 @@ function normalizeQrisPayload(payload) {
   return String(payload || '').replace(/[\r\n\t]+/g, '').trim();
 }
 
+function isEnabledLike(value) {
+  return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+}
+
+function isDisabledLike(value) {
+  return value === false || value === 'false' || value === 0 || value === '0' || value === 'off';
+}
+
+function hasStaticQrisConfigured(settings = {}) {
+  return Boolean(
+    String(settings?.qris_static_qr_url || '').trim() ||
+    String(settings?.qris_static_payload || '').trim()
+  );
+}
+
+function hasStaticQrisEnabled(settings = {}) {
+  const flag = settings?.qris_static_enabled;
+  if (isDisabledLike(flag)) return false;
+  if (isEnabledLike(flag)) return hasStaticQrisConfigured(settings);
+  return hasStaticQrisConfigured(settings);
+}
+
+function resolveQrisUniqueCodeRange(settings = {}) {
+  const port = Number(settings?.server_port || process.env.PORT || process.env.SERVER_PORT || 0);
+  if (port === 3002) return { min: 1, max: 399 };
+  if (port === 3001) return { min: 400, max: 599 };
+  return { min: 1, max: 599 };
+}
+
 function parseTlv(payload) {
   const text = normalizeQrisPayload(payload);
   const items = [];
@@ -195,6 +224,9 @@ async function decodeQrisPayloadFromUrl(url) {
 
 module.exports = {
   normalizeQrisPayload,
+  hasStaticQrisConfigured,
+  hasStaticQrisEnabled,
+  resolveQrisUniqueCodeRange,
   buildDynamicQrisPayload,
   buildDynamicQrisBuffer,
   buildDynamicQrisDataUrl,

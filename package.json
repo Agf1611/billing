@@ -11,7 +11,8 @@
     "scan:static": "node scripts/static-scan.js",
     "smoke:core": "node scripts/smoke-core.js",
     "qa": "npm run check:syntax && npm run check:ejs && npm run smoke:core && npm run scan:static",
-    "audit:publish": "node scripts/audit-public-release.js"
+    "audit:publish": "node scripts/audit-public-release.js",
+    "import:network-map": "node scripts/import-network-map.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.21",
@@ -31,6 +32,7 @@
     "qrcode-terminal": "^0.12.0",
     "ros-client": "^1.1.2",
     "routeros-client": "^1.1.1",
+    "sharp": "^0.34.3",
     "winston": "^3.8.2",
     "xlsx": "^0.18.5"
   },

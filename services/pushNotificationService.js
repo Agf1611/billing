@@ -33,6 +33,22 @@ function buildCustomerPushExternalId(customer) {
   return `customer-${id}`;
 }
 
+function buildTechnicianPushExternalId(technician) {
+  const id = Number(technician && technician.id);
+  if (!Number.isFinite(id) || id <= 0) return '';
+  return `technician-${id}`;
+}
+
+function buildAdminPushExternalId(admin) {
+  const username = normalizeText(admin && admin.username);
+  if (username) return `admin-${username.toLowerCase()}`;
+
+  const id = normalizeText(admin && admin.id);
+  if (id) return `admin-${id.toLowerCase()}`;
+
+  return '';
+}
+
 function uniqueExternalIds(items = []) {
   return [...new Set((Array.isArray(items) ? items : []).map((item) => normalizeText(item)).filter(Boolean))];
 }
@@ -112,11 +128,44 @@ async function sendPushToCustomers(customers = [], options = {}) {
   return sendPushToExternalIds(externalIds, options);
 }
 
+async function sendPushToTechnician(technician, options = {}) {
+  const externalId = buildTechnicianPushExternalId(technician);
+  if (!externalId) return { success: false, skipped: true, reason: 'invalid-technician' };
+  return sendPushToExternalIds([externalId], {
+    targetUrl: '/tech',
+    title: 'Notifikasi Teknisi',
+    ...options
+  });
+}
+
+async function sendPushToTechnicians(technicians = [], options = {}) {
+  const externalIds = uniqueExternalIds((Array.isArray(technicians) ? technicians : []).map(buildTechnicianPushExternalId));
+  return sendPushToExternalIds(externalIds, {
+    targetUrl: '/tech',
+    title: 'Notifikasi Teknisi',
+    ...options
+  });
+}
+
+async function sendPushToAdmins(admins = [], options = {}) {
+  const externalIds = uniqueExternalIds((Array.isArray(admins) ? admins : []).map(buildAdminPushExternalId));
+  return sendPushToExternalIds(externalIds, {
+    targetUrl: '/admin',
+    title: 'Notifikasi Admin',
+    ...options
+  });
+}
+
 module.exports = {
   getPushSettings,
   isPushConfigured,
   buildCustomerPushExternalId,
+  buildTechnicianPushExternalId,
+  buildAdminPushExternalId,
   sendPushToExternalIds,
   sendPushToCustomer,
-  sendPushToCustomers
+  sendPushToCustomers,
+  sendPushToTechnician,
+  sendPushToTechnicians,
+  sendPushToAdmins
 };

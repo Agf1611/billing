@@ -1,12 +1,13 @@
 const db = require('../config/database');
 const { logger } = require('../config/logger');
 const mikrotikService = require('./mikrotikService');
+const massOutageService = require('./massOutageService');
 
 const LIVE_INTERVAL_MS = 5000;
 const INVENTORY_INTERVAL_MS = 30000;
 const STALE_AFTER_MS = 45000;
 const FAST_REPEAT_GUARD_MS = 1500;
-const REFRESH_TIMEOUT_MS = 20000;
+const REFRESH_TIMEOUT_MS = 45000;
 const HUNG_REFRESH_GRACE_MS = 5000;
 
 const routerCollectors = new Map();
@@ -67,6 +68,41 @@ function getCollectorEntry(routerId = null) {
     });
   }
   return routerCollectors.get(key);
+}
+
+function stopCollectorEntry(entry) {
+  if (!entry) return;
+  if (entry.liveTimer) clearInterval(entry.liveTimer);
+  if (entry.inventoryTimer) clearInterval(entry.inventoryTimer);
+  entry.liveTimer = null;
+  entry.inventoryTimer = null;
+  entry.refreshPromise = null;
+  entry.started = false;
+}
+
+function removeCollectorEntry(routerId = null) {
+  const key = getRouterKey(routerId);
+  const entry = routerCollectors.get(key);
+  if (!entry) return;
+  stopCollectorEntry(entry);
+  routerCollectors.delete(key);
+}
+
+function hasConfiguredRouter(routerId = null) {
+  const normalizedRouterId = mikrotikService.normalizeRouterId(routerId);
+  if (!normalizedRouterId) return true;
+  return Boolean(mikrotikService.getRouterById(normalizedRouterId));
+}
+
+function buildMissingRouterSnapshot(routerId = null) {
+  const normalizedRouterId = mikrotikService.normalizeRouterId(routerId);
+  return {
+    ...buildInitialSnapshot(normalizedRouterId),
+    snapshotAt: nowIso(),
+    source: 'router-missing',
+    collectorStatus: 'missing',
+    ageMs: 0
+  };
 }
 
 function withRefreshTimeout(promise, timeoutMs, label) {
@@ -461,12 +497,19 @@ async function runCollectorRefresh(entry, mode = 'full', refreshId = 0) {
   snapshot.ageMs = getAgeMs(snapshot.snapshotAt);
   if (entry.activeRefreshId === refreshId) {
     entry.snapshot = snapshot;
+    massOutageService.evaluateSnapshot(routerId, snapshot).catch((error) => {
+      logger.warn(`[MonitoringCollector] Evaluasi gangguan massal gagal untuk ${entry.routerKey}: ${error.message || error}`);
+    });
     return snapshot;
   }
   return entry.snapshot || snapshot;
 }
 
 async function refreshRouterSnapshot(routerId = null, options = {}) {
+  if (!hasConfiguredRouter(routerId)) {
+    removeCollectorEntry(routerId);
+    return buildMissingRouterSnapshot(routerId);
+  }
   const entry = getCollectorEntry(routerId);
   const mode = options.mode === 'live' ? 'live' : 'full';
   const existingAgeMs = getAgeMs(entry.snapshot?.snapshotAt);
@@ -517,6 +560,10 @@ async function refreshRouterSnapshot(routerId = null, options = {}) {
 }
 
 function startRouterCollector(routerId = null) {
+  if (!hasConfiguredRouter(routerId)) {
+    removeCollectorEntry(routerId);
+    return null;
+  }
   const entry = getCollectorEntry(routerId);
   if (entry.started) return entry;
   entry.started = true;
@@ -552,8 +599,7 @@ function syncConfiguredRouters() {
   for (const [routerKey, entry] of routerCollectors.entries()) {
     if (routerKey === 'default') continue;
     if (!activeRouterIds.has(Number(entry.routerId))) {
-      if (entry.liveTimer) clearInterval(entry.liveTimer);
-      if (entry.inventoryTimer) clearInterval(entry.inventoryTimer);
+      stopCollectorEntry(entry);
       routerCollectors.delete(routerKey);
     }
   }
@@ -565,6 +611,9 @@ function startCollectorService() {
 }
 
 function getSnapshotWithComputedMeta(routerId = null) {
+  if (!hasConfiguredRouter(routerId)) {
+    return buildMissingRouterSnapshot(routerId);
+  }
   const entry = getCollectorEntry(routerId);
   const snapshot = entry.snapshot || buildInitialSnapshot(routerId);
   const ageMs = getAgeMs(snapshot.snapshotAt);
@@ -576,6 +625,10 @@ function getSnapshotWithComputedMeta(routerId = null) {
 }
 
 async function getRouterSnapshot(routerId = null, options = {}) {
+  if (!hasConfiguredRouter(routerId)) {
+    removeCollectorEntry(routerId);
+    return buildMissingRouterSnapshot(routerId);
+  }
   startRouterCollector(routerId);
   const snapshot = getSnapshotWithComputedMeta(routerId);
   if (!snapshot.snapshotAt || options.force === true) {
@@ -590,6 +643,10 @@ async function getRouterSnapshot(routerId = null, options = {}) {
 }
 
 async function refreshAndGetRouterSnapshot(routerId = null, options = {}) {
+  if (!hasConfiguredRouter(routerId)) {
+    removeCollectorEntry(routerId);
+    return buildMissingRouterSnapshot(routerId);
+  }
   startRouterCollector(routerId);
   return await refreshRouterSnapshot(routerId, { force: true, mode: options.mode || 'full' });
 }

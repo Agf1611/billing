@@ -2,74 +2,242 @@
 <html lang="<%= lang || 'id' %>">
 
 <head>
+    <% const otpLogoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= t('customer.otp_title', 'Verifikasi OTP') %> | <%= settings.company_header || 'ISP Portal' %>
-    </title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title><%= t('customer.otp_title', 'Verifikasi OTP') %> | <%= settings.company_header || 'ISP Portal' %></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="manifest" href="/manifest.webmanifest">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#f4f8ff">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="apple-touch-icon" href="/img/logo.png">
     <link rel="icon" href="/img/logo.png">
     <style>
         :root {
-            --primary-color: #4361ee;
-            --accent-color: #4895ef;
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --page-bg: #f4f8ff;
+            --page-bg-2: #ffffff;
+            --surface: rgba(255, 255, 255, 0.96);
+            --line: rgba(107, 142, 195, 0.18);
+            --text-main: #18243d;
+            --text-soft: #6c7b98;
+            --text-faint: #8d98b1;
+            --blue: #2c6bff;
+            --danger-soft: rgba(239, 68, 68, 0.12);
+            --danger-text: #d43d51;
+            --shadow: 0 28px 70px rgba(40, 79, 144, 0.16);
+            --shell-width: min(100vw, 448px);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            min-height: 100%;
+            margin: 0;
+            color: var(--text-main);
+            font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(72, 165, 255, 0.18) 0%, rgba(72, 165, 255, 0) 34%),
+                radial-gradient(circle at top right, rgba(14, 165, 164, 0.14) 0%, rgba(14, 165, 164, 0) 28%),
+                linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.18;
+            background-image:
+                linear-gradient(rgba(44, 107, 255, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(44, 107, 255, 0.04) 1px, transparent 1px);
+            background-size: 32px 32px;
         }
 
         body {
-            background: var(--bg-gradient);
-            min-height: 100vh;
             display: flex;
-            align-items: center;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #f8fafc;
+            justify-content: center;
         }
 
-        .login-card {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .otp-shell {
+            position: relative;
+            width: var(--shell-width);
+            min-height: 100vh;
+            min-height: 100dvh;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(247, 250, 255, 0.98) 100%);
+            backdrop-filter: blur(20px);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .otp-shell::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(320px 180px at 15% 0%, rgba(44, 107, 255, 0.14), transparent 70%),
+                radial-gradient(280px 180px at 85% 14%, rgba(14, 165, 164, 0.1), transparent 72%);
+        }
+
+        .otp-main {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: calc(env(safe-area-inset-top) + 14px) 18px calc(14px + env(safe-area-inset-bottom));
+            gap: 10px;
+        }
+
+        .brand-bar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 16px 34px rgba(42, 78, 140, 0.08);
+        }
+
+        .brand-logo {
+            width: 62px;
+            height: 62px;
+            flex: 0 0 62px;
+            display: grid;
+            place-items: center;
+            border-radius: 18px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(236, 244, 255, 0.96));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 18px 34px rgba(44, 107, 255, 0.12);
+        }
+
+        .brand-logo img {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }
+
+        .brand-copy {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .brand-copy strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--text-faint);
+        }
+
+        .brand-copy h1 {
+            margin: 0 0 3px;
+            font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+            font-size: 21px;
+            line-height: 1.04;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+        }
+
+        .brand-copy p {
+            margin: 0;
+            color: var(--text-soft);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .otp-card {
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.74);
+            border-radius: 26px;
+            box-shadow: 0 22px 44px rgba(42, 78, 140, 0.1);
+            overflow: hidden;
+        }
+
+        .otp-card-head {
+            padding: 18px 18px 10px;
+            text-align: center;
+        }
+
+        .otp-card-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px;
             border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            width: 100%;
-            max-width: 420px;
-            margin: auto;
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            color: var(--blue);
+            background: linear-gradient(180deg, rgba(44, 107, 255, 0.14), rgba(44, 107, 255, 0.06));
+            border: 1px solid rgba(44, 107, 255, 0.12);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+        }
+
+        .otp-card-head h2 {
+            margin: 0 0 6px;
+            font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+
+        .otp-card-head p {
+            margin: 0;
+            color: var(--text-soft);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .otp-card-body {
+            padding: 12px 18px 18px;
         }
 
         .form-control {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 12px 15px;
-            border-radius: 10px;
+            min-height: 54px;
+            background: #f7faff;
+            border: 1px solid var(--line);
+            color: var(--text-main);
+            padding: 14px 16px;
+            border-radius: 16px;
+            box-shadow: none;
         }
 
         .form-control:focus {
-            background: rgba(15, 23, 42, 0.8);
-            border-color: var(--primary-color);
-            color: white;
-            box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.15);
+            background: #ffffff;
+            border-color: rgba(44, 107, 255, 0.42);
+            box-shadow: 0 0 0 4px rgba(44, 107, 255, 0.11);
+            color: var(--text-main);
         }
 
         .btn-primary {
-            background: var(--primary-color);
+            background: linear-gradient(180deg, #4f7dff 0%, #2c6bff 100%);
             border: none;
-            padding: 12px;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s;
+            min-height: 52px;
+            border-radius: 16px;
+            font-size: 14px;
+            font-weight: 800;
+            box-shadow: 0 18px 32px rgba(44, 107, 255, 0.22);
+            transition: transform .2s ease, box-shadow .2s ease;
         }
 
         .btn-primary:hover {
-            background: var(--accent-color);
-            transform: translateY(-2px);
+            background: linear-gradient(180deg, #5b8cff 0%, #356fff 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 20px 34px rgba(44, 107, 255, 0.24);
         }
 
         .otp-input {
@@ -78,48 +246,97 @@
             font-weight: 700;
             text-align: center;
         }
+
+        .otp-note {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 16px;
+            border: 1px solid rgba(44, 107, 255, 0.1);
+            background: rgba(44, 107, 255, 0.06);
+            color: var(--text-soft);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .otp-back-link {
+            color: var(--text-soft);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .alert-danger-soft {
+            border: 0;
+            border-radius: 16px;
+            background: var(--danger-soft);
+            color: var(--danger-text);
+            font-size: 12px;
+            line-height: 1.5;
+            padding: 12px 14px;
+        }
+
+        @media (max-width: 576px) {
+            .otp-input {
+                letter-spacing: 10px;
+                font-size: 22px;
+            }
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="login-card">
-            <div class="text-center mb-4">
-                <div class="mb-3">
-                    <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
+    <div class="otp-shell">
+        <main class="otp-main">
+            <div class="brand-bar">
+                <div class="brand-logo">
+                    <img src="<%= otpLogoSrc %>" alt="<%= settings.company_header || 'Logo ISP' %>">
                 </div>
-                <h2 class="fw-bold">Verifikasi OTP</h2>
-                <p class="text-secondary">Kode verifikasi telah dikirim ke nomor WhatsApp Anda: <br><strong>
-                        <%= phone %>
-                    </strong></p>
+                <div class="brand-copy">
+                    <strong>Portal Pelanggan</strong>
+                    <h1><%= settings.company_header || 'ISP Portal' %></h1>
+                    <p>Masukkan kode OTP untuk lanjut.</p>
+                </div>
             </div>
 
-            <% if (error) { %>
-                <div class="alert alert-danger border-0 bg-danger bg-opacity-10 text-danger" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    <%= error %>
+            <section class="otp-card">
+                <div class="otp-card-head">
+                    <div class="otp-card-icon"><i class="bi bi-patch-check"></i></div>
+                    <h2>Verifikasi OTP</h2>
+                    <p>Kode verifikasi telah dikirim ke nomor WhatsApp Anda.<br><strong><%= phone %></strong></p>
                 </div>
-                <% } %>
+
+                <div class="otp-card-body">
+                    <% if (error) { %>
+                        <div class="alert-danger-soft mb-3" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <%= error %>
+                        </div>
+                    <% } %>
 
                     <form action="/customer/login-otp" method="POST">
                         <div class="mb-4">
-                            <label for="otp" class="form-label text-secondary small text-uppercase fw-bold">Masukkan 4
-                                Digit Kode OTP</label>
+                            <label for="otp" class="form-label text-secondary small text-uppercase fw-bold">Masukkan 4 Digit Kode OTP</label>
                             <input type="text" class="form-control otp-input" id="otp" name="otp" maxlength="4"
                                 pattern="\d{4}" required autocomplete="one-time-code" autofocus placeholder="0000">
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100 mb-3">
-                            <i class="bi bi-check-circle-fill me-2"></i> Verifikasi & Masuk
+                            <i class="bi bi-arrow-right-circle-fill me-2"></i> Verifikasi & Masuk
                         </button>
 
                         <div class="text-center">
-                            <a href="/customer/login" class="text-secondary text-decoration-none small">
+                            <a href="/customer/login" class="otp-back-link">
                                 <i class="bi bi-arrow-left me-1"></i> Kembali ke Login
                             </a>
                         </div>
                     </form>
-        </div>
+                </div>
+            </section>
+        </main>
     </div>
     <script>
         if ('serviceWorker' in navigator) {

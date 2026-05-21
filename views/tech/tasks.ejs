@@ -23,6 +23,10 @@
     cancelled: 'Dibatalkan'
   };
   const safeTasks = Array.isArray(tasks) ? tasks : [];
+  function buildRouteHref(value) {
+    const query = String(value || '').trim();
+    return query ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}` : '';
+  }
 %>
 
 <style>
@@ -51,8 +55,8 @@
 
   .task-summary-badge {
     border-radius: 999px;
-    border: 1px solid rgba(59, 130, 246, .24);
-    background: rgba(59, 130, 246, .10);
+    border: 1px solid rgba(111, 141, 255, .24);
+    background: rgba(111, 141, 255, .12);
     color: var(--tech-primary);
     padding: 7px 12px;
     font-size: 11px;
@@ -64,6 +68,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
   }
 
   .task-filter-label {
@@ -92,6 +97,9 @@
     gap: 12px;
     align-items: center;
     padding: 12px 13px;
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.025));
+    border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
 
   .task-main {
@@ -140,8 +148,9 @@
     padding: 4px 8px;
     border-radius: 999px;
     border: 1px solid var(--tech-border);
-    background: var(--tech-bg-soft-2);
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
     max-width: 100%;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
 
   .task-meta-pill strong {
@@ -172,19 +181,20 @@
   .task-icon-btn {
     width: 38px;
     height: 38px;
-    border-radius: 12px;
+    border-radius: 14px;
     border: 1px solid var(--tech-border);
-    background: var(--tech-bg-soft-2);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
     color: var(--tech-text);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     font-size: 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
 
   .task-cta-btn {
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 8px 12px;
     font-size: 12px;
     font-weight: 800;
@@ -193,6 +203,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
   }
 
   .task-detail-grid {
@@ -204,9 +215,10 @@
 
   .task-detail-cell {
     border: 1px solid var(--tech-border);
-    background: var(--tech-bg-soft-2);
-    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+    border-radius: 16px;
     padding: 10px 11px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
 
   .task-detail-label {
@@ -228,10 +240,11 @@
 
   .task-detail-block {
     border: 1px solid var(--tech-border);
-    background: var(--tech-bg-soft-2);
-    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+    border-radius: 16px;
     padding: 11px 12px;
     margin-bottom: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
   }
 
   .task-detail-block-title {
@@ -241,6 +254,50 @@
     margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: .06em;
+  }
+
+  .task-action-mini {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    line-height: 1;
+  }
+
+  .task-action-mini i {
+    font-size: 14px;
+  }
+
+  .task-action-mini small {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+
+  .task-checklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .task-check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    background: rgba(148,163,184,.12);
+    border: 1px solid rgba(148,163,184,.18);
+    color: var(--tech-text);
+  }
+
+  .task-check-pill.done {
+    background: rgba(34,197,94,.14);
+    border-color: rgba(34,197,94,.18);
+    color: var(--tech-success);
   }
 
   .task-empty {
@@ -387,6 +444,13 @@
       <% const customerName = task.customer_name || task.linked_customer_name || 'Pelanggan umum'; %>
       <% const customerPhone = task.customer_phone || task.linked_customer_phone || ''; %>
       <% const shortLocation = task.customer_address || task.location_note || 'Lokasi menyusul'; %>
+      <% const routeHref = buildRouteHref(task.customer_address || task.location_note || customerName); %>
+      <% const taskChecklist = task.task_type === 'install' ? [
+        { label: 'Lokasi', done: Boolean(task.location_note || task.customer_address) },
+        { label: 'Akun', done: Boolean(task.pppoe_username) },
+        { label: 'Profil', done: Boolean(task.normal_pppoe_profile) },
+        { label: 'Catatan', done: Boolean(task.description) }
+      ] : [] ; %>
       <div class="t-card task-compact-card">
         <div class="task-main">
           <div class="task-topline">
@@ -401,6 +465,16 @@
             <span class="task-meta-pill"><i class="bi bi-clock-history"></i> Jadwal <strong><%= task.scheduled_date || '-' %></strong></span>
           </div>
           <div class="task-address"><i class="bi bi-geo-alt"></i><span><%= shortLocation %></span></div>
+          <% if (taskChecklist.length) { %>
+            <div class="task-checklist">
+              <% taskChecklist.forEach((item) => { %>
+                <span class="task-check-pill <%= item.done ? 'done' : '' %>">
+                  <i class="bi <%= item.done ? 'bi-check2-circle' : 'bi-circle' %>"></i>
+                  <span><%= item.label %></span>
+                </span>
+              <% }) %>
+            </div>
+          <% } %>
         </div>
 
         <div class="task-actions">
@@ -411,6 +485,12 @@
           <% if (customerPhone) { %>
             <a href="<%= buildWhatsAppLink(customerPhone) %>" class="task-icon-btn" title="Chat WhatsApp">
               <i class="bi bi-whatsapp"></i>
+            </a>
+          <% } %>
+
+          <% if (routeHref) { %>
+            <a href="<%= routeHref %>" target="_blank" rel="noopener" class="task-icon-btn" title="Buka rute">
+              <i class="bi bi-sign-turn-right"></i>
             </a>
           <% } %>
 
@@ -430,10 +510,10 @@
 
       <div class="modal fade" id="taskDetailModal<%= task.id %>" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-          <div class="modal-content surface-soft">
-            <div class="modal-header" style="border-color:var(--tech-border)">
+          <div class="modal-content tech-modal-card">
+            <div class="modal-header">
               <div>
-                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> • <%= taskStatusMap[task.status] || task.status %></div>
+                <div class="small text-secondary mb-1"><%= taskTypeMap[task.task_type] || task.task_type %> &bull; <%= taskStatusMap[task.status] || task.status %></div>
                 <h6 class="modal-title mb-0"><%= task.title %></h6>
               </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -510,9 +590,12 @@
                 </div>
               <% } %>
             </div>
-            <div class="modal-footer" style="border-color:var(--tech-border)">
+            <div class="modal-footer">
               <% if (customerPhone) { %>
                 <a href="<%= buildWhatsAppLink(customerPhone) %>" class="btn btn-outline-success btn-sm"><i class="bi bi-whatsapp me-1"></i> Hubungi</a>
+              <% } %>
+              <% if (routeHref) { %>
+                <a href="<%= routeHref %>" target="_blank" rel="noopener" class="btn btn-outline-info btn-sm"><i class="bi bi-sign-turn-right me-1"></i> Rute</a>
               <% } %>
               <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
             </div>
@@ -523,8 +606,8 @@
       <% if (task.status === 'in_progress') { %>
         <div class="modal fade" id="completeTaskModal<%= task.id %>" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content surface-soft">
-              <div class="modal-header" style="border-color:var(--tech-border)">
+            <div class="modal-content tech-modal-card">
+              <div class="modal-header">
                 <h6 class="modal-title mb-0">Selesaikan Job</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
               </div>
@@ -533,7 +616,7 @@
                   <label class="form-label text-secondary small">Catatan Penyelesaian</label>
                   <textarea class="form-control tech-textarea" name="completion_note" rows="3" placeholder="Contoh: pemasangan selesai, ONU normal, pelanggan sudah online"></textarea>
                 </div>
-                <div class="modal-footer" style="border-color:var(--tech-border)">
+                <div class="modal-footer">
                   <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
                   <button type="submit" class="btn btn-success btn-sm">Simpan Selesai</button>
                 </div>

@@ -46,7 +46,10 @@
       <i class="bi bi-receipt"></i><span><%= t('admin.nav.invoices', 'Tagihan') %></span>
     </a>
     <a href="/admin/bookkeeping" class="sb-item <%= activePage==='bookkeeping' ? 'active' : '' %>">
-      <i class="bi bi-cash-coin"></i><span>Pembayaran</span>
+      <i class="bi bi-cash-coin"></i><span>Pembukuan</span>
+    </a>
+    <a href="/admin/reports" class="sb-item <%= activePage==='reports' ? 'active' : '' %>">
+      <i class="bi bi-bar-chart-line"></i><span><%= t('admin.nav.finance_report', 'Laporan Keuangan') %></span>
     </a>
 
     <% const cashierOnly = typeof session !== 'undefined' && session.isCashier && !session.isAdmin; %>
@@ -72,20 +75,22 @@
       <i class="bi bi-headset"></i><span>Gangguan</span>
     </a>
     <a href="/admin/whatsapp" class="sb-item <%= activePage==='whatsapp' ? 'active' : '' %>">
-      <i class="bi bi-whatsapp"></i><span><%= t('admin.nav.whatsapp', 'WhatsApp') %></span>
+      <i class="bi bi-megaphone"></i><span><%= t('admin.nav.whatsapp', 'WA & Pengumuman') %></span>
     </a>
-
-    <div class="sb-section">LAPORAN</div>
-    <a href="/admin/reports" class="sb-item <%= activePage==='reports' ? 'active' : '' %>">
-      <i class="bi bi-bar-chart-line"></i><span><%= t('admin.nav.finance_report', 'Laporan Keuangan') %></span>
-    </a>
-
-    <div class="sb-section">PENGATURAN</div>
     <% if (typeof session !== 'undefined' && session.isAdmin) { %>
-      <a href="/admin/settings" class="sb-item <%= activePage==='settings' ? 'active' : '' %>">
-        <i class="bi bi-gear"></i><span><%= t('admin.nav.settings', 'Pengaturan') %></span>
-      </a>
+    <a href="/admin/technician-tasks" class="sb-item <%= activePage==='technician_tasks' ? 'active' : '' %>">
+      <i class="bi bi-clipboard-check"></i><span>Tugas Teknisi</span>
+    </a>
+    <a href="/admin/customer-requests" class="sb-item <%= activePage==='customer_requests' ? 'active' : '' %>">
+      <i class="bi bi-person-check"></i><span>Approval Pelanggan</span>
+      <% if (Number(adminPendingCustomerRequests || 0) > 0) { %>
+        <span class="sb-badge"><%= Number(adminPendingCustomerRequests || 0) > 99 ? '99+' : Number(adminPendingCustomerRequests || 0) %></span>
+      <% } %>
+    </a>
     <% } %>
+    <a href="/admin/collector-payments" class="sb-item <%= activePage==='collector_payments' ? 'active' : '' %>">
+      <i class="bi bi-check2-square"></i><span>Approval Kolektor</span>
+    </a>
 
     <div class="sb-section">LAINNYA</div>
     <a href="/admin/packages" class="sb-item <%= activePage==='packages' ? 'active' : '' %>">
@@ -97,16 +102,6 @@
     <a href="/admin/cashiers/reports" class="sb-item <%= activePage==='cashiers_reports' ? 'active' : '' %>">
       <i class="bi bi-journal-text"></i><span>Laporan Kasir</span>
     </a>
-    <a href="/admin/collector-payments" class="sb-item <%= activePage==='collector_payments' ? 'active' : '' %>">
-      <i class="bi bi-check2-square"></i><span>Approval Kolektor</span>
-    </a>
-    <% } %>
-
-    <% if (cashierOnly) { %>
-    <div class="sb-section">LAPORAN</div>
-    <a href="/admin/reports" class="sb-item <%= activePage==='reports' ? 'active' : '' %>">
-      <i class="bi bi-bar-chart-line"></i><span><%= t('admin.nav.finance_report', 'Laporan Keuangan') %></span>
-    </a>
     <% } %>
 
     <% if (typeof session !=='undefined' && (session.isAdmin || session.isCashier)) { %>
@@ -115,15 +110,6 @@
       <a href="/admin/accounts" class="sb-item <%= activePage==='accounts' ? 'active' : '' %>">
         <i class="bi bi-people"></i><span>Pengelolaan Akun</span>
       </a>
-      <a href="/admin/technician-tasks" class="sb-item <%= activePage==='technician_tasks' ? 'active' : '' %>">
-        <i class="bi bi-clipboard-check"></i><span>Tugas Teknisi</span>
-      </a>
-      <a href="/admin/customer-requests" class="sb-item <%= activePage==='customer_requests' ? 'active' : '' %>">
-        <i class="bi bi-person-check"></i><span>Approval Pelanggan</span>
-        <% if (Number(adminPendingCustomerRequests || 0) > 0) { %>
-          <span class="sb-badge"><%= Number(adminPendingCustomerRequests || 0) > 99 ? '99+' : Number(adminPendingCustomerRequests || 0) %></span>
-        <% } %>
-      </a>
       <% } %>
       <a href="/admin/agents" class="sb-item <%= activePage==='agents' ? 'active' : '' %>">
         <i class="bi bi-person-badge"></i><span><%= t('admin.nav.agents', 'Agent') %></span>
@@ -131,6 +117,9 @@
       <% if (session.isAdmin) { %>
         <a href="/admin/agents/reports" class="sb-item <%= activePage==='agents_reports' ? 'active' : '' %>">
           <i class="bi bi-journal-text"></i><span><%= t('admin.nav.agent_reports', 'Laporan Agent') %></span>
+        </a>
+        <a href="/admin/settings" class="sb-item <%= activePage==='settings' ? 'active' : '' %>">
+          <i class="bi bi-gear"></i><span><%= t('admin.nav.settings', 'Pengaturan') %></span>
         </a>
       <% } %>
     <% } %>
@@ -276,6 +265,41 @@
     restoreScroll();
   })();
 </script>
+<% if (typeof adminPushEnabled !== 'undefined' && adminPushEnabled && adminOneSignalAppId && adminPushExternalId) { %>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer data-onesignal-admin-sdk="true"></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.__ADMIN_ONESIGNAL_APP_ID = <%- JSON.stringify(adminOneSignalAppId) %>;
+  window.__ADMIN_ONESIGNAL_EXTERNAL_ID = <%- JSON.stringify(adminPushExternalId) %>;
+  OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      await OneSignal.init({
+        appId: window.__ADMIN_ONESIGNAL_APP_ID,
+        notifyButton: { enable: false },
+        allowLocalhostAsSecureOrigin: true,
+        serviceWorkerPath: '/OneSignalSDKWorker.js',
+        serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+        serviceWorkerParam: { scope: '/' },
+        autoResubscribe: true
+      });
+      if (window.__ADMIN_ONESIGNAL_EXTERNAL_ID && typeof OneSignal.login === 'function') {
+        await OneSignal.login(window.__ADMIN_ONESIGNAL_EXTERNAL_ID);
+      }
+      if (OneSignal.Notifications && OneSignal.Notifications.permission !== true && typeof OneSignal.Notifications.requestPermission === 'function') {
+        try { await OneSignal.Notifications.requestPermission(); } catch (_error) {}
+      }
+      window.__ADMIN_ONESIGNAL_READY = true;
+    } catch (error) {
+      console.warn('OneSignal admin gagal dipasang:', error);
+    }
+  });
+</script>
+<% } %>
+<%- include('../../partials/employee_location_tracker', {
+  enabled: Boolean(typeof session !== 'undefined' && session && session.isCashier && !session.isAdmin),
+  endpoint: '/admin/api/staff-location',
+  roleLabel: 'Kasir'
+}) %>
 
 <!-- Bottom Navigation (Mobile Only) -->
 <nav class="bottom-nav" id="bottomNav">

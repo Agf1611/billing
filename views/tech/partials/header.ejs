@@ -11,61 +11,91 @@
       document.documentElement.setAttribute('data-theme', savedTheme);
     })();
   </script>
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#09111d">
   <%- include('../../partials/pwa_portal', {
     portalKey: 'tech',
     manifestPath: '/pwa/tech.webmanifest',
     scope: '/tech/',
-    themeColor: '#0f172a',
+    themeColor: '#09111d',
     appTitle: 'Portal Teknisi'
   }) %>
   <title><%= title %> - <%= company %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <% if (typeof techPushEnabled !== 'undefined' && techPushEnabled && techOneSignalAppId && techPushExternalId) { %>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer data-onesignal-tech-sdk="true"></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.__TECH_ONESIGNAL_APP_ID = <%- JSON.stringify(techOneSignalAppId) %>;
+    window.__TECH_ONESIGNAL_EXTERNAL_ID = <%- JSON.stringify(techPushExternalId) %>;
+    OneSignalDeferred.push(async function(OneSignal) {
+      try {
+        await OneSignal.init({
+          appId: window.__TECH_ONESIGNAL_APP_ID,
+          notifyButton: { enable: false },
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: '/OneSignalSDKWorker.js',
+          serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+          serviceWorkerParam: { scope: '/' },
+          autoResubscribe: true
+        });
+        if (window.__TECH_ONESIGNAL_EXTERNAL_ID && typeof OneSignal.login === 'function') {
+          await OneSignal.login(window.__TECH_ONESIGNAL_EXTERNAL_ID);
+        }
+        window.__TECH_ONESIGNAL_READY = true;
+      } catch (error) {
+        console.warn('OneSignal teknisi gagal dipasang:', error);
+      }
+    });
+  </script>
+  <% } %>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <style>
     :root,
     html[data-theme="dark"] {
-      --tech-bg: #07111f;
-      --tech-bg-alt: #0d192a;
-      --tech-panel: rgba(12, 22, 38, .92);
-      --tech-panel-soft: rgba(255, 255, 255, .04);
-      --tech-panel-soft-2: rgba(59, 130, 246, .08);
+      --tech-bg: #09111d;
+      --tech-bg-alt: #111827;
+      --tech-panel: rgba(17, 24, 39, .92);
+      --tech-panel-soft: rgba(79, 110, 247, .10);
+      --tech-panel-soft-2: rgba(79, 110, 247, .14);
       --tech-border: rgba(148, 163, 184, .18);
-      --tech-text: #f8fbff;
-      --tech-muted: #8ea2bf;
-      --tech-primary: #5b8cff;
-      --tech-primary-soft: rgba(91, 140, 255, .18);
-      --tech-success: #27c183;
-      --tech-warning: #f5a524;
-      --tech-danger: #f16063;
-      --tech-shadow: 0 18px 40px rgba(2, 8, 23, .34);
-      --tech-topbar: rgba(7, 17, 31, .84);
-      --tech-nav-bg: rgba(10, 20, 35, .92);
-      --tech-input-bg: rgba(10, 19, 33, .88);
+      --tech-text: #edf2ff;
+      --tech-muted: #96a3bf;
+      --tech-primary: #6f8dff;
+      --tech-primary-soft: rgba(111, 141, 255, .18);
+      --tech-success: #35c98a;
+      --tech-warning: #ffb34d;
+      --tech-danger: #ff7286;
+      --tech-shadow: 0 26px 54px rgba(2, 8, 23, .34);
+      --tech-topbar: rgba(15, 23, 42, .84);
+      --tech-nav-bg: rgba(17, 24, 39, .94);
+      --tech-input-bg: rgba(15, 23, 42, .92);
       --tech-icon-bg: rgba(255, 255, 255, .055);
       --tech-btn-close-filter: invert(1) grayscale(1) brightness(200%);
     }
 
     html[data-theme="light"] {
-      --tech-bg: #eef4ff;
+      --tech-bg: #eef3ff;
       --tech-bg-alt: #f8fbff;
-      --tech-panel: rgba(255, 255, 255, .92);
-      --tech-panel-soft: rgba(37, 99, 235, .05);
-      --tech-panel-soft-2: rgba(37, 99, 235, .08);
-      --tech-border: rgba(148, 163, 184, .22);
-      --tech-text: #15233b;
-      --tech-muted: #64748b;
-      --tech-primary: #315efb;
-      --tech-primary-soft: rgba(49, 94, 251, .12);
-      --tech-success: #119a65;
-      --tech-warning: #dc8a10;
-      --tech-danger: #db4d58;
-      --tech-shadow: 0 18px 38px rgba(148, 163, 184, .18);
-      --tech-topbar: rgba(255, 255, 255, .84);
-      --tech-nav-bg: rgba(255, 255, 255, .94);
+      --tech-panel: rgba(255, 255, 255, .94);
+      --tech-panel-soft: rgba(79, 110, 247, .06);
+      --tech-panel-soft-2: rgba(79, 110, 247, .10);
+      --tech-border: rgba(170, 186, 215, .30);
+      --tech-text: #1b2740;
+      --tech-muted: #6b7b97;
+      --tech-primary: #4f6ef7;
+      --tech-primary-soft: rgba(79, 110, 247, .12);
+      --tech-success: #149b68;
+      --tech-warning: #d98a18;
+      --tech-danger: #d95363;
+      --tech-shadow: 0 20px 40px rgba(148, 163, 184, .18);
+      --tech-topbar: rgba(255, 255, 255, .88);
+      --tech-nav-bg: rgba(255, 255, 255, .96);
       --tech-input-bg: rgba(255, 255, 255, .98);
-      --tech-icon-bg: rgba(37, 99, 235, .06);
+      --tech-icon-bg: rgba(79, 110, 247, .06);
       --tech-btn-close-filter: none;
     }
 
@@ -77,14 +107,14 @@
     }
 
     body {
-      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-family: "Plus Jakarta Sans", "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
       padding-top: 72px;
       padding-bottom: 92px;
       -webkit-tap-highlight-color: transparent;
       transition: background-color .2s ease, color .2s ease;
       background:
-        radial-gradient(420px 240px at 0% 0%, rgba(91, 140, 255, .14) 0%, rgba(91, 140, 255, 0) 70%),
-        radial-gradient(420px 220px at 100% 0%, rgba(39, 193, 131, .10) 0%, rgba(39, 193, 131, 0) 68%),
+        radial-gradient(460px 260px at 0% 0%, rgba(111, 141, 255, .18) 0%, rgba(111, 141, 255, 0) 72%),
+        radial-gradient(420px 240px at 100% 0%, rgba(73, 186, 255, .10) 0%, rgba(73, 186, 255, 0) 68%),
         linear-gradient(180deg, var(--tech-bg-alt) 0%, var(--tech-bg) 100%);
     }
 
@@ -109,7 +139,7 @@
       gap: 12px;
       padding: 10px 12px;
       border: 1px solid var(--tech-border);
-      border-radius: 22px;
+      border-radius: 24px;
       background: var(--tech-topbar);
       backdrop-filter: blur(18px);
       box-shadow: var(--tech-shadow);
@@ -151,7 +181,7 @@
     .top-nav-btn {
       width: 40px;
       height: 40px;
-      border-radius: 14px;
+      border-radius: 15px;
       border: 1px solid var(--tech-border);
       background: var(--tech-icon-bg);
       color: var(--tech-text);
@@ -206,9 +236,10 @@
     }
 
     .surface-soft {
-      background: var(--tech-panel-soft) !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03)) !important;
       border-color: var(--tech-border) !important;
       color: var(--tech-text) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
     }
 
     .badge-status {
@@ -220,6 +251,8 @@
       font-size: 11px;
       font-weight: 800;
       letter-spacing: .01em;
+      border: 1px solid transparent;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
     }
 
     .badge-open {
@@ -238,6 +271,12 @@
       background: rgba(39, 193, 131, .14);
       color: var(--tech-success);
       border: 1px solid rgba(39, 193, 131, .2);
+    }
+
+    .badge-neutral {
+      background: rgba(148, 163, 184, .12);
+      color: var(--tech-text);
+      border: 1px solid rgba(148, 163, 184, .18);
     }
 
     .btn-action {
@@ -265,6 +304,17 @@
       padding: 14px;
       border: 1px solid var(--tech-border);
       box-shadow: var(--tech-shadow);
+    }
+
+    .stat-box::after {
+      content: "";
+      position: absolute;
+      inset: auto -26px -34px auto;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(111, 141, 255, .16) 0%, rgba(111, 141, 255, 0) 72%);
+      pointer-events: none;
     }
 
     .stat-box .lbl,
@@ -326,6 +376,38 @@
       margin-top: 6px;
     }
 
+    .tech-modal-card {
+      border: 1px solid var(--tech-border);
+      border-radius: 26px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .03) 100%),
+        var(--tech-panel) !important;
+      box-shadow: var(--tech-shadow);
+      color: var(--tech-text);
+    }
+
+    .tech-modal-card .modal-header,
+    .tech-modal-card .modal-footer {
+      border-color: var(--tech-border) !important;
+      background: transparent;
+      padding: 16px 18px;
+    }
+
+    .tech-modal-card .modal-body {
+      padding: 4px 18px 18px;
+    }
+
+    .tech-modal-card .modal-title {
+      font-weight: 900;
+      letter-spacing: -.02em;
+    }
+
+    .tech-modal-card .btn-close {
+      filter: var(--tech-btn-close-filter);
+      opacity: .78;
+    }
+
     .bottom-nav {
       position: fixed;
       left: 12px;
@@ -335,7 +417,7 @@
       grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 8px;
       padding: 10px;
-      border-radius: 28px;
+      border-radius: 30px;
       border: 1px solid var(--tech-border);
       background: var(--tech-nav-bg);
       backdrop-filter: blur(20px);
@@ -375,7 +457,7 @@
     .nav-item.active,
     .nav-item-trigger.active {
       color: var(--tech-primary);
-      border-color: rgba(91, 140, 255, .18);
+      border-color: rgba(111, 141, 255, .18);
       background: var(--tech-primary-soft);
     }
 
@@ -383,14 +465,14 @@
       transform: translateY(-16px);
       min-height: 68px;
       border-radius: 22px;
-      background: linear-gradient(180deg, rgba(91, 140, 255, .96), rgba(49, 94, 251, .94));
+      background: linear-gradient(180deg, rgba(111, 141, 255, .98), rgba(79, 110, 247, .96));
       color: #fff !important;
       border-color: rgba(255, 255, 255, .18);
-      box-shadow: 0 18px 28px rgba(49, 94, 251, .28);
+      box-shadow: 0 18px 28px rgba(79, 110, 247, .28);
     }
 
     .nav-item--center.active {
-      background: linear-gradient(180deg, rgba(91, 140, 255, 1), rgba(49, 94, 251, .97));
+      background: linear-gradient(180deg, rgba(111, 141, 255, 1), rgba(79, 110, 247, .97));
       border-color: rgba(255, 255, 255, .24);
     }
 

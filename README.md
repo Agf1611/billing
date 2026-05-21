@@ -27,7 +27,7 @@ Sistem manajemen ISP berbasis Node.js untuk billing, portal pelanggan, MikroTik,
 ## Instalasi
 
 ```bash
-git clone https://github.com/alijayanet/billing-rtrw.git
+git clone https://github.com/sickas/billing-rtrw.git
 cd billing-rtrw
 npm install
 ```
