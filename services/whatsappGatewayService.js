@@ -50,6 +50,7 @@ function buildMpwaRequest(url, payload, config) {
   let finalUrl = url;
   const body = { ...payload };
   if (config.device) {
+    body.sender = config.device;
     body.device = config.device;
     body.session = config.device;
   }
