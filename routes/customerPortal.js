@@ -5,6 +5,7 @@ const { getSettingsWithCache } = require('../config/settingsManager');
 const billingSvc = require('../services/billingService');
 const paymentSvc = require('../services/paymentService');
 const customerSvc = require('../services/customerService');
+const whatsappGateway = require('../services/whatsappGatewayService');
 const packageChangeSvc = require('../services/packageChangeService');
 const mikrotikService = require('../services/mikrotikService');
 const customerDetailSvc = require('../services/customerDetailService');
@@ -216,14 +217,13 @@ async function trySendGatewayPaidWhatsapp(req, customer, invoice, gatewayLabel, 
   try {
     if (!settings?.whatsapp_enabled) return false;
     if (!customer?.phone || !invoice) return false;
-    const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(15000);
-    if (!ready) throw new Error('Bot WhatsApp belum siap');
-    const ok = await sendWA(
+    const ready = await whatsappGateway.ensureReady(15000);
+    if (!ready) throw new Error('WhatsApp belum siap');
+    const ok = await whatsappGateway.sendText(
       customer.phone,
       buildPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req))
     );
-    if (!ok) throw new Error('sendWA mengembalikan gagal');
+    if (!ok) throw new Error('Gateway WhatsApp mengembalikan gagal');
     return true;
   } catch (error) {
     logger.error(`[Webhook] Gagal kirim notif WA lunas (${gatewayLabel}): ${error.message || String(error)}`);
@@ -1228,7 +1228,6 @@ router.post('/register', async (req, res) => {
 
     // Kirim notifikasi ke Admin
     if (settings.whatsapp_enabled && settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0) {
-      const { sendWA } = await import('../services/whatsappBot.mjs');
       const selectedPkg = packages.find(p => p.id.toString() === package_id.toString());
       const pkgName = selectedPkg ? selectedPkg.name : 'Tidak diketahui';
       
@@ -1245,7 +1244,7 @@ router.post('/register', async (req, res) => {
         if (digits.startsWith('0')) digits = '62' + digits.slice(1);
         if (seen.has(digits)) continue;
         seen.add(digits);
-        try { await sendWA(digits, finalAdminMsg); } catch(e) { /* ignore */ }
+        try { await whatsappGateway.sendText(digits, finalAdminMsg); } catch(e) { /* ignore */ }
       }
     }
 
@@ -1325,14 +1324,14 @@ router.post('/login', async (req, res) => {
   logger.info(`[Login] OTP dibuat untuk customerId=${matchedCustomer.id || '-'}.`);
 
   try {
-    const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
+    const ready = await whatsappGateway.ensureReady(15000);
 
-    if (whatsappStatus.connection !== 'open') {
+    if (!ready) {
       throw new Error('Sistem WhatsApp sedang tidak aktif. Silakan hubungi Admin.');
     }
 
-    const msg = `ðŸ›¡ï¸ *KODE VERIFIKASI (OTP)*\n\nKode Anda adalah: *${loginOtp}*\n\nJangan berikan kode ini kepada siapapun. Kode berlaku selama 5 menit.`;
-    const sent = await sendWA(deliveryPhone, msg);
+    const msg = `*KODE VERIFIKASI (OTP)*\n\nKode Anda adalah: *${loginOtp}*\n\nJangan berikan kode ini kepada siapapun. Kode berlaku selama 5 menit.`;
+    const sent = await whatsappGateway.sendText(deliveryPhone, msg);
 
     if (!sent) {
       throw new Error('Gagal mengirim kode OTP melalui WhatsApp. Pastikan nomor Anda terdaftar di WhatsApp.');
@@ -1377,14 +1376,14 @@ router.post('/login', async (req, res) => {
     // Kirim via WhatsApp
     if (settings.whatsapp_enabled) {
       try {
-        const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
+        const ready = await whatsappGateway.ensureReady(15000);
         
-        if (whatsappStatus.connection !== 'open') {
+        if (!ready) {
           throw new Error('Sistem WhatsApp sedang tidak aktif. Silakan hubungi Admin.');
         }
 
-        const msg = `🛡️ *KODE VERIFIKASI (OTP)*\n\nKode Anda adalah: *${otp}*\n\nJangan berikan kode ini kepada siapapun. Kode berlaku selama 5 menit.`;
-        const sent = await sendWA(phone, msg);
+        const msg = `*KODE VERIFIKASI (OTP)*\n\nKode Anda adalah: *${otp}*\n\nJangan berikan kode ini kepada siapapun. Kode berlaku selama 5 menit.`;
+        const sent = await whatsappGateway.sendText(phone, msg);
         
         if (!sent) {
           throw new Error('Gagal mengirim kode OTP melalui WhatsApp. Pastikan nomor Anda terdaftar di WhatsApp.');
@@ -2437,7 +2436,6 @@ router.post('/tickets/create', async (req, res) => {
     try {
       const settings = getSettingsWithCache();
       if (settings.whatsapp_enabled) {
-        const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
         const customer = customerSvc.getCustomerById(customerId);
         
         const waMsg = `🎫 *TIKET KELUHAN BARU*\n\n` +
@@ -2457,7 +2455,7 @@ router.post('/tickets/create', async (req, res) => {
             if (digits.startsWith('0')) digits = '62' + digits.slice(1);
             if (seen.has(digits)) continue;
             seen.add(digits);
-            await sendWA(digits, waMsg);
+            await whatsappGateway.sendText(digits, waMsg);
           }
         }
 
@@ -2471,7 +2469,7 @@ router.post('/tickets/create', async (req, res) => {
             if (digits.startsWith('0')) digits = '62' + digits.slice(1);
             if (seenTech.has(digits)) continue;
             seenTech.add(digits);
-            await sendWA(digits, waMsg);
+            await whatsappGateway.sendText(digits, waMsg);
           }
         }
       }
@@ -2848,8 +2846,8 @@ router.post('/payment/callback', express.json(), async (req, res) => {
 
         if (settings.whatsapp_enabled) {
           try {
-            const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
-            if (whatsappStatus.connection !== 'open') throw new Error('Bot WhatsApp belum terhubung');
+            const ready = await whatsappGateway.ensureReady(15000);
+            if (!ready) throw new Error('WhatsApp belum terhubung');
             if (!fresh.buyer_phone) throw new Error('Nomor WhatsApp pembeli kosong');
             const msg =
               `🎫 *VOUCHER HOTSPOT*\n\n` +
@@ -2859,7 +2857,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
               `👤 User: *${created.code}*\n` +
               `🔑 Pass: *${created.pass}*\n\n` +
               `Terima kasih.`;
-            await sendWA(fresh.buyer_phone, msg);
+            await whatsappGateway.sendText(fresh.buyer_phone, msg);
             db.prepare(`
               UPDATE public_voucher_orders
               SET wa_sent=1, wa_sent_at=CURRENT_TIMESTAMP, wa_error='', updated_at=CURRENT_TIMESTAMP
@@ -2900,16 +2898,15 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       const customer = customerSvc.getCustomerById(checkInv.customer_id);
       
       try {
-        const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-        const ready = await ensureWhatsAppReady(15000);
+        const ready = await whatsappGateway.ensureReady(15000);
         if (!ready) {
-          throw new Error('Bot WhatsApp belum siap');
+          throw new Error('WhatsApp belum siap');
         }
         if (!customer.phone) {
           throw new Error('Nomor WhatsApp pelanggan kosong');
         }
         const msg = `✅ *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran tagihan internet periode *${checkInv.period_month}/${checkInv.period_year}* telah kami terima via *${gateway}*.\n\n💰 *Total:* Rp ${checkInv.amount.toLocaleString('id-ID')}\n📅 *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus layanan Anda kini telah aktif. Selamat berinternet kembali! 🚀`;
-        const sent = await sendWA(customer.phone, buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)));
+        const sent = await whatsappGateway.sendText(customer.phone, buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)));
         if (!sent) {
           throw new Error('sendWA mengembalikan gagal');
         }

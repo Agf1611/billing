@@ -20,6 +20,7 @@ const {
   buildTechnicianPushExternalId
 } = require('../services/pushNotificationService');
 const { notifyApprovalRequired } = require('../services/adminPaymentNotificationService');
+const whatsappGateway = require('../services/whatsappGatewayService');
 const techUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 }
@@ -303,7 +304,6 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
         const settings = getSettingsWithCache();
         
         if (settings.whatsapp_enabled) {
-          const { sendWA } = await import('../services/whatsappBot.mjs');
           if (ticket) {
             const waMsg = `✅ *TIKET KELUHAN SELESAI*\n\n` +
                          `🎫 *ID Tiket:* #${ticket.id}\n` +
@@ -314,7 +314,7 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
 
             // Kirim ke Pelanggan
             if (ticket.customer_phone) {
-              await sendWA(ticket.customer_phone, waMsg);
+              await whatsappGateway.sendText(ticket.customer_phone, waMsg);
             }
 
             // Kirim ke Admin
@@ -332,7 +332,7 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
                 if (digits.startsWith('0')) digits = '62' + digits.slice(1);
                 if (seen.has(digits)) continue;
                 seen.add(digits);
-                await sendWA(digits, adminMsg);
+                await whatsappGateway.sendText(digits, adminMsg);
               }
             }
           }

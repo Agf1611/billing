@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { logger } = require('./config/logger');
 const db = require('./config/database');
 const customerSvc = require('./services/customerService');
+const whatsappGateway = require('./services/whatsappGatewayService');
 const { normalizePhoneDigits, formatPhoneDisplay, buildWhatsAppLink } = require('./services/phoneService');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { scheduleAutoBackup } = require('./services/backupService');
@@ -287,10 +288,11 @@ function requireWhatsappApiKey(req, res, next) {
 
 app.get('/api/whatsapp/status', requireWhatsappApiKey, async (req, res) => {
   try {
-    const { whatsappStatus } = await import('./services/whatsappBot.mjs');
+    const whatsappStatus = await whatsappGateway.getStatus();
     return res.json({
       success: true,
       enabled: Boolean(getSetting('whatsapp_enabled', false)),
+      provider: whatsappStatus?.provider || 'local',
       connection: whatsappStatus?.connection || 'unknown',
       reason: whatsappStatus?.reason || '',
       user: whatsappStatus?.user || null
@@ -319,8 +321,8 @@ app.post('/api/whatsapp/send-message', requireWhatsappApiKey, async (req, res) =
     if (!message) return res.status(400).json({ success: false, error: 'missing_message', message: 'Pesan wajib diisi.' });
     if (message.length > 5000) return res.status(400).json({ success: false, error: 'message_too_long', message: 'Pesan maksimal 5000 karakter.' });
 
-    const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('./services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(15000);
+    const whatsappStatus = await whatsappGateway.getStatus();
+    const ready = await whatsappGateway.ensureReady(15000);
     if (!ready) {
       return res.status(503).json({
         success: false,
@@ -330,7 +332,7 @@ app.post('/api/whatsapp/send-message', requireWhatsappApiKey, async (req, res) =
       });
     }
 
-    const sent = await sendWA(to, message);
+    const sent = await whatsappGateway.sendText(to, message);
     if (!sent) {
       return res.status(502).json({
         success: false,
@@ -692,14 +694,13 @@ async function trySendWebhookPaidWhatsapp(req, customerId, invoiceId, gatewayLab
     const customer = customerSvc.getCustomerById(customerId);
     const invoice = billingSvc.getInvoiceById(invoiceId);
     if (!customer || !invoice || !customer.phone) return false;
-    const { sendWA, ensureWhatsAppReady } = await import('./services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(12000);
-    if (!ready) throw new Error('Bot WhatsApp belum siap');
-    const ok = await sendWA(
+    const ready = await whatsappGateway.ensureReady(12000);
+    if (!ready) throw new Error('WhatsApp belum siap');
+    const ok = await whatsappGateway.sendText(
       customer.phone,
       buildWebhookPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req))
     );
-    if (!ok) throw new Error('sendWA mengembalikan gagal');
+    if (!ok) throw new Error('Gateway WhatsApp mengembalikan gagal');
     return true;
   } catch (error) {
     logger.error(`[WEBHOOK][payment-notif] Gagal kirim notif lunas WA: ${error?.message || error}`);
@@ -1079,6 +1080,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Mount customer portal
 const customerPortal = require('./routes/customerPortal');
 app.use('/customer', customerPortal);
+app.get(/^\/inv(?:\/)?(\d+[a-f0-9]{8})(?:\/print)?$/i, (req, res) => {
+  return res.redirect(`/customer${req.originalUrl}`);
+});
+app.get(/^\/i\/([A-Za-z0-9-]+)$/i, (req, res) => {
+  return res.redirect(`/customer${req.originalUrl}`);
+});
 
 // Mount admin portal
 const adminPortal = require('./routes/adminPortal');
@@ -1172,12 +1179,14 @@ function shouldRunWhatsappWorker() {
 const backgroundWorkersEnabled = shouldRunBackgroundWorkers();
 const whatsappWorkerEnabled = shouldRunWhatsappWorker();
 
-if (whatsappWorkerEnabled && getSetting('whatsapp_enabled', false)) {
+if (whatsappWorkerEnabled && getSetting('whatsapp_enabled', false) && whatsappGateway.getProvider() === 'local') {
   import('./services/whatsappBot.mjs')
     .then((mod) => mod.startWhatsAppBot())
     .catch((err) => logger.error('Gagal memulai WhatsApp bot:', err));
 } else if (!whatsappWorkerEnabled) {
   logger.info(`[WA] Worker WhatsApp dinonaktifkan untuk port ${global.appSettings?.port || process.env.PORT || '-'}.`);
+} else if (getSetting('whatsapp_enabled', false) && whatsappGateway.getProvider() === 'mpwa') {
+  logger.info('[WA] Provider MPWA aktif, worker bot lokal tidak dijalankan.');
 }
 
 if (backgroundWorkersEnabled) {

@@ -1,15 +1,20 @@
 node_modules/
 
 database/
+data/
 database.sqlite
 *.db
 *.db-shm
 *.db-wal
 
 auth_info_baileys/
+auth_info_baileys*/
 logs/
 backups/
+uploads/tmp/
 
+.env
+.env.*
 settings.local.json
 settings.local.json.*
 
@@ -17,6 +22,7 @@ run-out.log
 run-err.log
 *.log
 
+tmp/
 custcookies*.txt
 login-cookies.txt
 

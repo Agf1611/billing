@@ -6,6 +6,7 @@ const billingSvc = require('../services/billingService');
 const customerSvc = require('../services/customerService');
 const employeeLocationSvc = require('../services/employeeLocationService');
 const { buildDynamicQrisDataUrl, hasStaticQrisEnabled } = require('../services/qrisService');
+const whatsappGateway = require('../services/whatsappGatewayService');
 
 function requireAgentSession(req, res, next) {
   if (req.session && req.session.isAgent && req.session.agentId) return next();
@@ -449,8 +450,7 @@ router.post('/pay-invoice', requireAgentSession, express.urlencoded({ extended: 
     let waSent = false;
     if (settings.whatsapp_enabled && customer && customer.phone) {
       try {
-        const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
-        if (whatsappStatus.connection === 'open') {
+        if (await whatsappGateway.ensureReady(12000)) {
           const msg =
             `✅ *PEMBAYARAN BERHASIL*\n\n` +
             `👤 *Pelanggan:* ${customer.name}\n` +
@@ -459,7 +459,7 @@ router.post('/pay-invoice', requireAgentSession, express.urlencoded({ extended: 
             `💰 *Nominal Tagihan:* Rp ${Number(result.invoice.amount || 0).toLocaleString('id-ID')}\n` +
             `🏷️ *Dibayar Via:* Agent ${result.agent.name}\n\n` +
             `Terima kasih.`;
-          await sendWA(customer.phone, msg);
+          await whatsappGateway.sendText(customer.phone, msg);
           waSent = true;
         }
       } catch (e) {}
@@ -546,8 +546,7 @@ router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }
     let waSent = false;
     if (getSetting('whatsapp_enabled', false) && buyerPhone) {
       try {
-        const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
-        if (whatsappStatus.connection === 'open') {
+        if (await whatsappGateway.ensureReady(12000)) {
           const msg =
             `${isSuccess ? '✅' : isFailed ? '❌' : '⏳'} *TRANSAKSI PULSA*\n\n` +
             `📦 *SKU:* ${sku}\n` +
@@ -557,7 +556,7 @@ router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }
             `${result?.tx?.digi_sn ? `🔢 *SN:* ${result.tx.digi_sn}\n` : ''}` +
             `${result?.tx?.digi_message ? `💬 *Pesan:* ${result.tx.digi_message}\n` : ''}` +
             `\nTerima kasih.`;
-          await sendWA(buyerPhone, msg);
+          await whatsappGateway.sendText(buyerPhone, msg);
           waSent = true;
         }
       } catch (e) {}
@@ -605,8 +604,7 @@ router.post('/api/pulsa/order', requireAgentSession, express.json({ limit: '50kb
     let waSent = false;
     if (getSetting('whatsapp_enabled', false) && buyerPhone) {
       try {
-        const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
-        if (whatsappStatus.connection === 'open') {
+        if (await whatsappGateway.ensureReady(12000)) {
           const msg =
             `${isSuccess ? '✅' : isFailed ? '❌' : '⏳'} *TRANSAKSI PULSA*\n\n` +
             `📦 *SKU:* ${sku}\n` +
@@ -617,7 +615,7 @@ router.post('/api/pulsa/order', requireAgentSession, express.json({ limit: '50kb
             `${result?.tx?.digi_sn ? `🔢 *SN:* ${result.tx.digi_sn}\n` : ''}` +
             `${result?.tx?.digi_message ? `💬 *Pesan:* ${result.tx.digi_message}\n` : ''}` +
             `\nTerima kasih.`;
-          await sendWA(buyerPhone, msg);
+          await whatsappGateway.sendText(buyerPhone, msg);
           waSent = true;
         }
       } catch (e) {}

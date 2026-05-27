@@ -9,6 +9,7 @@ const customerSvc = require('./customerService');
 const packageChangeSvc = require('./packageChangeService');
 const mikrotikService = require('./mikrotikService');
 const usageSvc = require('./usageService');
+const whatsappGateway = require('./whatsappGatewayService');
 const { getSetting } = require('../config/settingsManager');
 const { hasStaticQrisEnabled } = require('./qrisService');
 const {
@@ -82,15 +83,7 @@ function isPermanentError(errorMessage) {
 
 async function sendCustomerWhatsapp(phone, message) {
   if (!getSetting('whatsapp_enabled', false)) return false;
-  let sendWA;
-  try {
-    const mod = await import('./whatsappBot.mjs');
-    sendWA = mod.sendWA;
-  } catch (e) {
-    logger.error(`[CRON] Gagal load WhatsApp bot: ${e.message || e}`);
-    return false;
-  }
-  return Boolean(await sendWA(phone, String(message || '').trim()));
+  return Boolean(await whatsappGateway.sendText(phone, String(message || '').trim()));
 }
 
 function buildInvoicePeriods(invoices = []) {
@@ -331,21 +324,11 @@ function startCronJobs() {
     const waEnabled = getSetting('whatsapp_enabled', false);
     if (!enabled) return;
 
-    let ensureWhatsAppReady;
-    if (waEnabled) {
-      try {
-        const mod = await import('./whatsappBot.mjs');
-        ensureWhatsAppReady = mod.ensureWhatsAppReady;
-      } catch (e) {
-        logger.error(`[CRON] Gagal load WhatsApp bot: ${e.message || e}`);
-      }
-    }
-
-    const ready = waEnabled && typeof ensureWhatsAppReady === 'function'
-      ? await ensureWhatsAppReady(25000)
+    const ready = waEnabled
+      ? await whatsappGateway.ensureReady(25000)
       : false;
     if (waEnabled && !ready) {
-      logger.warn('[CRON] WhatsApp bot belum terhubung, pengingat tagihan otomatis dilewati.');
+      logger.warn('[CRON] WhatsApp belum terhubung, pengingat tagihan otomatis dilewati.');
     }
 
     const baseDelayMs = (Number(getSetting('whatsapp_broadcast_delay', 5) || 5) * 1000); // Default 5 detik

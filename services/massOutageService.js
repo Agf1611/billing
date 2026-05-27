@@ -6,6 +6,7 @@ const {
   isPushConfigured,
   sendPushToTechnicians
 } = require('./pushNotificationService');
+const whatsappGateway = require('./whatsappGatewayService');
 
 const evaluationLocks = new Map();
 
@@ -181,11 +182,10 @@ async function sendTelegramAdminMessage(text) {
 async function sendWhatsappMessages(numbers = [], text = '') {
   const targets = [...new Set((Array.isArray(numbers) ? numbers : []).map((item) => normalizeText(item)).filter(Boolean))];
   if (!targets.length || !normalizeText(text)) return [];
-  const { sendWA } = await import('./whatsappBot.mjs');
   const results = [];
   for (const target of targets) {
     try {
-      const ok = await sendWA(target, text);
+      const ok = await whatsappGateway.sendText(target, text);
       results.push({ target, ok: Boolean(ok) });
     } catch (error) {
       logger.warn(`[MassOutage] Gagal kirim WA ke ${target}: ${error.message || error}`);

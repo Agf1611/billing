@@ -2,6 +2,7 @@ const db = require('../config/database');
 const { getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const { normalizePhoneDigits } = require('./phoneService');
+const whatsappGateway = require('./whatsappGatewayService');
 const {
   isPushConfigured,
   sendPushToAdmins
@@ -132,15 +133,14 @@ async function sendWhatsappToAdminNumbers(message, settings = {}) {
     return { success: false, skipped: true, reason: 'no-admin-whatsapp' };
   }
 
-  const { sendWA, ensureWhatsAppReady } = await import('./whatsappBot.mjs');
-  const ready = await ensureWhatsAppReady(12000);
+  const ready = await whatsappGateway.ensureReady(12000);
   if (!ready) return { success: false, skipped: true, reason: 'whatsapp-not-ready' };
 
   let sent = 0;
   const failed = [];
   for (const phone of targets) {
     try {
-      const ok = await sendWA(phone, message);
+      const ok = await whatsappGateway.sendText(phone, message);
       if (ok) sent += 1;
       else failed.push(phone);
     } catch (error) {

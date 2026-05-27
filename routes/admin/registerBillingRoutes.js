@@ -4,6 +4,7 @@ const {
   hasStaticQrisEnabled
 } = require('../../services/qrisService');
 const { verifyPassword } = require('../../config/passwords');
+const whatsappGateway = require('../../services/whatsappGatewayService');
 
 module.exports = function registerBillingRoutes(router, deps = {}) {
   const {
@@ -476,11 +477,11 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
       setImmediate(async () => {
         try {
-          const { sendWA, sendWAImage, ensureWhatsAppReady, whatsappStatus } = await import('../../services/whatsappBot.mjs');
-          const ready = await ensureWhatsAppReady(25000);
+          const whatsappStatus = await whatsappGateway.getStatus();
+          const ready = await whatsappGateway.ensureReady(25000);
           if (!ready) {
-            const waState = String(whatsappStatus?.connection || 'unknown');
-            throw new Error(`Bot WhatsApp belum siap (${waState}).`);
+            const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
+            throw new Error(`WhatsApp belum siap (${waState}).`);
           }
 
           const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(queuedCustomer.id);
@@ -494,9 +495,9 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
             finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
           }
           const sent = qrisImageBuffer.length
-            ? await sendWAImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
-            : await sendWA(queuedCustomer.phone, finalMessage);
-          if (!sent) throw new Error('WhatsApp Bot menolak pengiriman.');
+            ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
+            : await whatsappGateway.sendText(queuedCustomer.phone, finalMessage);
+          if (!sent) throw new Error('Gateway WhatsApp menolak pengiriman.');
         } catch (error) {
           console.warn(`[BillingWA] Gagal kirim tagihan invoice ${queuedInvoice.id}: ${error.message || String(error)}`);
         }

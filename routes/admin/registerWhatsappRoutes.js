@@ -1,5 +1,6 @@
 const multer = require('multer');
 const { persistCompressedImageUpload } = require('../../services/imageUploadService');
+const whatsappGateway = require('../../services/whatsappGatewayService');
 
 const announcementUpload = multer({
   storage: multer.memoryStorage(),
@@ -84,13 +85,13 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     };
   }
 
-  async function sendWhatsappAnnouncement({ phone, message, imageFilePath = '', sendWA, sendWAImage, fs }) {
+  async function sendWhatsappAnnouncement({ phone, message, imageFilePath = '', fs }) {
     const caption = String(message || '').trim();
-    if (imageFilePath && typeof sendWAImage === 'function' && fs?.existsSync(imageFilePath)) {
+    if (imageFilePath && fs?.existsSync(imageFilePath)) {
       const buffer = fs.readFileSync(imageFilePath);
-      return Boolean(await sendWAImage(phone, buffer, caption));
+      return Boolean(await whatsappGateway.sendImage(phone, buffer, caption));
     }
-    return Boolean(await sendWA(phone, caption));
+    return Boolean(await whatsappGateway.sendText(phone, caption));
   }
 
   router.get('/whatsapp', requireAdminSession, async (req, res) => {
@@ -339,10 +340,9 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
         return res.redirect('/admin/whatsapp/broadcast');
       }
 
-      const { sendWA, sendWAImage, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
-      const ready = await ensureWhatsAppReady(25000);
+      const ready = await whatsappGateway.ensureReady(25000);
       if (!ready) {
-        throw new Error('Bot WhatsApp belum terhubung. Silakan buka menu WhatsApp dan pastikan statusnya Terhubung.');
+        throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
       }
 
       if (isTestMode) {
@@ -358,8 +358,6 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
           phone: customer.phone,
           message: formattedMsg,
           imageFilePath,
-          sendWA,
-          sendWAImage,
           fs
         });
         if (!sentOk) throw new Error('sendWA mengembalikan gagal');
@@ -435,8 +433,6 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
                 phone: customer.phone,
                 message: formattedMsg,
                 imageFilePath,
-                sendWA,
-                sendWAImage,
                 fs
               });
               if (!sentOk) throw new Error('sendWA mengembalikan gagal');
@@ -527,7 +523,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
   router.get('/api/whatsapp/status', requireAdmin, async (req, res) => {
     try {
-      const { whatsappStatus } = await import('../../services/whatsappBot.mjs');
+      const whatsappStatus = await whatsappGateway.getStatus();
       res.json(whatsappStatus);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -537,10 +533,10 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
   router.post('/whatsapp/test-notification', requireAdminSession, async (req, res) => {
     try {
       const startedAt = Date.now();
-      const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('../../services/whatsappBot.mjs');
-      const ready = await ensureWhatsAppReady(25000);
+      const whatsappStatus = await whatsappGateway.getStatus();
+      const ready = await whatsappGateway.ensureReady(25000);
       if (!ready) {
-        throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
+        throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
       }
       const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
       if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
@@ -548,8 +544,8 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
         `TEST NOTIFIKASI WHATSAPP\n\n` +
         `WhatsApp bot untuk ${getSetting('company_header', 'Portal Billing ISP')} sudah berfungsi.\n` +
         `Waktu: ${new Date().toLocaleString('id-ID')}`;
-      const ok = await sendWA(adminPhone, messageText);
-      if (!ok) throw new Error('Gagal mengirim pesan test (sendWA=false).');
+      const ok = await whatsappGateway.sendText(adminPhone, messageText);
+      if (!ok) throw new Error('Gagal mengirim pesan test.');
       const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
       req.session._msg = { type: 'success', text: `Test notifikasi WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
@@ -561,16 +557,16 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
   router.post('/whatsapp/test-template', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
     try {
       const startedAt = Date.now();
-      const { sendWA, whatsappStatus, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
-      const ready = await ensureWhatsAppReady(25000);
+      const whatsappStatus = await whatsappGateway.getStatus();
+      const ready = await whatsappGateway.ensureReady(25000);
       if (!ready) {
-        throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
+        throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
       }
       const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
       if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
       const templateKey = String(req.body.template_key || 'billing').trim();
       const previewMessage = buildWhatsappTemplatePreview(templateKey, { baseUrl: resolveRequestBaseUrl(req) });
-      const ok = await sendWA(adminPhone, previewMessage);
+      const ok = await whatsappGateway.sendText(adminPhone, previewMessage);
       if (!ok) throw new Error('Gagal mengirim test message.');
       const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
       req.session._msg = { type: 'success', text: `Test message WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)} dalam sekitar ${durationSec} detik.` };

@@ -672,6 +672,13 @@
             </select>
           </div>
           <div class="fg">
+            <label class="fl">Provider WhatsApp</label>
+            <select class="fs" name="whatsapp_provider" id="whatsappProvider">
+              <option value="local" <%= (settings.whatsapp_provider || 'local') !== 'mpwa' ? 'selected' : '' %>>Bot Lokal</option>
+              <option value="mpwa" <%= settings.whatsapp_provider === 'mpwa' ? 'selected' : '' %>>MPWA / API Gateway</option>
+            </select>
+          </div>
+          <div class="fg">
             <label class="fl">Nomor Admin WA (Pisahkan dengan koma)</label>
             <input class="fc" name="whatsapp_admin_numbers" value="<%= (settings.whatsapp_admin_numbers || []).join(', ') %>" placeholder="6281xxx, 6282xxx">
           </div>
@@ -690,6 +697,52 @@
             </div>
             <div style="font-size:10px; color:var(--muted); margin-top:4px">
               Dipakai untuk API kirim pesan: <span class="mono">POST /api/whatsapp/send-message</span>. Kirim key lewat header <span class="mono">x-api-key</span> atau <span class="mono">Authorization: Bearer</span>.
+            </div>
+          </div>
+          <div class="form-row" style="grid-column: span 2;" data-mpwa-settings>
+            <div class="fg">
+              <label class="fl">URL MPWA</label>
+              <input class="fc" type="url" name="whatsapp_mpwa_base_url" value="<%= settings.whatsapp_mpwa_base_url || '' %>" placeholder="https://wa.domain.com">
+            </div>
+            <div class="fg">
+              <label class="fl">API Key MPWA</label>
+              <div class="secret-field">
+                <input class="fc" type="password" name="whatsapp_mpwa_api_key" value="<%= settings.whatsapp_mpwa_api_key || '' %>" placeholder="API key dari MPWA">
+                <button type="button" class="secret-toggle" data-secret-toggle aria-label="Lihat API key MPWA">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="fg">
+              <label class="fl">Endpoint Kirim Pesan</label>
+              <input class="fc" name="whatsapp_mpwa_send_path" value="<%= settings.whatsapp_mpwa_send_path || '/api/send-message' %>" placeholder="/api/send-message">
+            </div>
+            <div class="fg">
+              <label class="fl">Auth MPWA</label>
+              <select class="fs" name="whatsapp_mpwa_auth_mode">
+                <% const mpwaAuth = settings.whatsapp_mpwa_auth_mode || 'bearer'; %>
+                <option value="bearer" <%= mpwaAuth === 'bearer' ? 'selected' : '' %>>Bearer Token</option>
+                <option value="x-api-key" <%= mpwaAuth === 'x-api-key' ? 'selected' : '' %>>Header x-api-key</option>
+                <option value="body" <%= mpwaAuth === 'body' ? 'selected' : '' %>>Body api_key</option>
+                <option value="query" <%= mpwaAuth === 'query' ? 'selected' : '' %>>Query api_key</option>
+                <option value="none" <%= mpwaAuth === 'none' ? 'selected' : '' %>>Tanpa Auth</option>
+              </select>
+            </div>
+            <div class="fg">
+              <label class="fl">Field Nomor</label>
+              <input class="fc" name="whatsapp_mpwa_number_field" value="<%= settings.whatsapp_mpwa_number_field || 'number' %>" placeholder="number">
+            </div>
+            <div class="fg">
+              <label class="fl">Field Pesan</label>
+              <input class="fc" name="whatsapp_mpwa_message_field" value="<%= settings.whatsapp_mpwa_message_field || 'message' %>" placeholder="message">
+            </div>
+            <div class="fg">
+              <label class="fl">Device / Session</label>
+              <input class="fc" name="whatsapp_mpwa_device" value="<%= settings.whatsapp_mpwa_device || '' %>" placeholder="Opsional">
+            </div>
+            <div class="fg">
+              <label class="fl">Endpoint Gambar</label>
+              <input class="fc" name="whatsapp_mpwa_image_path" value="<%= settings.whatsapp_mpwa_image_path || '' %>" placeholder="Opsional, contoh /api/send-image">
             </div>
           </div>
           <div class="fg">
@@ -1053,6 +1106,17 @@ const initialSettingsPane = (location.hash || '').startsWith('#settings-')
   ? String(location.hash || '').replace('#settings-', '')
   : '<%= activeSettingsPane || "usaha" %>';
 showSettingsPane(initialSettingsPane);
+
+function syncWhatsappProviderFields() {
+  const provider = document.getElementById('whatsappProvider');
+  const isMpwa = provider && provider.value === 'mpwa';
+  document.querySelectorAll('[data-mpwa-settings]').forEach((node) => {
+    node.style.display = isMpwa ? '' : 'none';
+  });
+}
+
+document.getElementById('whatsappProvider')?.addEventListener('change', syncWhatsappProviderFields);
+syncWhatsappProviderFields();
 
 function removeCompanyLogo() {
   submitAssetRemoval('usaha', 'remove_company_logo', 'Hapus logo usaha yang sedang dipakai?');

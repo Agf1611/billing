@@ -210,11 +210,15 @@
 
       if (status.connection === 'open') {
         icon.classList.add('status-open');
-        text.innerText = connectedLabel;
-        desc.innerText = I18N.descOpen;
+        text.innerText = status.provider === 'mpwa' ? 'MPWA Terhubung' : connectedLabel;
+        desc.innerText = status.provider === 'mpwa' ? 'Provider MPWA aktif dan siap mengirim notifikasi.' : I18N.descOpen;
         infoSection.style.display = 'block';
         document.getElementById('wa-user').innerText = status.user?.id || status.user?.name || I18N.deviceFallback;
         document.getElementById('wa-time').innerText = new Date(status.lastUpdate).toLocaleTimeString();
+      } else if (status.connection === 'not_configured') {
+        icon.classList.add('status-close');
+        text.innerText = 'MPWA Belum Lengkap';
+        desc.innerText = 'Isi URL MPWA dan API key di Pengaturan WhatsApp.';
       } else if (status.connection === 'qr' && status.qr) {
         console.log('Generating QR Code Canvas...');
         icon.classList.add('status-qr');

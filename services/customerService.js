@@ -5,6 +5,7 @@ const db = require('../config/database');
 const { logger } = require('../config/logger');
 const { normalizePhoneDigits } = require('./phoneService');
 const { getSetting } = require('../config/settingsManager');
+const whatsappGateway = require('./whatsappGatewayService');
 const {
   buildCustomerPortalLoginLink,
   buildCustomerCheckBillingLink,
@@ -55,9 +56,9 @@ async function trySendLifecycleWhatsapp(phone, message) {
     if (!getSetting('whatsapp_enabled', false)) return false;
     const to = String(phone || '').trim();
     if (!to) return false;
-    const { sendWA, whatsappStatus } = await import('./whatsappBot.mjs');
-    if (!whatsappStatus || whatsappStatus.connection !== 'open') return false;
-    return Boolean(await sendWA(to, String(message || '').trim()));
+    const ready = await whatsappGateway.ensureReady(10000);
+    if (!ready) return false;
+    return Boolean(await whatsappGateway.sendText(to, String(message || '').trim()));
   } catch (e) {
     logger.warn(`[customerService] Gagal kirim WhatsApp lifecycle: ${e.message}`);
     return false;

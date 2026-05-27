@@ -18,6 +18,7 @@ const customerDetailSvc = require('../services/customerDetailService');
 const usageSvc = require('../services/usageService');
 const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
+const whatsappGateway = require('../services/whatsappGatewayService');
 const mikrotikService = require('../services/mikrotikService');
 const monitoringCollectorSvc = require('../services/monitoringCollectorService');
 const massOutageSvc = require('../services/massOutageService');
@@ -582,13 +583,13 @@ async function trySendWhatsappPayment(customerPhone, message) {
     if (!getSetting('whatsapp_enabled', false)) return false;
     const to = String(customerPhone || '').trim();
     if (!to) return false;
-    const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('../services/whatsappBot.mjs');
-    const ready = typeof ensureWhatsAppReady === 'function' ? await ensureWhatsAppReady(12000) : true;
+    const status = await whatsappGateway.getStatus();
+    const ready = await whatsappGateway.ensureReady(12000);
     if (!ready) {
-      logger.warn(`[WhatsApp] Kirim pesan pelanggan dibatalkan karena bot belum siap (${whatsappStatus?.connection || 'unknown'}).`);
+      logger.warn(`[WhatsApp] Kirim pesan pelanggan dibatalkan karena gateway belum siap (${status?.provider || 'local'}:${status?.connection || 'unknown'}).`);
       return false;
     }
-    return Boolean(await sendWA(to, String(message || '').trim()));
+    return Boolean(await whatsappGateway.sendText(to, String(message || '').trim()));
   } catch (error) {
     logger.warn(`[WhatsApp] Gagal kirim pesan pelanggan: ${error.message || String(error)}`);
     return false;
@@ -4937,11 +4938,11 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
 
     setImmediate(async () => {
       try {
-        const { sendWA, sendWAImage, whatsappStatus, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-        const ready = await ensureWhatsAppReady(25000);
+        const whatsappStatus = await whatsappGateway.getStatus();
+        const ready = await whatsappGateway.ensureReady(25000);
         if (!ready) {
-          const waState = String(whatsappStatus?.connection || 'unknown');
-          throw new Error(`Bot WhatsApp belum siap (${waState}).`);
+          const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
+          throw new Error(`WhatsApp belum siap (${waState}).`);
         }
 
         const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(queuedCustomer.id);
@@ -4956,11 +4957,11 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
         }
 
         const sent = qrisImageBuffer.length
-          ? await sendWAImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
-          : await sendWA(queuedCustomer.phone, finalMessage);
+          ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
+          : await whatsappGateway.sendText(queuedCustomer.phone, finalMessage);
         if (!sent) {
-          const waState = String(whatsappStatus?.connection || 'unknown');
-          throw new Error(`WhatsApp Bot menolak pengiriman. Status saat ini: ${waState}.`);
+          const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
+          throw new Error(`Gateway WhatsApp menolak pengiriman. Status saat ini: ${waState}.`);
         }
       } catch (error) {
         logger.warn(`[BillingWA] Gagal kirim tagihan invoice ${queuedInvoice.id}: ${error.message || String(error)}`);
@@ -5052,11 +5053,11 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
     const customer = customerSvc.getCustomerById(inv.customer_id);
     if (!customer || !customer.phone) throw new Error('Nomor WhatsApp pelanggan tidak ditemukan');
 
-    const { sendWA, whatsappStatus, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(10000);
+    const whatsappStatus = await whatsappGateway.getStatus();
+    const ready = await whatsappGateway.ensureReady(10000);
     if (!ready) {
-      const waState = String(whatsappStatus.connection || 'unknown');
-      throw new Error(`Bot WhatsApp belum siap (${waState}). Silakan cek status WhatsApp di menu Admin.`);
+      const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
+      throw new Error(`WhatsApp belum siap (${waState}). Silakan cek status WhatsApp di menu Admin.`);
     }
 
     const qrisAmountUnique = Number(inv.qris_amount_unique || 0) || 0;
@@ -5106,10 +5107,10 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
     }
     if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
 
-    const sent = await sendWA(customer.phone, finalMessage);
+    const sent = await whatsappGateway.sendText(customer.phone, finalMessage);
     if (!sent) {
-      const waState = String(whatsappStatus.connection || 'unknown');
-      throw new Error(`Gagal mengirim pesan melalui WhatsApp Bot. Status saat ini: ${waState}.`);
+      const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
+      throw new Error(`Gagal mengirim pesan melalui Gateway WhatsApp. Status saat ini: ${waState}.`);
     }
 
     req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name}.` };
@@ -5188,7 +5189,6 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
       try {
         const settings = getSettings();
         if (settings.whatsapp_enabled) {
-          const { sendWA } = await import('../services/whatsappBot.mjs');
           if (ticket) {
             const waMsg = `✅ *TIKET KELUHAN SELESAI*\n\n` +
                          `🎫 *ID Tiket:* #${ticket.id}\n` +
@@ -5199,7 +5199,7 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
 
             // Kirim ke Pelanggan
             if (ticket.customer_phone) {
-              await sendWA(ticket.customer_phone, waMsg);
+              await whatsappGateway.sendText(ticket.customer_phone, waMsg);
             }
 
             // Kirim ke Admin Numbers
@@ -5216,7 +5216,7 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
                 if (digits.startsWith('0')) digits = '62' + digits.slice(1);
                 if (seen.has(digits)) continue;
                 seen.add(digits);
-                await sendWA(digits, adminMsg);
+                await whatsappGateway.sendText(digits, adminMsg);
               }
             }
           }
@@ -6427,7 +6427,16 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     ],
     whatsapp: [
       'whatsapp_enabled',
+      'whatsapp_provider',
       'whatsapp_api_key',
+      'whatsapp_mpwa_base_url',
+      'whatsapp_mpwa_api_key',
+      'whatsapp_mpwa_send_path',
+      'whatsapp_mpwa_image_path',
+      'whatsapp_mpwa_auth_mode',
+      'whatsapp_mpwa_number_field',
+      'whatsapp_mpwa_message_field',
+      'whatsapp_mpwa_device',
       'whatsapp_admin_numbers',
       'whatsapp_test_number',
       'onesignal_enabled',
@@ -6740,6 +6749,16 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     newSettings.admin_password = String(newSettings.admin_password || currentSettings.admin_password || '').trim();
     newSettings.admin_api_key = String(newSettings.admin_api_key || currentSettings.admin_api_key || '').trim();
     newSettings.whatsapp_api_key = String(newSettings.whatsapp_api_key || currentSettings.whatsapp_api_key || '').trim();
+    newSettings.whatsapp_provider = String(newSettings.whatsapp_provider || currentSettings.whatsapp_provider || 'local').trim().toLowerCase() === 'mpwa' ? 'mpwa' : 'local';
+    newSettings.whatsapp_mpwa_base_url = String(newSettings.whatsapp_mpwa_base_url || currentSettings.whatsapp_mpwa_base_url || '').trim().replace(/\/+$/, '');
+    newSettings.whatsapp_mpwa_api_key = String(newSettings.whatsapp_mpwa_api_key || currentSettings.whatsapp_mpwa_api_key || '').trim();
+    newSettings.whatsapp_mpwa_send_path = String(newSettings.whatsapp_mpwa_send_path || currentSettings.whatsapp_mpwa_send_path || '/api/send-message').trim() || '/api/send-message';
+    newSettings.whatsapp_mpwa_image_path = String(newSettings.whatsapp_mpwa_image_path || currentSettings.whatsapp_mpwa_image_path || '').trim();
+    newSettings.whatsapp_mpwa_auth_mode = String(newSettings.whatsapp_mpwa_auth_mode || currentSettings.whatsapp_mpwa_auth_mode || 'bearer').trim().toLowerCase();
+    if (!['bearer', 'x-api-key', 'body', 'query', 'none'].includes(newSettings.whatsapp_mpwa_auth_mode)) newSettings.whatsapp_mpwa_auth_mode = 'bearer';
+    newSettings.whatsapp_mpwa_number_field = String(newSettings.whatsapp_mpwa_number_field || currentSettings.whatsapp_mpwa_number_field || 'number').trim() || 'number';
+    newSettings.whatsapp_mpwa_message_field = String(newSettings.whatsapp_mpwa_message_field || currentSettings.whatsapp_mpwa_message_field || 'message').trim() || 'message';
+    newSettings.whatsapp_mpwa_device = String(newSettings.whatsapp_mpwa_device || currentSettings.whatsapp_mpwa_device || '').trim();
     newSettings.session_secret = String(newSettings.session_secret || currentSettings.session_secret || '').trim();
     newSettings.xendit_callback_token = String(newSettings.xendit_callback_token || currentSettings.xendit_callback_token || '').trim();
     newSettings.mikrotik_user = String(newSettings.mikrotik_user || currentSettings.mikrotik_user || '').trim();
@@ -8576,10 +8595,9 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
       return res.redirect('/admin/whatsapp/broadcast');
     }
 
-    const { sendWA, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(25000);
+    const ready = await whatsappGateway.ensureReady(25000);
     if (!ready) {
-      throw new Error('Bot WhatsApp belum terhubung. Silakan buka menu WhatsApp dan pastikan statusnya Terhubung.');
+      throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
     }
     
     // Initialize Tracker dengan Smart Rate Limit
@@ -8652,7 +8670,7 @@ router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ ext
             // Add subtle variation untuk menghindari spam detection
             formattedMsg = addMessageVariation(formattedMsg, i);
 
-            const sentOk = await sendWA(cust.phone, formattedMsg);
+            const sentOk = await whatsappGateway.sendText(cust.phone, formattedMsg);
             if (!sentOk) throw new Error('sendWA mengembalikan gagal');
             global.broadcastStatus.sent++;
             messagesInCurrentHour++;
@@ -8749,7 +8767,7 @@ router.post('/whatsapp/templates', requireAdminSession, express.urlencoded({ ext
 
 router.get('/api/whatsapp/status', requireAdmin, async (req, res) => {
     try {
-      const { whatsappStatus } = await import('../services/whatsappBot.mjs');
+      const whatsappStatus = await whatsappGateway.getStatus();
       res.json(whatsappStatus);
     } catch (e) {
       res.status(500).json({ error: e.message });
@@ -8758,10 +8776,10 @@ router.get('/api/whatsapp/status', requireAdmin, async (req, res) => {
 
 router.post('/whatsapp/test-notification', requireAdminSession, async (req, res) => {
   try {
-    const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(25000);
+    const whatsappStatus = await whatsappGateway.getStatus();
+    const ready = await whatsappGateway.ensureReady(25000);
     if (!ready) {
-      throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
+      throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
     }
     const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
     if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
@@ -8773,8 +8791,8 @@ router.post('/whatsapp/test-notification', requireAdminSession, async (req, res)
       `TEST NOTIFIKASI WHATSAPP\n\n` +
       `WhatsApp bot untuk ${getSetting('company_header', 'Portal Billing ISP')} sudah berfungsi.\n` +
       `Waktu: ${new Date().toLocaleString('id-ID')}`;
-    const ok = await sendWA(adminPhone, messageText);
-    if (!ok) throw new Error('Gagal mengirim pesan test (sendWA=false).');
+    const ok = await whatsappGateway.sendText(adminPhone, messageText);
+    if (!ok) throw new Error('Gagal mengirim pesan test.');
     req.session._msg = { type: 'success', text: `Test notifikasi WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)}.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal kirim test WhatsApp: ' + e.message };
@@ -8784,16 +8802,16 @@ router.post('/whatsapp/test-notification', requireAdminSession, async (req, res)
 
 router.post('/whatsapp/test-template', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
-    const { sendWA, whatsappStatus, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(25000);
+    const whatsappStatus = await whatsappGateway.getStatus();
+    const ready = await whatsappGateway.ensureReady(25000);
     if (!ready) {
-      throw new Error('Bot WhatsApp belum terhubung. Silakan scan QR hingga status Terhubung.');
+      throw new Error('WhatsApp belum terhubung. Silakan cek provider WhatsApp di menu Status.');
     }
     const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
     if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
     const templateKey = String(req.body.template_key || 'billing').trim();
     const previewMessage = buildWhatsappTemplatePreview(templateKey, { baseUrl: resolveRequestBaseUrl(req) });
-    const ok = await sendWA(adminPhone, previewMessage);
+    const ok = await whatsappGateway.sendText(adminPhone, previewMessage);
     if (!ok) throw new Error('Gagal mengirim test message.');
     req.session._msg = { type: 'success', text: `Test message WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)}.` };
   } catch (e) {
