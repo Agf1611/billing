@@ -3,6 +3,7 @@ const {
   buildDynamicQrisBuffer,
   hasStaticQrisEnabled
 } = require('../../services/qrisService');
+const { verifyPassword } = require('../../config/passwords');
 
 module.exports = function registerBillingRoutes(router, deps = {}) {
   const {
@@ -45,6 +46,12 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     }) && Boolean(String(getSetting('qris_static_payload', '') || '').trim());
   }
 
+  function wantsJsonResponse(req) {
+    const accept = String(req?.headers?.accept || '').toLowerCase();
+    const requestedWith = String(req?.headers?.['x-requested-with'] || '').toLowerCase();
+    return requestedWith === 'xmlhttprequest' || accept.includes('application/json') || req?.body?.ajax === '1';
+  }
+
   async function buildInvoiceQrisImageBuffer(invoice) {
     const exactAmount = Number(invoice?.qris_amount_unique || invoice?.amount || 0) || 0;
     const basePayload = String(getSetting('qris_static_payload', '') || '').trim();
@@ -63,7 +70,9 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       search = '',
       billingDayStart = '',
       billingDayEnd = '',
-      page: rawPage = '1'
+      page: rawPage = '1',
+      sort: rawSort = 'smart',
+      pay_channel: rawPayChannel = 'all'
     } = req.query;
     const monthQueryProvided = Object.prototype.hasOwnProperty.call(req.query, 'month');
     const defaultMonth = now.getMonth() + 1;
@@ -74,30 +83,91 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     const filterYear = parseInt(rawFilterYear, 10) || now.getFullYear();
     const currentPage = Math.max(1, parseInt(rawPage, 10) || 1);
     const pageSize = 25;
-    const nativeStatusFilter = ['paid', 'unpaid'].includes(filterStatus) ? filterStatus : 'all';
-    let invoices = billingSvc.getAllInvoices({ month: filterMonth, year: filterYear, status: nativeStatusFilter, search });
-    const isIsolatedInvoice = (inv) => String(inv?.customer_status || '').toLowerCase() === 'suspended';
-    const isOpenUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && !isIsolatedInvoice(inv);
-    const isIsolatedUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && isIsolatedInvoice(inv);
-    const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
-    const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
-    if (normalizedBillingDayStart || normalizedBillingDayEnd) {
-      invoices = invoices.filter((inv) => {
+    const nativeStatusFilter = ['paid'].includes(filterStatus)
+      ? 'paid'
+      : ['unpaid', 'overdue', 'isolated'].includes(filterStatus)
+        ? 'unpaid'
+        : 'all';
+    const allowedSorts = new Set(['smart', 'paid_latest', 'due_today', 'due_latest', 'name']);
+    const allowedPayChannels = new Set(['all', 'cash', 'online', 'staff', 'admin', 'cashier', 'collector', 'technician', 'agent']);
+    const normalizedSort = allowedSorts.has(String(rawSort || '').trim()) ? String(rawSort).trim() : 'smart';
+    const normalizedPayChannel = allowedPayChannels.has(String(rawPayChannel || '').trim()) ? String(rawPayChannel).trim() : 'all';
+    const effectiveSort = normalizedSort !== 'smart'
+      ? normalizedSort
+      : filterStatus === 'paid'
+        ? 'paid_latest'
+        : filterStatus === 'overdue'
+          ? 'due_latest'
+          : 'smart';
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const summaryInvoices = billingSvc.getAllInvoices({ limit: 0 });
+    const summary = buildInvoiceSummaryFromList(summaryInvoices, {
+      todayStart,
+      getDueDate: getInvoiceDueDateLocal
+    });
+    const applyBillingDayFilter = (rows) => {
+      const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
+      const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
+      if (!normalizedBillingDayStart && !normalizedBillingDayEnd) return rows;
+      return rows.filter((inv) => {
         const day = Number(inv?.due_day_snapshot || 0);
         if (!Number.isFinite(day) || day <= 0) return false;
         if (normalizedBillingDayStart && day < normalizedBillingDayStart) return false;
         if (normalizedBillingDayEnd && day > normalizedBillingDayEnd) return false;
         return true;
       });
-    }
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const overdueCountBase = invoices.filter((inv) =>
+    };
+
+    const baseInvoices = applyBillingDayFilter(billingSvc.getAllInvoices({
+      month: filterMonth,
+      year: filterYear,
+      status: 'all',
+      search,
+      sort: effectiveSort,
+      today: now,
+      limit: 0
+    }));
+    let invoices = applyBillingDayFilter(billingSvc.getAllInvoices({
+      month: filterMonth,
+      year: filterYear,
+      status: nativeStatusFilter,
+      search,
+      sort: effectiveSort,
+      payChannel: normalizedPayChannel,
+      today: now,
+      limit: 0
+    }));
+    const isIsolatedInvoice = (inv) => String(inv?.customer_status || '').toLowerCase() === 'suspended';
+    const isOpenUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && !isIsolatedInvoice(inv);
+    const isIsolatedUnpaidInvoice = (inv) => String(inv?.status || '').toLowerCase() === 'unpaid' && isIsolatedInvoice(inv);
+    const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
+    const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
+    const dueTodayStartTime = todayStart.getTime();
+    const dueTodayEndTime = dueTodayStartTime + 86400000;
+    const isDueToday = (inv) => {
+      const due = getInvoiceDueDateLocal(inv).getTime();
+      return due >= dueTodayStartTime && due < dueTodayEndTime;
+    };
+    const overdueCountBase = baseInvoices.filter((inv) =>
       isOpenUnpaidInvoice(inv) &&
       getInvoiceDueDateLocal(inv).getTime() < todayStart.getTime()
     ).length;
-    const isolatedCountBase = invoices.filter((inv) => isIsolatedUnpaidInvoice(inv)).length;
+    const isolatedCountBase = baseInvoices.filter((inv) => isIsolatedUnpaidInvoice(inv)).length;
+    const payChannelCountBase = baseInvoices.filter((inv) => String(inv.status || '').toLowerCase() === 'paid');
+    const chipCounts = {
+      unpaid: baseInvoices.filter((inv) => isOpenUnpaidInvoice(inv)).length,
+      dueToday: baseInvoices.filter((inv) => isOpenUnpaidInvoice(inv) && isDueToday(inv)).length,
+      overdue: overdueCountBase,
+      paid: payChannelCountBase.length,
+      cash: payChannelCountBase.filter((inv) => ['cash', 'admin', 'cashier', 'collector', 'technician'].includes(String(inv.payment_channel || ''))).length,
+      online: payChannelCountBase.filter((inv) => String(inv.payment_channel || '') === 'online').length,
+      staff: payChannelCountBase.filter((inv) => ['admin', 'cashier', 'collector', 'technician'].includes(String(inv.payment_channel || ''))).length
+    };
     if (filterStatus === 'unpaid') {
       invoices = invoices.filter((inv) => isOpenUnpaidInvoice(inv));
+      if (effectiveSort === 'due_today') {
+        invoices = invoices.filter((inv) => isDueToday(inv));
+      }
     } else if (filterStatus === 'overdue') {
       invoices = invoices.filter((inv) =>
         isOpenUnpaidInvoice(inv) &&
@@ -106,7 +176,6 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     } else if (filterStatus === 'isolated') {
       invoices = invoices.filter((inv) => isIsolatedUnpaidInvoice(inv));
     }
-    const summary = buildInvoiceSummaryFromList(invoices);
     const totalInvoicesCount = invoices.length;
     const totalPages = Math.max(1, Math.ceil(totalInvoicesCount / pageSize));
     const safePage = Math.min(currentPage, totalPages);
@@ -139,6 +208,9 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       search,
       billingDayStart: normalizedBillingDayStart || '',
       billingDayEnd: normalizedBillingDayEnd || '',
+      sort: normalizedSort,
+      payChannel: normalizedPayChannel,
+      chipCounts,
       defaultMonth,
       defaultYear: now.getFullYear(),
       showingAllMonths: filterMonth === '',
@@ -334,9 +406,19 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     return redirectBack(res, '/admin/billing');
   });
 
-  router.post('/billing/:id/unpay', requireAdminSession, (req, res) => {
+  router.post('/billing/:id/unpay', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
     try {
-      billingSvc.markAsUnpaid(req.params.id);
+      if (req.session?.isCashier && !req.session?.isAdmin) {
+        throw new Error('Batalkan lunas hanya bisa dilakukan oleh admin utama.');
+      }
+      const confirmPassword = String(req.body.confirm_password || '').trim();
+      if (!verifyPassword(confirmPassword, getSetting('admin_password', ''))) {
+        throw new Error('Password admin salah. Batalkan lunas tidak diproses.');
+      }
+      billingSvc.markAsUnpaid(
+        req.params.id,
+        typeof resolvePaymentActor === 'function' ? resolvePaymentActor(req, 'Admin') : null
+      );
       req.session._msg = { type: 'success', text: 'Status tagihan direset ke Belum Bayar.' };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
@@ -377,8 +459,8 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
   });
 
   router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
+    const asJson = wantsJsonResponse(req);
     try {
-      const startedAt = Date.now();
       let inv = billingSvc.getInvoiceById(req.params.id);
       if (!inv) throw new Error('Tagihan tidak ditemukan');
       if (String(inv.status || '').toLowerCase() === 'unpaid' && hasDynamicQrisSource()) {
@@ -388,33 +470,53 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       const customer = customerSvc.getCustomerById(inv.customer_id);
       if (!customer || !customer.phone) throw new Error('Nomor WhatsApp pelanggan tidak ditemukan');
 
-      const { sendWA, sendWAImage, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
-      const ready = await ensureWhatsAppReady(25000);
-      if (!ready) {
-        throw new Error('Bot WhatsApp belum terhubung. Silakan cek status WhatsApp di menu Admin.');
-      }
-
-      const qrisAmountUnique = Number(inv.qris_amount_unique || 0) || 0;
-      const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
       const requestBaseUrl = resolveRequestBaseUrl(req);
-      let finalMessage = buildBillingWhatsappMessage(customer, unpaidInvoices, inv, { baseUrl: requestBaseUrl });
+      const queuedInvoice = { ...inv };
+      const queuedCustomer = { ...customer };
 
-      const manualPaymentInfo = buildManualPaymentMessage();
-      if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
+      setImmediate(async () => {
+        try {
+          const { sendWA, sendWAImage, ensureWhatsAppReady, whatsappStatus } = await import('../../services/whatsappBot.mjs');
+          const ready = await ensureWhatsAppReady(25000);
+          if (!ready) {
+            const waState = String(whatsappStatus?.connection || 'unknown');
+            throw new Error(`Bot WhatsApp belum siap (${waState}).`);
+          }
 
-      const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(inv) : Buffer.alloc(0);
-      if (qrisImageBuffer.length) {
-        finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
+          const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(queuedCustomer.id);
+          let finalMessage = buildBillingWhatsappMessage(queuedCustomer, unpaidInvoices, queuedInvoice, { baseUrl: requestBaseUrl });
+          const manualPaymentInfo = buildManualPaymentMessage();
+          if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
+
+          const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
+          const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
+          if (qrisImageBuffer.length) {
+            finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
+          }
+          const sent = qrisImageBuffer.length
+            ? await sendWAImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
+            : await sendWA(queuedCustomer.phone, finalMessage);
+          if (!sent) throw new Error('WhatsApp Bot menolak pengiriman.');
+        } catch (error) {
+          console.warn(`[BillingWA] Gagal kirim tagihan invoice ${queuedInvoice.id}: ${error.message || String(error)}`);
+        }
+      });
+
+      req.session._msg = { type: 'success', text: `Tagihan WhatsApp untuk ${customer.name} sedang dikirim di latar belakang.` };
+      if (asJson) {
+        return res.json({
+          success: true,
+          queued: true,
+          message: req.session._msg.text,
+          customerName: customer.name,
+          invoiceId: Number(inv.id || 0) || null
+        });
       }
-      const sent = qrisImageBuffer.length
-        ? await sendWAImage(customer.phone, qrisImageBuffer, finalMessage)
-        : await sendWA(customer.phone, finalMessage);
-      if (!sent) throw new Error('Gagal mengirim pesan melalui WhatsApp Bot.');
-
-      const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-      req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name} dalam sekitar ${durationSec} detik.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
+      if (asJson) {
+        return res.status(400).json({ success: false, error: req.session._msg.text });
+      }
     }
     return redirectBack(res, '/admin/billing');
   });

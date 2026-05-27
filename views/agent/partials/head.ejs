@@ -1,0 +1,25 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<%- include('../../partials/pwa_portal', {
+  portalKey: 'agent',
+  manifestPath: '/pwa/agent.webmanifest',
+  scope: '/agent/',
+  themeColor: '#1e293b',
+  appTitle: 'Portal Agent'
+}) %>
+<title><%= title || 'Portal Agent' %> - <%= company %></title>
+<script>
+  (function () {
+    try {
+      var theme = localStorage.getItem('agent-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/css/agent.css">

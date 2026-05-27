@@ -194,7 +194,135 @@ async function notifyInvoicePaid(options = {}) {
   };
 }
 
+function buildAdminAgentVoucherNotificationPayload(txId) {
+  const id = Number(txId || 0);
+  if (!id) return null;
+  const tx = db.prepare(`
+    SELECT t.*, a.name AS agent_name, a.username AS agent_username
+    FROM agent_transactions t
+    JOIN agents a ON a.id = t.agent_id
+    WHERE t.id = ? AND t.type = 'voucher_sale'
+  `).get(id);
+  if (!tx) return null;
+
+  const amount = Number(tx.amount_buy || 0) || 0;
+  const sell = Number(tx.amount_sell || 0) || 0;
+  const qtyLabel = tx.voucher_batch_id ? `Batch #${tx.voucher_batch_id}` : (tx.voucher_code || `Transaksi #${tx.id}`);
+  const agentLabel = `${tx.agent_name || 'Agent'}${tx.agent_username ? ` (@${tx.agent_username})` : ''}`;
+  return {
+    tx,
+    title: 'Pemasukan voucher agen',
+    body: `${agentLabel} ${qtyLabel} masuk ${formatRupiah(amount)}`,
+    whatsappMessage: [
+      '*PEMASUKAN VOUCHER AGEN*',
+      '',
+      `Agent: ${agentLabel}`,
+      `Transaksi: #${tx.id}`,
+      `Voucher: ${qtyLabel}`,
+      `Paket: ${tx.profile_name || '-'}`,
+      `Modal agen: ${formatRupiah(amount)}`,
+      `Harga jual: ${formatRupiah(sell)}`,
+      `Waktu: ${tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`
+    ].join('\n')
+  };
+}
+
+async function notifyAgentVoucherIncome(txId) {
+  const payload = buildAdminAgentVoucherNotificationPayload(txId);
+  if (!payload) return { success: false, skipped: true, reason: 'tx-not-found' };
+
+  const settings = getSettingsWithCache();
+  const results = {};
+
+  try {
+    if (isPushConfigured(settings)) {
+      results.push = await sendPushToAdmins(getAdminPushRecipients(settings), {
+        settings,
+        title: payload.title,
+        message: payload.body,
+        targetUrl: '/admin/bookkeeping',
+        data: {
+          kind: 'agent_voucher_income',
+          source: 'agent-voucher',
+          txId: Number(payload.tx.id || 0) || null,
+          agentId: Number(payload.tx.agent_id || 0) || null,
+          voucherBatchId: Number(payload.tx.voucher_batch_id || 0) || null
+        }
+      });
+    }
+  } catch (error) {
+    logger.warn(`[AdminPaymentNotification] Gagal kirim push voucher agent: ${error.message || String(error)}`);
+    results.push = { success: false, error: error.message || String(error) };
+  }
+
+  return {
+    success: Boolean(results.push?.success),
+    ...results
+  };
+}
+
+async function notifyApprovalRequired({
+  type = 'customer',
+  title = '',
+  requester = '',
+  subject = '',
+  detail = '',
+  targetUrl = '/admin/customer-requests'
+} = {}) {
+  const settings = getSettingsWithCache();
+  const cleanTitle = normalizeText(title) || 'Approval diperlukan';
+  const cleanRequester = normalizeText(requester) || '-';
+  const cleanSubject = normalizeText(subject) || '-';
+  const cleanDetail = normalizeText(detail);
+  const cleanTargetUrl = normalizeText(targetUrl) || '/admin/customer-requests';
+  const body = `${cleanSubject} menunggu persetujuan admin`;
+  const whatsappMessage = [
+    '*APPROVAL DIPERLUKAN*',
+    '',
+    `Jenis: ${cleanTitle}`,
+    `Pengaju: ${cleanRequester}`,
+    `Data: ${cleanSubject}`,
+    cleanDetail ? `Detail: ${cleanDetail}` : '',
+    `Buka: ${cleanTargetUrl}`
+  ].filter(Boolean).join('\n');
+
+  const results = {};
+  try {
+    if (isPushConfigured(settings)) {
+      results.push = await sendPushToAdmins(getAdminPushRecipients(settings), {
+        settings,
+        title: cleanTitle,
+        message: body,
+        targetUrl: cleanTargetUrl,
+        data: {
+          kind: 'approval_required',
+          source: String(type || 'approval'),
+          targetUrl: cleanTargetUrl
+        }
+      });
+    }
+  } catch (error) {
+    logger.warn(`[AdminApprovalNotification] Gagal kirim push admin: ${error.message || String(error)}`);
+    results.push = { success: false, error: error.message || String(error) };
+  }
+
+  try {
+    results.whatsapp = await sendWhatsappToAdminNumbers(whatsappMessage, settings);
+  } catch (error) {
+    logger.warn(`[AdminApprovalNotification] Gagal kirim WhatsApp admin: ${error.message || String(error)}`);
+    results.whatsapp = { success: false, error: error.message || String(error) };
+  }
+
+  return {
+    success: Boolean(results.push?.success || results.whatsapp?.success),
+    ...results
+  };
+}
+
 module.exports = {
   buildAdminPaymentNotificationPayload,
-  notifyInvoicePaid
+  buildAdminAgentVoucherNotificationPayload,
+  notifyInvoicePaid,
+  notifyAgentVoucherIncome,
+  notifyApprovalRequired
 };

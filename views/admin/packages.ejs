@@ -92,7 +92,11 @@
               </td>
               <td style="color:var(--muted);font-size:12px"><%= p.description||'-' %></td>
               <td><% if(Number(p.show_in_portal||0)===1){ %><span class="badge bs">Tampil</span><% } else { %><span class="badge bd">Sembunyi</span><% } %></td>
-              <td class="text-center"><span class="badge bm"><%= p.customer_count %> <%= t('admin.packages.customers_suffix', 'pelanggan') %></span></td>
+              <td class="text-center">
+                <a class="badge bm" style="text-decoration:none" href="/admin/customers?status=all&package_id=<%= p.id %>" title="Lihat pelanggan paket ini">
+                  <%= p.customer_count %> <%= t('admin.packages.customers_suffix', 'pelanggan') %>
+                </a>
+              </td>
               <td><% if(p.is_active){%><span class="badge bs"><%= t('common.active', 'Aktif') %></span><%}else{%><span class="badge bd"><%= t('common.inactive', 'Nonaktif') %></span><%}%></td>
               <td>
                 <button class="btn btn-g btn-icon btn-sm" data-idx="<%= i %>" onclick="editPkg(+this.dataset.idx)"><i class="bi bi-pencil"></i></button>

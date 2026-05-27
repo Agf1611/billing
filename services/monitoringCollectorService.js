@@ -3,12 +3,18 @@ const { logger } = require('../config/logger');
 const mikrotikService = require('./mikrotikService');
 const massOutageService = require('./massOutageService');
 
-const LIVE_INTERVAL_MS = 5000;
-const INVENTORY_INTERVAL_MS = 30000;
-const STALE_AFTER_MS = 45000;
-const FAST_REPEAT_GUARD_MS = 1500;
-const REFRESH_TIMEOUT_MS = 45000;
-const HUNG_REFRESH_GRACE_MS = 5000;
+function envNumber(name, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+const LIVE_INTERVAL_MS = envNumber('MIKROTIK_COLLECTOR_LIVE_INTERVAL_MS', 60000, 15000);
+const INVENTORY_INTERVAL_MS = envNumber('MIKROTIK_COLLECTOR_INVENTORY_INTERVAL_MS', 300000, 60000);
+const STALE_AFTER_MS = envNumber('MIKROTIK_COLLECTOR_STALE_AFTER_MS', 600000, 60000);
+const FAST_REPEAT_GUARD_MS = envNumber('MIKROTIK_COLLECTOR_FAST_GUARD_MS', 15000, 5000);
+const REFRESH_TIMEOUT_MS = envNumber('MIKROTIK_COLLECTOR_REFRESH_TIMEOUT_MS', 75000, 30000);
+const HUNG_REFRESH_GRACE_MS = envNumber('MIKROTIK_COLLECTOR_HUNG_GRACE_MS', 10000, 1000);
 
 const routerCollectors = new Map();
 
@@ -445,16 +451,23 @@ async function runCollectorRefresh(entry, mode = 'full', refreshId = 0) {
   const previous = entry.snapshot || buildInitialSnapshot(routerId);
   const fetchers = {
     pppoeSecretsRaw: mode === 'live'
-      ? Promise.resolve(previous.raw.pppoeSecretsRaw)
-      : mikrotikService.getPppoeSecrets(routerId, { bypassCache: true }),
-    pppoeActiveRaw: mikrotikService.getPppoeActive(routerId, { bypassCache: true }),
+      ? () => Promise.resolve(previous.raw.pppoeSecretsRaw)
+      : () => mikrotikService.getPppoeSecrets(routerId, { bypassCache: true }),
+    pppoeActiveRaw: () => mikrotikService.getPppoeActive(routerId, { bypassCache: true }),
     hotspotUsersRaw: mode === 'live'
-      ? Promise.resolve(previous.raw.hotspotUsersRaw)
-      : mikrotikService.getHotspotUsers(routerId, { bypassCache: true }),
-    hotspotActiveRaw: mikrotikService.getHotspotActive(routerId, { bypassCache: true })
+      ? () => Promise.resolve(previous.raw.hotspotUsersRaw)
+      : () => mikrotikService.getHotspotUsers(routerId, { bypassCache: true }),
+    hotspotActiveRaw: () => mikrotikService.getHotspotActive(routerId, { bypassCache: true })
   };
   const labels = Object.keys(fetchers);
-  const settled = await Promise.allSettled(labels.map((label) => fetchers[label]));
+  const settled = [];
+  for (const label of labels) {
+    try {
+      settled.push({ status: 'fulfilled', value: await fetchers[label]() });
+    } catch (reason) {
+      settled.push({ status: 'rejected', reason });
+    }
+  }
   const merged = {};
   const sections = {};
   let successCount = 0;

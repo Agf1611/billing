@@ -3,7 +3,18 @@
   const pageSession = (typeof session !== 'undefined' && session) ? session : {};
   const pageMsg = (typeof msg !== 'undefined' && msg) ? msg : null;
   const pageCategories = categories || { income: [], expense: [] };
+  const pagePaymentMethods = Array.isArray(paymentMethods) && paymentMethods.length ? paymentMethods : [
+    { value: 'cash', label: 'Cash' },
+    { value: 'transfer', label: 'Transfer' },
+    { value: 'qris', label: 'QRIS' },
+    { value: 'bank', label: 'Bank' },
+    { value: 'ewallet', label: 'E-Wallet' },
+    { value: 'other', label: 'Lainnya' }
+  ];
   const entryForm = formData || {};
+  const entryFormAction = typeof formAction !== 'undefined' && formAction ? formAction : '/admin/bookkeeping/new';
+  const entryFormMode = String(typeof formMode !== 'undefined' ? formMode : 'create');
+  const isEditMode = entryFormMode === 'edit';
 %>
 <!DOCTYPE html>
 <html lang="<%= pageLang %>">
@@ -101,7 +112,7 @@
     <div class="tb-title">
       <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
       <i class="bi bi-cash-coin"></i>
-      <span>Tambah Pembukuan</span>
+      <span><%= isEditMode ? 'Edit Pembukuan' : 'Tambah Pembukuan' %></span>
     </div>
     <div class="tb-right">
       <button type="button" class="btn btn-g btn-sm tb-theme-btn" data-theme-toggle aria-label="Ganti tema admin">
@@ -122,13 +133,13 @@
       <section class="bk-form-card">
         <div class="bk-form-head">
           <div>
-            <h3>Input Pemasukan / Pengeluaran</h3>
-            <p>Halaman ini khusus untuk tambah data pembukuan, jadi halaman daftar tetap lebih ringan saat dibuka dari handphone.</p>
+            <h3><%= isEditMode ? 'Edit Pemasukan / Pengeluaran' : 'Input Pemasukan / Pengeluaran' %></h3>
+            <p>Isi nominal, kategori, posisi uang, dan keterangan transaksi.</p>
           </div>
           <a href="/admin/bookkeeping" class="btn btn-g btn-sm"><i class="bi bi-arrow-left"></i> Kembali</a>
         </div>
         <div class="bk-form-body">
-          <form method="POST" action="/admin/bookkeeping/new">
+          <form method="POST" action="<%= entryFormAction %>">
             <input type="hidden" name="month" value="<%= entryForm.month || '' %>">
             <input type="hidden" name="year" value="<%= entryForm.year || '' %>">
 
@@ -152,6 +163,14 @@
                 <label class="fl">Kategori</label>
                 <select class="fc" name="category" id="entryCategory" data-selected="<%= entryForm.category || '' %>"></select>
               </div>
+              <div>
+                <label class="fl">Posisi Uang</label>
+                <select class="fc" name="payment_method">
+                  <% pagePaymentMethods.forEach((method) => { %>
+                    <option value="<%= method.value %>" <%= String(entryForm.payment_method || 'cash') === String(method.value) ? 'selected' : '' %>><%= method.label %></option>
+                  <% }) %>
+                </select>
+              </div>
               <div class="full">
                 <label class="fl">Kategori Lainnya</label>
                 <input class="fc" name="custom_category" placeholder="Isi jika kategori belum tersedia" value="<%= entryForm.custom_category || '' %>">
@@ -168,7 +187,7 @@
 
             <div class="bk-form-actions">
               <a href="/admin/bookkeeping" class="btn btn-g"><i class="bi bi-arrow-left"></i> Batal</a>
-              <button class="btn btn-p" type="submit"><i class="bi bi-save2"></i> Simpan Pembukuan</button>
+              <button class="btn btn-p" type="submit"><i class="bi bi-save2"></i> <%= isEditMode ? 'Update Pembukuan' : 'Simpan Pembukuan' %></button>
             </div>
           </form>
         </div>

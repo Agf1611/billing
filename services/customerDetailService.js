@@ -175,7 +175,20 @@ async function resolvePppoeTrafficLiveSingle(username, routerId = null) {
   let conn = null;
   try {
     conn = await mikrotikService.getConnection(routerId);
-    let sessions = await mikrotikService.getPppoeActive(routerId).catch(() => []);
+    let sessions = [];
+    try {
+      sessions = await conn.client.menu('/ppp/active').where('name', normalizedUsername).get();
+    } catch {
+      try {
+        const allSessions = await conn.client.menu('/ppp/active').get({
+          proplist: ['.id', 'session-id', 'name', 'service', 'address', 'uptime', 'caller-id', 'interface', 'bytes-in', 'bytes-out']
+        });
+        sessions = (Array.isArray(allSessions) ? allSessions : [])
+          .filter((row) => String(row?.name || '').trim() === normalizedUsername);
+      } catch {
+        sessions = [];
+      }
+    }
     sessions = (Array.isArray(sessions) ? sessions : []).filter((row) => String(row?.name || '').trim() === normalizedUsername);
     if (!sessions.length) {
       sessions = await conn.client.menu('/ppp/active').where('name', normalizedUsername).get().catch(() => []);
@@ -652,10 +665,18 @@ async function resolveCustomerLiveState(customer, username, deviceToken, pppoeSt
     ? withTimeout(resolvePppoeTrafficLive(username, preferredRouterId, candidateRouters), forceNetworkRefresh ? 6500 : 4500, null)
     : Promise.resolve(null);
   const networkPromise = username
-    ? resolvePppoeSnapshot(
-        username,
-        preferredRouterId,
-        candidateRouters
+    ? withTimeout(
+        resolvePppoeSnapshot(
+          username,
+          preferredRouterId,
+          candidateRouters
+        ),
+        forceNetworkRefresh ? 6500 : 3200,
+        {
+          snapshot: null,
+          routerId: preferredRouterId,
+          source: preferredRouterId ? `router:${Number(preferredRouterId)}` : 'default'
+        }
       )
     : Promise.resolve({
         snapshot: null,
@@ -810,7 +831,7 @@ async function buildCustomerDetail(customerId, options = {}) {
   const stateOnline = Number(pppoeState?.is_online || 0) === 1 && isRecentPppoeState(pppoeState);
 
   const hasFreshNetworkState = Boolean(network && Object.prototype.hasOwnProperty.call(network, 'online'));
-  const resolvedOnline = hasFreshNetworkState ? Boolean(network.online) : stateOnline;
+  const resolvedOnline = Boolean(network?.online) || (!options.forceNetworkRefresh && stateOnline && (!hasFreshNetworkState || network?.online === false));
   const liveDownloadBytes = resolvedOnline ? (Number(network?.bytesOut || 0) || 0) : 0;
   const liveUploadBytes = resolvedOnline ? (Number(network?.bytesIn || 0) || 0) : 0;
   const hasLiveTraffic = Boolean(resolvedOnline && network);
@@ -832,7 +853,14 @@ async function buildCustomerDetail(customerId, options = {}) {
         mikrotikService.syncPppoeMonitoringState(
           snapshotRouterId,
           [{ name: username }],
-          network.online ? [{ name: username }] : []
+          resolvedOnline
+            ? [{
+                name: username,
+                profile: meaningfulText(network.profile, pppoeState?.profile_name),
+                address: meaningfulText(network.remoteAddress, network.activeAddress, pppoeState?.remote_address),
+                uptime: meaningfulText(network.uptime, pppoeState?.session_uptime)
+              }]
+            : []
         )
       ).catch(() => {});
     } catch (error) {
@@ -857,6 +885,11 @@ async function buildCustomerDetail(customerId, options = {}) {
     ? (meaningfulText(network?.uptime, pppoeState?.session_uptime) || 'Online sekarang')
     : '-';
 
+  const packagePrice = Number(customer.package_price || 0) || 0;
+  const discountEnabled = Number(customer.discount_enabled || 0) === 1;
+  const discountAmount = discountEnabled ? Math.min(packagePrice, Math.max(0, Math.round(Number(customer.discount_amount || 0) || 0))) : 0;
+  const packagePriceAfterDiscount = Math.max(0, packagePrice - discountAmount);
+
   return {
     customer: {
       id: customer.id,
@@ -874,7 +907,10 @@ async function buildCustomerDetail(customerId, options = {}) {
       createdAt: customer.created_at || '',
       installDate: customer.install_date || '',
       packageName: customer.package_name || '',
-      packagePrice: Number(customer.package_price || 0) || 0,
+      packagePrice,
+      discountEnabled: discountEnabled && discountAmount > 0,
+      discountAmount,
+      packagePriceAfterDiscount,
       speedDown: Number(customer.speed_down || 0) || 0,
       speedUp: Number(customer.speed_up || 0) || 0,
       useFup: Number(customer.use_fup || 0) === 1,
@@ -887,7 +923,7 @@ async function buildCustomerDetail(customerId, options = {}) {
       oltName: customer.olt_name || '',
       odpName: customer.odp_name || '',
       ponPort: customer.pon_port || '',
-      customerCode: customer.customer_code || customer.phone || customer.genieacs_tag || customer.pppoe_username || String(customer.id || ''),
+      customerCode: customer.customer_code || `SCK${customer.id || ''}`,
       isolateDay: Number(customer.isolate_day || 0) || 0,
       staticIp: customer.static_ip || '',
       macAddress: customer.mac_address || ''

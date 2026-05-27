@@ -29,6 +29,35 @@ const logger = winston.createLogger({
 const dbPath = path.join(__dirname, '../database/billing.db');
 const db = new Database(dbPath);
 
+function ensureOltVlanPushLogTable() {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS olt_vlan_push_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        olt_id INTEGER REFERENCES olts(id) ON DELETE SET NULL,
+        onu_index TEXT DEFAULT '',
+        onu_name TEXT DEFAULT '',
+        vlan INTEGER NOT NULL DEFAULT 0,
+        vlan_mode TEXT DEFAULT 'tag',
+        lan_ports TEXT DEFAULT '',
+        ssid_ports TEXT DEFAULT '',
+        dry_run INTEGER NOT NULL DEFAULT 1,
+        commands TEXT DEFAULT '',
+        output TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        error TEXT DEFAULT '',
+        created_by TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_olt_vlan_push_logs_olt_created ON olt_vlan_push_logs(olt_id, created_at)');
+  } catch (e) {
+    logger.warn(`[OLT-VLAN] Gagal memastikan tabel log: ${e.message}`);
+  }
+}
+
+ensureOltVlanPushLogTable();
+
 /**
  * Profil SNMP per brand OLT
  * Setiap profil mendefinisikan OID tabel untuk status, nama, dan cara deteksi.
@@ -1773,6 +1802,173 @@ const telnetOptsFromOlt = (olt) => ({
   enablePassword: olt.enable_password != null && String(olt.enable_password).length > 0 ? String(olt.enable_password) : null
 });
 
+function normalizePortList(value, fallback = '1') {
+  const values = String(value || '')
+    .split(',')
+    .map((item) => parseInt(String(item).trim(), 10))
+    .filter((num) => Number.isFinite(num) && num >= 1 && num <= 8);
+  const unique = Array.from(new Set(values));
+  return unique.length ? unique.join(',') : fallback;
+}
+
+function parseHiosoOnuParts(index) {
+  const raw = String(index || '').trim();
+  const resolved = raw.includes('/') ? raw : (hiosoOnuIdFromIndex(raw) || raw);
+  const match = resolved.match(/^(\d+)\/(?:(\d+)\/)?(\d+):(\d+)$/);
+  if (!match) {
+    return {
+      onu: resolved,
+      ponPort: '',
+      board: '',
+      port: '',
+      onuId: ''
+    };
+  }
+  const rack = match[1];
+  const middle = match[2];
+  const port = match[3];
+  const onuId = match[4];
+  const ponPort = middle ? `${rack}/${middle}/${port}` : `${rack}/${port}`;
+  return {
+    onu: resolved,
+    ponPort,
+    board: middle || rack,
+    port,
+    onuId
+  };
+}
+
+function defaultHiosoVlanTemplate() {
+  return [
+    'enable',
+    'config',
+    '# Sesuaikan command di bawah bila CLI Hioso berbeda',
+    'onu port vlan {{onu}} eth {{lan_ports}} mode {{vlan_mode}} vlan {{vlan}}',
+    'save'
+  ].join('\n');
+}
+
+function renderOltCommandTemplate(template, values) {
+  const cleanTokenValue = (value) => String(value == null ? '' : value)
+    .replace(/[\r\n]/g, ' ')
+    .trim();
+
+  return String(template || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'))
+    .map((line) => line.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => cleanTokenValue(values[key] || '')))
+    .filter(Boolean);
+}
+
+function insertOltVlanPushLog(entry) {
+  ensureOltVlanPushLogTable();
+  return db.prepare(`
+    INSERT INTO olt_vlan_push_logs
+      (olt_id, onu_index, onu_name, vlan, vlan_mode, lan_ports, ssid_ports, dry_run, commands, output, status, error, created_by)
+    VALUES
+      (@olt_id, @onu_index, @onu_name, @vlan, @vlan_mode, @lan_ports, @ssid_ports, @dry_run, @commands, @output, @status, @error, @created_by)
+  `).run({
+    olt_id: entry.olt_id || null,
+    onu_index: entry.onu_index || '',
+    onu_name: entry.onu_name || '',
+    vlan: entry.vlan || 0,
+    vlan_mode: entry.vlan_mode || 'tag',
+    lan_ports: entry.lan_ports || '',
+    ssid_ports: entry.ssid_ports || '',
+    dry_run: entry.dry_run ? 1 : 0,
+    commands: entry.commands || '',
+    output: entry.output || '',
+    status: entry.status || 'pending',
+    error: entry.error || '',
+    created_by: entry.created_by || ''
+  });
+}
+
+function getOltVlanPushLogs(oltId, limit = 20) {
+  ensureOltVlanPushLogTable();
+  const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 100));
+  return db.prepare(`
+    SELECT *
+    FROM olt_vlan_push_logs
+    WHERE olt_id = ?
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ?
+  `).all(oltId, safeLimit);
+}
+
+async function pushOnuVlan(oltId, data = {}, actor = 'Admin') {
+  const olt = getOltById(oltId);
+  if (!olt) throw new Error('OLT tidak ditemukan');
+
+  const brand = String(olt.brand || 'hioso').trim().toLowerCase();
+  if (!['hioso', 'hsgq', 'hsqg'].includes(brand)) {
+    throw new Error(`Push VLAN ini khusus Hioso/HSGQ. Brand OLT saat ini: ${brand || '-'}.`);
+  }
+
+  const vlan = parseInt(String(data.vlan || '').trim(), 10);
+  if (!Number.isFinite(vlan) || vlan < 1 || vlan > 4094) {
+    throw new Error('VLAN ID harus antara 1 sampai 4094.');
+  }
+
+  const vlanMode = String(data.vlan_mode || 'tag').trim().toLowerCase();
+  const allowedModes = ['tag', 'untag', 'transparent'];
+  if (!allowedModes.includes(vlanMode)) {
+    throw new Error('Mode VLAN harus tag, untag, atau transparent.');
+  }
+
+  const index = String(data.index || '').trim();
+  if (!index) throw new Error('Index ONU kosong.');
+
+  const onuParts = parseHiosoOnuParts(index);
+  const lanPorts = normalizePortList(data.lans, '1');
+  const ssidPorts = normalizePortList(data.ssids, '');
+  const dryRun = String(data.dry_run || 'true').toLowerCase() !== 'false';
+  const template = String(data.command_template || '').trim() || defaultHiosoVlanTemplate();
+  const commands = renderOltCommandTemplate(template, {
+    onu: onuParts.onu,
+    onu_index: index,
+    pon_port: onuParts.ponPort,
+    board: onuParts.board,
+    port: onuParts.port,
+    onu_id: onuParts.onuId,
+    vlan,
+    vlan_mode: vlanMode,
+    lan_ports: lanPorts,
+    ssid_ports: ssidPorts
+  });
+
+  if (!commands.length) throw new Error('Command template VLAN kosong.');
+
+  const baseLog = {
+    olt_id: olt.id,
+    onu_index: index,
+    onu_name: data.name || '',
+    vlan,
+    vlan_mode: vlanMode,
+    lan_ports: lanPorts,
+    ssid_ports: ssidPorts,
+    dry_run: dryRun,
+    commands: commands.join('\n'),
+    created_by: actor || 'Admin'
+  };
+
+  if (dryRun) {
+    const output = 'Mode uji: command belum dikirim ke OLT.';
+    const result = insertOltVlanPushLog({ ...baseLog, output, status: 'dry_run' });
+    return { ok: true, dryRun: true, logId: result.lastInsertRowid, commands, output };
+  }
+
+  try {
+    const output = await telnetLoginAndRun(olt.host, olt.web_user, olt.web_password, commands, telnetOptsFromOlt(olt));
+    const result = insertOltVlanPushLog({ ...baseLog, output, status: 'success' });
+    return { ok: true, dryRun: false, logId: result.lastInsertRowid, commands, output };
+  } catch (e) {
+    insertOltVlanPushLog({ ...baseLog, status: 'failed', error: e.message || String(e) });
+    throw e;
+  }
+}
+
 /**
  * Delegasi VLAN / service-port ke [go-api-c320](https://github.com/s4lfanet/go-api-c320) — POST /api/v1/vlan/onu
  * Format pon_port: rack/shelf/slot (contoh 1/2/7) dari indeks gpon-onu_1/2/7:5
@@ -2047,7 +2243,7 @@ async function configureWanViaAcs(sn, data) {
    return await telnetLoginAndRun(olt.host, olt.web_user, olt.web_password, cmds, telnetOptsFromOlt(olt));
  }
  
- module.exports = {
+module.exports = {
   getAllOlts, getActiveOlts, getOltById, createOlt, updateOlt, deleteOlt, getOltStats, rebootOnu, renameOnu, authorizeOnu,
-  configureOnuWan, configureZteWanViaGoApi, configureWanViaAcs
+  configureOnuWan, configureZteWanViaGoApi, configureWanViaAcs, pushOnuVlan, getOltVlanPushLogs
 };

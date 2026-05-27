@@ -79,6 +79,22 @@
     .monitor-mobile-value { font-size:10.5px; font-weight:700; color:var(--text); word-break:break-word; line-height:1.25; }
     .monitor-mobile-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:7px; }
     .monitor-mobile-actions .btn { justify-content:center; padding:0; height:32px; min-height:32px; font-size:11px; }
+    .traffic-panel-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+    .traffic-metric{border:1px solid var(--border);border-radius:16px;padding:12px;min-width:0}
+    .traffic-metric-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800}
+    .traffic-metric-value{font-size:24px;font-weight:900;line-height:1.05;margin-top:7px;color:var(--text);word-break:break-word}
+    .traffic-metric.rx .traffic-metric-value{color:#22c55e}
+    .traffic-metric.tx .traffic-metric-value{color:#60a5fa}
+    .traffic-interface-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+    .traffic-interface-chip{border:1px solid var(--border);border-radius:14px;padding:9px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.03);cursor:pointer;text-align:left;color:var(--text)}
+    .traffic-interface-chip strong{font-size:12px}
+    .traffic-interface-chip span{font-size:10px;color:var(--muted)}
+    .traffic-interface-chip.is-active{border-color:rgba(99,102,241,.75);box-shadow:0 0 0 2px rgba(99,102,241,.18) inset}
+    .sync-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+    .sync-summary-card{border:1px solid var(--border);border-radius:16px;padding:11px 12px;min-width:0;cursor:pointer;text-align:left;color:var(--text);background:rgba(255,255,255,.03);font:inherit}
+    .sync-summary-card.is-active{border-color:rgba(99,102,241,.7);box-shadow:0 0 0 2px rgba(99,102,241,.18) inset}
+    .sync-summary-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:800}
+    .sync-summary-value{font-size:22px;font-weight:900;line-height:1;margin-top:7px;color:var(--text)}
     .mikrotik-monitor-page .stat-grid .sc { min-height:0; }
     .mikrotik-monitor-page .stat-grid .sc.is-actionable { cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
     .mikrotik-monitor-page .stat-grid .sc.is-actionable:hover { transform:translateY(-2px); }
@@ -97,7 +113,10 @@
     .monitor-mobile-empty { padding:18px 16px; text-align:center; color:var(--muted); border:1px dashed var(--border); border-radius:18px; }
     body[data-theme="light"] .monitor-sync,
     body[data-theme="light"] .monitor-mobile-card,
-    body[data-theme="light"] .monitor-mobile-empty{
+    body[data-theme="light"] .monitor-mobile-empty,
+    body[data-theme="light"] .traffic-metric,
+    body[data-theme="light"] .sync-summary-card,
+    body[data-theme="light"] .traffic-interface-chip{
       background:rgba(255,255,255,.9);
       box-shadow:0 14px 30px rgba(165,162,211,.12);
     }
@@ -196,14 +215,17 @@
       .mikrotik-monitor-page .card-hd { flex-direction:column; align-items:stretch; }
       .mikrotik-monitor-page .monitor-card-hd h6{ margin-bottom:0; }
       .mikrotik-monitor-page .tabs {
-        display:grid;
-        grid-template-columns:repeat(2,minmax(0,1fr));
+        display:flex;
+        overflow:auto;
         gap:8px;
         border-bottom:none;
         padding-bottom:0;
         margin-bottom:12px;
+        scrollbar-width:none;
       }
+      .mikrotik-monitor-page .tabs::-webkit-scrollbar{display:none}
       .mikrotik-monitor-page .tab{
+        min-width:max-content;
         justify-content:center;
         text-align:center;
         padding:10px 12px;
@@ -240,6 +262,14 @@
       .mikrotik-monitor-page .mtab{line-height:1.1}
       .mikrotik-monitor-page .tabs { gap:6px; margin-bottom:10px; }
       .mikrotik-monitor-page .tab { font-size:11px; padding:9px 8px; }
+      .traffic-panel-grid,
+      .sync-summary-grid{grid-template-columns:1fr 1fr;gap:7px}
+      .traffic-metric{padding:10px}
+      .traffic-metric-value{font-size:18px}
+      .sync-summary-card{padding:9px 10px}
+      .sync-summary-value{font-size:18px}
+      .traffic-interface-list{grid-template-columns:1fr 1fr;gap:7px}
+      .traffic-interface-chip{padding:8px 9px}
       .monitor-toolbar .fs-sm { min-width:0; font-size:11px; }
       .monitor-toolbar .btn { font-size:11px; padding:0 10px; }
       .monitor-sync-badge { font-size:9px; padding:3px 7px; }
@@ -316,6 +346,8 @@
 
     <div class="tabs">
       <div class="tab active" onclick="showTab(event, 'pppoe')">PPPoE</div>
+      <div class="tab" onclick="showTab(event, 'traffic-isp')">Trafik ISP</div>
+      <div class="tab" onclick="showTab(event, 'pppoe-sync')">Sinkron PPPoE</div>
       <div class="tab" onclick="showTab(event, 'hotspot')">Hotspot</div>
       <div class="tab" onclick="showTab(event, 'pppoe-profiles')">Profil PPPoE</div>
       <div class="tab" onclick="showTab(event, 'hotspot-profiles-tab')">Profil Hotspot</div>
@@ -361,6 +393,103 @@
             <button class="btn btn-g btn-sm" id="pppoe-prev-btn" onclick="changeSecretsPage(-1)" disabled><i class="bi bi-chevron-left"></i> Prev</button>
             <div class="table-pager-page" id="pppoe-pagination-page">Page 1 / 1</div>
             <button class="btn btn-g btn-sm" id="pppoe-next-btn" onclick="changeSecretsPage(1)" disabled>Next <i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ISP Traffic Tab -->
+    <div id="traffic-isp" class="tab-content">
+      <div class="card">
+        <div class="card-hd monitor-card-hd">
+          <h6><i class="bi bi-activity"></i> Trafik ISP</h6>
+          <div class="monitor-toolbar monitor-toolbar-simple" id="traffic-toolbar">
+            <div class="monitor-toolbar-stack">
+              <select class="fs fs-sm" id="isp-interface-select" onchange="loadInterfaceTraffic(true)">
+                <option value="">Pilih interface</option>
+              </select>
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('traffic-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Interface</button>
+              <button class="btn btn-p btn-sm" type="button" onclick="loadInterfaceTraffic(true)"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            </div>
+          </div>
+        </div>
+        <div class="traffic-panel-grid">
+          <div class="traffic-metric rx">
+            <div class="traffic-metric-label">Download</div>
+            <div class="traffic-metric-value" id="traffic-rx">0 Mbps</div>
+          </div>
+          <div class="traffic-metric tx">
+            <div class="traffic-metric-label">Upload</div>
+            <div class="traffic-metric-value" id="traffic-tx">0 Mbps</div>
+          </div>
+          <div class="traffic-metric">
+            <div class="traffic-metric-label">Status</div>
+            <div class="traffic-metric-value" id="traffic-status">-</div>
+          </div>
+        </div>
+        <div class="monitor-sync-detail" id="traffic-detail">Live setiap 3 detik. Pilih ether/VLAN/bridge yang menjadi jalur ISP.</div>
+        <div class="traffic-interface-list" id="traffic-interface-list">
+          <div class="monitor-mobile-empty">Memuat interface...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PPPoE Sync Tab -->
+    <div id="pppoe-sync" class="tab-content">
+      <div class="card">
+        <div class="card-hd monitor-card-hd">
+          <h6><i class="bi bi-link-45deg"></i> Sinkron PPPoE</h6>
+          <div class="monitor-toolbar monitor-toolbar-simple" id="pppoe-sync-toolbar">
+            <div class="monitor-toolbar-stack">
+              <input type="text" class="fc fc-sm" id="pppoe-sync-search" placeholder="Cari PPPoE / pelanggan" oninput="setPppoeSyncSearch(this.value)">
+              <select class="fs fs-sm" id="pppoe-sync-section" onchange="setPppoeSyncSection(this.value)">
+                <option value="all">Semua</option>
+                <option value="customerOnly">Pelanggan belum ada secret</option>
+                <option value="routerOnly">Secret belum jadi pelanggan</option>
+                <option value="matched">Sudah sinkron</option>
+              </select>
+            </div>
+            <div class="monitor-toolbar-actions">
+              <button type="button" class="btn btn-g btn-sm monitor-filter-toggle" onclick="toggleMonitorToolbar('pppoe-sync-toolbar', this)" aria-expanded="false"><i class="bi bi-funnel"></i> Filter</button>
+              <button class="btn btn-p btn-sm" type="button" onclick="loadPppoeSync(true)"><i class="bi bi-arrow-clockwise"></i> Cek</button>
+            </div>
+          </div>
+        </div>
+        <div class="sync-summary-grid">
+          <button type="button" class="sync-summary-card" data-sync-section="customerOnly" onclick="setPppoeSyncSection('customerOnly')">
+            <div class="sync-summary-label">Belum ada secret</div>
+            <div class="sync-summary-value" id="sync-customer-only">0</div>
+          </button>
+          <button type="button" class="sync-summary-card" data-sync-section="routerOnly" onclick="setPppoeSyncSection('routerOnly')">
+            <div class="sync-summary-label">Belum jadi pelanggan</div>
+            <div class="sync-summary-value" id="sync-router-only">0</div>
+          </button>
+          <button type="button" class="sync-summary-card" data-sync-section="matched" onclick="setPppoeSyncSection('matched')">
+            <div class="sync-summary-label">Sinkron</div>
+            <div class="sync-summary-value" id="sync-matched">0</div>
+          </button>
+        </div>
+        <div class="tbl-wrap">
+          <table class="dtbl">
+            <thead>
+              <tr><th>Status</th><th>PPPoE</th><th>Pelanggan</th><th>Profile</th><th>Info</th><th>Aksi</th></tr>
+            </thead>
+            <tbody id="pppoe-sync-list">
+              <tr><td colspan="6" class="text-center text-muted">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="monitor-mobile-list" id="pppoe-sync-mobile-list">
+          <div class="monitor-mobile-empty">Memuat data...</div>
+        </div>
+        <div class="table-pager">
+          <div class="table-pager-meta" id="pppoeSync-pagination-meta">Menunggu data...</div>
+          <div class="table-pager-actions">
+            <button class="btn btn-g btn-sm" id="pppoeSync-prev-btn" onclick="changePppoeSyncPage(-1)" disabled><i class="bi bi-chevron-left"></i> Prev</button>
+            <div class="table-pager-page" id="pppoeSync-pagination-page">Page 1 / 1</div>
+            <button class="btn btn-g btn-sm" id="pppoeSync-next-btn" onclick="changePppoeSyncPage(1)" disabled>Next <i class="bi bi-chevron-right"></i></button>
           </div>
         </div>
       </div>
@@ -645,13 +774,32 @@
     if (e && e.currentTarget) {
       e.currentTarget.classList.add('active');
     } else {
-      const tabMap = { 'pppoe': 0, 'hotspot': 1, 'pppoe-profiles': 2, 'hotspot-profiles-tab': 3 };
+      const tabMap = { 'pppoe': 0, 'traffic-isp': 1, 'pppoe-sync': 2, 'hotspot': 3, 'pppoe-profiles': 4, 'hotspot-profiles-tab': 5 };
       const idx = tabMap[id];
       const tabs = document.querySelectorAll('.tab');
       if (Number.isInteger(idx) && tabs[idx]) tabs[idx].classList.add('active');
     }
     document.getElementById(id).classList.add('active');
     ensureMonitoringTabLoaded(id);
+    syncTrafficLiveState(id);
+  }
+
+  function startTrafficLive() {
+    stopTrafficLive();
+    trafficLiveTimer = setInterval(() => {
+      if (document.hidden || getActiveSecondaryTabId() !== 'traffic-isp') return;
+      loadInterfaceTraffic(false);
+    }, 3000);
+  }
+
+  function stopTrafficLive() {
+    if (trafficLiveTimer) clearInterval(trafficLiveTimer);
+    trafficLiveTimer = null;
+  }
+
+  function syncTrafficLiveState(activeTabId = getActiveSecondaryTabId()) {
+    if (activeTabId === 'traffic-isp') startTrafficLive();
+    else stopTrafficLive();
   }
 
   function isCompactMobileMonitoring() {
@@ -660,6 +808,8 @@
 
   const tabLoadState = {
     pppoe: true,
+    traffic: false,
+    pppoeSync: false,
     hotspot: false,
     pppoeProfiles: false,
     hotspotProfiles: false
@@ -674,6 +824,20 @@
       if (!tabLoadState.hotspot) {
         tabLoadState.hotspot = true;
         loadHotspotUsers();
+      }
+      return;
+    }
+    if (id === 'traffic-isp') {
+      if (!tabLoadState.traffic) {
+        tabLoadState.traffic = true;
+        loadInterfaces().then(() => loadInterfaceTraffic(false)).catch((error) => console.error('Load ISP traffic failed:', error));
+      }
+      return;
+    }
+    if (id === 'pppoe-sync') {
+      if (!tabLoadState.pppoeSync) {
+        tabLoadState.pppoeSync = true;
+        loadPppoeSync();
       }
       return;
     }
@@ -704,6 +868,10 @@
   let hotspotData = [];
   let pppoeProfilesData = [];
   let hotspotProfilesData = [];
+  let interfaceData = [];
+  let pppoeSyncData = [];
+  let trafficLiveTimer = null;
+  let monitoringAutoTimer = null;
   let profileOptionsRouterKey = null;
   let profileOptionsPromise = null;
   let searchDebounceTimer = null;
@@ -713,7 +881,7 @@
   const monitoringSync = {
     lastSuccessAt: null,
     status: 'idle',
-    detail: 'Saat pertama kali dibuka, collector MikroTik menyiapkan snapshot router. Gunakan refresh manual untuk memicu pembaruan langsung.',
+    detail: 'Saat halaman dibuka, data MikroTik otomatis diperbarui dari router.',
     source: 'warming_up',
     ageMs: null,
     partialFailure: false
@@ -722,14 +890,18 @@
     pppoe: { page: 1, limit: 25, q: '', status: 'all', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
     hotspot: { page: 1, limit: 25, q: '', status: 'all', total: 0, totalPages: 1, filteredTotal: 0, onlineCount: 0 },
     pppoeProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 },
-    hotspotProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 }
+    hotspotProfiles: { page: 1, limit: 25, q: '', total: 0, totalPages: 1, filteredTotal: 0 },
+    pppoeSync: { page: 1, limit: 25, q: '', section: 'all', total: 0, totalPages: 1, filteredTotal: 0 }
   };
   const loadState = {
     summary: false,
     pppoe: false,
     hotspot: false,
     pppoeProfiles: false,
-    hotspotProfiles: false
+    hotspotProfiles: false,
+    interfaces: false,
+    traffic: false,
+    pppoeSync: false
   };
   const MONITORING_CACHE_KEY = 'billing-admin-mikrotik-cache-v8';
   const summaryState = {
@@ -783,7 +955,8 @@
       pppoe: { ...tableState.pppoe },
       hotspot: { ...tableState.hotspot },
       pppoeProfiles: { ...tableState.pppoeProfiles },
-      hotspotProfiles: { ...tableState.hotspotProfiles }
+      hotspotProfiles: { ...tableState.hotspotProfiles },
+      pppoeSync: { ...tableState.pppoeSync }
     };
   }
 
@@ -953,12 +1126,16 @@
     const hotspotStatusFilter = document.getElementById('hotspot-status-filter');
     const pppoeProfilesSearch = document.getElementById('pppoe-profiles-search');
     const hotspotProfilesSearch = document.getElementById('hotspot-profiles-search');
+    const pppoeSyncSearch = document.getElementById('pppoe-sync-search');
+    const pppoeSyncSection = document.getElementById('pppoe-sync-section');
     if (pppoeSearch) pppoeSearch.value = tableState.pppoe.q || '';
     if (pppoeStatusFilter) pppoeStatusFilter.value = tableState.pppoe.status || 'all';
     if (hotspotSearch) hotspotSearch.value = tableState.hotspot.q || '';
     if (hotspotStatusFilter) hotspotStatusFilter.value = tableState.hotspot.status || 'all';
     if (pppoeProfilesSearch) pppoeProfilesSearch.value = tableState.pppoeProfiles.q || '';
     if (hotspotProfilesSearch) hotspotProfilesSearch.value = tableState.hotspotProfiles.q || '';
+    if (pppoeSyncSearch) pppoeSyncSearch.value = tableState.pppoeSync.q || '';
+    if (pppoeSyncSection) pppoeSyncSection.value = tableState.pppoeSync.section || 'all';
   }
 
   function parseIsoDate(value) {
@@ -1397,6 +1574,239 @@
     if (!options.skipPersist) persistMonitoringCache();
   }
 
+  function formatBps(value) {
+    const bps = Number(value || 0);
+    if (!Number.isFinite(bps) || bps <= 0) return '0 Mbps';
+    if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(2)} Gbps`;
+    if (bps >= 1000000) return `${(bps / 1000000).toFixed(2)} Mbps`;
+    if (bps >= 1000) return `${(bps / 1000).toFixed(0)} Kbps`;
+    return `${bps.toFixed(0)} bps`;
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value || 0);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    if (bytes >= 1099511627776) return `${(bytes / 1099511627776).toFixed(2)} TB`;
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes.toFixed(0)} B`;
+  }
+
+  function chooseDefaultInterface(items = []) {
+    const list = Array.isArray(items) ? items : [];
+    const current = String(document.getElementById('isp-interface-select')?.value || '').trim();
+    if (current && list.some((row) => String(row.name || '') === current)) return current;
+    const preferred = list.find((row) => /^ether1$/i.test(String(row.name || '')))
+      || list.find((row) => /^ether/i.test(String(row.name || '')) && row.running)
+      || list.find((row) => row.running)
+      || list[0];
+    return String(preferred?.name || '').trim();
+  }
+
+  function renderInterfaces(items = []) {
+    interfaceData = Array.isArray(items) ? items : [];
+    const select = document.getElementById('isp-interface-select');
+    const list = document.getElementById('traffic-interface-list');
+    const selected = chooseDefaultInterface(interfaceData);
+    if (select) {
+      select.replaceChildren();
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = 'Pilih interface';
+      select.appendChild(empty);
+      for (const row of interfaceData) {
+        const option = document.createElement('option');
+        option.value = String(row.name || '');
+        option.textContent = `${row.name || '-'}${row.type ? ` - ${row.type}` : ''}`;
+        select.appendChild(option);
+      }
+      select.value = selected;
+    }
+    if (!list) return;
+    list.replaceChildren();
+    if (!interfaceData.length) {
+      const empty = document.createElement('div');
+      empty.className = 'monitor-mobile-empty';
+      empty.textContent = 'Belum ada interface';
+      list.appendChild(empty);
+      return;
+    }
+    list.insertAdjacentHTML('beforeend', interfaceData.map((row, index) => {
+      const active = String(row.name || '') === selected;
+      return `<button type="button" class="traffic-interface-chip${active ? ' is-active' : ''}" onclick="selectTrafficInterfaceByIndex(${index})">
+        <div><strong>${safeText(row.name)}</strong><br><span>${safeText(row.type || '-')} &bull; ${row.running ? 'running' : 'down'}</span></div>
+        <i class="bi bi-${row.running ? 'check-circle' : 'circle'}"></i>
+      </button>`;
+    }).join(''));
+  }
+
+  function selectTrafficInterfaceByIndex(index) {
+    const row = interfaceData[Number(index)];
+    if (!row) return;
+    selectTrafficInterface(row.name);
+  }
+
+  function selectTrafficInterface(name) {
+    const select = document.getElementById('isp-interface-select');
+    if (select) select.value = String(name || '');
+    renderInterfaces(interfaceData);
+    loadInterfaceTraffic(true);
+  }
+
+  function applyInterfaceTraffic(response = {}) {
+    const traffic = response.traffic || response || {};
+    const rx = Number(traffic.rxBps || 0);
+    const tx = Number(traffic.txBps || 0);
+    const rxEl = document.getElementById('traffic-rx');
+    const txEl = document.getElementById('traffic-tx');
+    const statusEl = document.getElementById('traffic-status');
+    const detailEl = document.getElementById('traffic-detail');
+    if (rxEl) rxEl.textContent = formatBps(rx);
+    if (txEl) txEl.textContent = formatBps(tx);
+    if (statusEl) statusEl.textContent = traffic.running ? 'Running' : 'Down';
+    if (detailEl) {
+      const sampled = traffic.sampledAt ? formatDateTimeShort(traffic.sampledAt) : '-';
+      detailEl.textContent = `${traffic.interface || '-'} | RX ${formatBytes(traffic.rxByte)} | TX ${formatBytes(traffic.txByte)} | ${sampled}`;
+    }
+  }
+
+  async function loadInterfaces(force = false) {
+    if (loadState.interfaces) return;
+    loadState.interfaces = true;
+    try {
+      const data = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/interfaces', {
+        routerId: getRouterId() || ''
+      }, force), 20000);
+      renderInterfaces(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+      console.error('Error loadInterfaces:', error);
+      const list = document.getElementById('traffic-interface-list');
+      if (list) list.innerHTML = '<div class="monitor-mobile-empty text-danger">Gagal memuat interface</div>';
+    } finally {
+      loadState.interfaces = false;
+    }
+  }
+
+  async function loadInterfaceTraffic(force = false) {
+    if (loadState.traffic) return;
+    const interfaceName = String(document.getElementById('isp-interface-select')?.value || chooseDefaultInterface(interfaceData)).trim();
+    if (!interfaceName) {
+      await loadInterfaces(force);
+      return;
+    }
+    loadState.traffic = true;
+    const detailEl = document.getElementById('traffic-detail');
+    if (detailEl) detailEl.textContent = `Mengambil trafik ${interfaceName}...`;
+    try {
+      const data = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/interface-traffic', {
+        routerId: getRouterId() || '',
+        interface: interfaceName
+      }, force), 20000);
+      applyInterfaceTraffic(data);
+    } catch (error) {
+      console.error('Error loadInterfaceTraffic:', error);
+      if (detailEl) detailEl.textContent = `Gagal membaca trafik: ${error.message || error}`;
+    } finally {
+      loadState.traffic = false;
+    }
+  }
+
+  function getSyncBadge(section) {
+    if (section === 'matched') return '<span class="badge bs">Sinkron</span>';
+    if (section === 'routerOnly') return '<span class="badge bw">Secret saja</span>';
+    return '<span class="badge bd">Belum ada secret</span>';
+  }
+
+  function getSyncCustomerEditUrl(customer = {}, username = '') {
+    const id = Number(customer.id || 0);
+    if (!id) return '';
+    const params = new URLSearchParams();
+    params.set('search', String(username || customer.pppoe_username || customer.name || id).trim());
+    params.set('openEdit', String(id));
+    return `/admin/customers?${params.toString()}`;
+  }
+
+  function syncPppoeSectionCards() {
+    document.querySelectorAll('[data-sync-section]').forEach((card) => {
+      card.classList.toggle('is-active', card.dataset.syncSection === tableState.pppoeSync.section);
+    });
+    const section = document.getElementById('pppoe-sync-section');
+    if (section) section.value = tableState.pppoeSync.section || 'all';
+  }
+
+  function applyPppoeSyncResponse(response = {}) {
+    const summary = response.summary || {};
+    pppoeSyncData = Array.isArray(response.items) ? response.items : [];
+    tableState.pppoeSync.page = Number(response.page || 1);
+    tableState.pppoeSync.total = Number(response.total || 0);
+    tableState.pppoeSync.totalPages = Number(response.totalPages || 1);
+    tableState.pppoeSync.filteredTotal = Number(response.filteredTotal || 0);
+    document.getElementById('sync-customer-only').textContent = Number(summary.customerOnly || 0);
+    document.getElementById('sync-router-only').textContent = Number(summary.routerOnly || 0);
+    document.getElementById('sync-matched').textContent = Number(summary.matched || 0);
+    updatePaginationUi('pppoeSync');
+    syncPppoeSectionCards();
+
+    const tbody = document.getElementById('pppoe-sync-list');
+    if (!pppoeSyncData.length) {
+      setTableMessage('pppoe-sync-list', 6, 'Belum ada data');
+      setMobileListMessage('pppoe-sync-mobile-list', 'Belum ada data');
+      return;
+    }
+
+    tbody.replaceChildren();
+    for (const row of pppoeSyncData) {
+      const customer = row.customer || {};
+      const editUrl = getSyncCustomerEditUrl(customer, row.username);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${getSyncBadge(row.section)}</td>
+        <td class="fw6">${safeText(row.username)}</td>
+        <td>${safeText(customer.name || '-')}<br><span class="text-muted">${safeText(customer.phone || '')}</span></td>
+        <td>${safeText(row.profile || '-')}</td>
+        <td>${safeText(customer.status || row.remoteAddress || '-')}</td>
+        <td>${editUrl ? `<a class="btn btn-g btn-sm" href="${editUrl}"><i class="bi bi-pencil-square"></i> Edit</a>` : '-'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    renderMobileCards('pppoe-sync-mobile-list', pppoeSyncData.map((row) => {
+      const customer = row.customer || {};
+      const editUrl = getSyncCustomerEditUrl(customer, row.username);
+      return `
+        <div class="monitor-mobile-card">
+          <div class="monitor-mobile-head">
+            <div>
+              <div class="monitor-mobile-name">${safeText(row.username)}</div>
+              <div class="monitor-mobile-meta">${safeText(customer.name || row.profile || '-')}</div>
+            </div>
+            ${getSyncBadge(row.section)}
+          </div>
+          <div class="monitor-mobile-grid">
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">Pelanggan</div>
+              <div class="monitor-mobile-value">${safeText(customer.name || '-')}</div>
+            </div>
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">Status</div>
+              <div class="monitor-mobile-value">${safeText(customer.status || '-')}</div>
+            </div>
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">Telepon</div>
+              <div class="monitor-mobile-value">${safeText(customer.phone || '-')}</div>
+            </div>
+            <div class="monitor-mobile-cell">
+              <div class="monitor-mobile-label">Profile</div>
+              <div class="monitor-mobile-value">${safeText(row.profile || '-')}</div>
+            </div>
+          </div>
+          ${editUrl ? `<div class="monitor-mobile-actions"><a class="btn btn-g btn-sm" href="${editUrl}"><i class="bi bi-pencil-square"></i> Edit Pelanggan</a></div>` : ''}
+        </div>
+      `;
+    }));
+  }
+
   function restoreMonitoringCacheForCurrentRouter() {
     const entry = getMonitoringCacheEntry();
     if (!entry || !entry.tableState) return false;
@@ -1416,6 +1826,7 @@
     tableState.hotspot = { ...tableState.hotspot, ...(entry.tableState.hotspot || {}) };
     tableState.pppoeProfiles = { ...tableState.pppoeProfiles, ...(entry.tableState.pppoeProfiles || {}) };
     tableState.hotspotProfiles = { ...tableState.hotspotProfiles, ...(entry.tableState.hotspotProfiles || {}) };
+    tableState.pppoeSync = { ...tableState.pppoeSync, ...(entry.tableState.pppoeSync || {}) };
     applySearchInputs();
 
     applySummaryData(entry.summary || {}, { skipPersist: true });
@@ -1439,14 +1850,14 @@
     const lastSuccessAt = entry.lastSuccessAt ? new Date(entry.lastSuccessAt) : (entry.savedAt ? new Date(entry.savedAt) : null);
     monitoringSync.lastSuccessAt = lastSuccessAt && !Number.isNaN(lastSuccessAt.getTime()) ? lastSuccessAt : null;
     if (!cachedSummary || !cachedSummary.metadata) {
-      setMonitoringSyncStatus('success', 'Menampilkan data MikroTik dari cache. Tekan Refresh Manual kalau ingin ambil data terbaru dari router.', monitoringSync.lastSuccessAt);
+      setMonitoringSyncStatus('success', 'Menampilkan cache sementara. Sistem sedang mengambil data terbaru dari router.', monitoringSync.lastSuccessAt);
     }
     return true;
   }
 
   function refreshMonitoringAfterCacheRestore(reason = 'auto') {
-    setMonitoringSyncStatus('syncing', 'Menampilkan cache tersimpan. Mengambil data terbaru dari router...');
-    queueMonitoringRefresh(false, reason).catch((error) => {
+    setMonitoringSyncStatus('syncing', 'Menampilkan cache sementara. Mengambil data terbaru dari router...');
+    queueMonitoringRefresh(true, reason).catch((error) => {
       console.error('Background monitoring refresh failed:', error);
       setMonitoringSyncStatus('error', `Muat data terbaru gagal: ${error.message || error}`);
     });
@@ -1533,10 +1944,12 @@
     setTableMessage('hotspot-list', 8, message);
     setTableMessage('pppoe-profiles-list', 5, message);
     setTableMessage('hotspot-profiles-list', 7, message);
+    setTableMessage('pppoe-sync-list', 6, message);
     setMobileListMessage('pppoe-mobile-list', message);
     setMobileListMessage('hotspot-mobile-list', message);
     setMobileListMessage('pppoe-profiles-mobile-list', message);
     setMobileListMessage('hotspot-profiles-mobile-list', message);
+    setMobileListMessage('pppoe-sync-mobile-list', message);
     syncMonitorCardState();
   }
 
@@ -1610,6 +2023,24 @@
     scheduleTableSearch('hotspotProfiles', value);
   }
 
+  function setPppoeSyncSearch(value) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      tableState.pppoeSync.q = String(value || '').trim();
+      tableState.pppoeSync.page = 1;
+      tabLoadState.pppoeSync = true;
+      loadPppoeSync();
+    }, 250);
+  }
+
+  function setPppoeSyncSection(value) {
+    tableState.pppoeSync.section = String(value || 'all').trim() || 'all';
+    tableState.pppoeSync.page = 1;
+    tabLoadState.pppoeSync = true;
+    syncPppoeSectionCards();
+    loadPppoeSync();
+  }
+
   function changeSecretsPage(step) {
     const nextPage = tableState.pppoe.page + step;
     if (nextPage < 1 || nextPage > Math.max(1, tableState.pppoe.totalPages || 1)) return;
@@ -1639,6 +2070,14 @@
     tableState.hotspotProfiles.page = nextPage;
     tabLoadState.hotspotProfiles = true;
     loadHotspotUserProfiles();
+  }
+
+  function changePppoeSyncPage(step) {
+    const nextPage = tableState.pppoeSync.page + step;
+    if (nextPage < 1 || nextPage > Math.max(1, tableState.pppoeSync.totalPages || 1)) return;
+    tableState.pppoeSync.page = nextPage;
+    tabLoadState.pppoeSync = true;
+    loadPppoeSync();
   }
 
   function syncMonitorCardState() {
@@ -1715,6 +2154,7 @@
   }
 
   function changeRouter() {
+    stopTrafficLive();
     profileOptionsRouterKey = null;
     profileOptionsPromise = null;
     tableState.pppoe.page = 1;
@@ -1727,14 +2167,20 @@
     tableState.pppoeProfiles.q = '';
     tableState.hotspotProfiles.page = 1;
     tableState.hotspotProfiles.q = '';
+    tableState.pppoeSync.page = 1;
+    tableState.pppoeSync.q = '';
+    tableState.pppoeSync.section = 'all';
+    interfaceData = [];
+    pppoeSyncData = [];
     applySearchInputs();
     if (restoreMonitoringCacheForCurrentRouter()) {
       refreshMonitoringAfterCacheRestore('router');
+      syncTrafficLiveState();
       return;
     }
     setMonitoringSyncStatus('idle', 'Router diganti. Data router baru sedang dimuat sekali, lalu akan disimpan ke cache.');
     resetMonitoringView('Router diganti. Memuat data router baru...');
-    queueMonitoringRefresh(false, 'router');
+    queueMonitoringRefresh(true, 'router').finally(() => syncTrafficLiveState());
   }
 
   function downloadBackup(e) {
@@ -1854,15 +2300,39 @@
     }
   }
 
+  async function loadPppoeSync(force = false) {
+    if (loadState.pppoeSync) return;
+    loadState.pppoeSync = true;
+    setTableMessage('pppoe-sync-list', 6, 'Memuat data...');
+    setMobileListMessage('pppoe-sync-mobile-list', 'Memuat data...');
+    try {
+      const params = new URLSearchParams({
+        routerId: String(getRouterId() || ''),
+        page: String(tableState.pppoeSync.page),
+        limit: String(tableState.pppoeSync.limit),
+        section: String(tableState.pppoeSync.section || 'all')
+      });
+      if (tableState.pppoeSync.q) params.set('q', tableState.pppoeSync.q);
+      const data = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/pppoe-sync', Object.fromEntries(params), force), 25000);
+      applyPppoeSyncResponse(data);
+    } catch (error) {
+      console.error('Error loadPppoeSync:', error);
+      setTableMessage('pppoe-sync-list', 6, I18N.loadFailed, 'danger');
+      setMobileListMessage('pppoe-sync-mobile-list', I18N.loadFailed, 'danger');
+    } finally {
+      loadState.pppoeSync = false;
+    }
+  }
+
   async function refreshVisibleMonitoringData(force = false, reason = 'auto') {
     if (hasOpenModal()) return;
     const isManual = reason === 'manual';
     const waitingMessage = isManual
       ? 'Refresh manual dimulai. Tunggu sekitar 5 detik sebelum semua data diperbarui...'
-      : 'Sedang mengambil data MikroTik untuk disimpan ke cache...';
+      : 'Sedang mengambil data terbaru dari router...';
     const loadingMessage = isManual
       ? 'Sedang memperbarui semua data MikroTik dari router...'
-      : 'Sedang memuat semua data MikroTik dari router...';
+      : 'Sedang memperbarui data MikroTik otomatis...';
 
     setMonitoringSyncStatus('syncing', waitingMessage);
     if (isManual) {
@@ -1877,12 +2347,17 @@
       }
       await loadSecrets(false);
       if (loadFullSuite || tabLoadState.hotspot) await loadHotspotUsers(false);
+      if (loadFullSuite || tabLoadState.traffic) {
+        await loadInterfaces(false);
+        if (tabLoadState.traffic) await loadInterfaceTraffic(false);
+      }
+      if (loadFullSuite || tabLoadState.pppoeSync) await loadPppoeSync(false);
       if (loadFullSuite || tabLoadState.pppoeProfiles) await loadPppoeProfiles(false);
       if (loadFullSuite || tabLoadState.hotspotProfiles) await loadHotspotUserProfiles(false);
       const now = new Date();
-    if (!summaryState.metadata || !summaryState.metadata.collectorStatus) {
+      if (!summaryState.metadata || !summaryState.metadata.collectorStatus) {
       const successMessage = loadFullSuite
-        ? (isManual ? 'Refresh manual selesai. Data MikroTik sudah diperbarui.' : 'Data MikroTik berhasil dimuat dan disimpan ke cache.')
+        ? (isManual ? 'Refresh manual selesai. Data MikroTik sudah diperbarui.' : 'Data MikroTik terbaru sudah diperbarui otomatis.')
         : 'Data inti MikroTik berhasil dimuat. Tab lain akan dimuat saat dibuka agar handphone tetap ringan.';
       setMonitoringSyncStatus('success', successMessage, now);
     } else {
@@ -1921,6 +2396,18 @@
       console.error('Manual monitoring refresh failed:', error);
       setMonitoringSyncStatus('error', `Refresh manual gagal: ${error.message || error}`);
     }
+  }
+
+  function startMonitoringAutoRefresh() {
+    if (monitoringAutoTimer) clearInterval(monitoringAutoTimer);
+    monitoringAutoTimer = setInterval(() => {
+      if (document.hidden || hasOpenModal()) return;
+      if (monitoringRefreshPromise) return;
+      queueMonitoringRefresh(false, 'interval').catch((error) => {
+        console.error('Auto monitoring refresh failed:', error);
+      });
+    }, 60000);
+    if (typeof monitoringAutoTimer.unref === 'function') monitoringAutoTimer.unref();
   }
 
   async function loadProfiles() {
@@ -2187,7 +2674,7 @@
         return;
       }
       resetMonitoringView('Memuat data router untuk pertama kali...');
-      await queueMonitoringRefresh(false, 'auto');
+      await queueMonitoringRefresh(true, 'auto');
     } catch (error) {
       console.error('Monitoring page bootstrap failed:', error);
       setMonitoringSyncStatus('error', `Inisialisasi halaman gagal: ${error.message || error}`);
@@ -2195,6 +2682,16 @@
   }
 
   bootstrapMonitoringPage();
+  startMonitoringAutoRefresh();
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopTrafficLive();
+    else {
+      syncTrafficLiveState();
+      if (!monitoringRefreshPromise) {
+        queueMonitoringRefresh(false, 'visible').catch((error) => console.error('Visible monitoring refresh failed:', error));
+      }
+    }
+  });
   setTimeout(() => {
     if (monitoringSync.status !== 'idle') return;
     setMonitoringSyncStatus('syncing', 'Memulai ulang pemuatan data MikroTik...');

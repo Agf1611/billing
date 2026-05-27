@@ -236,6 +236,11 @@ function computeInvoiceAmountAndMeta(customer, pkg, periodMonth, periodYear) {
   if (prorated && billableDays != null && dim != null) {
     metaParts.push(`Prorata ${billableDays}/${dim} hari`);
   }
+  const discountAmount = resolveCustomerDiscount(customer, amount);
+  if (discountAmount > 0) {
+    amount = Math.max(0, amount - discountAmount);
+    metaParts.push(`Diskon pelanggan Rp ${discountAmount.toLocaleString('id-ID')}`);
+  }
   const notesAuto = metaParts.length ? `AUTO: ${metaParts.join(' | ')}` : '';
 
   return {
@@ -243,6 +248,14 @@ function computeInvoiceAmountAndMeta(customer, pkg, periodMonth, periodYear) {
     bumpPromo: usePromo,
     notesAuto
   };
+}
+
+function resolveCustomerDiscount(customer = {}, baseAmount = 0) {
+  const enabled = Number(customer.discount_enabled || 0) === 1;
+  if (!enabled) return 0;
+  const amount = Math.max(0, Math.round(Number(customer.discount_amount || 0) || 0));
+  const cap = Math.max(0, Math.round(Number(baseAmount || 0) || 0));
+  return Math.min(amount, cap);
 }
 
 function generateMonthlyInvoices(month, year) {
@@ -278,10 +291,27 @@ function generateMonthlyInvoices(month, year) {
 
 function generateInvoicesDueInDays(leadDays = 7, fromDate = new Date()) {
   const safeLeadDays = Math.max(0, parseInt(leadDays, 10) || 0);
-  const dueDate = addCalendarDays(fromDate, safeLeadDays);
+  const baseDate = fromDate instanceof Date && !Number.isNaN(fromDate.getTime()) ? fromDate : new Date();
+  const dueDate = addCalendarDays(baseDate, safeLeadDays);
   const periodMonth = dueDate.getMonth() + 1;
   const periodYear = dueDate.getFullYear();
   const targetDueDay = dueDate.getDate();
+  const baseMonth = baseDate.getMonth() + 1;
+  const baseYear = baseDate.getFullYear();
+
+  if (periodMonth !== baseMonth || periodYear !== baseYear) {
+    return {
+      count: 0,
+      eligible: 0,
+      createdInvoiceIds: [],
+      leadDays: safeLeadDays,
+      periodMonth,
+      periodYear,
+      dueDay: targetDueDay,
+      skipped: true,
+      reason: 'cross-month-period'
+    };
+  }
 
   const customers = db.prepare("SELECT * FROM customers WHERE status IN ('active','suspended') AND package_id IS NOT NULL").all();
   const existing = db.prepare('SELECT customer_id FROM invoices WHERE period_month=? AND period_year=?').all(periodMonth, periodYear);
@@ -451,8 +481,38 @@ function pushPortalInvoiceNotification(invoiceId) {
         senderRole: 'Tagihan',
         invoiceId: Number(invoice.id || 0) || null
       }
-    }, { dedupeWindowMs: 30 * 24 * 60 * 60 * 1000 });
+    }, { dedupeWindowMs: 30 * 24 * 60 * 60 * 1000, push: true });
   } catch (_) {
+    return null;
+  }
+}
+
+function queueCustomerPaidNotification(invoiceId, paidByName = 'Admin') {
+  try {
+    const invoice = db.prepare(`
+      SELECT i.id, i.customer_id, i.period_month, i.period_year, i.amount,
+             c.name AS customer_name
+      FROM invoices i
+      LEFT JOIN customers c ON c.id = i.customer_id
+      WHERE i.id = ?
+    `).get(Number(invoiceId || 0));
+    if (!invoice || !invoice.customer_id) return null;
+    const customerSvc = require('./customerService');
+    return customerSvc.addPortalNotification(invoice.customer_id, {
+      kind: 'payment',
+      tab: 'billing',
+      title: `Pembayaran INV-${invoice.id} lunas`,
+      body: `Pembayaran tagihan ${invoice.period_month}/${invoice.period_year} sebesar Rp ${Number(invoice.amount || 0).toLocaleString('id-ID')} sudah diterima.`,
+      payload: {
+        senderName: 'Billing',
+        senderRole: 'Pembayaran',
+        source: 'invoice-paid',
+        invoiceId: Number(invoice.id || 0) || null,
+        paidBy: paidByName || 'Admin'
+      }
+    }, { dedupeWindowMs: 60 * 1000, push: true });
+  } catch (error) {
+    logger.warn(`[Billing] Gagal menyiapkan notifikasi lunas pelanggan: ${error.message || String(error)}`);
     return null;
   }
 }
@@ -652,12 +712,13 @@ function getCustomerBillingYearSummary(customerId, year) {
   if (!Number.isFinite(y) || y < 2000 || y > 3000) throw new Error('Tahun tidak valid');
 
   const customer = db.prepare(`
-    SELECT c.id, c.name, p.price as package_price
+    SELECT c.id, c.name, c.discount_enabled, c.discount_amount, p.price as package_price
     FROM customers c
     LEFT JOIN packages p ON c.package_id = p.id
     WHERE c.id=?
   `).get(cid);
   if (!customer) throw new Error('Pelanggan tidak ditemukan');
+  const packagePrice = Math.max(0, Math.round(Number(customer.package_price || 0) || 0) - resolveCustomerDiscount(customer, customer.package_price || 0));
 
   const invoices = db.prepare(`
     SELECT
@@ -679,14 +740,120 @@ function getCustomerBillingYearSummary(customerId, year) {
     customerId: customer.id,
     customerName: customer.name,
     year: y,
-    packagePrice: customer.package_price || 0,
+    packagePrice,
     invoices
   };
 }
 
-function getAllInvoices({ month, year, status, search, limit = 300 } = {}) {
+const ONLINE_INVOICE_ACTORS = new Set(['tripay', 'midtrans', 'xendit', 'duitku', 'qris static', 'qris', 'online', 'dana', 'brimo', 'transfer']);
+const AUTO_ONLINE_INVOICE_ACTORS = new Set(['tripay', 'midtrans', 'xendit', 'duitku', 'qris static', 'qris', 'online']);
+
+function normalizeInvoicePaymentChannel(invoice = {}) {
+  const status = String(invoice.status || '').trim().toLowerCase();
+  const paidBy = String(invoice.paid_by_name || '').trim();
+  const lowerPaidBy = paidBy.toLowerCase();
+  const gateway = String(invoice.payment_gateway || '').trim();
+  const notes = String(invoice.notes || '').trim().toLowerCase();
+
+  if (status !== 'paid') return { channel: 'unpaid', label: 'Belum Bayar' };
+  if (lowerPaidBy.startsWith('agent ')) return { channel: 'agent', label: 'Agent' };
+  if (gateway || ONLINE_INVOICE_ACTORS.has(lowerPaidBy) || notes.includes('webhook')) {
+    return { channel: 'online', label: gateway || paidBy || 'Online / QRIS' };
+  }
+  if (lowerPaidBy.startsWith('admin')) return { channel: 'admin', label: paidBy || 'Admin' };
+  if (lowerPaidBy.startsWith('kasir')) return { channel: 'cashier', label: paidBy || 'Kasir' };
+  if (lowerPaidBy.startsWith('kolektor')) return { channel: 'collector', label: paidBy || 'Kolektor' };
+  if (lowerPaidBy.startsWith('teknisi')) return { channel: 'technician', label: paidBy || 'Teknisi' };
+  return { channel: 'cash', label: paidBy || 'Cash / Manual' };
+}
+
+function invoiceMatchesPaymentChannel(invoice = {}, payChannel = 'all') {
+  const channel = String(payChannel || 'all').trim().toLowerCase();
+  if (!channel || channel === 'all') return true;
+  const normalized = normalizeInvoicePaymentChannel(invoice).channel;
+  if (channel === 'online') return normalized === 'online';
+  if (channel === 'cash') return ['cash', 'admin', 'cashier', 'collector', 'technician'].includes(normalized);
+  if (channel === 'staff') return ['admin', 'cashier', 'collector', 'technician'].includes(normalized);
+  return normalized === channel;
+}
+
+function isInvoicePaymentOnline(invoice = {}) {
+  const paidBy = String(invoice.paid_by_name || '').trim().toLowerCase();
+  const gateway = String(invoice.payment_gateway || '').trim();
+  const notes = String(invoice.notes || '').trim().toLowerCase();
+  return Boolean(
+    gateway ||
+    String(invoice.payment_order_id || '').trim() ||
+    String(invoice.payment_reference || '').trim() ||
+    Number(invoice.qris_paid_notif_id || 0) > 0 ||
+    AUTO_ONLINE_INVOICE_ACTORS.has(paidBy) ||
+    notes.includes('webhook') ||
+    notes.includes('otomatis via')
+  );
+}
+
+function canCancelPaidInvoice(invoice = {}) {
+  return String(invoice.status || '').trim().toLowerCase() === 'paid' && !isInvoicePaymentOnline(invoice);
+}
+
+function getInvoiceDueSortTime(invoice = {}) {
+  const dueAt = getInvoiceDueDate(invoice, invoice.due_day_snapshot || 10);
+  return dueAt ? dueAt.getTime() : 0;
+}
+
+function sortInvoiceRows(rows = [], sort = 'smart', today = new Date(), statusScope = 'all') {
+  const normalizedSort = String(sort || 'smart').trim().toLowerCase();
+  const normalizedStatusScope = String(statusScope || 'all').trim().toLowerCase();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const compareName = (a, b) => String(a.customer_name || '').localeCompare(String(b.customer_name || ''), 'id', { sensitivity: 'base' });
+  const comparePeriodDesc = (a, b) =>
+    (Number(b.period_year || 0) - Number(a.period_year || 0)) ||
+    (Number(b.period_month || 0) - Number(a.period_month || 0)) ||
+    compareName(a, b) ||
+    (Number(b.id || 0) - Number(a.id || 0));
+
+  return rows.slice().sort((a, b) => {
+    if (normalizedSort === 'name') return compareName(a, b) || comparePeriodDesc(a, b);
+    if (normalizedSort === 'paid_latest') {
+      return (new Date(b.paid_at || 0).getTime() - new Date(a.paid_at || 0).getTime()) ||
+        (Number(b.id || 0) - Number(a.id || 0));
+    }
+    if (normalizedSort === 'due_latest') {
+      return (getInvoiceDueSortTime(b) - getInvoiceDueSortTime(a)) ||
+        compareName(a, b) ||
+        (Number(b.id || 0) - Number(a.id || 0));
+    }
+    if (normalizedSort === 'due_today') {
+      const aDue = getInvoiceDueSortTime(a);
+      const bDue = getInvoiceDueSortTime(b);
+      const aToday = aDue >= todayStart && aDue < todayStart + 86400000 ? 0 : 1;
+      const bToday = bDue >= todayStart && bDue < todayStart + 86400000 ? 0 : 1;
+      return (aToday - bToday) || (aDue - bDue) || compareName(a, b);
+    }
+
+    const statusWeight = (row) => {
+      const status = String(row.status || '').toLowerCase();
+      if (status === 'paid') return 3;
+      const due = getInvoiceDueSortTime(row);
+      if (due >= todayStart && due < todayStart + 86400000) return 0;
+      if (due < todayStart) return 1;
+      return 2;
+    };
+    if (normalizedStatusScope === 'all' || !normalizedStatusScope) {
+      const periodDiff =
+        (Number(b.period_year || 0) - Number(a.period_year || 0)) ||
+        (Number(b.period_month || 0) - Number(a.period_month || 0));
+      if (periodDiff) return periodDiff;
+    }
+    return (statusWeight(a) - statusWeight(b)) ||
+      (getInvoiceDueSortTime(a) - getInvoiceDueSortTime(b)) ||
+      comparePeriodDesc(a, b);
+  });
+}
+
+function getAllInvoices({ month, year, status, search, limit = 300, sort = 'smart', payChannel = 'all', today = new Date() } = {}) {
   let q = `
-    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, c.status as customer_status, p.name as package_name
+    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, c.pppoe_username, c.status as customer_status, p.name as package_name
     FROM invoices i
     JOIN customers c ON i.customer_id = c.id
     LEFT JOIN packages p ON c.package_id = p.id
@@ -697,12 +864,35 @@ function getAllInvoices({ month, year, status, search, limit = 300 } = {}) {
   if (year)   { q += ' AND i.period_year=?';  params.push(parseInt(year)); }
   if (status && status !== 'all') { q += ' AND lower(trim(i.status))=?'; params.push(String(status).trim().toLowerCase()); }
   if (search) {
-    q += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ?)';
+    const invoiceSearchId = (() => {
+      const raw = String(search || '').trim();
+      const invMatch = raw.match(/^inv[\s-]*(\d+)$/i) || raw.match(/^#?(\d+)$/);
+      return invMatch ? Number(invMatch[1] || 0) : 0;
+    })();
+    q += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR (? > 0 AND i.id = ?))';
     const s = `%${search}%`;
-    params.push(s, s, s);
+    params.push(s, s, s, s, invoiceSearchId, invoiceSearchId);
   }
-  q += ` ORDER BY i.period_year DESC, i.period_month DESC, c.name ASC LIMIT ${parseInt(limit)}`;
-  return db.prepare(q).all(...params);
+  q += ` ORDER BY i.period_year DESC, i.period_month DESC, c.name ASC`;
+  let rows = db.prepare(q).all(...params).map((row) => {
+    const payment = normalizeInvoicePaymentChannel(row);
+    return {
+      ...row,
+      payment_channel: payment.channel,
+      payment_channel_label: payment.label,
+      can_cancel_paid: canCancelPaidInvoice(row),
+      due_sort_time: getInvoiceDueSortTime(row)
+    };
+  });
+
+  rows = rows.filter((row) => invoiceMatchesPaymentChannel(row, payChannel));
+  rows = sortInvoiceRows(rows, sort, today instanceof Date ? today : new Date(today || Date.now()), status || 'all');
+
+  const safeLimit = parseInt(limit, 10);
+  if (Number.isFinite(safeLimit) && safeLimit > 0) {
+    rows = rows.slice(0, safeLimit);
+  }
+  return rows;
 }
 
 function getInvoiceById(id) {
@@ -745,6 +935,7 @@ function markAsPaid(invoiceId, paidByName, notes, actor = null) {
     shiftCustomerBillingAnchorAfterLatePayment(invoiceBefore.customer_id, invoiceBefore, paymentDate);
     bookkeepingSvc.upsertInvoiceIncomeEntry(invId, paidByName || 'Admin', paymentDate.toISOString());
     queueAdminPaidNotification(invId, paidByName || 'Admin', notes || '', actor, paymentDate);
+    queueCustomerPaidNotification(invId, paidByName || 'Admin');
   }
 
   // Catat audit trail jika berhasil
@@ -774,9 +965,43 @@ function markAsPaid(invoiceId, paidByName, notes, actor = null) {
   return result;
 }
 
-function markAsUnpaid(invoiceId) {
-  const result = db.prepare(`UPDATE invoices SET status='unpaid', paid_at=NULL, paid_by_name='', notes='' WHERE id=?`).run(invoiceId);
+function markAsUnpaid(invoiceId, actor = null) {
+  const invId = Number(invoiceId || 0);
+  if (!Number.isFinite(invId) || invId <= 0) throw new Error('Invoice ID tidak valid');
+  const invoice = db.prepare(`
+    SELECT id, customer_id, period_month, period_year, amount, status, paid_by_name, notes,
+           payment_gateway, payment_order_id, payment_reference, qris_paid_notif_id
+    FROM invoices
+    WHERE id=?
+  `).get(invId);
+  if (!invoice) throw new Error('Tagihan tidak ditemukan');
+  if (String(invoice.status || '').trim().toLowerCase() !== 'paid') {
+    throw new Error('Hanya tagihan yang sudah lunas yang bisa dibatalkan.');
+  }
+  if (!canCancelPaidInvoice(invoice)) {
+    throw new Error('Pembayaran online/QRIS otomatis tidak bisa dibatalkan dari menu ini.');
+  }
+
+  const result = db.prepare(`UPDATE invoices SET status='unpaid', paid_at=NULL, paid_by_name='', notes='' WHERE id=?`).run(invId);
   if (result.changes > 0) bookkeepingSvc.removeInvoiceIncomeEntry(invoiceId);
+  if (result.changes > 0 && actor) {
+    auditTrail.logAuditTrail({
+      action: 'CANCEL_INVOICE_PAID',
+      entity_type: 'invoice',
+      entity_id: String(invId),
+      actor_type: actor.type || 'admin',
+      actor_id: actor.id || null,
+      actor_name: actor.name || null,
+      details: {
+        customer_id: invoice.customer_id,
+        period: `${invoice.period_month}/${invoice.period_year}`,
+        amount: invoice.amount,
+        previous_paid_by: invoice.paid_by_name || ''
+      },
+      ip_address: actor.ip || null,
+      user_agent: actor.userAgent || null
+    });
+  }
   return result;
 }
 
@@ -997,18 +1222,23 @@ function getPaidInvoiceReport({ year, month = 0 } = {}) {
 }
 
 function getTopUnpaid(limit = 5) {
+  const now = new Date();
+  const activePeriodKey = (now.getFullYear() * 100) + (now.getMonth() + 1);
   return db.prepare(`
     SELECT c.name, c.phone, COUNT(*) as unpaid_count, SUM(i.amount) as total_unpaid
     FROM invoices i JOIN customers c ON i.customer_id = c.id
     WHERE i.status='unpaid'
+      AND ((i.period_year * 100) + i.period_month) <= ?
     GROUP BY c.id ORDER BY unpaid_count DESC LIMIT ?
-  `).all(limit);
+  `).all(activePeriodKey, limit);
 }
 
 function getInvoicesByAny(val) {
   if (!val) return [];
   const raw = String(val || '').trim();
   const cleanVal = raw.replace(/\D/g, '');
+  const now = new Date();
+  const activePeriodKey = (now.getFullYear() * 100) + (now.getMonth() + 1);
   
   // Find customer ID first using phone, pppoe, or genieacs_tag
   let customer = null;
@@ -1044,8 +1274,9 @@ function getInvoicesByAny(val) {
       LEFT JOIN packages p ON c.package_id = p.id
       LEFT JOIN routers r ON c.router_id = r.id
       WHERE i.customer_id = ?
+        AND (lower(trim(i.status)) != 'unpaid' OR ((i.period_year * 100) + i.period_month) <= ?)
       ORDER BY i.period_year DESC, i.period_month DESC
-    `).all(customer.id);
+    `).all(customer.id, activePeriodKey);
   }
 
   const keyword = raw.toLowerCase();
@@ -1072,13 +1303,16 @@ function getInvoicesByAny(val) {
     JOIN customers c ON i.customer_id = c.id
     LEFT JOIN packages p ON c.package_id = p.id
     LEFT JOIN routers r ON c.router_id = r.id
-    WHERE lower(c.name) LIKE ?
+    WHERE (
+      lower(c.name) LIKE ?
        OR lower(c.phone) LIKE ?
        OR lower(c.genieacs_tag) LIKE ?
        OR lower(c.pppoe_username) LIKE ?
+    )
+      AND (lower(trim(i.status)) != 'unpaid' OR ((i.period_year * 100) + i.period_month) <= ?)
     ORDER BY i.period_year DESC, i.period_month DESC
     LIMIT 300
-  `).all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+  `).all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, activePeriodKey);
 }
 
 function getUnpaidInvoicesByCustomerId(customerId) {
@@ -1090,6 +1324,19 @@ function getUnpaidInvoicesByCustomerId(customerId) {
     WHERE i.customer_id = ? AND lower(trim(i.status)) = 'unpaid'
     ORDER BY i.period_year ASC, i.period_month ASC
   `).all(customerId);
+}
+
+function isInvoiceDueForCollection(invoice, asOfDate = new Date()) {
+  const dueAt = getInvoiceDueDate(invoice, invoice?.due_day_snapshot || 10);
+  if (!dueAt) return false;
+  const current = asOfDate instanceof Date && !Number.isNaN(asOfDate.getTime()) ? asOfDate : new Date();
+  const todayEnd = new Date(current.getFullYear(), current.getMonth(), current.getDate(), 23, 59, 59, 999);
+  return dueAt.getTime() <= todayEnd.getTime();
+}
+
+function getDueUnpaidInvoicesByCustomerId(customerId, asOfDate = new Date()) {
+  return getUnpaidInvoicesByCustomerId(customerId)
+    .filter((invoice) => isInvoiceDueForCollection(invoice, asOfDate));
 }
 
 function getTodayRevenue() {
@@ -1131,8 +1378,14 @@ function createInstallProrataCatchUpInvoice(customerId) {
   const dim = daysInMonth(periodYear, periodMonth);
   const billableDays = Math.min(dim, Math.max(1, dim - inst.d + 1));
   const basePrice = Number(pkg.price) || 0;
-  const amount = Math.max(0, Math.round(basePrice * (billableDays / dim)));
-  const notesAuto = `AUTO: Susulan prorata bulan pasang (${billableDays}/${dim} hari, dasar harga reguler Rp ${basePrice.toLocaleString('id-ID')})`;
+  let amount = Math.max(0, Math.round(basePrice * (billableDays / dim)));
+  const metaParts = [`Susulan prorata bulan pasang (${billableDays}/${dim} hari, dasar harga reguler Rp ${basePrice.toLocaleString('id-ID')})`];
+  const discountAmount = resolveCustomerDiscount(customer, amount);
+  if (discountAmount > 0) {
+    amount = Math.max(0, amount - discountAmount);
+    metaParts.push(`Diskon pelanggan Rp ${discountAmount.toLocaleString('id-ID')}`);
+  }
+  const notesAuto = `AUTO: ${metaParts.join(' | ')}`;
 
   const r = db.prepare('INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)').run(
     cid, periodMonth, periodYear, amount, notesAuto, resolveInvoiceDueDay(customer, periodMonth, periodYear)
@@ -1154,26 +1407,38 @@ function createInstallProrataCatchUpInvoice(customerId) {
 
 function updatePaymentInfo(invoiceId, data) {
   const { 
-    gateway, order_id, link, reference, payload, expires_at 
+    gateway, method, order_id, link, reference, payload, expires_at
   } = data;
   
   return db.prepare(`
     UPDATE invoices SET 
       payment_gateway = ?,
+      payment_method = ?,
       payment_order_id = ?,
       payment_link = ?,
       payment_reference = ?,
       payment_payload = ?,
       payment_expires_at = ?
     WHERE id = ?
-  `).run(gateway, order_id, link, reference, payload ? JSON.stringify(payload) : null, expires_at, invoiceId);
+  `).run(
+    gateway || '',
+    String(method || '').trim().toUpperCase(),
+    order_id || '',
+    link || '',
+    reference || '',
+    payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null,
+    expires_at || null,
+    invoiceId
+  );
 }
 
 module.exports = {
   getInvoicesByAny,
   getUnpaidInvoicesByCustomerId,
+  getDueUnpaidInvoicesByCustomerId,
+  isInvoiceDueForCollection,
   generateMonthlyInvoices, generateInvoicesDueInDays, generateInvoiceForCustomer, ensurePortalReactivationInvoice, createInstallProrataCatchUpInvoice, payInvoiceForCustomerPeriod, payInvoicesForCustomerMonths, getPaidMonthsForCustomerYear, getCustomerBillingYearSummary, getAllInvoices, getInvoiceById,
-  markAsPaid, markAsUnpaid, deleteInvoice,
+  markAsPaid, markAsUnpaid, canCancelPaidInvoice, isInvoicePaymentOnline, deleteInvoice,
   getInvoiceSummary, getMonthlyRevenue,
   getDashboardStats, getRecentPayments, getTopUnpaid,
   getTodayRevenue,

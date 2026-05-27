@@ -242,6 +242,44 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
     }
 
+    html[data-theme="dark"] :is(.text-dark, .text-body, .text-black):not(.badge) {
+      color: var(--tech-text) !important;
+    }
+
+    html[data-theme="dark"] :is(.bg-white, .bg-light, .card, .modal-content, .dropdown-menu, .offcanvas, .popover, .list-group-item) {
+      background: var(--tech-panel) !important;
+      color: var(--tech-text) !important;
+      border-color: var(--tech-border) !important;
+    }
+
+    html[data-theme="dark"] :is(.dropdown-item, .modal-content, .offcanvas, .popover, .list-group-item, .card) :is(h1, h2, h3, h4, h5, h6, p, label, span, strong, small, div):not(.badge) {
+      color: inherit;
+    }
+
+    html[data-theme="dark"] :is(.text-muted, .text-secondary, .small, small) {
+      color: var(--tech-muted) !important;
+    }
+
+    html[data-theme="dark"] :is(.form-control, .form-select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select):not(.tech-field):not(.tech-select):not(.tech-textarea) {
+      background-color: var(--tech-input-bg) !important;
+      color: var(--tech-text) !important;
+      border-color: var(--tech-border) !important;
+    }
+
+    html[data-theme="dark"] :is(.form-control, .form-select, textarea, input, select)::placeholder {
+      color: var(--tech-muted) !important;
+    }
+
+    html[data-theme="dark"] option {
+      background: var(--tech-bg-alt);
+      color: var(--tech-text);
+    }
+
+    html[data-theme="dark"] .btn-close {
+      filter: var(--tech-btn-close-filter);
+      opacity: .78;
+    }
+
     .badge-status {
       display: inline-flex;
       align-items: center;

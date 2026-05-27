@@ -75,6 +75,8 @@ async function sendPushToExternalIds(externalIds, options = {}) {
 
   const baseUrl = normalizeText(options.baseUrl) || resolveAppBaseUrl();
   const targetUrl = resolveTargetUrl(options.targetUrl || '/customer/dashboard', baseUrl);
+  const imageUrl = normalizeText(options.imageUrl || options.image_url || '');
+  const resolvedImageUrl = imageUrl ? resolveTargetUrl(imageUrl, baseUrl) : '';
   const payload = {
     app_id: config.appId,
     target_channel: 'push',
@@ -83,10 +85,17 @@ async function sendPushToExternalIds(externalIds, options = {}) {
     contents: { en: message },
     data: {
       ...(options.data && typeof options.data === 'object' ? options.data : {}),
-      targetUrl
+      targetUrl,
+      ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl, image_url: resolvedImageUrl } : {})
     },
     ttl: Number(options.ttl || 86400)
   };
+
+  if (resolvedImageUrl) {
+    payload.chrome_web_image = resolvedImageUrl;
+    payload.big_picture = resolvedImageUrl;
+    payload.ios_attachments = { image: resolvedImageUrl };
+  }
 
   try {
     const response = await axios.post('https://api.onesignal.com/notifications', payload, {

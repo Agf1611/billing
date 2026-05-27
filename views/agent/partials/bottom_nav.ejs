@@ -1,0 +1,22 @@
+<nav class="bottom-nav" aria-label="Navigasi Agent">
+  <a href="/agent/vouchers/single" class="bn-item <%= activeAgentPage === 'vouchers' ? 'active' : '' %>">
+    <i class="bi bi-ticket-perforated"></i>
+    <span>Voucher</span>
+  </a>
+  <a href="/agent/billing" class="bn-item <%= activeAgentPage === 'billing' ? 'active' : '' %>">
+    <i class="bi bi-receipt"></i>
+    <span>Tagihan</span>
+  </a>
+  <a href="/agent" class="bn-item bn-main <%= activeAgentPage === 'dashboard' ? 'active' : '' %>">
+    <i class="bi bi-house-door-fill"></i>
+    <span>Dashboard</span>
+  </a>
+  <a href="/agent/history" class="bn-item <%= activeAgentPage === 'history' ? 'active' : '' %>">
+    <i class="bi bi-clock-history"></i>
+    <span>Riwayat</span>
+  </a>
+  <a href="/agent/help" class="bn-item <%= activeAgentPage === 'help' ? 'active' : '' %>">
+    <i class="bi bi-headset"></i>
+    <span>Bantuan</span>
+  </a>
+</nav>

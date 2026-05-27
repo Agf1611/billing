@@ -20,6 +20,14 @@ function createInvoiceAccessSignature(invoiceId, customerId, exp, secret) {
     .digest('hex');
 }
 
+function createShortInvoiceSignature(invoiceId, customerId, secret) {
+  return crypto
+    .createHmac('sha256', String(secret || ''))
+    .update(`invoice-check.${Number(invoiceId || 0)}.${Number(customerId || 0)}`)
+    .digest('hex')
+    .slice(0, 8);
+}
+
 function normalizeBaseUrl(raw) {
   const value = String(raw || '').trim();
   if (!value) return '';
@@ -104,6 +112,52 @@ function buildCustomerCheckBillingLink(customer = {}, options = {}) {
   return `${baseUrl}/customer/check-billing?q=${lookup}`;
 }
 
+function buildShortInvoiceCheckCode(invoice = {}, customer = {}, options = {}) {
+  const secret = String(options.secret || getSetting('session_secret', '') || '').trim();
+  const invoiceId = Number(invoice.id || 0);
+  const customerId = Number(customer.id || invoice.customer_id || 0);
+  if (!invoiceId || !customerId) return '';
+  const sig = createShortInvoiceSignature(invoiceId, customerId, secret);
+  return `${invoiceId}${sig}`;
+}
+
+function parseShortInvoiceCheckCode(code, secret, expectedCustomerId = 0) {
+  const raw = String(code || '').trim().replace(/^inv/i, '');
+  if (!/^\d+[a-f0-9]{8}$/i.test(raw)) return null;
+  const invoiceId = Number(raw.slice(0, -8));
+  const sig = raw.slice(-8).toLowerCase();
+  if (!Number.isFinite(invoiceId) || invoiceId <= 0) return null;
+  let customerId = Number(expectedCustomerId || 0);
+  if (!customerId) {
+    const invoice = billingSvc.getInvoiceById(invoiceId);
+    customerId = Number(invoice?.customer_id || 0);
+  }
+  if (!customerId) return null;
+  const expected = createShortInvoiceSignature(invoiceId, customerId, secret).toLowerCase();
+  if (expected.length !== sig.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
+  return { invoiceId, customerId, sig };
+}
+
+function buildCustomerInvoiceCheckBillingLink(invoice = {}, customer = {}, ttlMs = 7 * 24 * 60 * 60 * 1000, options = {}) {
+  const secret = String(getSetting('session_secret', '') || '').trim();
+  const baseUrl = normalizeBaseUrl(options.baseUrl) || resolveAppBaseUrl();
+  const invoiceId = Number(invoice.id || 0);
+  const customerId = Number(customer.id || invoice.customer_id || 0);
+  if (!invoiceId || !customerId) return buildCustomerCheckBillingLink(customer, options);
+  const shortCode = buildShortInvoiceCheckCode(invoice, customer, { secret });
+  if (shortCode) return `${baseUrl}/customer/inv${shortCode}`;
+  const lookup = resolveCustomerLookup(customer);
+  const token = createSignedPublicToken({
+    invoiceId,
+    customerId,
+    lookup,
+    exp: Date.now() + ttlMs
+  }, secret);
+  const qs = new URLSearchParams({ t: token });
+  return `${baseUrl}/customer/check-billing?${qs.toString()}`;
+}
+
 function buildCustomerPortalLoginLink(options = {}) {
   const baseUrl = normalizeBaseUrl(options.baseUrl) || resolveAppBaseUrl();
   return `${baseUrl}/customer/login`;
@@ -116,6 +170,8 @@ function buildPublicInvoicePrintLink(invoice = {}, customer = {}, ttlMs = 48 * 6
   const invoiceId = Number(invoice.id || 0);
   const customerId = Number(customer.id || invoice.customer_id || 0);
   if (!invoiceId || !customerId) return '';
+  const shortCode = buildShortInvoiceCheckCode(invoice, customer, { secret });
+  if (shortCode) return `${baseUrl}/customer/inv${shortCode}/print`;
   const exp = Date.now() + ttlMs;
   const sig = createInvoiceAccessSignature(invoiceId, customerId, exp, secret).slice(0, 12);
   const code = `${invoiceId.toString(36)}-${exp.toString(36)}-${sig}`;
@@ -299,6 +355,8 @@ function ensureDueDateLine(message, dueDateText) {
 module.exports = {
   createSignedPublicToken,
   parsePublicInvoiceCode,
+  buildShortInvoiceCheckCode,
+  parseShortInvoiceCheckCode,
   normalizeBaseUrl,
   isUsablePublicBaseUrl,
   resolveAppBaseUrl,
@@ -306,6 +364,7 @@ module.exports = {
   resolveCustomerLookup,
   buildCustomerPortalLoginLink,
   buildCustomerCheckBillingLink,
+  buildCustomerInvoiceCheckBillingLink,
   buildPublicInvoicePrintLink,
   buildPublicInvoiceReceiptLink,
   formatInvoiceDueDate,

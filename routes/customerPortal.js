@@ -19,6 +19,7 @@ const { normalizePhoneDigits } = require('../services/phoneService');
 const {
   resolveCustomerLookup,
   parsePublicInvoiceCode,
+  parseShortInvoiceCheckCode,
   resolveRequestBaseUrl,
   buildCustomerCheckBillingLink,
   buildCustomerPortalLoginLink,
@@ -38,6 +39,7 @@ const {
   isPushConfigured,
   sendPushToTechnicians
 } = require('../services/pushNotificationService');
+const { notifyApprovalRequired } = require('../services/adminPaymentNotificationService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
 const CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const LOGIN_GENIE_PREFETCH_MAX_WAIT_MS = 1200;
@@ -322,6 +324,82 @@ function isEnabledFlag(v) {
   return v === true || v === 'true' || v === 1 || v === '1';
 }
 
+function isTripayEnabled(settings = {}) {
+  return isEnabledFlag(settings.tripay_enabled);
+}
+
+function hasTripayCredentials(settings = {}) {
+  return Boolean(
+    String(settings.tripay_api_key || '').trim() &&
+    String(settings.tripay_private_key || '').trim() &&
+    String(settings.tripay_merchant_code || '').trim()
+  );
+}
+
+function resolveTripayFallbackQrisCode(settings = {}) {
+  return String(settings.tripay_qris_method || settings.tripay_default_qris_method || process.env.TRIPAY_QRIS_METHOD || 'QRIS2')
+    .trim()
+    .toUpperCase() || 'QRIS2';
+}
+
+function buildTripayQrisFallbackChannel(settings = {}, note = '') {
+  return {
+    code: resolveTripayFallbackQrisCode(settings),
+    name: 'QRIS Tripay',
+    group: 'QRIS',
+    active: true,
+    source: 'tripay',
+    fallback: true,
+    note: note || 'QRIS dinamis dari Tripay'
+  };
+}
+
+function isQrisPaymentCode(code) {
+  return String(code || '').trim().toUpperCase().startsWith('QRIS');
+}
+
+function getPaymentChannelRank(channel = {}) {
+  const code = String(channel.code || '').toUpperCase();
+  const source = String(channel.source || '').toLowerCase();
+  const group = String(channel.group || '').trim();
+
+  if (source === 'tripay' && isQrisPaymentCode(code)) return 1;
+  if (isQrisPaymentCode(code)) return 2;
+  if (group === 'E-Wallet') return 10;
+  if (group === 'Virtual Account') return 20;
+  if (group === 'Convenience Store') return 30;
+  if (code === 'STATICQRIS') return 90;
+  return 80;
+}
+
+function sortCustomerPaymentChannels(channels = []) {
+  return [...channels].sort((a, b) => {
+    const ra = getPaymentChannelRank(a);
+    const rb = getPaymentChannelRank(b);
+    if (ra !== rb) return ra - rb;
+    return normalizePaymentMethodLabel(a).localeCompare(normalizePaymentMethodLabel(b), 'id');
+  });
+}
+
+function choosePreferredCustomerPaymentMethod(channels = [], settings = {}) {
+  const activeChannels = (Array.isArray(channels) ? channels : []).filter((channel) => channel && channel.active);
+  const tripayQris = activeChannels.find((channel) => (
+    String(channel.source || '').toLowerCase() === 'tripay' &&
+    isQrisPaymentCode(channel.code)
+  ));
+  if (tripayQris) return String(tripayQris.code || 'QRIS').toUpperCase();
+  if (isTripayEnabled(settings) && hasTripayCredentials(settings)) return resolveTripayFallbackQrisCode(settings);
+  return String(activeChannels[0]?.code || (hasStaticQrisEnabled(settings) ? 'STATICQRIS' : 'QRIS')).toUpperCase();
+}
+
+function canFallbackToStaticQris(gateway, method, settings = {}) {
+  return (
+    String(gateway || '').toLowerCase() === 'tripay' &&
+    isQrisPaymentCode(method) &&
+    hasStaticQrisEnabled(settings)
+  );
+}
+
 function resolvePaymentExpiresAt(gateway, result) {
   const g = String(gateway || '').toLowerCase();
   const p = result && result.payload ? result.payload : null;
@@ -388,6 +466,19 @@ function gatewayDefaultExpiresAtIso(gateway, nowMs = Date.now()) {
   return null;
 }
 
+function normalizePaymentSelectionMethod(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function canReuseInvoicePaymentLink(invoice = {}, gateway = '', method = '') {
+  const requestedGateway = String(gateway || '').trim().toLowerCase();
+  const storedGateway = String(invoice.payment_gateway || '').trim().toLowerCase();
+  const requestedMethod = normalizePaymentSelectionMethod(method);
+  const storedMethod = normalizePaymentSelectionMethod(invoice.payment_method || '');
+  if (!invoice.payment_link || !requestedGateway || !requestedMethod) return false;
+  return storedGateway === requestedGateway && storedMethod === requestedMethod;
+}
+
 function hasStaticQrisEnabled(settings) {
   return resolveStaticQrisEnabled(settings);
 }
@@ -397,7 +488,8 @@ function normalizePaymentMethodLabel(channel = {}) {
   const rawName = String(channel.name || '').trim();
   const map = {
     STATICQRIS: 'QRIS Instan',
-    QRIS: 'QRIS Gateway',
+    QRIS: 'QRIS Tripay',
+    QRIS2: 'QRIS Tripay',
     BCAVA: 'BCA Virtual Account',
     BNIVA: 'BNI Virtual Account',
     BRIVA: 'BRI Virtual Account',
@@ -412,7 +504,9 @@ function normalizePaymentMethodLabel(channel = {}) {
 function getCustomerPaymentChannelsCacheKey(settings = {}) {
   return JSON.stringify({
     staticQris: hasStaticQrisEnabled(settings),
-    tripayEnabled: Boolean(settings.tripay_enabled)
+    tripayEnabled: isTripayEnabled(settings),
+    tripayReady: hasTripayCredentials(settings),
+    tripayMode: String(settings.tripay_mode || '').trim().toLowerCase()
   });
 }
 
@@ -488,6 +582,34 @@ async function getCustomerPaymentChannels(settings = {}) {
   if (cached) return cached;
 
   const channels = [];
+  const tripayReady = isTripayEnabled(settings) && hasTripayCredentials(settings);
+
+  if (tripayReady) {
+    let tripayActiveChannels = [];
+    try {
+      const tripayChannels = await paymentSvc.getTripayChannels();
+      tripayActiveChannels = (Array.isArray(tripayChannels) ? tripayChannels : [])
+        .filter((channel) => channel && channel.active)
+        .map((channel) => ({
+          ...channel,
+          name: normalizePaymentMethodLabel(channel),
+          source: 'tripay'
+        }));
+      tripayActiveChannels.forEach((channel) => channels.push(channel));
+    } catch (error) {
+      logger.warn(`[Payment] Gagal menyiapkan channel Tripay: ${error.message}`);
+    }
+
+    const hasTripayQris = tripayActiveChannels.some((channel) => isQrisPaymentCode(channel.code));
+    if (!tripayActiveChannels.length || !hasTripayQris) {
+      channels.push(buildTripayQrisFallbackChannel(settings,
+        tripayActiveChannels.length
+          ? 'QRIS Tripay dijadikan default pembayaran'
+          : 'Daftar channel Tripay belum terbaca, QRIS Tripay tetap disiapkan'
+      ));
+    }
+  }
+
   if (hasStaticQrisEnabled(settings)) {
     channels.push({
       code: 'STATICQRIS',
@@ -495,25 +617,8 @@ async function getCustomerPaymentChannels(settings = {}) {
       group: 'QRIS',
       active: true,
       source: 'internal',
-      note: 'Scan langsung dengan nominal otomatis'
+      note: 'Cadangan QRIS internal dengan nominal otomatis'
     });
-  }
-
-  if (settings.tripay_enabled) {
-    try {
-      const tripayChannels = await paymentSvc.getTripayChannels();
-      (Array.isArray(tripayChannels) ? tripayChannels : [])
-        .filter((channel) => channel && channel.active)
-        .forEach((channel) => {
-          channels.push({
-            ...channel,
-            name: normalizePaymentMethodLabel(channel),
-            source: 'tripay'
-          });
-        });
-    } catch {
-      // ignore, fallback ke channel internal/manual
-    }
   }
 
   const seen = new Set();
@@ -535,12 +640,11 @@ async function getCustomerPaymentChannels(settings = {}) {
       return true;
     })
     .sort((a, b) => {
+      const ra = getPaymentChannelRank(a);
+      const rb = getPaymentChannelRank(b);
+      if (ra !== rb) return ra - rb;
       const codeA = String(a.code || '').toUpperCase();
       const codeB = String(b.code || '').toUpperCase();
-      const groupOrder = { QRIS: 1, 'E-Wallet': 2, 'Virtual Account': 3, 'Convenience Store': 4 };
-      const ga = groupOrder[String(a.group || '')] || 99;
-      const gb = groupOrder[String(b.group || '')] || 99;
-      if (ga !== gb) return ga - gb;
       const pa = priority[codeA] || 99;
       const pb = priority[codeB] || 99;
       if (pa !== pb) return pa - pb;
@@ -553,7 +657,8 @@ async function getCustomerPaymentChannels(settings = {}) {
 async function resolveCustomerPaymentGateway(settings, method) {
   const chosen = String(method || '').trim().toUpperCase();
   if (chosen === 'STATICQRIS') return 'static';
-  if (settings.tripay_enabled) {
+  if (isTripayEnabled(settings) && hasTripayCredentials(settings)) {
+    if (isQrisPaymentCode(chosen)) return 'tripay';
     try {
       const channels = await paymentSvc.getTripayChannels();
       const allowed = new Set((Array.isArray(channels) ? channels : []).filter((c) => c && c.active).map((c) => String(c.code || '').toUpperCase()));
@@ -910,7 +1015,8 @@ registerPublicPortalRoutes(router, {
   customerSvc,
   billingSvc,
   getCustomerPaymentChannels,
-  signPublicToken
+  signPublicToken,
+  verifyPublicToken
 });
 
 router.get('/voucher', async (req, res) => {
@@ -1014,8 +1120,9 @@ router.post('/public/voucher/create-payment', async (req, res) => {
         'tripay';
     }
 
-    let method = String(req.body.method || 'STATICQRIS').trim().toUpperCase();
-    if (!method) method = 'STATICQRIS';
+    const paymentChannels = await getCustomerPaymentChannels(settings);
+    let method = String(req.body.method || choosePreferredCustomerPaymentMethod(paymentChannels, settings)).trim().toUpperCase();
+    if (!method) method = choosePreferredCustomerPaymentMethod(paymentChannels, settings);
     gateway = await resolveCustomerPaymentGateway(settings, method);
     if (method === 'STATICQRIS' && hasStaticQrisEnabled(settings)) {
       return res.redirect(`/customer/public/payment/static/${encodeURIComponent(String(inv.id))}?t=${encodeURIComponent(String(req.body.token || ''))}`);
@@ -1050,7 +1157,14 @@ router.post('/public/voucher/create-payment', async (req, res) => {
     } else if (gateway === 'duitku') {
       result = await paymentSvc.createDuitkuTransaction(invoiceLike, buyer, method, appUrl, { returnPath, itemName: invoiceLike.item_name });
     } else {
-      result = await paymentSvc.createTripayTransaction(invoiceLike, buyer, method, appUrl, { returnPath, itemName: invoiceLike.item_name, sku: invoiceLike.sku });
+      try {
+        result = await paymentSvc.createTripayTransaction(invoiceLike, buyer, method, appUrl, { returnPath, itemName: invoiceLike.item_name, sku: invoiceLike.sku });
+      } catch (error) {
+        if (isQrisPaymentCode(method)) {
+          return res.redirect('/customer/voucher?err=' + encodeURIComponent('Tripay sedang gangguan. Silakan coba lagi beberapa saat lagi atau hubungi admin.'));
+        }
+        throw error;
+      }
     }
 
     if (!result.success) throw new Error(result.message || 'Gagal membuat transaksi');
@@ -1390,7 +1504,7 @@ router.get('/public/invoices/:id/print', (req, res) => {
     settings,
     printStyle,
     viewerRole: 'public',
-    printBasePath: req.path
+    printBasePath: `${req.path}?t=${encodeURIComponent(String(req.query.t || ''))}`
   });
 });
 
@@ -1425,6 +1539,80 @@ router.get('/i/:code', (req, res) => {
   });
 });
 
+function renderPublicShortInvoice(req, res, code) {
+  const settings = getSettingsWithCache();
+  const secret = String(settings.session_secret || '').trim();
+  const parsed = parseShortInvoiceCheckCode(code, secret);
+  if (!parsed || !Number(parsed.invoiceId || 0)) {
+    return res.status(403).send('Link invoice tidak valid');
+  }
+
+  const invoice = billingSvc.getInvoiceById(parsed.invoiceId);
+  if (!invoice) return res.status(404).send('Invoice tidak ditemukan');
+  if (Number(invoice.customer_id || 0) !== Number(parsed.customerId || 0)) {
+    return res.status(403).send('Invoice tidak valid');
+  }
+
+  const customer = customerSvc.getCustomerById(invoice.customer_id);
+  if (!customer) return res.status(404).send('Data pelanggan tidak ditemukan');
+
+  const printStyle = String(req.query.style || 'a4').toLowerCase() === 'receipt' ? 'receipt' : 'a4';
+  return res.render('admin/print_invoice', {
+    invoice,
+    customer,
+    company: settings.company_header || 'Billing ISP',
+    settings,
+    printStyle,
+    viewerRole: 'public',
+    printBasePath: req.path
+  });
+}
+
+function redirectPublicShortInvoiceBilling(req, res, code) {
+  const settings = getSettingsWithCache();
+  const secret = String(settings.session_secret || '').trim();
+  const parsed = parseShortInvoiceCheckCode(code, secret);
+  if (!parsed || !Number(parsed.invoiceId || 0)) {
+    return res.redirect('/customer/check-billing?err=' + encodeURIComponent('Link tagihan tidak valid.'));
+  }
+
+  const invoice = billingSvc.getInvoiceById(parsed.invoiceId);
+  if (!invoice) {
+    return res.redirect('/customer/check-billing?err=' + encodeURIComponent('Tagihan tidak ditemukan.'));
+  }
+
+  const customer = customerSvc.getCustomerById(invoice.customer_id);
+  if (!customer || Number(customer.id || 0) !== Number(parsed.customerId || 0)) {
+    return res.redirect('/customer/check-billing?err=' + encodeURIComponent('Data tagihan tidak valid.'));
+  }
+
+  const lookup = resolveCustomerLookup(customer);
+  const token = signPublicToken({
+    invoiceId: Number(invoice.id),
+    customerId: Number(invoice.customer_id),
+    lookup,
+    exp: Date.now() + 15 * 60 * 1000
+  }, secret);
+
+  return res.redirect(`/customer/check-billing?t=${encodeURIComponent(token)}`);
+}
+
+router.get(/^\/inv(\d+[a-f0-9]{8})\/print$/i, (req, res) => {
+  return renderPublicShortInvoice(req, res, req.params[0]);
+});
+
+router.get(/^\/inv\/(\d+[a-f0-9]{8})\/print$/i, (req, res) => {
+  return renderPublicShortInvoice(req, res, req.params[0]);
+});
+
+router.get(/^\/inv(\d+[a-f0-9]{8})$/i, (req, res) => {
+  return redirectPublicShortInvoiceBilling(req, res, req.params[0]);
+});
+
+router.get(/^\/inv\/(\d+[a-f0-9]{8})$/i, (req, res) => {
+  return redirectPublicShortInvoiceBilling(req, res, req.params[0]);
+});
+
 router.get('/dashboard', async (req, res) => {
   const profile = getSessionCustomer(req);
   const loginId = (req.session && req.session.phone) || resolveCustomerSessionLoginId(profile);
@@ -1432,8 +1620,18 @@ router.get('/dashboard', async (req, res) => {
   
   // Flash message
   let msgNotif = null;
+  let settingsActionNotif = null;
   if (req.session._msg) {
-    msgNotif = dashboardNotif(req.session._msg.text, req.session._msg.type);
+    const target = String(req.session._msg.target || '').trim().toLowerCase();
+    if (target === 'ssid' || target === 'password') {
+      settingsActionNotif = {
+        target,
+        text: req.session._msg.text,
+        type: req.session._msg.type || 'success'
+      };
+    } else {
+      msgNotif = dashboardNotif(req.session._msg.text, req.session._msg.type);
+    }
     delete req.session._msg;
   }
   
@@ -1526,6 +1724,7 @@ router.get('/dashboard', async (req, res) => {
     connectedUsers: Array.isArray(dashboardCustomer?.connectedUsers) ? dashboardCustomer.connectedUsers : [],
     isLoggedIn: true,
     notif: baseNotif,
+    settingsActionNotif,
     notifications: notificationSummary.items,
     notificationUnreadCount: notificationSummary.unreadCount,
     portalPackages,
@@ -1749,8 +1948,8 @@ router.post('/change-ssid', async (req, res) => {
     patchPortalDeviceCache(req, { ssid });
   }
   req.session._msg = ok 
-    ? { type: 'success', text: 'Nama WiFi (SSID) berhasil diubah.' }
-    : { type: 'danger', text: 'Gagal mengubah SSID.' };
+    ? { type: 'success', text: 'Nama WiFi (SSID) berhasil diubah.', target: 'ssid' }
+    : { type: 'danger', text: 'Gagal mengubah SSID.', target: 'ssid' };
 
   res.redirect('/customer/dashboard#settings');
 });
@@ -1775,8 +1974,8 @@ router.post('/change-password', async (req, res) => {
   }
 
   req.session._msg = ok
-    ? { type: 'success', text: 'Password WiFi berhasil diubah. Jika perangkat belum ikut berubah, coba restart modem / router Anda.' }
-    : { type: 'danger', text: 'Gagal mengubah password. Pastikan minimal 8 karakter.' };
+    ? { type: 'success', text: 'Password WiFi berhasil diubah. Jika perangkat belum ikut berubah, coba restart modem / router Anda.', target: 'password' }
+    : { type: 'danger', text: 'Gagal mengubah password. Pastikan minimal 8 karakter.', target: 'password' };
 
   res.redirect('/customer/dashboard#settings');
 });
@@ -1916,6 +2115,17 @@ router.post('/packages/change', async (req, res) => {
       type: 'success',
       text: `Pengajuan perubahan paket ke ${targetName} sudah dikirim. ${nextStep}`
     };
+
+    setImmediate(() => {
+      notifyApprovalRequired({
+        type: 'package_change_request',
+        title: 'Approval Pindah Paket',
+        requester: profile.name || profile.phone || `Pelanggan #${profile.id}`,
+        subject: `${profile.name || 'Pelanggan'} ke ${targetName}`,
+        detail: `Request #${Number(createdRequest.id || 0) || '-'}${createdRequest.current_package_name ? ` dari ${createdRequest.current_package_name}` : ''}`,
+        targetUrl: '/admin/customer-requests?status=pending'
+      }).catch((error) => logger.warn(`[PackageApproval] Gagal kirim notif admin: ${error.message || String(error)}`));
+    });
   } catch (error) {
     req.session._msg = { type: 'danger', text: 'Gagal mengubah paket: ' + (error.message || 'Terjadi kesalahan') };
   }
@@ -1959,18 +2169,20 @@ router.post('/logout', (req, res) => {
 router.post('/public/payment/create/:invoiceId', async (req, res) => {
   const settings = getSettingsWithCache();
   const secret = settings.session_secret || '';
-  const payload = verifyPublicToken(req.body.token, secret);
+  const currentToken = String(req.body.token || '').trim();
+  const payload = verifyPublicToken(currentToken, secret);
 
-  const redirectBack = (lookup, err, info) => {
+  const redirectBack = (lookup, err, info, token = currentToken) => {
+    const t = token ? `t=${encodeURIComponent(String(token))}` : '';
     const q = lookup ? `q=${encodeURIComponent(String(lookup))}` : '';
     const e = err ? `err=${encodeURIComponent(String(err))}` : '';
     const i = info ? `info=${encodeURIComponent(String(info))}` : '';
-    const qs = [q, e, i].filter(Boolean).join('&');
+    const qs = [t, q, e, i].filter(Boolean).join('&');
     return res.redirect(`/customer/check-billing${qs ? `?${qs}` : ''}`);
   };
 
   if (!payload) {
-    return redirectBack('', 'Link pembayaran tidak valid atau sudah kadaluarsa.');
+    return redirectBack('', 'Link pembayaran tidak valid atau sudah kadaluarsa.', '', '');
   }
 
   if (String(req.params.invoiceId) !== String(payload.invoiceId)) {
@@ -1990,8 +2202,9 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
       return redirectBack(payload.lookup, '', 'Tagihan ini sudah lunas.');
     }
 
-    const rawMethod = String(req.body.method || 'STATICQRIS').trim().toUpperCase().slice(0, 40);
-    let method = rawMethod || 'STATICQRIS';
+    const paymentChannels = await getCustomerPaymentChannels(settings);
+    const rawMethod = String(req.body.method || choosePreferredCustomerPaymentMethod(paymentChannels, settings)).trim().toUpperCase().slice(0, 40);
+    let method = rawMethod || choosePreferredCustomerPaymentMethod(paymentChannels, settings);
     let gateway = await resolveCustomerPaymentGateway(settings, method);
     if (method === 'STATICQRIS' && hasStaticQrisEnabled(settings)) {
       return res.redirect(`/customer/public/payment/static/${encodeURIComponent(String(inv.id))}?t=${encodeURIComponent(String(req.body.token || ''))}`);
@@ -2007,7 +2220,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
     }
 
     const force = String(req.query.force || '').toLowerCase() === '1' || String(req.query.force || '').toLowerCase() === 'true';
-    if (!force && inv.payment_link) {
+    if (!force && canReuseInvoicePaymentLink(inv, gateway, method)) {
       let expiresAtMs = inv.payment_expires_at ? new Date(inv.payment_expires_at).getTime() : 0;
       let payloadExpiresAt = null;
       if (inv.payment_payload) {
@@ -2023,6 +2236,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
         try {
           billingSvc.updatePaymentInfo(inv.id, {
             gateway: inv.payment_gateway,
+            method: inv.payment_method || method,
             order_id: inv.payment_order_id,
             link: inv.payment_link,
             reference: inv.payment_reference,
@@ -2033,7 +2247,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
       }
 
       if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
-        logger.info(`[Payment] Reusing existing link for INV-${inv.id} (public)`);
+        logger.info(`[Payment] Reusing existing link for INV-${inv.id} via ${gateway}/${method} (public)`);
         return res.redirect(inv.payment_link);
       }
     }
@@ -2060,7 +2274,15 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
     } else if (gateway === 'duitku') {
       result = await paymentSvc.createDuitkuTransaction(inv, cust, method, appUrl);
     } else {
-      result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
+      try {
+        result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
+      } catch (error) {
+        if (canFallbackToStaticQris(gateway, method, settings)) {
+          logger.warn(`[Payment] Tripay QRIS gagal untuk INV-${inv.id} (public), fallback ke QRIS statik: ${error.message}`);
+          return res.redirect(`/customer/public/payment/static/${encodeURIComponent(String(inv.id))}?t=${encodeURIComponent(String(req.body.token || ''))}`);
+        }
+        throw error;
+      }
     }
 
     if (result.success) {
@@ -2069,6 +2291,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
         gatewayDefaultExpiresAtIso(gateway);
       billingSvc.updatePaymentInfo(inv.id, {
         gateway: gateway,
+        method,
         order_id: result.order_id,
         link: result.link,
         reference: result.reference,
@@ -2076,7 +2299,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
         expires_at: resolvedExpiresAt
       });
 
-      logger.info(`[Payment] New link created for INV-${inv.id} via ${gateway} (public)`);
+      logger.info(`[Payment] New link created for INV-${inv.id} via ${gateway}/${method} (public)`);
       return res.redirect(result.link);
     }
 
@@ -2090,22 +2313,25 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
 router.get('/public/payment/static/:invoiceId', async (req, res) => {
   const settings = getSettingsWithCache();
   const secret = settings.session_secret || '';
-  const payload = verifyPublicToken(req.query.t, secret);
-  const redirectBack = (lookup, err, info) => {
+  const currentToken = String(req.query.t || '').trim();
+  const payload = verifyPublicToken(currentToken, secret);
+  const redirectBack = (lookup, err, info, token = currentToken) => {
+    const t = token ? `t=${encodeURIComponent(String(token))}` : '';
     const q = lookup ? `q=${encodeURIComponent(String(lookup))}` : '';
     const e = err ? `err=${encodeURIComponent(String(err))}` : '';
     const i = info ? `info=${encodeURIComponent(String(info))}` : '';
-    const qs = [q, e, i].filter(Boolean).join('&');
+    const qs = [t, q, e, i].filter(Boolean).join('&');
     return res.redirect(`/customer/check-billing${qs ? `?${qs}` : ''}`);
   };
 
-  if (!payload) return redirectBack('', 'Link QRIS statik tidak valid atau sudah kadaluarsa.');
+  if (!payload) return redirectBack('', 'Link QRIS statik tidak valid atau sudah kadaluarsa.', '', '');
   if (String(req.params.invoiceId) !== String(payload.invoiceId)) return redirectBack(payload.lookup, 'Tagihan QRIS statik tidak valid.');
   if (!hasStaticQrisEnabled(settings)) return redirectBack(payload.lookup, 'QRIS statik belum dikonfigurasi admin.');
 
   try {
     let invoice = ensureStaticQrisInvoice(req.params.invoiceId);
     if (!invoice) throw new Error('Tagihan tidak ditemukan');
+    if (Number(invoice.customer_id) !== Number(payload.customerId)) throw new Error('Tagihan tidak valid');
     if (String(invoice.status || '').toLowerCase() === 'paid') {
       return redirectBack(payload.lookup, '', 'Tagihan ini sudah lunas.');
     }
@@ -2124,7 +2350,7 @@ router.get('/public/payment/static/:invoiceId', async (req, res) => {
       qrisCode: Number(invoice.qris_unique_code || 0) || 0,
       statusUrl: `/customer/public/payment/static/${encodeURIComponent(String(invoice.id))}/status?t=${encodeURIComponent(String(req.query.t || ''))}`,
       isLoggedIn: false,
-      backUrl: `/customer/check-billing?q=${encodeURIComponent(String(payload.lookup || customer?.id || ''))}`,
+      backUrl: `/customer/check-billing?t=${encodeURIComponent(String(req.query.t || ''))}`,
       pageTitle: 'Pembayaran QRIS Statis'
     });
   } catch (error) {
@@ -2143,6 +2369,7 @@ router.get('/public/payment/static/:invoiceId/status', async (req, res) => {
   try {
     const invoice = billingSvc.getInvoiceById(req.params.invoiceId);
     if (!invoice) return res.status(404).json({ ok: false, message: 'Tagihan tidak ditemukan.' });
+    if (Number(invoice.customer_id) !== Number(payload.customerId)) return res.status(403).json({ ok: false, message: 'Tagihan tidak valid.' });
     return res.json({
       ok: true,
       invoiceId: Number(invoice.id || 0) || 0,
@@ -2274,7 +2501,7 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
 
     const paymentChannels = await getCustomerPaymentChannels(settings);
     const activeChannels = (Array.isArray(paymentChannels) ? paymentChannels : []).filter((channel) => channel && channel.active);
-    const defaultMethod = activeChannels[0]?.code || (hasStaticQrisEnabled(settings) ? 'STATICQRIS' : 'QRIS');
+    const defaultMethod = choosePreferredCustomerPaymentMethod(activeChannels, settings);
     let method = String(req.query.method || defaultMethod).trim().toUpperCase();
     let gateway = await resolveCustomerPaymentGateway(settings, method);
 
@@ -2291,16 +2518,13 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
           gateway = await resolveCustomerPaymentGateway(settings, method);
         }
       } catch {
-        method = hasStaticQrisEnabled(settings) ? 'STATICQRIS' : 'QRIS';
+        method = 'QRIS';
         gateway = await resolveCustomerPaymentGateway(settings, method);
-        if (method === 'STATICQRIS' && hasStaticQrisEnabled(settings)) {
-          return res.redirect(`/customer/payment/static/${encodeURIComponent(String(inv.id))}`);
-        }
       }
     }
 
     const force = String(req.query.force || '').toLowerCase() === '1' || String(req.query.force || '').toLowerCase() === 'true';
-    if (!force && inv.payment_link) {
+    if (!force && canReuseInvoicePaymentLink(inv, gateway, method)) {
       let expiresAtMs = inv.payment_expires_at ? new Date(inv.payment_expires_at).getTime() : 0;
       let payloadExpiresAt = null;
       if (inv.payment_payload) {
@@ -2316,6 +2540,7 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
         try {
           billingSvc.updatePaymentInfo(inv.id, {
             gateway: inv.payment_gateway,
+            method: inv.payment_method || method,
             order_id: inv.payment_order_id,
             link: inv.payment_link,
             reference: inv.payment_reference,
@@ -2326,7 +2551,7 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
       }
 
       if (Number.isFinite(expiresAtMs) && expiresAtMs > Date.now()) {
-        logger.info(`[Payment] Reusing existing link for INV-${inv.id}`);
+        logger.info(`[Payment] Reusing existing link for INV-${inv.id} via ${gateway}/${method}`);
         return res.redirect(inv.payment_link);
       }
     }
@@ -2345,7 +2570,16 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
       result = await paymentSvc.createDuitkuTransaction(inv, cust, method, appUrl);
     } else {
       // Default ke Tripay
-      result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
+      try {
+        result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
+      } catch (error) {
+        if (canFallbackToStaticQris(gateway, method, settings)) {
+          logger.warn(`[Payment] Tripay QRIS gagal untuk INV-${inv.id}, fallback ke QRIS statik: ${error.message}`);
+          req.session._msg = { type: 'warning', text: 'Tripay sedang gangguan. Sistem mengalihkan ke QRIS cadangan agar pembayaran tetap bisa dilakukan.' };
+          return res.redirect(`/customer/payment/static/${encodeURIComponent(String(inv.id))}`);
+        }
+        throw error;
+      }
     }
     
     if (result.success) {
@@ -2355,6 +2589,7 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
       // Simpan info pembayaran ke database
       billingSvc.updatePaymentInfo(inv.id, {
         gateway: gateway,
+        method,
         order_id: result.order_id,
         link: result.link,
         reference: result.reference,
@@ -2362,7 +2597,7 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
         expires_at: resolvedExpiresAt
       });
 
-      logger.info(`[Payment] New link created for INV-${inv.id} via ${gateway}`);
+      logger.info(`[Payment] New link created for INV-${inv.id} via ${gateway}/${method}`);
       res.redirect(result.link);
     } else {
       throw new Error(result.message || 'Gagal membuat transaksi');

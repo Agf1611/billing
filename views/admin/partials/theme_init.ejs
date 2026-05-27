@@ -1,7 +1,7 @@
 <script>
   (function() {
     try {
-      var theme = localStorage.getItem('admin-theme') || 'dark';
+      var theme = localStorage.getItem('admin-theme') || 'light';
       var root = document.documentElement;
       root.setAttribute('data-admin-theme', theme);
       root.style.colorScheme = theme === 'light' ? 'light' : 'dark';

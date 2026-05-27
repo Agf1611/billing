@@ -184,9 +184,20 @@
                 <div class="payment-methods-grid mt-1">
                   <%
                     const sortedChannels = [...paymentChannels].sort((a, b) => {
-                      const priority = { 'E-Wallet': 1, 'QRIS': 2, 'Virtual Account': 3, 'Convenience Store': 4 };
-                      const prioA = priority[a.group] || 99;
-                      const prioB = priority[b.group] || 99;
+                      const rank = (channel) => {
+                        const code = String(channel.code || '').toUpperCase();
+                        const source = String(channel.source || '').toLowerCase();
+                        const group = String(channel.group || '');
+                        if (source === 'tripay' && code.startsWith('QRIS')) return 1;
+                        if (code.startsWith('QRIS')) return 2;
+                        if (group === 'E-Wallet') return 10;
+                        if (group === 'Virtual Account') return 20;
+                        if (group === 'Convenience Store') return 30;
+                        if (code === 'STATICQRIS') return 90;
+                        return 80;
+                      };
+                      const prioA = rank(a);
+                      const prioB = rank(b);
                       return prioA - prioB;
                     });
                     const activeChannels = sortedChannels.filter(c => c.active);
@@ -204,16 +215,17 @@
                       for (const k of Object.keys(brandMap)) { if (code.includes(k)) { brand = brandMap[k]; break; } }
                       const bankMap = { BCAVA: 'BCA', BNIVA: 'BNI', BRIVA: 'BRI', MANDIRIVA: 'Mandiri', PERMATAVA: 'Permata', CIMBVA: 'CIMB', DANAMONVA: 'Danamon' };
                       if (!brand && bankMap[code]) brand = { label: bankMap[code], cls: 'pb-bank' };
-                      const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'QRIS' };
+                      const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'QRIS Tripay', QRIS2: 'QRIS Tripay' };
                       let shortName = nameMap[code] || String(channel.name || '').trim();
                       shortName = shortName.replace(/virtual account/ig, 'VA').replace(/^bank\s+/ig, '').replace(/\s+/g, ' ').trim();
-                      if (code !== 'QRIS' && code.includes('QRIS') && brand) shortName = `QRIS ${brand.label}`;
+                      if (!nameMap[code] && code.includes('QRIS') && brand) shortName = `QRIS ${brand.label}`;
                       const group = String(channel.group || '');
-                      const groupIcon = group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-qr-code-scan';
-                      const shortGroup = group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'QRIS' : group;
+                      const isQrisTripay = code.startsWith('QRIS');
+                      const groupIcon = isQrisTripay ? 'bi-qr-code-scan' : group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-qr-code-scan';
+                      const shortGroup = isQrisTripay ? 'QRIS' : group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'QRIS' : group;
                       const radioId = `pm_${idx}_${code}`;
                   %>
-                    <input class="pm-radio" type="radio" id="<%= radioId %>" name="method" value="<%= channel.code %>" <%= (code === 'QRIS' || idx === 0) ? 'checked' : '' %> <%= idx === 0 ? 'required' : '' %>>
+                    <input class="pm-radio" type="radio" id="<%= radioId %>" name="method" value="<%= channel.code %>" <%= idx === 0 ? 'checked required' : '' %>>
                     <label class="pay-method-item" for="<%= radioId %>">
                       <div class="p-icon">
                         <% if (iconUrl) { %>

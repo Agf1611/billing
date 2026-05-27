@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+    <%
+      const priceText = 'Rp ' + Number(batch.price || 0).toLocaleString('id-ID');
+      function voucherTheme(price) {
+        const value = Number(price || 0);
+        const palettes = [
+          { accent:'#a21caf', brand:'#0891b2', soft:'#fdf4ff', wash:'#fff7ff', mark:'rgba(8,145,178,.08)' },
+          { accent:'#2563eb', brand:'#0f766e', soft:'#eff6ff', wash:'#f8fbff', mark:'rgba(15,118,110,.08)' },
+          { accent:'#dc2626', brand:'#be123c', soft:'#fff1f2', wash:'#fff7f7', mark:'rgba(190,18,60,.08)' },
+          { accent:'#16a34a', brand:'#047857', soft:'#f0fdf4', wash:'#fbfffd', mark:'rgba(4,120,87,.08)' },
+          { accent:'#ea580c', brand:'#c2410c', soft:'#fff7ed', wash:'#fffaf5', mark:'rgba(194,65,12,.08)' },
+          { accent:'#7c3aed', brand:'#4338ca', soft:'#f5f3ff', wash:'#fbfaff', mark:'rgba(67,56,202,.08)' }
+        ];
+        return palettes[Math.abs(Math.floor(value / 1000)) % palettes.length];
+      }
+      const voucherThemeData = voucherTheme(batch.price);
+      const isSingleSale = Number(batch.qty_total || vouchers.length || 0) === 1 && vouchers.length === 1;
+      const firstVoucher = isSingleSale ? vouchers[0] : null;
+      const voucherState = (v) => {
+        const status = String(v.status || '').toLowerCase();
+        if (v.sold_at || v.used_at || status === 'sold' || status === 'used') return { key: 'sold', label: 'Terjual', cls: 'w' };
+        if (v.printed_at || status === 'printed') return { key: 'printed', label: 'Sudah Dicetak', cls: 'n' };
+        return { key: 'ready', label: 'Siap Dijual', cls: 's' };
+      };
+      const readyCount = (vouchers || []).filter(v => voucherState(v).key === 'ready').length;
+      const soldCount = (vouchers || []).filter(v => voucherState(v).key === 'sold').length;
+      const printedCount = (vouchers || []).filter(v => voucherState(v).key === 'printed').length;
+      const defaultVoucherFilter = readyCount > 0 ? 'ready' : 'all';
+      const firstState = firstVoucher ? voucherState(firstVoucher) : null;
+      const detailTitle = isSingleSale ? 'Voucher Satuan' : `Batch Cetak Banyak #${batch.id}`;
+      const detailSubtitle = isSingleSale
+        ? `${batch.profile_name} - 1 voucher untuk jual digital dari HP.`
+        : `${batch.profile_name} - total ${vouchers.length} voucher, siap cetak A4 dan dikelola per kode.`;
+      const allText = (vouchers || []).map(v => [
+        'Voucher WiFi',
+        `Paket: ${batch.profile_name || v.profile_name || '-'}`,
+        `Kode Voucher: ${v.code || '-'}`,
+        v.password && v.password !== v.code ? `Password: ${v.password}` : '',
+        `Masa Aktif: ${batch.validity || '-'}`,
+        `Harga: ${priceText}`
+      ].filter(Boolean).join('\n')).join('\n\n');
+    %>
+
+    <section class="hero">
+      <h1><%= detailTitle %></h1>
+      <p><%= detailSubtitle %></p>
+    </section>
+
+    <section class="cardx sold-focus" id="agentSoldFocus" hidden>
+      <div class="bd">
+        <div class="item-head">
+          <div>
+            <div class="sold-focus-label">Baru Terjual</div>
+            <div class="sold-focus-code" data-sold-focus-code>-</div>
+            <div class="t2" data-sold-focus-meta>Voucher berhasil ditandai terjual.</div>
+          </div>
+          <span class="badgey w"><i class="bi bi-cart-check-fill"></i> Terjual</span>
+        </div>
+        <div class="btn-row" style="margin-top:12px" data-sold-focus-actions></div>
+      </div>
+    </section>
+
+    <% if (isSingleSale && firstVoucher) {
+      const singleText = [
+        'Voucher WiFi',
+        `Paket: ${batch.profile_name || firstVoucher.profile_name || '-'}`,
+        `Kode Voucher: ${firstVoucher.code || '-'}`,
+        firstVoucher.password && firstVoucher.password !== firstVoucher.code ? `Password: ${firstVoucher.password}` : '',
+        `Masa Aktif: ${batch.validity || '-'}`,
+        `Harga: ${priceText}`,
+        'Silakan simpan voucher ini.'
+      ].filter(Boolean).join('\n');
+    %>
+      <section class="cardx single-voucher-card" data-voucher-state="<%= firstState ? firstState.key : 'ready' %>">
+        <div class="bd">
+          <div class="single-code-label">Kode Voucher</div>
+          <div class="single-code"><%= firstVoucher.code %></div>
+          <% if (firstState) { %>
+            <div style="margin-top:10px"><span class="badgey <%= firstState.cls %> voucher-status-label"><%= firstState.label %></span></div>
+          <% } %>
+          <div class="single-meta">
+            <span><i class="bi bi-wifi"></i> <%= batch.profile_name || firstVoucher.profile_name || '-' %></span>
+            <span><i class="bi bi-clock"></i> <%= batch.validity || '-' %></span>
+            <span><i class="bi bi-tag"></i> <%= priceText %></span>
+          </div>
+          <% if (firstVoucher.password && firstVoucher.password !== firstVoucher.code) { %>
+            <div class="single-pass">Password: <strong><%= firstVoucher.password %></strong></div>
+          <% } %>
+          <div class="btn-row" style="margin-top:12px" data-voucher-actions>
+            <% if (firstState && firstState.key === 'ready') { %>
+              <button class="btn-action" type="button" data-agent-mark-sold data-voucher-id="<%= firstVoucher.id %>"
+              data-company="<%= company %>"
+              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+              data-profile="<%= batch.profile_name || firstVoucher.profile_name || '-' %>"
+              data-code="<%= firstVoucher.code || '-' %>"
+              data-password="<%= firstVoucher.password || '' %>"
+              data-validity="<%= batch.validity || '-' %>"
+              data-price="<%= priceText %>"
+              data-accent="<%= voucherThemeData.accent %>"
+              data-brand="<%= voucherThemeData.brand %>"
+              data-soft="<%= voucherThemeData.soft %>"
+              data-wash="<%= voucherThemeData.wash %>"
+              data-mark="<%= voucherThemeData.mark %>"
+              data-copy-text="<%= singleText %>"><i class="bi bi-cart-check-fill"></i> Jual</button>
+            <% } else if (firstState && firstState.key === 'sold') { %>
+              <button class="btn-action" data-agent-voucher-image data-voucher-id="<%= firstVoucher.id %>"
+              data-company="<%= company %>"
+              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+              data-profile="<%= batch.profile_name || firstVoucher.profile_name || '-' %>"
+              data-code="<%= firstVoucher.code || '-' %>"
+              data-password="<%= firstVoucher.password || '' %>"
+              data-validity="<%= batch.validity || '-' %>"
+              data-price="<%= priceText %>"
+              data-accent="<%= voucherThemeData.accent %>"
+              data-brand="<%= voucherThemeData.brand %>"
+              data-soft="<%= voucherThemeData.soft %>"
+              data-wash="<%= voucherThemeData.wash %>"
+              data-mark="<%= voucherThemeData.mark %>"><i class="bi bi-share"></i> Bagikan Gambar</button>
+              <button class="btn-mini" data-agent-copy="<%= singleText %>" data-voucher-id="<%= firstVoucher.id %>"><i class="bi bi-clipboard"></i> Salin</button>
+            <% } else if (firstState && firstState.key === 'printed') { %>
+              <span class="btn-mini disabled-note"><i class="bi bi-printer"></i> Voucher sudah dicetak</span>
+            <% } else { %>
+              <span class="btn-mini disabled-note"><i class="bi bi-check2-circle"></i> Voucher sudah terjual</span>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    <% } %>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-info-circle"></i> <%= isSingleSale ? 'Informasi Voucher' : 'Informasi Batch' %></h2>
+        <span class="badgey <%= batch.status === 'done' ? 's' : 'w' %>"><%= batch.status || '-' %></span>
+      </div>
+      <div class="bd">
+        <div class="grid grid-2">
+          <div class="kpi"><div class="lbl"><%= isSingleSale ? 'Jenis' : 'Jenis Batch' %></div><div class="val"><%= isSingleSale ? 'Satuan' : 'Cetak Banyak' %></div></div>
+          <div class="kpi"><div class="lbl">Total Voucher</div><div class="val"><%= vouchers.length %></div></div>
+          <div class="kpi"><div class="lbl">Harga</div><div class="val"><%= priceText %></div></div>
+          <div class="kpi"><div class="lbl">Masa Aktif</div><div class="val"><%= batch.validity || '-' %></div></div>
+          <div class="kpi"><div class="lbl">Siap Dijual</div><div class="val" data-agent-ready-count data-count-value="<%= readyCount %>"><%= readyCount %></div></div>
+          <div class="kpi"><div class="lbl">Terjual</div><div class="val" data-agent-sold-count data-count-value="<%= soldCount %>" data-count-total="<%= vouchers.length %>"><%= soldCount %>/<%= vouchers.length %></div></div>
+          <div class="kpi"><div class="lbl">Dicetak</div><div class="val" data-agent-printed-count data-count-value="<%= printedCount %>"><%= printedCount %></div></div>
+        </div>
+        <div class="status-guide">
+          <span class="badgey s">Siap Dijual</span>
+          <span class="badgey w">Terjual</span>
+          <span class="badgey n">Sudah Dicetak</span>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <% if (!isSingleSale) { %>
+            <a class="btn-action" href="/agent/vouchers/batches/<%= batch.id %>/print" target="_blank" data-agent-print-confirm data-ready-count="<%= readyCount %>" data-total-count="<%= vouchers.length %>"><i class="bi bi-printer"></i> Print A4 & Tandai Cetak</a>
+          <% } %>
+          <button class="btn-mini" data-agent-copy="<%= allText %>"><i class="bi bi-clipboard"></i> Salin Semua</button>
+          <a class="btn-mini" href="/agent/vouchers/batches/<%= batch.id %>/export.csv"><i class="bi bi-filetype-csv"></i> CSV</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-ticket-perforated"></i> <%= isSingleSale ? 'Voucher Satuan' : 'Daftar Voucher Batch' %></h2>
+        <span class="pill"><%= vouchers.length %></span>
+      </div>
+      <div class="bd">
+        <% if (!vouchers || vouchers.length === 0) { %>
+          <div class="empty">Tidak ada voucher.</div>
+        <% } else { %>
+          <div class="voucher-filter-row" id="voucherFilterRow">
+            <button class="filter-chip <%= defaultVoucherFilter === 'all' ? 'active' : '' %>" type="button" data-voucher-filter="all">Semua <b data-voucher-filter-count="all" data-count-value="<%= vouchers.length %>"><%= vouchers.length %></b></button>
+            <button class="filter-chip <%= defaultVoucherFilter === 'ready' ? 'active' : '' %>" type="button" data-voucher-filter="ready">Siap <b data-voucher-filter-count="ready" data-count-value="<%= readyCount %>"><%= readyCount %></b></button>
+            <button class="filter-chip" type="button" data-voucher-filter="sold">Terjual <b data-voucher-filter-count="sold" data-count-value="<%= soldCount %>"><%= soldCount %></b></button>
+            <button class="filter-chip" type="button" data-voucher-filter="printed">Dicetak <b data-voucher-filter-count="printed" data-count-value="<%= printedCount %>"><%= printedCount %></b></button>
+          </div>
+          <div class="listx">
+            <% vouchers.forEach(v => {
+              const state = voucherState(v);
+              const text = [
+                'Voucher WiFi',
+                `Paket: ${batch.profile_name || v.profile_name || '-'}`,
+                `Kode Voucher: ${v.code || '-'}`,
+                v.password && v.password !== v.code ? `Password: ${v.password}` : '',
+                `Masa Aktif: ${batch.validity || '-'}`,
+                `Harga: ${priceText}`,
+                'Silakan simpan voucher ini.'
+              ].filter(Boolean).join('\n');
+            %>
+              <div class="itemx voucher-item state-<%= state.key %>" data-voucher-state="<%= state.key %>" <%= defaultVoucherFilter !== 'all' && state.key !== defaultVoucherFilter ? 'hidden' : '' %>>
+                <div class="item-head">
+                  <div>
+                    <div class="t1" style="font-size:18px;letter-spacing:1px"><%= v.code %></div>
+                    <div class="t2"><%= v.password && v.password !== v.code ? `Pass: ${v.password}` : 'User dan password sama' %></div>
+                    <div class="t2" data-voucher-meta>
+                      <%= state.key === 'ready' ? 'Siap dijual' : state.key === 'printed' ? `Dicetak ${v.printed_at ? new Date(v.printed_at).toLocaleString('id-ID') : ''}` : `Terjual ${v.sold_at ? new Date(v.sold_at).toLocaleString('id-ID') : ''}` %>
+                    </div>
+                  </div>
+                  <span class="badgey <%= state.cls %> voucher-status-label"><%= state.label %></span>
+                </div>
+                <div class="btn-row" style="margin-top:10px" data-voucher-actions>
+                  <% if (state.key === 'ready') { %>
+                    <button class="btn-action" type="button" data-agent-mark-sold data-voucher-id="<%= v.id %>"
+                    data-company="<%= company %>"
+                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+                    data-profile="<%= batch.profile_name || v.profile_name || '-' %>"
+                    data-code="<%= v.code || '-' %>"
+                    data-password="<%= v.password || '' %>"
+                    data-validity="<%= batch.validity || '-' %>"
+                    data-price="<%= priceText %>"
+                    data-accent="<%= voucherThemeData.accent %>"
+                    data-brand="<%= voucherThemeData.brand %>"
+                    data-soft="<%= voucherThemeData.soft %>"
+                    data-wash="<%= voucherThemeData.wash %>"
+                    data-mark="<%= voucherThemeData.mark %>"
+                    data-copy-text="<%= text %>"><i class="bi bi-cart-check-fill"></i> Jual</button>
+                  <% } else if (state.key === 'sold') { %>
+                    <button class="btn-mini" data-agent-voucher-image data-voucher-id="<%= v.id %>"
+                    data-company="<%= company %>"
+                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+                    data-profile="<%= batch.profile_name || v.profile_name || '-' %>"
+                    data-code="<%= v.code || '-' %>"
+                    data-password="<%= v.password || '' %>"
+                    data-validity="<%= batch.validity || '-' %>"
+                    data-price="<%= priceText %>"
+                    data-accent="<%= voucherThemeData.accent %>"
+                    data-brand="<%= voucherThemeData.brand %>"
+                    data-soft="<%= voucherThemeData.soft %>"
+                    data-wash="<%= voucherThemeData.wash %>"
+                    data-mark="<%= voucherThemeData.mark %>"><i class="bi bi-share"></i> Bagikan Gambar</button>
+                    <button class="btn-mini" data-agent-copy="<%= text %>" data-voucher-id="<%= v.id %>"><i class="bi bi-clipboard"></i> Salin</button>
+                  <% } else if (state.key === 'printed') { %>
+                    <span class="btn-mini disabled-note"><i class="bi bi-printer"></i> Voucher sudah dicetak</span>
+                  <% } else { %>
+                    <span class="btn-mini disabled-note"><i class="bi bi-check2-circle"></i> Voucher sudah terjual</span>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'vouchers' }) %>
+  <%- include('partials/scripts') %>
+  <script>
+    (function () {
+      document.querySelectorAll('[data-voucher-filter]').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const filter = chip.getAttribute('data-voucher-filter') || 'all';
+          document.documentElement.dataset.agentVoucherFilter = filter;
+          document.querySelectorAll('[data-voucher-filter]').forEach(el => el.classList.toggle('active', el === chip));
+          document.querySelectorAll('.listx [data-voucher-state]').forEach((item) => {
+            item.hidden = filter !== 'all' && item.getAttribute('data-voucher-state') !== filter;
+          });
+        });
+      });
+      document.documentElement.dataset.agentVoucherFilter = <%- JSON.stringify(defaultVoucherFilter) %>;
+    })();
+  </script>
+</body>
+</html>

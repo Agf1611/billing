@@ -19,28 +19,71 @@
     .picker-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
     .picker-toolbar .btn{min-height:38px}
     .picker-toolbar .hint{margin:0}
+    .discount-toggle-card{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:rgba(99,102,241,.06);
+      padding:12px;
+    }
+    .discount-toggle-line{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      cursor:pointer;
+      font-weight:800;
+      color:var(--text);
+      margin:0;
+    }
+    .discount-toggle-line input{position:absolute;opacity:0;pointer-events:none}
+    .discount-switch{
+      width:48px;
+      height:28px;
+      border-radius:999px;
+      background:rgba(148,163,184,.35);
+      position:relative;
+      flex:0 0 48px;
+      transition:.2s ease;
+      box-shadow:inset 0 0 0 1px rgba(148,163,184,.28);
+    }
+    .discount-switch::after{
+      content:'';
+      position:absolute;
+      top:4px;
+      left:4px;
+      width:20px;
+      height:20px;
+      border-radius:50%;
+      background:#fff;
+      box-shadow:0 4px 10px rgba(15,23,42,.18);
+      transition:.2s ease;
+    }
+    .discount-toggle-line input:checked + .discount-switch{background:linear-gradient(135deg,#6366f1,#22c55e)}
+    .discount-toggle-line input:checked + .discount-switch::after{transform:translateX(20px)}
+    .discount-amount-wrap{margin-top:10px}
+    .discount-amount-wrap[hidden]{display:none!important}
     .customer-overview-shell{display:none}
-    .customer-overview-top{padding:18px 20px 88px;color:#fff;position:relative}
-    .customer-overview-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .customer-overview-top{padding:14px 18px 72px;color:#fff;position:relative}
+    .customer-overview-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .customer-overview-title h3{margin:0;font-size:19px;display:flex;align-items:center;gap:12px}
-    .customer-overview-title .info-chip{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;font-weight:700}
-    .customer-overview-banner{background:#fff;color:#3b82c4;border-radius:22px;padding:16px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 14px 30px rgba(15,23,42,.12)}
-    .customer-overview-banner i{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:#e9f4ff;color:#2f8fe8;font-size:20px}
-    .customer-overview-content{margin-top:-62px;padding:0 16px 18px}
-    .customer-overview-card{background:#fff;border-radius:26px;padding:22px 18px 18px;border:1px solid rgba(148,163,184,.16);box-shadow:0 18px 44px rgba(15,23,42,.12)}
-    .customer-overview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-    .customer-period-form{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-    .customer-period-form label{font-size:14px;color:#64748b}
-    .customer-period-form .period-group{display:flex;align-items:center;gap:10px}
-    .customer-period-form select{border:0;background:transparent;font-size:18px;font-weight:800;color:#18213f;outline:none;padding:0 18px 0 0}
-    .customer-period-form .period-submit{display:inline-flex;align-items:center;gap:8px;border:0;background:#21316f;color:#fff;border-radius:999px;padding:10px 15px;font-weight:700}
-    .customer-overview-total{font-size:14px;color:#4aa4dd;font-weight:700}
-    .overview-section{margin-top:12px}
-    .overview-section + .overview-section{margin-top:22px}
-    .overview-section h4{margin:0 0 12px;font-size:15px;color:#1b294f}
-    .overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-    .overview-card{display:flex;gap:14px;align-items:flex-start;padding:12px 8px;border-radius:18px}
-    .overview-icon{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-size:26px;flex:0 0 auto;box-shadow:inset 0 0 0 1px rgba(255,255,255,.65)}
+    .customer-overview-title .info-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.1);font-size:11px;font-weight:700}
+    .customer-overview-banner{background:#fff;color:#3b82c4;border-radius:18px;padding:11px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 30px rgba(15,23,42,.12)}
+    .customer-overview-banner i{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#e9f4ff;color:#2f8fe8;font-size:17px}
+    .customer-overview-content{margin-top:-52px;padding:0 14px 14px}
+    .customer-overview-card{background:#fff;border-radius:22px;padding:15px 14px 14px;border:1px solid rgba(148,163,184,.16);box-shadow:0 18px 44px rgba(15,23,42,.12)}
+    .customer-overview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .customer-period-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .customer-period-form label{font-size:12px;color:#64748b}
+    .customer-period-form .period-group{display:flex;align-items:center;gap:6px}
+    .customer-period-form select{border:0;background:transparent;font-size:15px;font-weight:800;color:#18213f;outline:none;padding:0 14px 0 0}
+    .customer-period-form .period-submit{display:inline-flex;align-items:center;gap:6px;border:0;background:#21316f;color:#fff;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:700}
+    .customer-overview-total{font-size:12px;color:#4aa4dd;font-weight:700}
+    .overview-section{margin-top:8px}
+    .overview-section + .overview-section{margin-top:14px}
+    .overview-section h4{margin:0 0 7px;font-size:13px;color:#1b294f}
+    .overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .overview-card{display:flex;gap:9px;align-items:flex-start;padding:8px 6px;border-radius:14px}
+    .overview-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;flex:0 0 auto;box-shadow:inset 0 0 0 1px rgba(255,255,255,.65)}
     .overview-icon.orange{background:#fff1e8;color:#ff7c1c}
     .overview-icon.blue{background:#eaf4ff;color:#3da0f0}
     .overview-icon.gray{background:#f3f4f6;color:#666}
@@ -50,19 +93,19 @@
     .overview-icon.red{background:#fff1f2;color:#ef4444}
     .overview-icon.rose{background:#fff0ef;color:#ef4444}
     .overview-copy{min-width:0}
-    .overview-label{display:block;color:#5f687d;font-size:13px;margin-bottom:4px}
-    .overview-value{display:block;color:#111827;font-size:28px;font-weight:800;line-height:1}
-    .overview-amount{display:block;margin-top:6px;color:#1f2937;font-size:13px}
-    .overview-foot{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:12px;color:#3498db;font-weight:700}
-    .overview-link{display:inline-flex;align-items:center;gap:8px;margin-top:6px;font-size:12px;color:#3498db;font-weight:700;text-decoration:none}
+    .overview-label{display:block;color:#5f687d;font-size:11px;margin-bottom:3px}
+    .overview-value{display:block;color:#111827;font-size:22px;font-weight:800;line-height:1;letter-spacing:0}
+    .overview-amount{display:block;margin-top:4px;color:#1f2937;font-size:11.5px}
+    .overview-foot{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#3498db;font-weight:700}
+    .overview-link{display:inline-flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#3498db;font-weight:700;text-decoration:none}
     .overview-link:hover{text-decoration:underline}
     .mobile-add-customer{display:none}
     .page-tools{display:flex;gap:8px;flex-wrap:wrap}
     .page-tools .tool-label{display:inline}
-    .desktop-search-block{display:grid;gap:8px;min-width:0}
+    .desktop-search-block{display:grid;gap:5px;min-width:0}
     .desktop-filter-eyebrow{
       display:block;
-      font-size:11px;
+      font-size:10px;
       font-weight:800;
       letter-spacing:.08em;
       text-transform:uppercase;
@@ -120,12 +163,12 @@
       flex:0 0 16px;
     }
     .action-mini .action-label{display:none}
-    .quick-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .quick-filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
     .quick-filter-row .btn{
-      padding:8px 12px;
+      padding:6px 9px;
       display:inline-flex;
       align-items:center;
-      gap:8px;
+      gap:6px;
       min-width:0;
     }
     .quick-filter-row .btn i{
@@ -149,9 +192,9 @@
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      min-width:28px;
-      height:22px;
-      padding:0 8px;
+      min-width:24px;
+      height:20px;
+      padding:0 7px;
       border-radius:999px;
       background:rgba(99,102,241,.12);
       color:var(--primary);
@@ -182,13 +225,13 @@
       box-shadow:0 8px 18px rgba(239,68,68,.24)
     }
     .mobile-filter-badge.show{display:inline-flex}
-    .customer-filter-form{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;width:100%}
-    .customer-search-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;width:100%;min-width:0}
+    .customer-filter-form{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;width:100%}
+    .customer-search-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;width:100%;min-width:0}
     .customer-search-row .sinput{flex:1 1 auto;min-width:0}
-    .customer-filter-form .customer-search-row{flex:0 1 360px;max-width:360px}
-    .customer-filter-panel{display:flex;gap:10px;align-items:center;justify-content:flex-end;flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+    .customer-filter-form .customer-search-row{flex:1 1 430px;max-width:520px}
+    .customer-filter-panel{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex:1 1 auto;min-width:0;max-width:none;box-sizing:border-box;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
     .customer-filter-panel::-webkit-scrollbar{display:none}
-    .customer-filter-main-row{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:0}
+    .customer-filter-main-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;flex:0 0 auto;min-width:0}
     .customer-filter-panel .mobile-filter-field{min-width:0;flex:0 0 auto}
     .customer-filter-panel select.mobile-filter-field{
       width:auto !important;
@@ -204,11 +247,16 @@
     .customer-filter-panel select.mobile-filter-field[name="segment"]{min-width:160px}
     .customer-filter-panel select.mobile-filter-field[name="month"]{min-width:124px}
     .customer-filter-panel select.mobile-filter-field[name="year"]{min-width:96px}
-    .customer-filter-panel .mobile-date-row{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
-    .customer-filter-panel .mobile-filter-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .customer-filter-panel select.mobile-filter-field[name="package_id"]{min-width:150px}
+    .customer-filter-panel .mobile-date-row{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+    .customer-filter-panel .mobile-filter-actions{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
     .customer-filter-panel .fs,
     .customer-filter-panel .fc,
     .customer-filter-panel .btn{white-space:nowrap}
+    .customer-filter-panel .mobile-filter-actions .btn{
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
     .customer-table-action{
       display:inline-flex;
       align-items:center;
@@ -232,11 +280,19 @@
       padding:0;
     }
     .customer-reset-btn .customer-table-action span:last-child{display:none}
-    .customer-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
-    .customer-filter-summary strong{font-size:13px;color:var(--text)}
-    .customer-filter-summary span{font-size:12px;color:var(--muted)}
-    .customer-filter-summary .summary-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .customer-filter-summary .summary-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:rgba(99,102,241,.12);color:var(--primary);font-size:11px;font-weight:700}
+    .customer-filter-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;padding:7px 10px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
+    .customer-filter-summary strong{font-size:12px;color:var(--text)}
+    .customer-filter-summary span{font-size:11px;color:var(--muted)}
+    .customer-filter-summary .summary-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .customer-filter-summary .summary-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;background:rgba(99,102,241,.12);color:var(--primary);font-size:10.5px;font-weight:700}
+    .customer-profile-mini{display:grid;gap:3px;margin-top:6px;font-size:10.5px;line-height:1.25;color:var(--muted)}
+    .customer-profile-mini strong{color:var(--text);font-size:11px}
+    .customer-profile-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+    .profile-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.04);font-size:9.5px;font-weight:800;color:var(--muted)}
+    .profile-tag.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.28);color:#f59e0b}
+    .profile-tag.boost{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.28);color:#22c55e}
+    .speed-boost-card{border:1px solid var(--border);border-radius:14px;background:rgba(34,197,94,.07);padding:12px;display:grid;gap:10px}
+    .speed-boost-card .speed-boost-head{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--text)}
     .table-empty-state{
       display:grid;
       justify-items:center;
@@ -326,7 +382,7 @@
       .customer-filter-form{
         display:flex;
         align-items:center;
-        gap:10px;
+        gap:8px;
         flex-wrap:nowrap;
       }
       .customer-search-row{
@@ -350,7 +406,7 @@
         overflow:visible;
         display:flex;
         align-items:center;
-        gap:8px;
+        gap:7px;
         flex:1 1 auto;
         min-width:0;
       }
@@ -358,7 +414,7 @@
       .customer-filter-panel .mobile-date-row{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap:7px;
         flex-wrap:nowrap;
         width:auto;
       }
@@ -366,7 +422,7 @@
         display:flex;
         align-items:center;
         justify-content:flex-end;
-        gap:8px;
+        gap:6px;
         margin-left:auto;
         width:auto;
         flex:0 0 auto;
@@ -380,45 +436,55 @@
       .customer-filter-panel .desktop-filter-field .fs,
       .customer-filter-panel .desktop-filter-field .fc{
         width:auto !important;
-        min-height:38px;
+        min-height:36px;
+        height:36px;
+        font-size:12px;
       }
-      .customer-filter-panel select[name="status"]{min-width:126px}
-      .customer-filter-panel select[name="segment"]{min-width:146px}
-      .customer-filter-panel select[name="month"]{min-width:118px}
-      .customer-filter-panel select[name="year"]{min-width:90px}
+      .customer-filter-panel select[name="status"]{min-width:116px}
+      .customer-filter-panel select[name="segment"]{min-width:128px}
+      .customer-filter-panel select[name="package_id"]{min-width:138px}
+      .customer-filter-panel select[name="month"]{min-width:92px}
+      .customer-filter-panel select[name="year"]{min-width:78px}
       .customer-filter-panel input[name="billingDayStart"],
       .customer-filter-panel input[name="billingDayEnd"]{
-        width:96px !important;
+        width:82px !important;
+        padding-left:9px;
+        padding-right:9px;
+      }
+      .customer-filter-panel .mobile-filter-actions .btn{
+        min-height:36px;
+        height:36px;
+        padding:0 10px;
       }
       .customer-filter-summary{
-        margin-top:10px;
-        padding:10px 12px;
-        border-radius:16px;
+        margin-top:8px;
+        padding:7px 10px;
+        border-radius:12px;
       }
       .customer-filter-summary strong{
         display:block;
-        font-size:15px;
-        margin-bottom:2px;
+        font-size:12px;
+        margin-bottom:1px;
       }
       .quick-filter-row{
         display:flex;
         flex-wrap:nowrap;
         overflow:auto;
         scrollbar-width:none;
-        gap:8px;
-        margin-top:10px;
-        padding:6px;
-        padding-bottom:8px;
-        border:1px solid rgba(255,255,255,.06);
-        border-radius:16px;
+        gap:6px;
+        margin-top:8px;
+        padding:4px;
+        padding-bottom:5px;
+        border:1px solid rgba(255,255,255,.05);
+        border-radius:12px;
         background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.018));
         align-items:center;
       }
       .quick-filter-row::-webkit-scrollbar{display:none}
       .quick-filter-row .btn{
-        min-height:34px;
-        padding:5px 10px;
-        border-radius:12px;
+        min-height:30px;
+        padding:4px 8px;
+        border-radius:10px;
         justify-content:flex-start;
         flex:0 0 auto;
         background:transparent;
@@ -432,12 +498,12 @@
         flex:0 0 13px;
       }
       .quick-filter-row .btn .filter-chip-label{
-        font-size:10.5px;
+        font-size:10px;
         font-weight:800;
       }
       .quick-filter-row .btn .filter-chip-count{
-        min-width:22px;
-        height:18px;
+        min-width:20px;
+        height:17px;
         padding:0 6px;
         font-size:9.5px;
         background:rgba(99,102,241,.14);
@@ -457,9 +523,10 @@
       }
       .customer-table .dtbl{
         table-layout:fixed;
+        min-width:1180px;
       }
       .customer-table .dtbl thead th{
-        padding:14px 16px;
+        padding:11px 12px;
         font-size:11px;
         font-weight:800;
         letter-spacing:.07em;
@@ -472,17 +539,17 @@
         backdrop-filter:blur(10px);
         box-shadow:0 1px 0 rgba(255,255,255,.04);
       }
-      .customer-table .dtbl thead th:nth-child(1){width:52px}
-      .customer-table .dtbl thead th:nth-child(2){width:12%}
-      .customer-table .dtbl thead th:nth-child(3){width:15%}
-      .customer-table .dtbl thead th:nth-child(4){width:13%}
-      .customer-table .dtbl thead th:nth-child(5){width:12%}
-      .customer-table .dtbl thead th:nth-child(6){width:19%}
-      .customer-table .dtbl thead th:nth-child(7){width:14%}
-      .customer-table .dtbl thead th:nth-child(8){width:11%}
-      .customer-table .dtbl thead th:nth-child(9){width:176px}
+      .customer-table .dtbl thead th:nth-child(1){width:42px}
+      .customer-table .dtbl thead th:nth-child(2){width:140px}
+      .customer-table .dtbl thead th:nth-child(3){width:160px}
+      .customer-table .dtbl thead th:nth-child(4){width:190px}
+      .customer-table .dtbl thead th:nth-child(5){width:110px}
+      .customer-table .dtbl thead th:nth-child(6){width:170px}
+      .customer-table .dtbl thead th:nth-child(7){width:126px}
+      .customer-table .dtbl thead th:nth-child(8){width:92px}
+      .customer-table .dtbl thead th:nth-child(9){width:150px}
       .customer-table .dtbl tbody td{
-        padding:16px;
+        padding:10px 12px;
         vertical-align:top;
       }
       .customer-table .dtbl tbody tr{
@@ -497,9 +564,9 @@
         font-weight:700;
       }
       .customer-table-primary{
-        font-size:14px;
+        font-size:13px;
         font-weight:800;
-        line-height:1.35;
+        line-height:1.28;
         color:var(--text);
       }
       .customer-table-secondary,
@@ -508,7 +575,7 @@
       .customer-table-unpaid-note{
         margin-top:4px;
         font-size:11px;
-        line-height:1.5;
+        line-height:1.32;
         color:var(--muted);
       }
       .customer-table-tag{
@@ -528,42 +595,80 @@
         font-variant-numeric:tabular-nums;
       }
       .customer-table-package{
-        font-size:13px;
+        font-size:12.5px;
         font-weight:700;
-        line-height:1.4;
+        line-height:1.28;
+        display:-webkit-box;
+        -webkit-box-orient:vertical;
+        -webkit-line-clamp:2;
+        overflow:hidden;
+      }
+      .customer-price-stack{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        flex-wrap:wrap;
+        margin-top:3px;
+      }
+      .customer-price-normal{
+        color:var(--muted);
+        text-decoration:line-through;
+        text-decoration-thickness:2px;
+        font-size:11px;
+      }
+      .customer-price-discount{
+        color:#22c55e;
+        font-weight:900;
+        font-size:12px;
+      }
+      .customer-discount-chip{
+        display:inline-flex;
+        align-items:center;
+        gap:4px;
+        width:max-content;
+        margin-top:4px;
+        padding:3px 7px;
+        border-radius:999px;
+        background:rgba(34,197,94,.14);
+        color:#22c55e;
+        border:1px solid rgba(34,197,94,.24);
+        font-size:10px;
+        font-weight:900;
+        line-height:1;
       }
       .customer-table-usage{
-        max-width:132px;
+        max-width:110px;
       }
       .customer-table-usage strong{
         display:block;
-        font-size:13px;
+        font-size:12px;
         font-weight:800;
         line-height:1.2;
       }
       .customer-table-address{
-        max-width:320px;
+        max-width:170px;
         font-size:12px;
-        line-height:1.55;
+        line-height:1.35;
         color:var(--text);
         white-space:normal;
         word-break:break-word;
         display:-webkit-box;
         -webkit-box-orient:vertical;
-        -webkit-line-clamp:3;
+        -webkit-line-clamp:2;
         overflow:hidden;
       }
       .customer-status-stack{
         display:grid;
-        gap:8px;
+        gap:5px;
       }
       .customer-status-meta{
         display:flex;
         align-items:center;
-        gap:6px;
-        font-size:11px;
-        line-height:1.45;
+        gap:4px;
+        font-size:10.5px;
+        line-height:1.25;
         color:var(--muted);
+        flex-wrap:wrap;
       }
       .customer-status-meta i{
         color:var(--primary);
@@ -571,32 +676,65 @@
       .customer-unpaid-stack{
         display:grid;
         justify-items:center;
-        gap:6px;
+        gap:4px;
         text-align:center;
       }
       .customer-action-cluster{
-        display:flex;
-        flex-wrap:wrap;
-        gap:6px;
+        display:grid;
+        grid-template-columns:repeat(4,32px);
+        gap:5px;
         align-items:flex-start;
-        min-width:160px;
+        min-width:143px;
       }
       .customer-action-cluster form{
         display:inline-flex;
         margin:0;
       }
       .customer-action-cluster .btn{
-        min-height:34px;
-        min-width:34px;
-        border-radius:11px;
+        min-height:32px;
+        min-width:32px;
+        width:32px;
+        padding:0;
+        border-radius:10px;
       }
       .customer-action-cluster .customer-reset-btn{
-        width:auto;
-        padding:0 10px;
+        width:32px;
+        padding:0;
       }
       .customer-action-cluster .customer-table-action{
         font-size:11px;
         font-weight:700;
+      }
+    }
+    @media(min-width:769px){
+      .customer-profile-mini{
+        display:flex;
+        flex-wrap:wrap;
+        gap:3px 6px;
+        margin-top:5px;
+        font-size:10px;
+        line-height:1.18;
+      }
+      .customer-profile-mini strong{font-size:10.5px}
+      .customer-profile-mini span{
+        max-width:100%;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+      .customer-profile-tags{
+        flex:1 0 100%;
+        margin-top:2px;
+        gap:4px;
+      }
+      .profile-tag{
+        padding:3px 6px;
+        font-size:9px;
+      }
+      .customer-table .badge{
+        min-height:22px;
+        padding:4px 9px;
+        line-height:1;
       }
     }
     .upload-preview-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;flex-wrap:wrap}
@@ -733,24 +871,113 @@
       background:rgba(20,184,166,.14);
       color:#5eead4;
     }
-    @media(max-width:1100px){
+    @media(min-width:1101px){
+      .customer-filter-form{
+        display:grid !important;
+        grid-template-columns:220px minmax(0,1fr);
+        align-items:center;
+        gap:7px;
+      }
+      .customer-filter-form .customer-search-row{
+        width:auto !important;
+        max-width:none !important;
+        min-width:0;
+        flex:none;
+      }
+      .customer-search-row .desktop-search-block,
+      .customer-search-row .sinput{
+        width:100%;
+        min-width:0;
+        max-width:none !important;
+      }
+      .customer-search-row .sinput .fc{
+        min-height:38px;
+        height:38px;
+        font-size:12px;
+        padding-left:36px;
+        padding-right:10px;
+      }
+      .customer-filter-panel{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto auto;
+        align-items:center;
+        gap:6px;
+        overflow:visible;
+        min-width:0;
+      }
+      .customer-filter-main-row{
+        display:grid;
+        grid-template-columns:96px 120px 100px 74px 64px;
+        gap:6px;
+        align-items:center;
+        justify-content:start;
+        min-width:0;
+        width:100%;
+      }
+      .customer-filter-panel .mobile-date-row{
+        display:grid;
+        grid-template-columns:62px 62px;
+        gap:6px;
+        align-items:center;
+        width:auto;
+      }
+      .customer-filter-panel .mobile-filter-actions{
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        gap:6px;
+        min-width:0;
+      }
+      .customer-filter-panel .desktop-filter-field{
+        min-width:0;
+        width:100%;
+      }
+      .customer-filter-panel .desktop-filter-field .fs,
+      .customer-filter-panel .desktop-filter-field .fc{
+        width:100% !important;
+        min-width:0 !important;
+        min-height:38px;
+        height:38px;
+        padding-left:9px;
+        padding-right:24px;
+        font-size:11.5px;
+      }
+      .customer-filter-panel .mobile-date-row .fc{
+        text-align:center;
+        padding-left:6px;
+        padding-right:6px;
+      }
+      .customer-filter-panel .btn{
+        min-height:38px;
+        height:38px;
+        padding:0 10px;
+        border-radius:11px;
+        font-size:11.5px;
+        gap:5px;
+      }
+      .customer-filter-summary{
+        margin-top:8px;
+      }
+    }
+    @media(max-width:768px){
       #customerSearchForm{display:block !important;width:100%}
       .customer-filter-form{display:block !important;width:100%}
       .mobile-filter-toggle{
         display:inline-flex;
-        flex:0 0 auto;
-        min-width:92px;
-        height:46px;
-        padding:0 14px;
+        flex:0 0 52px;
+        min-width:52px;
+        height:52px;
+        padding:0;
         justify-content:center;
+        align-items:center;
         border-radius:16px;
       }
-      .mobile-filter-toggle .mobile-filter-toggle-label{display:inline}
+      .mobile-filter-toggle .mobile-filter-toggle-label{display:none}
       .customer-search-row{
         display:grid;
-        grid-template-columns:minmax(0,1fr) auto;
-        align-items:start;
-        gap:8px;
+        grid-template-columns:minmax(0,1fr) 52px;
+        align-items:center;
+        gap:10px;
         width:100%;
         margin-bottom:10px;
       }
@@ -758,9 +985,12 @@
         min-width:0;
         width:100%;
         max-width:none !important;
+        height:52px;
+        align-items:center;
       }
+      .customer-search-row .sinput .fc{min-height:52px}
       .customer-filter-form .customer-search-row{max-width:none}
-      .customer-search-row .mobile-filter-toggle{align-self:stretch}
+      .customer-search-row .mobile-filter-toggle{align-self:center}
       .customer-filter-panel{
         display:none;
         position:static !important;
@@ -822,22 +1052,23 @@
       .topbar .tb-right .tb-theme-btn{min-width:42px;padding:0 10px}
       .topbar .tb-right .tb-theme-btn span{display:none}
       .topbar .tb-right > .btn.btn-g.btn-sm:last-child{min-width:42px;padding:0 10px}
-      .customer-overview-shell{border-radius:24px;background:linear-gradient(180deg,#1f2f73 0%,#1f2f73 140px,#f7f9ff 140px,#fff 100%)}
-      .customer-overview-top{padding:16px 16px 82px}
+      .customer-overview-shell{border-radius:20px;background:linear-gradient(180deg,#1f2f73 0%,#1f2f73 118px,#f7f9ff 118px,#fff 100%)}
+      .customer-overview-top{padding:12px 14px 66px}
       .customer-overview-title h3{font-size:17px}
-      .customer-overview-title .info-chip{padding:8px 12px}
-      .customer-overview-content{padding:0 10px 16px}
-      .customer-overview-card{padding:18px 14px 88px}
+      .customer-overview-title .info-chip{padding:7px 10px}
+      .customer-overview-content{padding:0 8px 12px}
+      .customer-overview-card{padding:12px 10px 72px}
       .customer-period-form{width:100%;justify-content:space-between}
       .customer-period-form .period-group{gap:6px}
-      .customer-period-form select{font-size:17px}
+      .customer-period-form select{font-size:15px}
       .customer-overview-total{width:100%}
-      .overview-grid{gap:8px}
-      .overview-card{padding:10px 4px}
-      .overview-icon{width:48px;height:48px;font-size:23px;border-radius:14px}
-      .overview-label{font-size:12px}
-      .overview-value{font-size:24px}
-      .overview-amount{font-size:12px}
+      .overview-section + .overview-section{margin-top:12px}
+      .overview-grid{gap:7px}
+      .overview-card{padding:7px 4px}
+      .overview-icon{width:38px;height:38px;font-size:18px;border-radius:11px}
+      .overview-label{font-size:11px}
+      .overview-value{font-size:21px}
+      .overview-amount{font-size:11px}
       .mobile-add-customer{display:flex;position:sticky;bottom:14px;left:0;right:0;justify-content:center;z-index:15;margin-top:-68px}
       .mobile-add-customer .btn{width:min(100%,340px);border-radius:18px;min-height:54px;font-size:16px;box-shadow:0 18px 36px rgba(31,47,115,.25)}
       .card-hd{align-items:flex-start}
@@ -855,18 +1086,18 @@
         flex-wrap:nowrap;
         overflow:auto;
         scrollbar-width:none;
-        gap:8px;
+        gap:6px;
         padding:0 0 2px;
-        margin-top:10px;
+        margin-top:8px;
         border:0;
         background:transparent;
       }
       .quick-filter-row::-webkit-scrollbar{display:none}
       .quick-filter-row .btn{
         position:relative;
-        width:58px;
-        min-width:58px;
-        min-height:56px;
+        width:54px;
+        min-width:54px;
+        min-height:52px;
         padding:6px 4px 5px;
         font-size:10px;
         gap:5px;
@@ -972,10 +1203,18 @@
     }
     @media(max-width:430px){
       .mobile-filter-toggle{
-        min-width:46px;
-        padding:0 10px;
+        min-width:50px;
+        height:50px;
       }
-      .mobile-filter-toggle .mobile-filter-toggle-label{display:none}
+      .customer-search-row{
+        grid-template-columns:minmax(0,1fr) 50px;
+        gap:8px;
+      }
+      .customer-search-row .sinput,
+      .customer-search-row .sinput .fc{
+        min-height:50px;
+        height:50px;
+      }
       .topbar .tb-title{
         font-size:0;
         display:flex;
@@ -1058,6 +1297,7 @@
       const currentSearch = typeof search !== 'undefined' ? search : '';
       const currentFilterStatus = typeof filterStatus !== 'undefined' ? filterStatus : '';
       const currentFilterSegment = typeof filterSegment !== 'undefined' ? filterSegment : '';
+      const currentFilterPackageId = typeof filterPackageId !== 'undefined' ? Number(filterPackageId || 0) : 0;
       const currentBillingDayStart = typeof billingDayStart !== 'undefined' ? billingDayStart : '';
       const currentBillingDayEnd = typeof billingDayEnd !== 'undefined' ? billingDayEnd : '';
       const currentSelectedMonth = typeof selectedMonth !== 'undefined' ? selectedMonth : (new Date().getMonth() + 1);
@@ -1091,6 +1331,9 @@
         : ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
       const reportMonthLabel = customerMonthNames[(currentCustomerOverview.month || currentSelectedMonth || 1) - 1] || customerMonthNames[0];
       const reportYearLabel = currentCustomerOverview.year || currentSelectedYear || new Date().getFullYear();
+      const currentFilterPackage = currentFilterPackageId > 0 && Array.isArray(packages)
+        ? packages.find((pkg) => Number(pkg.id || 0) === currentFilterPackageId)
+        : null;
       const currentStatusLabel = currentFilterSegment === 'new'
         ? `Pelanggan Baru ${reportMonthLabel} ${reportYearLabel}`
         : currentFilterStatus === 'active'
@@ -1120,6 +1363,7 @@
             <form method="GET" action="/admin/customers" class="customer-period-form">
               <input type="hidden" name="search" value="<%= currentSearch || '' %>">
               <input type="hidden" name="status" value="<%= currentFilterStatus || '' %>">
+              <input type="hidden" name="package_id" value="<%= currentFilterPackageId || '' %>">
               <input type="hidden" name="segment" value="<%= currentFilterSegment || '' %>">
               <input type="hidden" name="billingDayStart" value="<%= currentBillingDayStart || '' %>">
               <input type="hidden" name="billingDayEnd" value="<%= currentBillingDayEnd || '' %>">
@@ -1250,6 +1494,7 @@
           status: currentFilterStatus || '',
           billingDayStart: currentBillingDayStart || '',
           billingDayEnd: currentBillingDayEnd || '',
+          package_id: currentFilterPackageId || '',
           segment: currentFilterSegment || '',
           month: currentSelectedMonth || '',
           year: currentSelectedYear || '',
@@ -1301,12 +1546,11 @@
             <div class="customer-search-row">
               <div class="desktop-search-block">
                 <span class="desktop-filter-eyebrow">Pencarian Cepat</span>
-                <div class="sinput" style="max-width:340px">
+                <div class="sinput" style="max-width:420px">
                   <i class="bi bi-search"></i>
-                  <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, tag...') %>" value="<%= currentSearch %>">
+                  <input class="fc" id="customerSearchInput" name="search" list="customerSearchSuggestions" autocomplete="off" placeholder="<%= t('admin.customers.search_placeholder', 'Cari nama, telepon, PPPoE, tag...') %>" value="<%= currentSearch %>">
                   <datalist id="customerSearchSuggestions"></datalist>
                 </div>
-                <p class="desktop-filter-hint">Cari pelanggan berdasarkan nama, nomor WhatsApp, username PPPoE, atau tag perangkat.</p>
               </div>
               <button class="btn btn-g btn-sm mobile-filter-toggle" type="button" onclick="toggleCustomerFilterPanel()" aria-label="Filter pelanggan">
                 <i class="bi bi-funnel"></i>
@@ -1323,6 +1567,15 @@
                     <option value="all" <%= !currentFilterStatus ? 'selected':'' %>><%= t('admin.customers.filter.all_status', 'Semua Status') %></option>
                     <option value="suspended" <%= currentFilterStatus==='suspended' ? 'selected':'' %>><%= t('admin.customers.filter.suspended', 'Suspend') %></option>
                     <option value="inactive" <%= currentFilterStatus==='inactive' ? 'selected':'' %>><%= t('admin.customers.filter.inactive', 'Nonaktif') %></option>
+                  </select>
+                </label>
+                <label class="desktop-filter-field">
+                  <span>Paket</span>
+                  <select class="fs mobile-filter-field" name="package_id" style="width:170px">
+                    <option value="" <%= !currentFilterPackageId ? 'selected' : '' %>>Semua Paket</option>
+                    <% packages.forEach((p) => { %>
+                      <option value="<%= p.id %>" <%= Number(currentFilterPackageId || 0) === Number(p.id || 0) ? 'selected' : '' %>><%= p.name %></option>
+                    <% }) %>
                   </select>
                 </label>
                 <label class="desktop-filter-field">
@@ -1352,16 +1605,16 @@
               <div class="mobile-date-row">
                 <label class="desktop-filter-field">
                   <span>Tanggal Tagih Dari</span>
-                  <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Tgl tagih dari" value="<%= currentBillingDayStart %>" style="width:130px">
+                  <input class="fc mobile-advanced-filter" type="number" name="billingDayStart" min="1" max="31" placeholder="Dari" value="<%= currentBillingDayStart %>" style="width:130px">
                 </label>
                 <label class="desktop-filter-field">
                   <span>Tanggal Tagih Sampai</span>
-                  <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Tgl tagih sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
+                  <input class="fc mobile-advanced-filter" type="number" name="billingDayEnd" min="1" max="31" placeholder="Sampai" value="<%= currentBillingDayEnd %>" style="width:140px">
                 </label>
               </div>
               <div class="mobile-filter-actions">
                 <button class="btn btn-g btn-sm btn-apply-mobile" type="submit"><i class="bi bi-check2"></i> Terapkan</button>
-                <% if (currentSearch || currentFilterStatus !== 'active' || currentFilterSegment || currentBillingDayStart || currentBillingDayEnd || Number(currentSelectedMonth || 0) !== (new Date().getMonth() + 1) || Number(currentSelectedYear || 0) !== new Date().getFullYear()) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
+                <% if (currentSearch || currentFilterStatus !== 'active' || currentFilterSegment || currentFilterPackageId || currentBillingDayStart || currentBillingDayEnd || Number(currentSelectedMonth || 0) !== (new Date().getMonth() + 1) || Number(currentSelectedYear || 0) !== new Date().getFullYear()) { %><a href="/admin/customers" class="btn btn-g btn-sm"><i class="bi bi-x"></i> <%= t('common.reset', 'Reset') %></a><% } %>
               </div>
             </div>
         </form>
@@ -1374,6 +1627,9 @@
             <span class="summary-chip"><i class="bi bi-calendar-check"></i> <%= reportMonthLabel %> <%= reportYearLabel %></span>
             <% if (currentFilterSegment === 'new') { %>
               <span class="summary-chip"><i class="bi bi-stars"></i> Pemasangan bulan ini</span>
+            <% } %>
+            <% if (currentFilterPackage) { %>
+              <span class="summary-chip"><i class="bi bi-box-seam"></i> <%= currentFilterPackage.name %></span>
             <% } %>
             <% if (currentBillingDayStart || currentBillingDayEnd) { %>
               <span class="summary-chip"><i class="bi bi-funnel"></i> Tagihan <%= currentBillingDayStart || '1' %>-<%= currentBillingDayEnd || '31' %></span>
@@ -1436,19 +1692,55 @@
             </tr>
           <% } %>
           <% customers.forEach((c, i) => { %>
+            <%
+              const rowPackagePrice = Number(c.package_price || 0) || 0;
+              const rowDiscountActive = Number(c.discount_enabled || 0) === 1 && Number(c.discount_amount || 0) > 0 && rowPackagePrice > 0;
+              const rowDiscountAmount = rowDiscountActive ? Math.min(rowPackagePrice, Math.max(0, Math.round(Number(c.discount_amount || 0) || 0))) : 0;
+              const rowDiscountPrice = Math.max(0, rowPackagePrice - rowDiscountAmount);
+              const rowPackageProfile = String(c.package_pppoe_profile || c.package_name || '').trim();
+              const rowCustomerProfile = String(c.normal_pppoe_profile || rowPackageProfile || '').trim();
+              const rowProfileMismatch = rowPackageProfile && rowCustomerProfile && rowPackageProfile !== rowCustomerProfile;
+              const rowBoostProfile = String(c.speed_boost_profile || '').trim();
+              const rowBoostUntil = String(c.speed_boost_until || '').trim();
+              const rowBoostDate = rowBoostUntil ? new Date(rowBoostUntil) : null;
+              const rowBoostActive = rowBoostProfile && rowBoostDate && !Number.isNaN(rowBoostDate.getTime()) && rowBoostDate.getTime() > Date.now();
+              const rowBoostLabel = rowBoostActive ? rowBoostDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
+            %>
             <tr>
               <td class="text-muted customer-table-index"><%= customerRowOffset + i + 1 %></td>
               <td>
                 <div class="customer-table-primary"><%= c.name %></div>
               </td>
               <td>
-                <div class="customer-table-primary customer-table-phone"><%= c.phone || '-' %></div>
+                <div class="customer-table-primary customer-table-phone"><%= c.customer_code || (((settings && settings.customer_id_prefix) || 'SCK') + c.id) %></div>
+                <div class="customer-table-secondary"><i class="bi bi-phone"></i> <%= c.phone || '-' %></div>
                 <% if (c.genieacs_tag) { %><div class="customer-table-secondary customer-table-tag"><i class="bi bi-wifi"></i> <%= c.genieacs_tag %></div><% } %>
               </td>
               <td>
                 <% if (c.package_name) { %>
                   <div class="customer-table-package"><%= c.package_name %></div>
-                  <div class="customer-table-package-note"><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps &bull; Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %></div>
+                  <div class="customer-table-package-note"><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps</div>
+                  <% if (rowDiscountActive) { %>
+                    <div class="customer-price-stack">
+                      <span class="customer-price-normal">Rp <%= rowPackagePrice.toLocaleString('id-ID') %></span>
+                      <span class="customer-price-discount">Rp <%= rowDiscountPrice.toLocaleString('id-ID') %></span>
+                    </div>
+                    <span class="customer-discount-chip"><i class="bi bi-percent"></i> Diskon Rp <%= rowDiscountAmount.toLocaleString('id-ID') %></span>
+                  <% } else { %>
+                    <div class="customer-table-package-note">Rp <%= rowPackagePrice ? rowPackagePrice.toLocaleString('id-ID') : '-' %></div>
+                  <% } %>
+                  <div class="customer-profile-mini">
+                    <% if (rowProfileMismatch) { %>
+                      <span>Paket: <strong><%= rowPackageProfile || '-' %></strong></span>
+                      <span>Pelanggan: <strong><%= rowCustomerProfile || '-' %></strong></span>
+                    <% } else { %>
+                      <span>Profil: <strong><%= rowCustomerProfile || '-' %></strong></span>
+                    <% } %>
+                    <div class="customer-profile-tags">
+                      <% if (rowProfileMismatch) { %><span class="profile-tag warn"><i class="bi bi-exclamation-triangle"></i> Profil khusus</span><% } %>
+                      <% if (rowBoostActive) { %><span class="profile-tag boost"><i class="bi bi-lightning-charge"></i> Boost <%= rowBoostProfile %> s/d <%= rowBoostLabel %></span><% } %>
+                    </div>
+                  </div>
                 <% } else { %><span class="text-muted">-</span><% } %>
               </td>
               <td>
@@ -1536,12 +1828,24 @@
             const usedGB = ((c.bytes_in || 0) + (c.bytes_out || 0)) / (1024 * 1024 * 1024);
             const limitGB = c.fup_limit_gb || 0;
             const useFup = c.use_fup === 1;
+            const cardPackagePrice = Number(c.package_price || 0) || 0;
+            const cardDiscountActive = Number(c.discount_enabled || 0) === 1 && Number(c.discount_amount || 0) > 0 && cardPackagePrice > 0;
+            const cardDiscountAmount = cardDiscountActive ? Math.min(cardPackagePrice, Math.max(0, Math.round(Number(c.discount_amount || 0) || 0))) : 0;
+            const cardDiscountPrice = Math.max(0, cardPackagePrice - cardDiscountAmount);
+            const cardPackageProfile = String(c.package_pppoe_profile || c.package_name || '').trim();
+            const cardCustomerProfile = String(c.normal_pppoe_profile || cardPackageProfile || '').trim();
+            const cardProfileMismatch = cardPackageProfile && cardCustomerProfile && cardPackageProfile !== cardCustomerProfile;
+            const cardBoostProfile = String(c.speed_boost_profile || '').trim();
+            const cardBoostUntil = String(c.speed_boost_until || '').trim();
+            const cardBoostDate = cardBoostUntil ? new Date(cardBoostUntil) : null;
+            const cardBoostActive = cardBoostProfile && cardBoostDate && !Number.isNaN(cardBoostDate.getTime()) && cardBoostDate.getTime() > Date.now();
+            const cardBoostLabel = cardBoostActive ? cardBoostDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
           %>
           <div class="customer-card">
             <div class="customer-head">
               <div>
                 <strong><%= c.name %></strong>
-                <div class="customer-sub"><%= c.phone || '-' %><% if (c.genieacs_tag) { %> &bull; <span style="color:var(--primary)"><%= c.genieacs_tag %></span><% } %></div>
+                <div class="customer-sub"><%= c.customer_code || (((settings && settings.customer_id_prefix) || 'SCK') + c.id) %> &bull; <%= c.phone || '-' %><% if (c.genieacs_tag) { %> &bull; <span style="color:var(--primary)"><%= c.genieacs_tag %></span><% } %></div>
               </div>
               <div>
                 <% if (c.status==='active') { %><span class="badge bs"><i class="bi bi-circle-fill" style="font-size:7px"></i>Aktif</span>
@@ -1560,6 +1864,11 @@
               <% if (c.package_name) { %>
                 <span class="badge bm"><%= c.package_name %></span>
               <% } %>
+              <% if (cardDiscountActive) { %>
+                <span class="customer-discount-chip"><i class="bi bi-percent"></i> Diskon</span>
+              <% } %>
+              <% if (cardProfileMismatch) { %><span class="profile-tag warn">Profil khusus</span><% } %>
+              <% if (cardBoostActive) { %><span class="profile-tag boost">Boost</span><% } %>
               <span class="badge bm"><%= usedGB.toFixed(2) %> GB</span>
             </div>
 
@@ -1567,7 +1876,18 @@
               <div class="customer-inline-box">
                 <small>Paket</small>
                 <strong><%= c.package_name || '-' %></strong>
-                <span><% if (c.package_name) { %><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps • Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %><% } else { %>-<% } %></span>
+                <% if (c.package_name) { %>
+                  <span><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps</span>
+                  <% if (cardDiscountActive) { %>
+                    <span class="customer-price-stack">
+                      <span class="customer-price-normal">Rp <%= cardPackagePrice.toLocaleString('id-ID') %></span>
+                      <span class="customer-price-discount">Rp <%= cardDiscountPrice.toLocaleString('id-ID') %></span>
+                    </span>
+                  <% } else { %>
+                    <span>Rp <%= cardPackagePrice ? cardPackagePrice.toLocaleString('id-ID') : '-' %></span>
+                  <% } %>
+                  <span>Profil: <%= cardCustomerProfile || '-' %></span>
+                <% } else { %><span>-</span><% } %>
               </div>
               <div class="customer-inline-box">
                 <small>Usage</small>
@@ -1578,9 +1898,10 @@
 
             <div class="customer-meta-grid">
               <div class="customer-meta">
-                <small>Paket</small>
-                <strong><%= c.package_name || '-' %></strong>
-                <span><% if (c.package_name) { %><%= (c.speed_down/1000).toFixed(0) %>/<%= (c.speed_up/1000).toFixed(0) %> Mbps &bull; Rp <%= c.package_price ? c.package_price.toLocaleString('id-ID') : '-' %><% } else { %>-<% } %></span>
+                <small>Profil PPPoE</small>
+                <strong><%= cardCustomerProfile || '-' %></strong>
+                <span>Paket: <%= cardPackageProfile || '-' %></span>
+                <% if (cardBoostActive) { %><span>Boost: <%= cardBoostProfile %> s/d <%= cardBoostLabel %></span><% } %>
               </div>
               <div class="customer-meta">
                 <small>Usage</small>
@@ -1693,6 +2014,17 @@
             </select>
           </div>
           <div class="fg"><label class="fl">Tag ONU (GenieACS)</label><input class="fc" name="genieacs_tag" placeholder="Sama dengan ID pelanggan"></div>
+        </div>
+        <div class="discount-toggle-card">
+          <label class="discount-toggle-line">
+            <span><i class="bi bi-percent"></i> Diskon Pelanggan</span>
+            <input type="checkbox" name="discount_enabled" value="1" data-discount-toggle data-target="add_discount_amount_wrap">
+            <span class="discount-switch" aria-hidden="true"></span>
+          </label>
+          <div class="discount-amount-wrap" id="add_discount_amount_wrap" hidden>
+            <label class="fl">Nominal Diskon</label>
+            <input class="fc" type="number" name="discount_amount" min="0" step="1000" inputmode="numeric" placeholder="Contoh: 20000">
+          </div>
         </div>
         <div class="form-row">
           <div class="fg" id="e_normal_pppoe_profile_field">
@@ -1915,6 +2247,17 @@
           </div>
           <div class="fg"><label class="fl">Tag ONU (GenieACS)</label><input class="fc" name="genieacs_tag" id="e_tag"></div>
         </div>
+        <div class="discount-toggle-card">
+          <label class="discount-toggle-line">
+            <span><i class="bi bi-percent"></i> Diskon Pelanggan</span>
+            <input type="checkbox" name="discount_enabled" id="e_discount_enabled" value="1" data-discount-toggle data-target="edit_discount_amount_wrap">
+            <span class="discount-switch" aria-hidden="true"></span>
+          </label>
+          <div class="discount-amount-wrap" id="edit_discount_amount_wrap" hidden>
+            <label class="fl">Nominal Diskon</label>
+            <input class="fc" type="number" name="discount_amount" id="e_discount_amount" min="0" step="1000" inputmode="numeric" placeholder="Contoh: 20000">
+          </div>
+        </div>
         <div class="form-row">
           <div class="fg">
             <label class="fl">Router MikroTik</label>
@@ -1948,6 +2291,28 @@
           <div class="fg" id="e_static_field" style="display:none">
             <label class="fl">IP Address Pelanggan</label>
             <input class="fc" name="static_ip" id="e_static_ip" placeholder="Contoh: 192.168.10.10">
+          </div>
+        </div>
+        <div class="speed-boost-card">
+          <div class="speed-boost-head"><i class="bi bi-lightning-charge"></i> Boost Paket Sementara</div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="fl">Profil Boost</label>
+              <input class="fc" name="speed_boost_profile" id="e_speed_boost_profile" placeholder="Contoh: paket-10mb">
+            </div>
+            <div class="fg">
+              <label class="fl">Durasi Hari</label>
+              <input class="fc" type="number" name="speed_boost_days" id="e_speed_boost_days" min="1" max="365" placeholder="Contoh: 5">
+            </div>
+            <div class="fg">
+              <label class="fl">Aktif Sampai</label>
+              <input class="fc" type="datetime-local" name="speed_boost_until" id="e_speed_boost_until">
+            </div>
+          </div>
+          <div class="fg">
+            <label class="fl">Catatan Boost</label>
+            <input class="fc" name="speed_boost_note" id="e_speed_boost_note" placeholder="Opsional">
+            <div class="hint">Kosongkan profil boost untuk mematikan boost dan kembali ke profil normal.</div>
           </div>
         </div>
         <div class="form-row">
@@ -2219,6 +2584,7 @@ function toggleCustomerFilterPanel(force) {
 function getActiveCustomerFilterCount() {
   const statusValue = String(document.querySelector('#customerSearchForm [name="status"]')?.value || '').trim();
   const segmentValue = String(document.querySelector('#customerSearchForm [name="segment"]')?.value || '').trim();
+  const packageValue = String(document.querySelector('#customerSearchForm [name="package_id"]')?.value || '').trim();
   const monthValue = String(document.querySelector('#customerSearchForm [name="month"]')?.value || '').trim();
   const yearValue = String(document.querySelector('#customerSearchForm [name="year"]')?.value || '').trim();
   const billingDayStartValue = String(document.querySelector('#customerSearchForm [name="billingDayStart"]')?.value || '').trim();
@@ -2226,6 +2592,7 @@ function getActiveCustomerFilterCount() {
   let count = 0;
   if (statusValue && statusValue !== 'active') count += 1;
   if (segmentValue) count += 1;
+  if (packageValue) count += 1;
   if (monthValue && Number(monthValue) !== (new Date().getMonth() + 1)) count += 1;
   if (yearValue && Number(yearValue) !== new Date().getFullYear()) count += 1;
   if (billingDayStartValue) count += 1;
@@ -2545,12 +2912,33 @@ function syncEditUploadPreviews(customer = null) {
   if (houseInput) houseInput.value = '';
 }
 
+function syncDiscountInput(toggle) {
+  if (!toggle) return;
+  const wrap = document.getElementById(toggle.dataset.target || '');
+  if (wrap) wrap.hidden = !toggle.checked;
+  const amountInput = wrap ? wrap.querySelector('input[name="discount_amount"]') : null;
+  if (amountInput && !toggle.checked) amountInput.value = '';
+}
+
+document.querySelectorAll('[data-discount-toggle]').forEach((toggle) => {
+  toggle.addEventListener('change', () => syncDiscountInput(toggle));
+  syncDiscountInput(toggle);
+});
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
 document.getElementById('add_create_pppoe_secret')?.addEventListener('change', syncAddPppoeSecretUi);
 bindUploadPreview('add_ktp_photo_file', 'add_ktp_preview', 'add_ktp_preview_name', 'Preview KTP');
 bindUploadPreview('add_house_photo_file', 'add_house_preview', 'add_house_preview_name', 'Preview Rumah');
 bindUploadPreview('e_ktp_photo_file', 'edit_ktp_preview', 'edit_ktp_preview_name', 'Preview KTP');
 bindUploadPreview('e_house_photo_file', 'edit_house_preview', 'edit_house_preview_name', 'Preview Rumah');
+
+function toDateTimeLocalInput(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function editCust(idx) {
   const c = customersData[idx];
   if (!c) return;
@@ -2562,10 +2950,19 @@ function editCust(idx) {
   document.getElementById('e_nik').value=c.nik||'';
   document.getElementById('e_npwp').value=c.npwp||'';
   document.getElementById('e_package').value=c.package_id||'';
+  const discountEnabled = document.getElementById('e_discount_enabled');
+  const discountAmount = document.getElementById('e_discount_amount');
+  if (discountEnabled) discountEnabled.checked = Number(c.discount_enabled || 0) === 1 && Number(c.discount_amount || 0) > 0;
+  if (discountAmount) discountAmount.value = Number(c.discount_amount || 0) > 0 ? Number(c.discount_amount || 0) : '';
+  syncDiscountInput(discountEnabled);
   document.getElementById('e_router_id').value=c.router_id||'';
   document.getElementById('e_connection_type').value=c.connection_type||'pppoe';
   document.getElementById('e_pppoe').value=c.pppoe_username||'';
   document.getElementById('e_normal_pppoe_profile').value=c.normal_pppoe_profile||'';
+  document.getElementById('e_speed_boost_profile').value=c.speed_boost_profile||'';
+  document.getElementById('e_speed_boost_days').value='';
+  document.getElementById('e_speed_boost_until').value=toDateTimeLocalInput(c.speed_boost_until||'');
+  document.getElementById('e_speed_boost_note').value=c.speed_boost_note||'';
   document.getElementById('e_static_ip').value=c.static_ip||'';
   document.getElementById('e_mac_address').value=c.mac_address||'';
   document.getElementById('e_tag').value=c.genieacs_tag||'';
@@ -2584,6 +2981,17 @@ function editCust(idx) {
   toggleConnectionFields('edit');
   openModal('editModal');
   loadPppoeEdit(c.router_id || '', c.id || '');
+}
+
+function openRequestedCustomerEditFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const targetId = Number(params.get('openEdit') || params.get('editCustomer') || 0);
+    if (!targetId) return;
+    const idx = customersData.findIndex((row) => Number(row.id || 0) === targetId);
+    if (idx < 0) return;
+    setTimeout(() => editCust(idx), 250);
+  } catch (_error) {}
 }
 
 function openGenInvoice(idx) {
@@ -2871,6 +3279,7 @@ document.querySelectorAll('.quick-filter-row a, .sort-link, .pagi a').forEach((l
   });
 });
 
+openRequestedCustomerEditFromUrl();
 setTimeout(()=>document.querySelectorAll('.alert').forEach(a=>a.style.display='none'),4000);
 </script>
 </body>

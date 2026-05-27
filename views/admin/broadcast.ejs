@@ -99,7 +99,7 @@
             (<span id="failedCount" class="text-danger ms-1">0</span> gagal)
           </div>
         </div>
-        <form id="broadcastForm" method="POST" action="/admin/whatsapp/broadcast" data-confirm="Kirim pesan broadcast sekarang? Pastikan target dan isi pesannya sudah benar.">
+        <form id="broadcastForm" method="POST" action="/admin/whatsapp/broadcast" enctype="multipart/form-data" data-confirm="Kirim pesan broadcast sekarang? Pastikan target dan isi pesannya sudah benar.">
           <div class="card-bd">
             <div class="alert alert-i" style="margin-bottom:14px;">
               <i class="bi bi-info-circle"></i> Pesan akan dikirim memakai akun WhatsApp bot yang sedang terhubung. Gunakan jeda aman agar pengiriman lebih stabil.
@@ -146,6 +146,21 @@
             </div>
             <div class="wa-inline-grid" style="margin-top:14px;">
               <div class="fg">
+                <label class="fl">Foto Pengumuman</label>
+                <input class="fc" type="file" name="announcement_image" accept="image/*">
+                <div class="wa-template-note">Opsional. Foto akan tampil di inbox pelanggan dan push app; jika WhatsApp aktif, foto ikut dikirim sebagai gambar.</div>
+              </div>
+              <div class="fg">
+                <label class="fl">Test ke 1 Pelanggan</label>
+                <input class="fc" name="test_lookup" placeholder="Nama / nomor HP / PPPoE / tag">
+                <div class="wa-template-note">Isi ini lalu tekan tombol test untuk cek dulu sebelum broadcast massal.</div>
+              </div>
+              <div class="wa-muted-box">
+                Test memakai isi pesan, foto, dan channel yang dicentang di bawah. Broadcast massal tetap mengikuti target penerima.
+              </div>
+            </div>
+            <div class="wa-inline-grid" style="margin-top:14px;">
+              <div class="fg">
                 <label class="fl">Kirim via WhatsApp</label>
                 <label style="display:flex; align-items:center; gap:10px; font-weight:800; color:var(--text);">
                   <input type="checkbox" name="send_whatsapp" value="1" <%= getSetting('whatsapp_enabled', false) ? 'checked' : '' %>>
@@ -166,7 +181,8 @@
             </div>
           </div>
           <div class="card-bd wa-card-actions">
-            <button type="submit" class="btn btn-p" id="broadcastSubmitBtn"><i class="bi bi-send"></i> Mulai Broadcast</button>
+            <button type="submit" class="btn btn-g" name="broadcast_mode" value="test" id="broadcastTestBtn"><i class="bi bi-person-check"></i> Test 1 Pelanggan</button>
+            <button type="submit" class="btn btn-p" name="broadcast_mode" value="broadcast" id="broadcastSubmitBtn"><i class="bi bi-send"></i> Mulai Broadcast</button>
           </div>
         </form>
       </div>
@@ -175,7 +191,7 @@
         <div class="card-hd">
           <h6><i class="bi bi-bell-fill"></i> Test Push OneSignal</h6>
         </div>
-        <form method="POST" action="/admin/whatsapp/test-push" data-wa-submit data-waiting-text="Sedang mengirim test push OneSignal..." onsubmit="return confirm('Kirim test push OneSignal ke pelanggan ini?');">
+        <form method="POST" action="/admin/whatsapp/test-push" enctype="multipart/form-data" data-wa-submit data-waiting-text="Sedang mengirim test push OneSignal..." onsubmit="return confirm('Kirim test push OneSignal ke pelanggan ini?');">
           <div class="card-bd">
             <div class="alert alert-i" style="margin-bottom:14px;">
               <i class="bi bi-info-circle"></i> Test ini hanya memakai OneSignal dan inbox portal, tidak mengirim WhatsApp.
@@ -192,6 +208,10 @@
               <div class="fg">
                 <label class="fl">Isi Push</label>
                 <input class="fc" name="push_message" value="Jika notifikasi ini masuk, push OneSignal portal pelanggan sudah aktif." placeholder="Isi notifikasi" required>
+              </div>
+              <div class="fg">
+                <label class="fl">Foto Test</label>
+                <input class="fc" type="file" name="announcement_image" accept="image/*">
               </div>
             </div>
             <div id="pushTestPending" class="wa-form-pending" aria-live="polite">
@@ -397,7 +417,11 @@ const broadcastForm = document.getElementById('broadcastForm');
 
 if (broadcastForm) {
   broadcastForm.addEventListener('submit', function (e) {
-    const msg = String(broadcastForm.dataset.confirm || '').trim();
+    const submitter = e.submitter;
+    const mode = String(submitter?.value || '').trim();
+    const msg = mode === 'test'
+      ? 'Kirim test pengumuman ke 1 pelanggan dulu?'
+      : String(broadcastForm.dataset.confirm || '').trim();
     if (msg && !confirm(msg)) e.preventDefault();
   });
 }

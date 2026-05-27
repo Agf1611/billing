@@ -211,7 +211,8 @@
             const group = String(channel.group || '').trim();
             const brand = brandMap[code] || null;
             const isInternal = code === 'STATICQRIS' || channel.source === 'internal';
-            const groupClass = isInternal ? 'internal' : group === 'Virtual Account' ? 'va' : group === 'E-Wallet' ? 'wallet' : 'qris';
+            const isQrisTripay = !isInternal && code.startsWith('QRIS');
+            const groupClass = isInternal ? 'internal' : isQrisTripay ? 'qris' : group === 'Virtual Account' ? 'va' : group === 'E-Wallet' ? 'wallet' : 'qris';
             const title = isInternal
               ? 'QRIS Instan'
               : String(channel.name || code)
@@ -219,7 +220,7 @@
                   .replace(/^bank\s+/ig, '')
                   .replace(/\s+/g, ' ')
                   .trim();
-            const iconClass = group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : 'bi-qr-code-scan';
+            const iconClass = isQrisTripay ? 'bi-qr-code-scan' : group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : 'bi-qr-code-scan';
         %>
           <a class="method" href="/customer/payment/create/<%= invoice.id %>?method=<%= encodeURIComponent(code) %>">
             <div class="icon">
@@ -229,10 +230,10 @@
                 <i class="bi <%= iconClass %>"></i>
               <% } %>
             </div>
-            <span class="badge <%= groupClass %>"><%= isInternal ? 'Internal' : (group === 'Virtual Account' ? 'VA' : group || 'Bayar') %></span>
+            <span class="badge <%= groupClass %>"><%= isInternal ? 'Internal' : isQrisTripay ? 'QRIS' : (group === 'Virtual Account' ? 'VA' : group || 'Bayar') %></span>
             <h3><%= title %></h3>
             <div class="meta">
-              <span><%= isInternal ? 'Nominal otomatis' : code %></span>
+              <span><%= isInternal ? 'Nominal otomatis' : isQrisTripay ? 'Tripay' : code %></span>
               <i class="bi bi-arrow-right-circle-fill"></i>
             </div>
           </a>

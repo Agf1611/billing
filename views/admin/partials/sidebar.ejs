@@ -78,8 +78,16 @@
       <i class="bi bi-megaphone"></i><span><%= t('admin.nav.whatsapp', 'WA & Pengumuman') %></span>
     </a>
     <% if (typeof session !== 'undefined' && session.isAdmin) { %>
+    <a href="/admin/settings#settings-monitoring" class="sb-item <%= activePage==='webhook_logs' ? 'active' : '' %>">
+      <i class="bi bi-activity"></i><span>Webhook Log</span>
+    </a>
+    <% } %>
+    <% if (typeof session !== 'undefined' && session.isAdmin) { %>
     <a href="/admin/technician-tasks" class="sb-item <%= activePage==='technician_tasks' ? 'active' : '' %>">
       <i class="bi bi-clipboard-check"></i><span>Tugas Teknisi</span>
+      <% if (Number(adminPendingTechnicianCustomerRequests || 0) > 0) { %>
+        <span class="sb-badge"><%= Number(adminPendingTechnicianCustomerRequests || 0) > 99 ? '99+' : Number(adminPendingTechnicianCustomerRequests || 0) %></span>
+      <% } %>
     </a>
     <a href="/admin/customer-requests" class="sb-item <%= activePage==='customer_requests' ? 'active' : '' %>">
       <i class="bi bi-person-check"></i><span>Approval Pelanggan</span>
@@ -90,6 +98,9 @@
     <% } %>
     <a href="/admin/collector-payments" class="sb-item <%= activePage==='collector_payments' ? 'active' : '' %>">
       <i class="bi bi-check2-square"></i><span>Approval Kolektor</span>
+      <% if (Number(adminPendingCollectorApprovals || 0) > 0) { %>
+        <span class="sb-badge"><%= Number(adminPendingCollectorApprovals || 0) > 99 ? '99+' : Number(adminPendingCollectorApprovals || 0) %></span>
+      <% } %>
     </a>
 
     <div class="sb-section">LAINNYA</div>
@@ -155,7 +166,7 @@
   (function() {
     const savedTheme = localStorage.getItem('admin-theme')
       || document.documentElement.dataset.adminTheme
-      || 'dark';
+      || 'light';
     document.documentElement.dataset.adminTheme = savedTheme;
     document.documentElement.style.colorScheme = savedTheme === 'light' ? 'light' : 'dark';
     if (document.body) document.body.dataset.theme = savedTheme;
@@ -185,7 +196,7 @@
   }
 
   function toggleAdminTheme() {
-    const currentTheme = document.body?.dataset.theme || document.documentElement.dataset.adminTheme || 'dark';
+    const currentTheme = document.body?.dataset.theme || document.documentElement.dataset.adminTheme || 'light';
     const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
     localStorage.setItem('admin-theme', nextTheme);
     syncThemeButtons(nextTheme);
@@ -194,7 +205,7 @@
   function restoreAdminTheme() {
     const theme = localStorage.getItem('admin-theme')
       || document.documentElement.dataset.adminTheme
-      || 'dark';
+      || 'light';
     syncThemeButtons(theme);
   }
 
@@ -215,34 +226,81 @@
     const storageKey = `admin-scroll:${window.location.pathname}`;
     let ticking = false;
 
+    const getScrollContainer = () => {
+      const main = document.querySelector('.mw');
+      if (main && main.scrollHeight > main.clientHeight) return main;
+      return document.scrollingElement || document.documentElement;
+    };
+
+    const getScrollTop = () => {
+      const target = getScrollContainer();
+      if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+        return window.scrollY || window.pageYOffset || target.scrollTop || 0;
+      }
+      return target.scrollTop || 0;
+    };
+
     const saveScroll = () => {
       try {
-        sessionStorage.setItem(storageKey, String(window.scrollY || window.pageYOffset || 0));
+        sessionStorage.setItem(storageKey, String(getScrollTop()));
       } catch (_error) {}
     };
 
-    const restoreScroll = () => {
+    const restoreScroll = (attempt = 0) => {
       try {
         const raw = sessionStorage.getItem(storageKey);
         if (raw === null || raw === '') return;
         const y = Math.max(0, parseInt(raw, 10) || 0);
+        if (!y) return;
+        const target = getScrollContainer();
+        const maxY = Math.max(0, (target.scrollHeight || 0) - (target.clientHeight || window.innerHeight || 0));
+        const nextY = maxY > 0 ? Math.min(y, maxY) : y;
         requestAnimationFrame(() => {
-          window.scrollTo(0, y);
+          if (target === document.scrollingElement || target === document.documentElement || target === document.body) {
+            window.scrollTo({ top: nextY, left: 0, behavior: 'instant' });
+          } else {
+            target.scrollTo({ top: nextY, left: 0, behavior: 'instant' });
+          }
+          if (attempt < 4 && Math.abs(getScrollTop() - nextY) > 8) {
+            window.setTimeout(() => restoreScroll(attempt + 1), 120);
+          }
         });
       } catch (_error) {}
     };
 
-    window.addEventListener('scroll', () => {
+    const onScroll = () => {
       if (ticking) return;
       ticking = true;
       window.requestAnimationFrame(() => {
         saveScroll();
         ticking = false;
       });
-    }, { passive: true });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    const initialContainer = document.querySelector('.mw');
+    if (initialContainer) initialContainer.addEventListener('scroll', onScroll, { passive: true });
 
     document.addEventListener('submit', () => {
       saveScroll();
+    }, true);
+
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!form || form.tagName !== 'FORM') return;
+      const method = String(form.getAttribute('method') || 'GET').trim().toUpperCase();
+      if (method === 'GET') return;
+      const action = String(form.getAttribute('action') || window.location.pathname).trim();
+      if (action && !action.startsWith('/admin') && !action.startsWith(window.location.pathname)) return;
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      let field = form.querySelector('input[name="_admin_return_to"]');
+      if (!field) {
+        field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = '_admin_return_to';
+        form.appendChild(field);
+      }
+      field.value = currentUrl;
     }, true);
 
     document.addEventListener('click', (event) => {
@@ -261,7 +319,12 @@
     }, true);
 
     window.addEventListener('beforeunload', saveScroll);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveScroll();
+    });
+    document.addEventListener('DOMContentLoaded', () => restoreScroll());
     window.addEventListener('pageshow', restoreScroll);
+    window.addEventListener('load', () => restoreScroll());
     restoreScroll();
   })();
 </script>
@@ -303,11 +366,6 @@
 
 <!-- Bottom Navigation (Mobile Only) -->
 <nav class="bottom-nav" id="bottomNav">
-  <% const cashierBottomNavOnly = typeof session !== 'undefined' && session.isCashier && !session.isAdmin; %>
-  <a href="/admin" class="bn-item <%= (!activePage || activePage==='dashboard') ? 'active' : '' %>">
-    <i class="bi bi-speedometer2"></i>
-    <span><%= t('common.home', 'Beranda') %></span>
-  </a>
   <a href="/admin/customers" class="bn-item <%= activePage==='customers' ? 'active' : '' %>">
     <i class="bi bi-people"></i>
     <span><%= t('admin.nav.customers', 'Pelanggan') %></span>
@@ -316,17 +374,14 @@
     <i class="bi bi-receipt"></i>
     <span><%= t('admin.nav.invoices', 'Tagihan') %></span>
   </a>
-  <% if (cashierBottomNavOnly) { %>
-    <a href="/admin/bookkeeping" class="bn-item <%= activePage==='bookkeeping' ? 'active' : '' %>">
-      <i class="bi bi-cash-coin"></i>
-      <span>Pembukuan</span>
-    </a>
-  <% } else { %>
-    <a href="/admin/mikrotik" class="bn-item <%= activePage==='mikrotik' ? 'active' : '' %>">
-      <i class="bi bi-router"></i>
-      <span>MikroTik</span>
-    </a>
-  <% } %>
+  <a href="/admin" class="bn-item bn-main <%= (!activePage || activePage==='dashboard') ? 'active' : '' %>">
+    <i class="bi bi-house-door-fill"></i>
+    <span>Dashboard</span>
+  </a>
+  <a href="/admin/bookkeeping" class="bn-item <%= activePage==='bookkeeping' ? 'active' : '' %>">
+    <i class="bi bi-cash-coin"></i>
+    <span>Pembukuan</span>
+  </a>
   <button class="bn-item" onclick="toggleSidebar()">
     <i class="bi bi-grid-3x3-gap"></i>
     <span><%= t('common.menu', 'Menu') %></span>

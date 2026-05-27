@@ -481,7 +481,8 @@
       }
 
       #manageOltsModal .mb,
-      #wanConfigModal .mb {
+      #wanConfigModal .mb,
+      #vlanPushModal .mb {
         max-width: min(100vw - 16px, 900px) !important;
       }
     }
@@ -1008,6 +1009,84 @@
   </div>
 </div>
 
+<!-- Hioso VLAN Push Modal -->
+<div class="mo" id="vlanPushModal">
+  <div class="mb" style="max-width: 620px;">
+    <div class="mh">
+      <span class="mt"><i class="bi bi-diagram-3"></i> Push VLAN ONU</span>
+      <button type="button" class="mc" onclick="closeModal('vlanPushModal')">&times;</button>
+    </div>
+    <form id="vlanPushForm" onsubmit="submitVlanPush(event)">
+      <div class="mbody">
+        <input type="hidden" id="vlan_olt_id">
+        <input type="hidden" id="vlan_onu_index">
+
+        <div class="fg">
+          <label class="fl">ONU</label>
+          <input type="text" id="vlan_onu_name" class="fc" readonly>
+        </div>
+
+        <div class="form-row">
+          <div class="fg">
+            <label class="fl">VLAN ID</label>
+            <input type="number" id="vlan_id" class="fc" min="1" max="4094" value="100" required>
+          </div>
+          <div class="fg">
+            <label class="fl">MODE</label>
+            <select id="vlan_mode" class="fs">
+              <option value="tag">Tag</option>
+              <option value="untag">Untag</option>
+              <option value="transparent">Transparent</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="fl">PORT LAN</label>
+          <div class="d-flex flex-wrap gap-3 mt-1">
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_lan" value="1" checked> LAN1</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_lan" value="2"> LAN2</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_lan" value="3"> LAN3</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_lan" value="4"> LAN4</label>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="fl">SSID</label>
+          <div class="d-flex flex-wrap gap-3 mt-1">
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_ssid" value="1"> SSID1</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_ssid" value="2"> SSID2</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_ssid" value="3"> SSID3</label>
+            <label class="d-flex align-items-center gap-1 small cursor-pointer"><input type="checkbox" name="vlan_ssid" value="4"> SSID4</label>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="d-flex align-items-center gap-2 small cursor-pointer" style="margin-top:6px">
+            <input type="checkbox" id="vlan_dry_run" checked>
+            <span>Mode uji dulu</span>
+          </label>
+        </div>
+
+        <div class="fg">
+          <label class="fl">COMMAND TEMPLATE</label>
+          <textarea id="vlan_command_template" class="fc" rows="6" spellcheck="false">enable
+config
+# Sesuaikan command di bawah bila CLI Hioso berbeda
+onu port vlan {{onu}} eth {{lan_ports}} mode {{vlan_mode}} vlan {{vlan}}
+save</textarea>
+        </div>
+
+        <div id="vlan_push_result" class="alert alert-i" style="display:none;font-size:12px;padding:10px 12px;white-space:pre-wrap"></div>
+      </div>
+      <div class="mf">
+        <button type="button" class="btn btn-g" onclick="closeModal('vlanPushModal')"><%= t('common.cancel', 'Batal') %></button>
+        <button type="submit" class="btn btn-p"><i class="bi bi-send"></i> Kirim VLAN</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="olt-data-store" data-olts='<%- JSON.stringify(olts || []) %>' style="display:none;"></div>
 <div id="olt-default-settings"
      data-tr069-acs-url="<%= settings.tr069_acs_url || '' %>"
@@ -1087,6 +1166,21 @@ function updateOltSummary(stats = {}) {
   document.getElementById('stat-traffic-in').innerText = formatBytes(stats.uplink_rx) + '/s';
   document.getElementById('stat-traffic-out').innerText = formatBytes(stats.uplink_tx) + '/s';
   document.getElementById('last-update').innerText = new Date().toLocaleTimeString(I18N.lang === 'en' ? 'en-US' : 'id-ID');
+}
+
+function resetOltSummary(message = '') {
+  updateOltSummary({
+    onus_total: '-',
+    onus_online: '-',
+    onus_offline: '-',
+    onus_weak: '-',
+    temp: message || 'N/A',
+    cpu: 'N/A',
+    ram: 'N/A',
+    uptime: 'N/A',
+    uplink_rx: 0,
+    uplink_tx: 0
+  });
 }
 
 function renderCardList(stats = {}) {
@@ -1181,6 +1275,10 @@ function renderOnuTable(stats = {}, id) {
       if (!Number.isFinite(rxVal)) rxClass = '';
       else if (rxVal < -27) rxClass = 'power-danger';
       else if (rxVal < WEAK_SIGNAL_THRESHOLD_DBM) rxClass = 'power-warning';
+      const actionOltId = encodeURIComponent(id || '');
+      const actionIndex = encodeURIComponent(onu.index || '');
+      const actionName = encodeURIComponent(onu.name || '-');
+      const actionSn = encodeURIComponent(onu.sn || '');
       return `<tr>
         <td data-label="<%= t('admin.olts.table.no', 'No') %>" data-onu-filter="${isOnline ? 'online' : 'offline'}" data-onu-weak="${hasWeakSignal ? 'true' : 'false'}">${index + 1}</td>
         <td data-label="ONU">
@@ -1197,11 +1295,14 @@ function renderOnuTable(stats = {}, id) {
         <td data-label="<%= t('admin.olts.table.distance', 'Jarak') %>"><span class="small text-muted">${onu.distance != null ? onu.distance : '-'}</span></td>
         <td data-label="<%= t('common.actions', 'Aksi') %>" style="text-align:right">
           <div class="onu-actions">
-            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="configureWanPrompt('${id}', '${onu.index}', '${onu.name}', '${onu.sn}')" style="font-size: 11px;">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="pushVlanPrompt(decodeURIComponent('${actionOltId}'), decodeURIComponent('${actionIndex}'), decodeURIComponent('${actionName}'))" style="font-size: 11px;">
+              <i class="bi bi-diagram-3"></i> VLAN
+            </button>
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="configureWanPrompt(decodeURIComponent('${actionOltId}'), decodeURIComponent('${actionIndex}'), decodeURIComponent('${actionName}'), decodeURIComponent('${actionSn}'))" style="font-size: 11px;">
               <i class="bi bi-gear-fill"></i> WAN
             </button>
-            <button class="btn-action-v2 btn-rename-v2" onclick="renameOnuPrompt('${id}', '${onu.index}', '${onu.name}')" title="${I18N.renameTitle}"><i class="bi bi-pencil-square"></i></button>
-            <button class="btn-action-v2 btn-reboot-v2" onclick="rebootOnu('${id}', '${onu.index}')" title="${I18N.rebootTitle}"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn-action-v2 btn-rename-v2" onclick="renameOnuPrompt(decodeURIComponent('${actionOltId}'), decodeURIComponent('${actionIndex}'), decodeURIComponent('${actionName}'))" title="${I18N.renameTitle}"><i class="bi bi-pencil-square"></i></button>
+            <button class="btn-action-v2 btn-reboot-v2" onclick="rebootOnu(decodeURIComponent('${actionOltId}'), decodeURIComponent('${actionIndex}'))" title="${I18N.rebootTitle}"><i class="bi bi-arrow-clockwise"></i></button>
           </div>
         </td>
       </tr>`;
@@ -1223,7 +1324,7 @@ function renderOnuTable(stats = {}, id) {
 }
 
 async function fetchOltStatsJson(id, options = {}) {
-  const { full = false, timeoutMs = full ? 35000 : 10000, section = '' } = options;
+  const { full = false, timeoutMs = full ? 65000 : 30000, section = '' } = options;
   const controller = new AbortController();
   const timeoutLabel = full ? I18N.fullLoadTimeout : I18N.summaryLoadTimeout;
   let timer = null;
@@ -1267,19 +1368,17 @@ async function loadOltDashboard(id) {
   renderOnuLoadingState();
 
   try {
-    const summaryStats = await fetchOltStatsJson(id, { full: false, timeoutMs: 10000 });
+    const summaryStats = await fetchOltStatsJson(id, { full: false, timeoutMs: 30000 });
     if (loadToken !== activeOltLoadToken) return;
     updateOltSummary(summaryStats);
   } catch (e) {
     if (loadToken !== activeOltLoadToken) return;
-    renderOnuError(`${I18N.errorPrefix}${e.message}`);
-    overlay.style.display = 'none';
-    return;
+    resetOltSummary(e.message || I18N.serverConnectFailed);
   }
 
   overlay.style.display = 'none';
 
-  fetchOltStatsJson(id, { full: true, section: 'table', timeoutMs: 25000 })
+  fetchOltStatsJson(id, { full: true, section: 'table', timeoutMs: 65000 })
     .then((fullStats) => {
       if (loadToken !== activeOltLoadToken) return;
       renderCardList();
@@ -1399,6 +1498,77 @@ async function authorizeOnuPrompt(oltId, index, sn) {
     }
   } catch (e) {
     alert(I18N.errorPrefix + e.message);
+  } finally {
+    overlay.style.display = 'none';
+  }
+}
+
+function pushVlanPrompt(oltId, index, name) {
+  document.getElementById('vlan_olt_id').value = oltId;
+  document.getElementById('vlan_onu_index').value = index;
+  document.getElementById('vlan_onu_name').value = `${name || '-'} (${index})`;
+  document.getElementById('vlan_dry_run').checked = true;
+  const result = document.getElementById('vlan_push_result');
+  result.style.display = 'none';
+  result.textContent = '';
+  openModal('vlanPushModal');
+}
+
+async function submitVlanPush(e) {
+  e.preventDefault();
+  const oltId = document.getElementById('vlan_olt_id').value;
+  const dryRun = document.getElementById('vlan_dry_run').checked;
+  const lans = Array.from(document.querySelectorAll('input[name="vlan_lan"]:checked')).map(cb => cb.value);
+  const ssids = Array.from(document.querySelectorAll('input[name="vlan_ssid"]:checked')).map(cb => cb.value);
+  const result = document.getElementById('vlan_push_result');
+
+  if (!lans.length && !ssids.length) {
+    alert('Pilih minimal 1 LAN atau SSID.');
+    return;
+  }
+  if (!dryRun && !confirm('Kirim VLAN ke OLT sekarang? Pastikan command template sudah sesuai Hioso.')) {
+    return;
+  }
+
+  const payload = {
+    index: document.getElementById('vlan_onu_index').value,
+    name: document.getElementById('vlan_onu_name').value,
+    vlan: document.getElementById('vlan_id').value,
+    vlan_mode: document.getElementById('vlan_mode').value,
+    lans: lans.join(','),
+    ssids: ssids.join(','),
+    dry_run: dryRun ? 'true' : 'false',
+    command_template: document.getElementById('vlan_command_template').value
+  };
+
+  const overlay = document.getElementById('loading-overlay');
+  overlay.style.display = 'flex';
+  result.style.display = 'none';
+  result.textContent = '';
+
+  try {
+    const res = await fetch(`/admin/olts/${oltId}/onu/push-vlan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(payload)
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || I18N.serverConnectFailed);
+    }
+
+    const commands = Array.isArray(data.output?.commands) ? data.output.commands.join('\n') : '';
+    result.textContent = `${data.message}\n\nCommand:\n${commands}\n\nOutput:\n${data.output?.output || '-'}`;
+    result.style.display = 'block';
+    if (!data.output?.dryRun) {
+      setTimeout(() => {
+        closeModal('vlanPushModal');
+        refreshCurrentOlt();
+      }, 900);
+    }
+  } catch (err) {
+    result.textContent = `${I18N.failedPrefix}${err.message}`;
+    result.style.display = 'block';
   } finally {
     overlay.style.display = 'none';
   }

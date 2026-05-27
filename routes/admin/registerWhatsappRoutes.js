@@ -1,3 +1,16 @@
+const multer = require('multer');
+const { persistCompressedImageUpload } = require('../../services/imageUploadService');
+
+const announcementUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const mime = String(file?.mimetype || '').toLowerCase();
+    if (!mime.startsWith('image/')) return cb(new Error('Lampiran pengumuman harus berupa gambar.'));
+    return cb(null, true);
+  }
+});
+
 module.exports = function registerWhatsappRoutes(router, deps = {}) {
   const {
     express,
@@ -41,6 +54,43 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       ...payload,
       company: company()
     }).trim();
+  }
+
+  async function persistAnnouncementImage(file) {
+    if (!file?.buffer?.length) return null;
+    const saved = await persistCompressedImageUpload(file, 'announcement', {
+      maxBytes: 900 * 1024,
+      maxDimension: 1800
+    });
+    return saved && saved.publicUrl ? saved : null;
+  }
+
+  function resolveAbsoluteAssetUrl(req, assetUrl = '') {
+    const value = String(assetUrl || '').trim();
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value)) return value;
+    const baseUrl = resolveRequestBaseUrl(req);
+    return `${String(baseUrl || '').replace(/\/+$/, '')}/${value.replace(/^\/+/, '')}`;
+  }
+
+  function buildAnnouncementPayload({ source = 'broadcast', target = '', imageUrl = '', absoluteImageUrl = '' } = {}) {
+    return {
+      senderName: 'Admin',
+      senderRole: 'Pengumuman',
+      source,
+      target,
+      ...(imageUrl ? { imageUrl, image_url: imageUrl } : {}),
+      ...(absoluteImageUrl ? { mediaUrl: absoluteImageUrl, media_url: absoluteImageUrl } : {})
+    };
+  }
+
+  async function sendWhatsappAnnouncement({ phone, message, imageFilePath = '', sendWA, sendWAImage, fs }) {
+    const caption = String(message || '').trim();
+    if (imageFilePath && typeof sendWAImage === 'function' && fs?.existsSync(imageFilePath)) {
+      const buffer = fs.readFileSync(imageFilePath);
+      return Boolean(await sendWAImage(phone, buffer, caption));
+    }
+    return Boolean(await sendWA(phone, caption));
   }
 
   router.get('/whatsapp', requireAdminSession, async (req, res) => {
@@ -104,7 +154,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     return res.json({ ok: true, message: 'Broadcast berhasil dihentikan.' });
   });
 
-  router.post('/whatsapp/test-push', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
+  router.post('/whatsapp/test-push', requireAdminSession, announcementUpload.single('announcement_image'), async (req, res) => {
     try {
       if (typeof isPushConfigured !== 'function' || typeof sendPushToCustomer !== 'function') {
         throw new Error('Modul push OneSignal belum tersedia.');
@@ -126,15 +176,20 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       if (!message) throw new Error('Isi pesan push tidak boleh kosong.');
 
       const baseUrl = resolveRequestBaseUrl(req);
+      const uploadedImage = await persistAnnouncementImage(req.file);
+      const imageUrl = uploadedImage?.publicUrl || '';
+      const absoluteImageUrl = resolveAbsoluteAssetUrl(req, imageUrl);
       const result = await sendPushToCustomer(customer, {
         settings,
         title,
         message,
         targetUrl: `${baseUrl}/customer/dashboard#home`,
+        imageUrl: absoluteImageUrl,
         data: {
           kind: 'test-push',
           source: 'admin-test-push',
-          customerId: Number(customer.id || 0) || null
+          customerId: Number(customer.id || 0) || null,
+          ...(imageUrl ? { imageUrl, image_url: imageUrl } : {})
         }
       });
 
@@ -148,11 +203,12 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
           tab: 'home',
           title,
           body: message,
-          payload: {
+          payload: buildAnnouncementPayload({
             source: 'admin-test-push',
-            senderName: 'Admin',
-            senderRole: 'Test Push'
-          }
+            target: 'test',
+            imageUrl,
+            absoluteImageUrl
+          })
         });
       } catch (notificationError) {
         logger.warn(`[PushTest] Push terkirim, tetapi gagal simpan inbox: ${notificationError.message}`);
@@ -169,9 +225,9 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     return res.redirect('/admin/whatsapp/broadcast');
   });
 
-  router.post('/whatsapp/broadcast', requireAdminSession, express.urlencoded({ extended: true }), async (req, res) => {
+  router.post('/whatsapp/broadcast', requireAdminSession, announcementUpload.single('announcement_image'), async (req, res) => {
     try {
-      const { target, message, delay: customDelay, batchSize: customBatchSize, hourlyLimit: customHourlyLimit, send_whatsapp, send_push, push_title } = req.body;
+      const { target, message, delay: customDelay, batchSize: customBatchSize, hourlyLimit: customHourlyLimit, send_whatsapp, send_push, push_title, broadcast_mode, test_lookup } = req.body;
       if (!message) throw new Error('Pesan tidak boleh kosong');
       const shouldSendWhatsapp = String(send_whatsapp || '').toLowerCase() === '1' || String(send_whatsapp || '').toLowerCase() === 'true' || send_whatsapp === 'on';
       const shouldSendPush = String(send_push || '').toLowerCase() === '1' || String(send_push || '').toLowerCase() === 'true' || send_push === 'on';
@@ -183,6 +239,11 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       const batchSize = parseInt(customBatchSize, 10) || 15;
       const batchPauseMs = 120000;
       const hourlyLimit = parseInt(customHourlyLimit, 10) || 80;
+      const isTestMode = String(broadcast_mode || '').toLowerCase() === 'test';
+      const uploadedImage = await persistAnnouncementImage(req.file);
+      const imageUrl = uploadedImage?.publicUrl || '';
+      const imageFilePath = uploadedImage?.filePath || '';
+      const absoluteImageUrl = resolveAbsoluteAssetUrl(req, imageUrl);
 
       if (customDelay) {
         const v = parseInt(customDelay, 10);
@@ -191,30 +252,39 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
         }
       }
 
-      if (global.broadcastStatus.active) {
+      if (!isTestMode && global.broadcastStatus.active) {
         throw new Error('Ada proses broadcast yang sedang berjalan. Silakan tunggu hingga selesai.');
       }
 
       let customers = [];
-      const allCust = customerSvc.getAllCustomers();
-      if (target === 'all') customers = allCust;
-      else if (target === 'active') customers = allCust.filter((c) => c.status === 'active');
-      else if (target === 'suspended') customers = allCust.filter((c) => c.status === 'suspended');
-      else if (target === 'unpaid') customers = allCust.filter((c) => c.unpaid_count > 0);
+      if (isTestMode) {
+        const lookup = String(test_lookup || '').trim();
+        if (!lookup) throw new Error('Isi pelanggan tujuan untuk test pengumuman.');
+        const customer = customerSvc.findCustomerByAny(lookup);
+        if (!customer) throw new Error('Pelanggan tujuan test pengumuman tidak ditemukan.');
+        customers = [customer];
+      } else {
+        const allCust = customerSvc.getAllCustomers();
+        if (target === 'all') customers = allCust;
+        else if (target === 'active') customers = allCust.filter((c) => c.status === 'active');
+        else if (target === 'suspended') customers = allCust.filter((c) => c.status === 'suspended');
+        else if (target === 'unpaid') customers = allCust.filter((c) => c.unpaid_count > 0);
+      }
 
       const uniqueCustomers = [];
       const seenPhones = new Set();
       for (const customer of customers) {
         let phoneKey = String(customer.phone || '').replace(/\D/g, '');
         if (phoneKey.startsWith('0')) phoneKey = `62${phoneKey.slice(1)}`;
-        if (phoneKey && phoneKey.length > 8 && !seenPhones.has(phoneKey)) {
+        const key = shouldSendWhatsapp ? phoneKey : String(customer.id || phoneKey || '');
+        if (key && (!shouldSendWhatsapp || phoneKey.length > 8) && !seenPhones.has(key)) {
           uniqueCustomers.push(customer);
-          seenPhones.add(phoneKey);
+          seenPhones.add(key);
         }
       }
 
       if (uniqueCustomers.length === 0) {
-        throw new Error('Tidak ada nomor pelanggan yang valid untuk target tersebut.');
+        throw new Error(shouldSendWhatsapp ? 'Tidak ada nomor pelanggan yang valid untuk target tersebut.' : 'Tidak ada pelanggan yang valid untuk target tersebut.');
       }
 
       const pushTitle = String(push_title || 'Pengumuman Pelanggan').trim() || 'Pengumuman Pelanggan';
@@ -234,7 +304,13 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
             title: pushTitle,
             message: item.body,
             targetUrl: `${requestBaseUrl}/customer/dashboard#home`,
-            data: { kind: 'announcement', source: 'broadcast', target }
+            imageUrl: absoluteImageUrl,
+            data: {
+              kind: 'announcement',
+              source: isTestMode ? 'broadcast-test' : 'broadcast',
+              target,
+              ...(imageUrl ? { imageUrl, image_url: imageUrl } : {})
+            }
           });
         }
       }
@@ -246,12 +322,12 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
             tab: 'home',
             title: pushTitle,
             body: item.body,
-            payload: {
-              senderName: 'Admin',
-              senderRole: 'Pengumuman',
-              source: 'broadcast',
-              target
-            }
+            payload: buildAnnouncementPayload({
+              source: isTestMode ? 'broadcast-test' : 'broadcast',
+              target,
+              imageUrl,
+              absoluteImageUrl
+            })
           });
         }
       } catch (notificationError) {
@@ -259,14 +335,36 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       }
 
       if (!shouldSendWhatsapp) {
-        req.session._msg = { type: 'success', text: `Broadcast push berhasil dikirim/disimpan untuk ${uniqueCustomers.length} pelanggan tanpa WhatsApp.` };
+        req.session._msg = { type: 'success', text: `${isTestMode ? 'Test' : 'Broadcast'} push berhasil dikirim/disimpan untuk ${uniqueCustomers.length} pelanggan tanpa WhatsApp.` };
         return res.redirect('/admin/whatsapp/broadcast');
       }
 
-      const { sendWA, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
+      const { sendWA, sendWAImage, ensureWhatsAppReady } = await import('../../services/whatsappBot.mjs');
       const ready = await ensureWhatsAppReady(25000);
       if (!ready) {
         throw new Error('Bot WhatsApp belum terhubung. Silakan buka menu WhatsApp dan pastikan statusnya Terhubung.');
+      }
+
+      if (isTestMode) {
+        const customer = uniqueCustomers[0];
+        const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
+        const primaryInvoice = Array.isArray(unpaidInvoices) && unpaidInvoices.length ? unpaidInvoices[0] : null;
+        const payload = buildWhatsappCustomerPayload(customer, unpaidInvoices, primaryInvoice, { baseUrl: requestBaseUrl });
+        let formattedMsg = buildBroadcastAnnouncementMessage(customer, message, { baseUrl: requestBaseUrl });
+        if (!/\{\{\s*payment_guide\s*\}\}/i.test(message) && payload.payment_guide) {
+          formattedMsg += `\n\n${payload.payment_guide}`;
+        }
+        const sentOk = await sendWhatsappAnnouncement({
+          phone: customer.phone,
+          message: formattedMsg,
+          imageFilePath,
+          sendWA,
+          sendWAImage,
+          fs
+        });
+        if (!sentOk) throw new Error('sendWA mengembalikan gagal');
+        req.session._msg = { type: 'success', text: `Test pengumuman berhasil dikirim ke ${customer.name || customer.phone}.` };
+        return res.redirect('/admin/whatsapp/broadcast');
       }
 
       global.broadcastStatus = {
@@ -333,7 +431,14 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
 
               formattedMsg = addMessageVariation(formattedMsg, i);
 
-              const sentOk = await sendWA(customer.phone, formattedMsg);
+              const sentOk = await sendWhatsappAnnouncement({
+                phone: customer.phone,
+                message: formattedMsg,
+                imageFilePath,
+                sendWA,
+                sendWAImage,
+                fs
+              });
               if (!sentOk) throw new Error('sendWA mengembalikan gagal');
               global.broadcastStatus.sent += 1;
               messagesInCurrentHour += 1;

@@ -94,8 +94,8 @@
       margin-bottom:16px;
       padding:14px 15px;
       border-radius:22px;
-      background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(248,251,255,.72));
-      border:1px solid rgba(255,255,255,.68);
+      background: var(--panel-bg);
+      border:1px solid var(--panel-border);
       box-shadow:0 16px 34px rgba(85,104,148,.10);
     }
     .brand-hero-logo{
@@ -105,7 +105,7 @@
       display:grid;
       place-items:center;
       border-radius:18px;
-      background:linear-gradient(145deg, rgba(255,255,255,.98), rgba(238,243,255,.92));
+      background: var(--panel-soft);
       box-shadow:inset 0 1px 0 rgba(255,255,255,.92), 0 16px 28px rgba(79,110,247,.10);
     }
     .brand-hero-logo img{width:44px;height:44px;object-fit:contain}
@@ -117,6 +117,15 @@
     }
     .brand-hero-copy h1{margin:0 0 4px;font-size:22px;line-height:1.04;font-weight:800;letter-spacing:-.04em}
     .brand-hero-copy p{margin:0;color:var(--text-soft);font-size:12px;line-height:1.45}
+    html[data-theme="dark"] .brand-hero,
+    html[data-theme="dark"] .brand-hero-logo{
+      box-shadow:0 16px 34px rgba(0,0,0,.28);
+    }
+    html[data-theme="dark"] .brand-hero-copy strong{
+      background:rgba(111,141,255,.14);
+      border-color:rgba(111,141,255,.28);
+      color:#dbe6ff;
+    }
     .head{
       background: linear-gradient(135deg, rgba(111, 141, 255, 0.08) 0%, rgba(77, 189, 255, 0.05) 100%);
       padding:18px 20px;
@@ -142,11 +151,23 @@
     .tbl{width:100%;border-collapse:separate;border-spacing:0}
     .tbl th,.tbl td{padding:10px 12px;border-bottom:1px solid var(--table-border);vertical-align:middle}
     .tbl thead th{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-soft)}
-    .tbl tbody tr{background:linear-gradient(180deg, rgba(255,255,255,.52), rgba(255,255,255,.18))}
-    .tbl tbody tr:hover{background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(248,251,255,.28))}
+    .tbl tbody tr{background:var(--panel-soft)}
+    .tbl tbody tr:hover{background:var(--chip-bg)}
+    .tbl td{color:var(--text-main)}
     .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid rgba(148,163,184,.18)}
     .pill-u{background: linear-gradient(180deg, rgba(224,93,109,.16), rgba(224,93,109,.08));color:#c34b5b;border-color: rgba(224,93,109,.18)}
     .pill-p{background: linear-gradient(180deg, rgba(28,165,111,.16), rgba(28,165,111,.08));color:#158b5d;border-color: rgba(28,165,111,.18)}
+    html[data-theme="dark"] .pill-u{color:#fecdd3;background:rgba(251,113,133,.18);border-color:rgba(251,113,133,.34)}
+    html[data-theme="dark"] .pill-p{color:#bbf7d0;background:rgba(34,197,94,.16);border-color:rgba(34,197,94,.28)}
+    html[data-theme="dark"] .alert{
+      background:var(--panel-soft);
+      color:var(--text-main);
+      border-color:var(--panel-border);
+    }
+    html[data-theme="dark"] .alert-danger{color:#fecdd3}
+    html[data-theme="dark"] .alert-warning{color:#fde68a}
+    html[data-theme="dark"] .alert-success{color:#bbf7d0}
+    html[data-theme="dark"] .alert-info{color:#bfdbfe}
     .btnx{border-radius:14px;font-weight:700}
     .btn-primary{background: linear-gradient(135deg, var(--brand-2) 0%, var(--brand) 100%);border:none;box-shadow:0 16px 28px rgba(79,110,247,.18)}
     .btn-outline-light{
@@ -171,26 +192,7 @@
       color:var(--text-soft);
       margin-bottom:8px;
     }
-    .payment-instruction{
-      display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr));
-      gap:8px;
-      margin:10px 0 14px;
-    }
-    .instruction-pill{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:10px 12px;
-      border-radius:14px;
-      background: var(--field-bg);
-      border:1px solid var(--table-border);
-      color: var(--text-soft);
-      font-size:12px;
-      line-height:1.35;
-      min-width:0;
-    }
-    .instruction-pill i{font-size:15px;color:var(--brand)}
+    .payment-summary{font-size:12px;color:var(--text-main);font-weight:800}
     .payment-methods-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     @media (min-width: 768px){.payment-methods-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
     .pay-scroll{max-height:320px;overflow:auto;padding-right:4px}
@@ -209,7 +211,7 @@
       transition: all .18s ease;
       overflow:hidden;
       min-height:124px;
-      box-shadow: var(--method-shadow), inset 0 1px 0 rgba(255,255,255,.26);
+      box-shadow: var(--method-shadow);
     }
     .pay-method-item:hover{transform: translateY(-1px);border-color: rgba(99, 102, 241, 0.45)}
     .pm-radio:checked + .pay-method-item{
@@ -228,6 +230,7 @@
     }
     html[data-theme="dark"] .p-icon{background: rgba(30,41,59,.92)}
     .p-logo{width:100%;height:100%;object-fit:contain;padding:7px;background: rgba(255, 255, 255, 0.96)}
+    html[data-theme="dark"] .p-logo{background:rgba(226,232,240,.92)}
     .p-badge{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.2px;text-transform:uppercase}
     .pb-dana{background: linear-gradient(135deg, rgba(59,130,246,0.95), rgba(14,165,233,0.95));color:#0b1220}
     .pb-ovo{background: linear-gradient(135deg, rgba(168,85,247,0.95), rgba(99,102,241,0.95));color:#0b1220}
@@ -300,7 +303,6 @@
       .brand-hero-logo img{width:40px;height:40px}
       .brand-hero-copy h1{font-size:20px}
       .head,.body{padding:16px 14px}
-      .payment-instruction{grid-template-columns:1fr}
       .manual-grid{grid-template-columns:1fr}
       .p-name{font-size:13px}
       .p-icon{width:44px;height:44px;font-size:20px}
@@ -318,7 +320,6 @@
         <div class="brand-hero-copy">
           <strong><i class="bi bi-credit-card-2-front-fill"></i> Cek Pembayaran</strong>
           <h1><%= settings.company_header || 'Portal ISP' %></h1>
-          <p>Halaman publik untuk cek tagihan pelanggan dengan identitas perusahaan yang jelas dan tetap nyaman dipakai di handphone.</p>
         </div>
       </div>
 
@@ -327,7 +328,6 @@
         <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
           <div>
             <div class="fw-bold" style="font-size:18px">Cek Pembayaran</div>
-            <div class="muted small">Cari tagihan aktif dan lanjutkan pembayaran dengan lebih rapi.</div>
           </div>
           <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-light btn-sm btnx" type="button" id="themeToggleBtn" aria-label="Ubah tema" title="Ubah tema">
@@ -351,7 +351,6 @@
               </button>
             </div>
           </div>
-          <div class="mini-help mt-2">Cari dengan nama pelanggan, nomor HP, atau ID pelanggan.</div>
         </form>
 
         <% if (error) { %>
@@ -373,7 +372,6 @@
 
         <% if (!customer && matches && matches.length > 0) { %>
           <div class="mb-2 fw-bold">Hasil Pencarian</div>
-          <div class="mini-help mb-2">Pilih pelanggan untuk melihat tagihan aktif.</div>
           <div class="table-responsive">
             <table class="tbl">
               <thead>
@@ -476,24 +474,9 @@
             <div class="mt-3" style="border-top:1px solid var(--table-border); padding-top: 14px">
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                 <div class="fw-bold">Pembayaran</div>
-                <div class="muted small">
+                <div class="payment-summary">
                   <span id="pay_inv_text"></span>
                   <span id="pay_amount_text"></span>
-                </div>
-              </div>
-
-              <div class="payment-instruction">
-                <div class="instruction-pill">
-                  <i class="bi bi-1-circle"></i>
-                  <span>Pilih invoice yang ingin dibayar.</span>
-                </div>
-                <div class="instruction-pill">
-                  <i class="bi bi-2-circle"></i>
-                  <span>Pilih metode pembayaran.</span>
-                </div>
-                <div class="instruction-pill">
-                  <i class="bi bi-3-circle"></i>
-                  <span>Lanjutkan pembayaran sampai selesai.</span>
                 </div>
               </div>
 
@@ -504,9 +487,20 @@
                   <div class="payment-methods-grid pay-scroll">
                     <%
                       const sortedChannels = [...paymentChannels].sort((a, b) => {
-                        const priority = { 'E-Wallet': 1, 'QRIS': 2, 'Virtual Account': 3, 'Convenience Store': 4 };
-                        const prioA = priority[a.group] || 99;
-                        const prioB = priority[b.group] || 99;
+                        const rank = (channel) => {
+                          const code = String(channel.code || '').toUpperCase();
+                          const source = String(channel.source || '').toLowerCase();
+                          const group = String(channel.group || '');
+                          if (source === 'tripay' && code.startsWith('QRIS')) return 1;
+                          if (code.startsWith('QRIS')) return 2;
+                          if (group === 'E-Wallet') return 10;
+                          if (group === 'Virtual Account') return 20;
+                          if (group === 'Convenience Store') return 30;
+                          if (code === 'STATICQRIS') return 90;
+                          return 80;
+                        };
+                        const prioA = rank(a);
+                        const prioB = rank(b);
                         return prioA - prioB;
                       });
                       const activeChannels = sortedChannels.filter(c => c.active);
@@ -524,16 +518,17 @@
                         for (const k of Object.keys(brandMap)) { if (code.includes(k)) { brand = brandMap[k]; break; } }
                         const bankMap = { BCAVA: 'BCA', BNIVA: 'BNI', BRIVA: 'BRI', MANDIRIVA: 'Mandiri', PERMATAVA: 'Permata', CIMBVA: 'CIMB', DANAMONVA: 'Danamon' };
                         if (!brand && bankMap[code]) brand = { label: bankMap[code], cls: 'pb-bank' };
-                        const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'QRIS' };
+                        const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'QRIS Tripay', QRIS2: 'QRIS Tripay' };
                         let shortName = nameMap[code] || String(channel.name || '').trim();
                         shortName = shortName.replace(/virtual account/ig, 'VA').replace(/^bank\s+/ig, '').replace(/\s+/g, ' ').trim();
-                        if (code !== 'QRIS' && code.includes('QRIS') && brand) shortName = `QRIS ${brand.label}`;
+                        if (!nameMap[code] && code.includes('QRIS') && brand) shortName = `QRIS ${brand.label}`;
                         const group = String(channel.group || '');
-                        const groupIcon = group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-qr-code-scan';
-                        const shortGroup = group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'QRIS' : group;
+                        const isQrisTripay = code.startsWith('QRIS');
+                        const groupIcon = isQrisTripay ? 'bi-qr-code-scan' : group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-qr-code-scan';
+                        const shortGroup = isQrisTripay ? 'QRIS' : group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'QRIS' : group;
                         const radioId = `pm_${idx}_${code}`;
                     %>
-                      <input class="pm-radio" type="radio" id="<%= radioId %>" name="method" value="<%= channel.code %>" <%= (code === 'STATICQRIS' || idx === 0) ? 'checked' : '' %> <%= idx === 0 ? 'required' : '' %>>
+                      <input class="pm-radio" type="radio" id="<%= radioId %>" name="method" value="<%= channel.code %>" <%= idx === 0 ? 'checked required' : '' %>>
                       <label class="pay-method-item" for="<%= radioId %>">
                         <div class="p-icon">
                           <% if (iconUrl) { %>
@@ -546,7 +541,7 @@
                         </div>
                         <div class="p-info">
                           <span class="p-name"><%= shortName %></span>
-                          <span class="p-sub"><%= group === 'Virtual Account' ? 'Transfer bank otomatis' : group === 'E-Wallet' ? 'Bayar langsung dari e-wallet' : group === 'QRIS' ? 'Scan kode QRIS' : 'Pembayaran digital' %></span>
+                          <span class="p-sub"><%= isQrisTripay ? 'Scan QRIS Tripay' : group === 'Virtual Account' ? 'Transfer bank otomatis' : group === 'E-Wallet' ? 'Bayar langsung dari e-wallet' : group === 'QRIS' ? 'Scan kode QRIS' : 'Pembayaran digital' %></span>
                         </div>
                         <span class="p-chip"><%= shortGroup %></span>
                       </label>
@@ -564,13 +559,6 @@
                       </div>
                       <span class="p-chip">QRIS</span>
                     </div>
-                  </div>
-                <% } %>
-
-                <% if (settings && settings.qris_static_enabled !== false && settings.qris_static_enabled !== 'false' && (settings.qris_static_qr_url || settings.qris_static_payload)) { %>
-                  <div class="alert alert-info mt-2 mb-0">
-                    <i class="bi bi-qr-code-scan me-2"></i>
-                    Pilih QRIS untuk menampilkan kode bayar dengan nominal yang sudah sesuai.
                   </div>
                 <% } %>
 
@@ -648,7 +636,6 @@
           <% if (paidInvoices.length > 0) { %>
             <div class="mt-4">
               <div class="mb-2 fw-bold">Riwayat Pembayaran</div>
-              <div class="mini-help">Menampilkan <%= Math.min(paidInvoices.length, 10) %> pembayaran terbaru.</div>
               <div class="table-responsive mt-2">
                 <table class="tbl">
                   <thead>

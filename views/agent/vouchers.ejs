@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <%
+      const currentVoucherPage = pageMode === 'batch' ? 'batch' : 'single';
+      const allBatches = Array.isArray(batches) ? batches : [];
+      const singleBatches = allBatches.filter((b) => Number(b.qty_total || b.vouchers_count || b.qty_created || 0) <= 1);
+      const multiBatches = allBatches.filter((b) => Number(b.qty_total || b.vouchers_count || b.qty_created || 0) > 1);
+    %>
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+
+    <section class="hero">
+      <h1><%= currentVoucherPage === 'batch' ? 'Voucher Banyak' : 'Voucher Satuan' %></h1>
+      <p><%= currentVoucherPage === 'batch' ? 'Buat stok voucher banyak, lihat total kode, lalu cetak A4 atau ekspor CSV.' : 'Buat 1 voucher untuk pembeli langsung, lalu bagikan gambar atau salin kode dari HP.' %></p>
+    </section>
+
+    <section class="voucher-menu" aria-label="Menu voucher agent">
+      <a class="voucher-menu-link <%= currentVoucherPage === 'single' ? 'active' : '' %>" href="/agent/vouchers/single">
+        <i class="bi bi-lightning-charge"></i>
+        <span>Voucher Satuan</span>
+        <small>Jual 1 kode</small>
+      </a>
+      <a class="voucher-menu-link <%= currentVoucherPage === 'batch' ? 'active' : '' %>" href="/agent/vouchers/batch">
+        <i class="bi bi-grid-3x3-gap"></i>
+        <span>Voucher Banyak</span>
+        <small>Batch + Print A4</small>
+      </a>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-magic"></i> <%= currentVoucherPage === 'batch' ? 'Buat Voucher Banyak' : 'Buat Voucher Satuan' %></h2>
+        <span class="pill">Saldo Rp <%= Number(agent?.balance || 0).toLocaleString('id-ID') %></span>
+      </div>
+      <div class="bd">
+        <% if (!prices || prices.length === 0) { %>
+          <div class="empty">Belum ada profile voucher untuk agent ini. Minta admin mengatur harga dan profile.</div>
+        <% } else { %>
+          <form method="POST" action="/agent/vouchers/create" id="agentVoucherForm" class="inline-form">
+            <input type="hidden" name="price_id" id="agentPriceId">
+            <input type="hidden" name="sale_mode" id="agentSaleMode" value="<%= currentVoucherPage %>">
+            <div class="voucher-grid" id="agentPriceGrid">
+              <% prices.forEach(p => {
+                   const sell = Number(p.sell_price || 0);
+                   const buy = Number(p.buy_price || 0);
+                   const profit = Math.max(0, sell - buy);
+              %>
+                <div class="vcard" role="button" tabindex="0" data-price-id="<%= p.id %>" data-title="<%= p.profile_name %>" data-buy-price="<%= buy %>" data-sell-price="<%= sell %>">
+                  <span class="badgey s"><i class="bi bi-wifi"></i> <%= p.validity || 'Voucher' %></span>
+                  <div class="name"><%= p.profile_name %></div>
+                  <div class="price">Rp <%= sell.toLocaleString('id-ID') %></div>
+                  <div class="meta"><%= p.router_name || 'Default Router' %></div>
+                  <div class="meta">Potong Rp <%= buy.toLocaleString('id-ID') %> - Profit Rp <%= profit.toLocaleString('id-ID') %></div>
+                </div>
+              <% }) %>
+            </div>
+
+            <div class="single-sale-panel" id="singleSalePanel" <%= currentVoucherPage === 'batch' ? 'hidden' : '' %>>
+              <div class="item-head">
+                <div>
+                  <div class="t1">Jual Satuan</div>
+                  <div class="t2">Untuk pembeli yang datang satu per satu. Setelah dibuat, agen langsung masuk ke detail voucher dan tombol Jual berubah menjadi Bagikan Gambar.</div>
+                </div>
+                <span class="badgey s"><i class="bi bi-phone"></i> Digital</span>
+              </div>
+            </div>
+
+            <div class="form-grid batch-options" id="batchOptions" <%= currentVoucherPage === 'batch' ? '' : 'hidden' %>>
+              <div class="mode-note">
+                <div class="t1">Batch Cetak Banyak</div>
+                <div class="t2">Untuk stok voucher fisik. Menu ini punya Print A4, total voucher, CSV, dan detail status siap/terjual/dicetak.</div>
+              </div>
+              <label>
+                <div class="t2">Jumlah</div>
+                <input class="form-control" type="number" name="qty" min="1" max="200" value="1">
+              </label>
+              <label>
+                <div class="t2">Prefix</div>
+                <input class="form-control" type="text" name="prefix" maxlength="8" placeholder="Opsional">
+              </label>
+              <label>
+                <div class="t2">Panjang Kode</div>
+                <input class="form-control" type="number" name="code_length" min="4" max="16" value="6">
+              </label>
+              <label>
+                <div class="t2">Karakter</div>
+                <select class="form-select" name="charset">
+                  <option value="numbers">Angka</option>
+                  <option value="letters">Huruf kecil</option>
+                  <option value="mixed">Huruf + angka</option>
+                </select>
+              </label>
+              <label>
+                <div class="t2">Mode</div>
+                <select class="form-select" name="mode">
+                  <option value="voucher">User = Pass</option>
+                  <option value="member">User dan Pass beda</option>
+                </select>
+              </label>
+            </div>
+
+            <button class="btn-action" id="agentVoucherSubmit" type="submit" disabled style="opacity:.65">
+              <i class="bi bi-plus-circle"></i> Pilih paket voucher
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </section>
+
+    <% if (currentVoucherPage === 'single') { %>
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-lightning-charge"></i> Riwayat Voucher Satuan</h2>
+        <span class="pill"><%= singleBatches.length %></span>
+      </div>
+      <div class="bd">
+        <% if (!singleBatches.length) { %>
+          <div class="empty">Belum ada voucher satuan.</div>
+        <% } else { %>
+          <div class="listx">
+            <% singleBatches.forEach(b => {
+              const total = Number(b.vouchers_count || b.qty_created || b.qty_total || 0) || 1;
+              const sold = Number(b.sold_count || 0) || 0;
+              const ready = Number(b.ready_count || 0) || 0;
+            %>
+              <div class="itemx">
+                <div class="item-head">
+                  <div>
+                    <div class="t1">Voucher #<%= b.id %> - <%= b.profile_name %></div>
+                    <div class="t2"><%= b.router_name || 'Default Router' %> - <%= ready %> siap - <%= sold %>/<%= total %> terjual</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="t1">Rp <%= Number(b.price || 0).toLocaleString('id-ID') %></div>
+                    <span class="badgey <%= sold > 0 ? 'w' : 's' %>"><%= sold > 0 ? 'Terjual' : 'Siap Dijual' %></span>
+                  </div>
+                </div>
+                <div class="btn-row" style="margin-top:10px">
+                  <a class="btn-action" href="/agent/vouchers/batches/<%= b.id %>"><i class="bi bi-eye"></i> Detail / Jual</a>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+    <% } %>
+
+    <% if (currentVoucherPage === 'batch') { %>
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-stack"></i> Batch Cetak Banyak</h2>
+        <span class="pill"><%= multiBatches.length %></span>
+      </div>
+      <div class="bd">
+        <% if (!multiBatches.length) { %>
+          <div class="empty">Belum ada batch cetak banyak.</div>
+        <% } else { %>
+          <div class="listx">
+            <% multiBatches.forEach(b => {
+              const total = Number(b.vouchers_count || b.qty_created || b.qty_total || 0) || 0;
+              const sold = Number(b.sold_count || 0) || 0;
+              const printed = Number(b.printed_count || 0) || 0;
+              const ready = Number(b.ready_count || 0) || 0;
+            %>
+              <div class="itemx batch-item">
+                <div class="item-head">
+                  <div>
+                    <div class="t1">Batch #<%= b.id %> - <%= b.profile_name %></div>
+                    <div class="t2"><%= b.router_name || 'Default Router' %> - total <%= total %> voucher - siap <%= ready %> - terjual <%= sold %> - dicetak <%= printed %></div>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="t1">Rp <%= Number(b.price || 0).toLocaleString('id-ID') %></div>
+                    <span class="badgey n"><%= total %> kode</span>
+                  </div>
+                </div>
+                <div class="batch-count-grid">
+                  <div><span>Total</span><strong><%= total %></strong></div>
+                  <div><span>Siap</span><strong><%= ready %></strong></div>
+                  <div><span>Terjual</span><strong><%= sold %></strong></div>
+                  <div><span>Dicetak</span><strong><%= printed %></strong></div>
+                </div>
+                <div class="btn-row" style="margin-top:10px">
+                  <a class="btn-mini" href="/agent/vouchers/batches/<%= b.id %>"><i class="bi bi-eye"></i> Detail Batch</a>
+                  <a class="btn-action" target="_blank" href="/agent/vouchers/batches/<%= b.id %>/print" data-agent-print-confirm data-ready-count="<%= ready %>" data-total-count="<%= total %>"><i class="bi bi-printer"></i> Print A4</a>
+                  <a class="btn-mini" href="/agent/vouchers/batches/<%= b.id %>/export.csv"><i class="bi bi-filetype-csv"></i> CSV</a>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+    <% } %>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'vouchers' }) %>
+  <%- include('partials/scripts') %>
+  <script>
+    (function () {
+      const grid = document.getElementById('agentPriceGrid');
+      const input = document.getElementById('agentPriceId');
+      const submit = document.getElementById('agentVoucherSubmit');
+      const form = document.getElementById('agentVoucherForm');
+      const qtyInput = form ? form.querySelector('input[name="qty"]') : null;
+      const saleModeInput = document.getElementById('agentSaleMode');
+      const batchOptions = document.getElementById('batchOptions');
+      const singlePanel = document.getElementById('singleSalePanel');
+      const modeTabs = document.querySelectorAll('[data-sale-mode]');
+      const balance = <%- JSON.stringify(Number(agent?.balance || 0)) %>;
+      const initialSaleMode = <%- JSON.stringify(currentVoucherPage) %>;
+      let saleMode = initialSaleMode === 'batch' ? 'batch' : 'single';
+      let selectedCard = null;
+      if (!grid || !input || !submit || !form || !qtyInput) return;
+      const rupiah = (value) => 'Rp ' + Number(value || 0).toLocaleString('id-ID');
+      const updateSubmit = () => {
+        if (!selectedCard || !input.value) {
+          submit.disabled = true;
+          submit.style.opacity = '.65';
+          submit.innerHTML = '<i class="bi bi-plus-circle"></i> Pilih paket voucher';
+          return;
+        }
+        submit.disabled = false;
+        submit.style.opacity = '1';
+        const title = selectedCard.getAttribute('data-title') || 'Paket';
+        submit.innerHTML = saleMode === 'single'
+          ? '<i class="bi bi-lightning-charge"></i> Jual 1 Voucher - ' + title
+          : '<i class="bi bi-grid-3x3-gap"></i> Buat Batch Banyak - ' + title;
+      };
+      const setSaleMode = (mode) => {
+        saleMode = mode === 'batch' ? 'batch' : 'single';
+        if (saleModeInput) saleModeInput.value = saleMode;
+        if (batchOptions) batchOptions.hidden = saleMode !== 'batch';
+        if (singlePanel) singlePanel.hidden = saleMode === 'batch';
+        if (saleMode === 'single') qtyInput.value = '1';
+        modeTabs.forEach(tab => tab.classList.toggle('active', tab.getAttribute('data-sale-mode') === saleMode));
+        updateSubmit();
+      };
+      const choose = (card) => {
+        selectedCard = card;
+        input.value = card.getAttribute('data-price-id') || '';
+        grid.querySelectorAll('.vcard').forEach(el => el.classList.remove('sel'));
+        card.classList.add('sel');
+        updateSubmit();
+      };
+      modeTabs.forEach(tab => tab.addEventListener('click', () => setSaleMode(tab.getAttribute('data-sale-mode'))));
+      grid.addEventListener('click', e => {
+        const card = e.target.closest('.vcard');
+        if (card) choose(card);
+      });
+      grid.addEventListener('keydown', e => {
+        const card = e.target.closest('.vcard');
+        if (!card) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          choose(card);
+        }
+      });
+      form.addEventListener('submit', (e) => {
+        if (!selectedCard) return;
+        const qty = saleMode === 'single' ? 1 : Math.max(1, Math.min(200, Number(qtyInput.value || 1) || 1));
+        qtyInput.value = String(qty);
+        const buy = Number(selectedCard.getAttribute('data-buy-price') || 0) || 0;
+        const cost = buy * qty;
+        const title = selectedCard.getAttribute('data-title') || 'Paket';
+        const left = balance - cost;
+        const text = [
+          (saleMode === 'single' ? 'Jual 1 voucher ' : 'Generate batch ' + qty + ' voucher ') + title + '?',
+          'Potong saldo: ' + rupiah(cost),
+          'Sisa saldo perkiraan: ' + rupiah(left)
+        ].join('\n');
+        if (!window.confirm(text)) e.preventDefault();
+      });
+      setSaleMode(initialSaleMode);
+    })();
+  </script>
+</body>
+</html>

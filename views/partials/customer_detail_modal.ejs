@@ -149,6 +149,36 @@
   .customer-network-status.warn{background:linear-gradient(180deg, rgba(245,158,11,.16), rgba(245,158,11,.08));color:#f59e0b;border-color:rgba(245,158,11,.22)}
   .customer-detail-cardline{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .customer-detail-cardline .value{margin-top:0!important}
+  .customer-detail-price-box{
+    display:grid;
+    gap:5px;
+  }
+  .customer-detail-price-normal{
+    color:var(--muted,var(--tech-muted,#94a3b8));
+    text-decoration:line-through;
+    text-decoration-thickness:2px;
+    font-size:12px;
+    font-weight:800;
+  }
+  .customer-detail-price-final{
+    color:#22c55e;
+    font-size:18px;
+    font-weight:950;
+    line-height:1.1;
+  }
+  .customer-detail-discount-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    width:max-content;
+    padding:4px 8px;
+    border-radius:999px;
+    background:rgba(34,197,94,.14);
+    border:1px solid rgba(34,197,94,.26);
+    color:#22c55e;
+    font-size:10px;
+    font-weight:900;
+  }
   .customer-traffic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .customer-traffic-card{padding:11px 12px;border-radius:18px;border:1px solid rgba(148,163,184,.12);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .customer-traffic-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,var(--tech-muted,#94a3b8))}
@@ -528,7 +558,7 @@
   }
 
   function customerDetailCurrentCode(customer) {
-    return customer?.customerCode || customer?.genieacsTag || customer?.pppoeUsername || customer?.phone || String(customer?.id || '-');
+    return customer?.customerCode || (customer?.id ? `SCK${customer.id}` : '-');
   }
 
   function customerDetailBanner(invoiceStatus, currentInvoice, network) {
@@ -661,6 +691,8 @@
       const shouldAutoRefreshNetwork = !forceNetworkRefresh &&
         Boolean(json?.customer?.pppoeUsername) &&
         (
+          String(json?.network?.status || '').toLowerCase() === 'offline' ||
+          json?.network?.online === false ||
           (
             String(json?.network?.remoteAddress || '-').trim() === '-' &&
             String(json?.network?.uptime || '-').trim() === '-' &&
@@ -730,6 +762,19 @@
       ? `${escapeCustomerDetailHtml(String(customer.lat).trim())}, ${escapeCustomerDetailHtml(String(customer.lng).trim())}`
       : 'Belum ada titik GPS';
     const duePillText = currentInvoice ? `JT tgl ${currentInvoice.dueDay || 10}` : 'Belum ada invoice';
+    const detailPackagePrice = Number(customer.packagePrice || 0) || 0;
+    const detailDiscountActive = Boolean(customer.discountEnabled) && Number(customer.discountAmount || 0) > 0 && detailPackagePrice > 0;
+    const detailDiscountAmount = detailDiscountActive ? Math.min(detailPackagePrice, Math.max(0, Math.round(Number(customer.discountAmount || 0) || 0))) : 0;
+    const detailFinalPrice = detailDiscountActive
+      ? Math.max(0, Number(customer.packagePriceAfterDiscount || 0) || (detailPackagePrice - detailDiscountAmount))
+      : detailPackagePrice;
+    const detailPriceHtml = detailDiscountActive
+      ? `<div class="customer-detail-price-box">
+          <span class="customer-detail-price-normal">${customerDetailRupiah(detailPackagePrice)}</span>
+          <span class="customer-detail-price-final">${customerDetailRupiah(detailFinalPrice)}</span>
+          <span class="customer-detail-discount-badge"><i class="bi bi-percent"></i>Diskon ${customerDetailRupiah(detailDiscountAmount)}</span>
+        </div>`
+      : (detailPackagePrice ? customerDetailRupiah(detailPackagePrice) : '-');
 
     content.replaceChildren();
     content.insertAdjacentHTML('afterbegin', `
@@ -803,6 +848,7 @@
         <div class="customer-hero-pills">
           <span class="customer-hero-pill"><i class="bi bi-calendar-check"></i>${duePillText}</span>
           <span class="customer-hero-pill"><i class="bi bi-speedometer2"></i>${escapeCustomerDetailHtml(packageSpeedText)}</span>
+          ${detailDiscountActive ? `<span class="customer-hero-pill"><i class="bi bi-percent"></i>Diskon aktif</span>` : ''}
           <span class="customer-hero-pill"><i class="bi bi-bar-chart-line"></i>${customerDetailBytesToGb(usage.totalBytes)}</span>
           <span class="customer-hero-pill"><i class="bi bi-hdd-network"></i>${escapeCustomerDetailHtml(sessionPillText)}</span>
         </div>
@@ -878,7 +924,7 @@
             <div class="customer-detail-data-grid">
               <div class="customer-detail-cell compact"><div class="label">Paket</div><div class="value">${escapeCustomerDetailHtml(customer.packageName || '-')}</div></div>
               <div class="customer-detail-cell compact"><div class="label">PPN / FUP</div><div class="value">${customer.useFup ? 'FUP aktif' : 'PPN 0%'}</div></div>
-              <div class="customer-detail-cell compact customer-span-2"><div class="label">Total per Bulan</div><div class="value">${customer.packagePrice ? customerDetailRupiah(customer.packagePrice) : '-'}</div></div>
+              <div class="customer-detail-cell compact customer-span-2"><div class="label">Total per Bulan</div><div class="value">${detailPriceHtml}</div></div>
             </div>
           </div>
 

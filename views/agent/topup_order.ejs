@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+
+    <section class="hero">
+      <h1>Bayar Topup QRIS</h1>
+      <p>Scan QRIS lalu bayar persis sesuai total pembayaran agar saldo otomatis masuk.</p>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-qr-code-scan"></i> Topup #<%= order.id %></h2>
+        <span class="badgey <%= String(order.status || '') === 'paid' ? 's' : 'w' %>"><%= order.status || '-' %></span>
+      </div>
+      <div class="bd">
+        <div class="qris-pay">
+          <div class="qris-image">
+            <% if (qrisDataUrl) { %>
+              <img src="<%= qrisDataUrl %>" alt="QRIS topup agent">
+            <% } else { %>
+              <div class="empty">QRIS tidak tersedia.</div>
+            <% } %>
+          </div>
+          <div class="pay-summary">
+            <div class="pay-row">
+              <span>Nominal saldo</span>
+              <strong>Rp <%= Number(order.amount || 0).toLocaleString('id-ID') %></strong>
+            </div>
+            <div class="pay-row">
+              <span>Kode unik</span>
+              <strong><%= Number(order.unique_code || 0).toLocaleString('id-ID') %></strong>
+            </div>
+            <div class="pay-total">
+              <span>Total bayar</span>
+              <strong>Rp <%= Number(order.pay_amount || 0).toLocaleString('id-ID') %></strong>
+            </div>
+            <div class="t2">Berlaku sampai <%= order.expires_at ? new Date(order.expires_at.replace(' ', 'T')).toLocaleString('id-ID') : '-' %></div>
+          </div>
+        </div>
+
+        <% if (String(order.status || '') === 'paid') { %>
+          <div class="alert-agent alert-success" style="margin:12px 0 0">Saldo sudah masuk ke akun agen.</div>
+        <% } else { %>
+          <div class="btn-row" style="margin-top:12px">
+            <a class="btn-action" href="/agent/topup/<%= order.id %>"><i class="bi bi-arrow-repeat"></i> Cek Status</a>
+            <a class="btn-mini" href="/agent/topup"><i class="bi bi-list-ul"></i> Riwayat</a>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'dashboard' }) %>
+  <%- include('partials/scripts') %>
+  <% if (String(order.status || '') !== 'paid') { %>
+    <script>
+      (function () {
+        const orderId = <%- JSON.stringify(Number(order.id || 0)) %>;
+        async function pollTopup() {
+          try {
+            const res = await fetch('/agent/topup/' + orderId, { headers: { 'X-Requested-With': 'fetch' } });
+            const html = await res.text();
+            if (html.includes('Saldo sudah masuk ke akun agen')) {
+              if ('Notification' in window) {
+                try {
+                  if (Notification.permission === 'default') await Notification.requestPermission();
+                  if (Notification.permission === 'granted') {
+                    new Notification('Saldo agent sudah masuk', { body: 'Topup QRIS berhasil diproses.' });
+                  }
+                } catch (e) {}
+              }
+              window.location.reload();
+            }
+          } catch (e) {}
+        }
+        window.setInterval(pollTopup, 6000);
+      })();
+    </script>
+  <% } %>
+</body>
+</html>

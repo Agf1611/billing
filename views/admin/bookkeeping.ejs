@@ -3,11 +3,28 @@
   const pageSession = (typeof session !== 'undefined' && session) ? session : {};
   const pageMsg = (typeof msg !== 'undefined' && msg) ? msg : null;
   const pageEntries = Array.isArray(entries) ? entries : [];
+  const totalEntryCount = Number(typeof totalEntries !== 'undefined' ? totalEntries : pageEntries.length);
+  const bkCurrentPage = Math.max(1, Number(typeof currentPage !== 'undefined' ? currentPage : 1) || 1);
+  const bkTotalPages = Math.max(1, Number(typeof totalPages !== 'undefined' ? totalPages : 1) || 1);
+  const bkPageSize = Math.max(1, Number(typeof pageSize !== 'undefined' ? pageSize : 20) || 20);
   const now = new Date();
   const selectedMonth = Number(filterMonth || (now.getMonth() + 1));
   const selectedYear = Number(filterYear || now.getFullYear());
   const selectedType = String(type || '').trim();
   const selectedSearch = String(search || '').trim();
+  const selectedDetailSection = String(typeof detailSection !== 'undefined' ? detailSection : '').trim();
+  const selectedDetailBucket = String(typeof detailBucket !== 'undefined' ? detailBucket : '').trim();
+  const selectedCashHolderKey = String(typeof cashHolder !== 'undefined' ? cashHolder : '').trim().toLowerCase();
+  const selectedCashHolderTransactions = Array.isArray(typeof cashHolderTransactions !== 'undefined' ? cashHolderTransactions : []) ? cashHolderTransactions : [];
+  const selectedCategoryDetail = (typeof categoryDetail !== 'undefined' && categoryDetail) ? categoryDetail : null;
+  const rawSelectedView = String(typeof view !== 'undefined' ? view : '').trim().toLowerCase();
+  const allowedBookkeepingViews = ['summary', 'ledger', 'staff-cash', 'settlements', 'role-payments'];
+  const selectedView = selectedCategoryDetail ? 'detail' : (allowedBookkeepingViews.includes(rawSelectedView) ? rawSelectedView : 'summary');
+  const isSummaryView = selectedView === 'summary';
+  const isLedgerView = selectedView === 'ledger';
+  const isStaffCashView = selectedView === 'staff-cash';
+  const isSettlementsView = selectedView === 'settlements';
+  const isRolePaymentsView = selectedView === 'role-payments';
   const monthNames = (pageLang === 'en')
     ? ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
     : ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -31,18 +48,82 @@
   const settlementSummary = ledgerDashboard.settlementSummary || {};
   const settlementRows = Array.isArray(ledgerDashboard.settlements) ? ledgerDashboard.settlements : [];
   const settlementOptions = Array.isArray(settlementSourceOptions) ? settlementSourceOptions : [];
+  const staffBalances = cashBalances.filter((item) => item.role !== 'admin');
+  const staffWithBalance = staffBalances.filter((item) => Number(item.currentBalance || 0) > 0);
+  const staffBalanceTotal = staffBalances.reduce((sum, item) => sum + Number(item.currentBalance || 0), 0);
+  const actorPaymentMap = new Map(actorBreakdown.map((item) => [String(item.label || '').trim().toLowerCase(), item]));
+  const cashOverviewRows = cashBalances.map((item) => {
+    const actor = actorPaymentMap.get(String(item.label || '').trim().toLowerCase()) || {};
+    const totalReceived = Number(item.invoiceIncome || 0) + Number(item.manualIncome || 0) + Number(item.settlementIn || 0);
+    const paidRows = recentPayments.filter((payment) => String(payment.actorLabel || '').trim().toLowerCase() === String(item.label || '').trim().toLowerCase());
+    return {
+      ...item,
+      totalReceived,
+      paidAmount: Number(actor.amount || 0),
+      paidCount: Number(item.invoiceCount || 0) + Number(item.manualCount || 0),
+      recentPayments: paidRows.slice(0, 8)
+    };
+  });
+  const isAdminCashDetail = selectedCategoryDetail && selectedDetailSection === 'admin' && selectedDetailBucket === 'cash';
+  const cashOverviewRemaining = cashOverviewRows.reduce((sum, item) => sum + Number(item.currentBalance || 0), 0);
+  const selectedCashHolderRow = cashOverviewRows.find((item) => `${item.role}:${item.entityId == null ? 'null' : item.entityId}` === selectedCashHolderKey) || null;
+  const adminCashTitle = selectedCashHolderRow ? selectedCashHolderRow.label : 'Uang di Admin';
+  const bkPageParams = new URLSearchParams();
+  bkPageParams.set('month', String(selectedMonth));
+  bkPageParams.set('year', String(selectedYear));
+  if (isLedgerView) bkPageParams.set('view', 'ledger');
+  if (selectedType) bkPageParams.set('type', selectedType);
+  if (selectedSearch) bkPageParams.set('search', selectedSearch);
+  const bkPageUrl = (pageNo) => {
+    const params = new URLSearchParams(bkPageParams);
+    params.set('page', String(pageNo));
+    return `/admin/bookkeeping?${params.toString()}`;
+  };
+  const bkDetailUrl = (section, bucket) => {
+    const params = new URLSearchParams();
+    params.set('month', String(selectedMonth));
+    params.set('year', String(selectedYear));
+    params.set('detail_section', String(section || ''));
+    params.set('detail_bucket', String(bucket || ''));
+    return `/admin/bookkeeping?${params.toString()}#bk-category-detail`;
+  };
+  const bkViewUrl = (nextView) => {
+    const params = new URLSearchParams();
+    params.set('month', String(selectedMonth));
+    params.set('year', String(selectedYear));
+    if (nextView && nextView !== 'summary') params.set('view', String(nextView));
+    return `/admin/bookkeeping?${params.toString()}`;
+  };
+  const bkBaseUrl = () => `/admin/bookkeeping?month=${selectedMonth}&year=${selectedYear}`;
+  const bkCashHolderUrl = (item) => {
+    const params = new URLSearchParams();
+    params.set('month', String(selectedMonth));
+    params.set('year', String(selectedYear));
+    params.set('detail_section', 'admin');
+    params.set('detail_bucket', 'cash');
+    params.set('cash_holder', `${item.role}:${item.entityId == null ? 'null' : item.entityId}`);
+    return `/admin/bookkeeping?${params.toString()}#bk-category-detail`;
+  };
   const incomeCards = [
-    { label: 'Pembayaran Tunai', amount: Number(incomeBreakdown.cash?.amount || 0), count: Number(incomeBreakdown.cash?.count || 0), icon: 'bi-cash-stack', tone: 'cash' },
-    { label: 'Pembayaran Online', amount: Number(incomeBreakdown.online?.amount || 0), count: Number(incomeBreakdown.online?.count || 0), icon: 'bi-qr-code-scan', tone: 'online' },
-    { label: 'Pemasukan Lain', amount: Number(incomeBreakdown.other?.amount || 0), count: Number(incomeBreakdown.other?.count || 0), icon: 'bi-piggy-bank', tone: 'other' },
-    { label: 'Pendapatan Mitra', amount: Number(incomeBreakdown.partner?.amount || 0), count: Number(incomeBreakdown.partner?.count || 0), icon: 'bi-people-fill', tone: 'partner' }
+    { label: 'Transaksi Cash', amount: Number(incomeBreakdown.cash?.amount || 0), count: Number(incomeBreakdown.cash?.count || 0), icon: 'bi-cash-stack', tone: 'cash', bucket: 'cash' },
+    { label: 'Transaksi Online', amount: Number(incomeBreakdown.online?.amount || 0), count: Number(incomeBreakdown.online?.count || 0), icon: 'bi-qr-code-scan', tone: 'online', bucket: 'online' },
+    { label: 'Pemasukan Lain', amount: Number(incomeBreakdown.other?.amount || 0), count: Number(incomeBreakdown.other?.count || 0), icon: 'bi-piggy-bank', tone: 'other', bucket: 'other' },
+    { label: 'Mitra Bayar Bulan Ini', amount: Number(incomeBreakdown.partner?.amount || 0), count: Number(incomeBreakdown.partner?.count || 0), icon: 'bi-people-fill', tone: 'partner', bucket: 'partner' }
   ];
   const expenseCards = [
-    expenseBreakdown.salary || { label: 'Gaji Karyawan', amount: 0, count: 0 },
-    expenseBreakdown.installation || { label: 'Pasang Baru', amount: 0, count: 0 },
-    expenseBreakdown.repair_tools || { label: 'Perbaikan / Alat', amount: 0, count: 0 },
-    expenseBreakdown.bandwidth || { label: 'Bayar Bandwidth', amount: 0, count: 0 }
+    { ...(expenseBreakdown.salary || { label: 'Gaji Karyawan', amount: 0, count: 0 }), bucket: 'salary', icon: 'bi-person-vcard' },
+    { ...(expenseBreakdown.installation || { label: 'Pasang Baru', amount: 0, count: 0 }), bucket: 'installation', icon: 'bi-hammer' },
+    { ...(expenseBreakdown.repair_tools || { label: 'Perbaikan Alat', amount: 0, count: 0 }), bucket: 'repair_tools', icon: 'bi-tools' },
+    { ...(expenseBreakdown.bandwidth || { label: 'Bayar Bandwidth', amount: 0, count: 0 }), bucket: 'bandwidth', icon: 'bi-router' },
+    { ...(expenseBreakdown.collection || { label: 'Bayar Kang Tagih', amount: 0, count: 0 }), bucket: 'collection', icon: 'bi-person-check' },
+    { ...(expenseBreakdown.utilities || { label: 'Listrik / PDAM / Pulsa', amount: 0, count: 0 }), bucket: 'utilities', icon: 'bi-lightning-charge' },
+    { ...(expenseBreakdown.marketing || { label: 'Bayar Marketing', amount: 0, count: 0 }), bucket: 'marketing', icon: 'bi-megaphone' },
+    { ...(expenseBreakdown.other || { label: 'Lain Lain', amount: 0, count: 0 }), bucket: 'other', icon: 'bi-grid' }
   ];
+  const detailRows = Array.isArray(selectedCategoryDetail?.rows) ? selectedCategoryDetail.rows : [];
+  const filterMeta = isLedgerView
+    ? `${totalEntryCount} entri, halaman ${bkCurrentPage}/${bkTotalPages}`
+    : `${monthLabel} ${selectedYear}`;
 %>
 <!DOCTYPE html>
 <html lang="<%= pageLang %>">
@@ -159,6 +240,78 @@
     .bk-filter-actions .btn {
       min-width: 120px;
     }
+    .bk-period-pill {
+      min-height: 46px;
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .bk-mode-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .bk-mode-head > div {
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+    }
+    .bk-mode-head strong {
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .bk-mode-head span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .bk-total-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-total-card {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow-soft);
+      min-width: 0;
+    }
+    .bk-total-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 7px;
+    }
+    .bk-total-card strong {
+      display: block;
+      color: var(--text);
+      font-size: 22px;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bk-total-card.income strong { color: #22c55e; }
+    .bk-total-card.expense strong { color: #fb7185; }
+    .bk-total-card.net strong { color: var(--primary); }
     .bk-summary-grid {
       display: grid;
       grid-template-columns: 1.2fr 1fr;
@@ -204,6 +357,7 @@
       font-weight: 800;
       color: var(--text);
       white-space: nowrap;
+      text-decoration: none;
     }
     .bk-summary-panel-body {
       padding: 16px 18px 18px;
@@ -214,11 +368,20 @@
       gap: 10px;
     }
     .bk-breakdown-item {
+      display: block;
       border: 1px solid rgba(148, 163, 184, 0.14);
       border-radius: 18px;
       padding: 12px 13px;
       background: var(--surface-soft);
       min-width: 0;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .bk-breakdown-item:hover {
+      transform: translateY(-1px);
+      border-color: rgba(124, 116, 255, 0.35);
+      background: rgba(124, 116, 255, 0.08);
     }
     .bk-breakdown-top {
       display: flex;
@@ -247,6 +410,209 @@
       margin-top: 5px;
       font-size: 11px;
       color: var(--muted);
+    }
+    .bk-click-hint {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary);
+    }
+    .bk-finance-menu {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-finance-menu-item {
+      display: grid;
+      justify-items: center;
+      gap: 8px;
+      padding: 14px 10px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      text-decoration: none;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 0;
+    }
+    .bk-finance-menu-item i {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 16px;
+      background: rgba(124, 116, 255, 0.12);
+      color: var(--primary);
+      font-size: 22px;
+    }
+    .bk-finance-menu-item:hover {
+      border-color: rgba(124, 116, 255, 0.35);
+      background: rgba(124, 116, 255, 0.08);
+    }
+    .bk-detail-card {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .bk-detail-card:last-child {
+      border-bottom: 0;
+    }
+    .bk-detail-copy {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .bk-detail-copy strong {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .bk-detail-copy span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .bk-detail-amount {
+      flex: 0 0 auto;
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--text);
+      text-align: right;
+      white-space: nowrap;
+    }
+    .bk-detail-amount.income {
+      color: #22c55e;
+    }
+    .bk-detail-amount.expense {
+      color: #fb7185;
+    }
+    .bk-detail-focus {
+      overflow: hidden;
+    }
+    .bk-detail-focus-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      background:
+        linear-gradient(135deg, rgba(124, 116, 255, 0.10), rgba(20, 184, 166, 0.06)),
+        var(--surface);
+    }
+    .bk-detail-focus-title {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }
+    .bk-detail-focus-title strong {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.25;
+    }
+    .bk-detail-focus-title h3 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .bk-detail-focus-title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .bk-detail-focus-body {
+      padding: 16px 18px 18px;
+      display: grid;
+      gap: 12px;
+    }
+    .bk-detail-focus-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .bk-detail-focus-stat {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      padding: 11px 12px;
+      background: var(--surface-soft);
+      min-width: 0;
+    }
+    .bk-detail-focus-stat span {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 5px;
+    }
+    .bk-detail-focus-stat strong {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bk-detail-focus-list {
+      display: grid;
+      gap: 9px;
+    }
+    .bk-detail-focus-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      background: var(--surface-soft);
+    }
+    .bk-detail-focus-main {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .bk-detail-focus-main strong {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .bk-detail-focus-main span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .bk-detail-focus-amount {
+      font-size: 14px;
+      font-weight: 950;
+      text-align: right;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .bk-detail-focus-amount.income { color: #22c55e; }
+    .bk-detail-focus-amount.expense { color: #fb7185; }
+    .bk-detail-focus-side {
+      display: grid;
+      justify-items: end;
+      gap: 8px;
     }
     .bk-profit-stack {
       display: grid;
@@ -402,6 +768,14 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+    .bk-action-mini {
+      min-width: 128px;
+      justify-content: center;
+    }
+    .bk-action-mini span {
+      font-size: 12px;
+      font-weight: 850;
+    }
     .bk-role-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -445,6 +819,9 @@
       display: grid;
       grid-template-columns: 1.1fr 1fr;
       gap: 16px;
+    }
+    .bk-balance-shell.settlements-only {
+      grid-template-columns: 1fr;
     }
     .bk-balance-list,
     .bk-settlement-list {
@@ -507,6 +884,261 @@
     .bk-balance-chip b {
       color: var(--text);
       font-weight: 800;
+    }
+    .bk-balance-toggle .bk-balance-list .bk-balance-card:not(:first-child) {
+      padding: 10px 12px;
+      border-radius: 14px;
+    }
+    .bk-balance-toggle .bk-balance-list .bk-balance-card:not(:first-child) .bk-balance-head {
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .bk-balance-toggle .bk-balance-list .bk-balance-card:not(:first-child) .bk-balance-amount {
+      font-size: 16px;
+    }
+    .bk-balance-toggle .bk-balance-list .bk-balance-card:not(:first-child) .bk-balance-chip-row {
+      display: none;
+    }
+    .bk-compact-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .bk-compact-stat {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      padding: 11px 12px;
+      background: var(--surface-soft);
+      min-width: 0;
+    }
+    .bk-compact-stat span {
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .bk-compact-stat strong {
+      display: block;
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bk-balance-compact-list {
+      display: grid;
+      gap: 8px;
+    }
+    .bk-balance-compact-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 14px;
+      background: var(--surface-soft);
+    }
+    .bk-balance-compact-name {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+    .bk-balance-compact-name strong {
+      font-size: 13px;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bk-balance-compact-name span {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--primary);
+    }
+    .bk-balance-compact-amount {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text);
+      white-space: nowrap;
+      text-align: right;
+    }
+    .bk-cash-overview {
+      display: grid;
+      gap: 10px;
+    }
+    .bk-cash-person {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 18px;
+      background: var(--surface-soft);
+      overflow: hidden;
+      padding: 12px 13px;
+    }
+    .bk-cash-person-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    .bk-cash-person-link {
+      color: inherit;
+      text-decoration: none;
+      min-width: 0;
+      display: block;
+    }
+    .bk-cash-person-link:hover strong {
+      color: var(--primary);
+    }
+    .bk-cash-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .bk-cash-actions .btn {
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .bk-cash-person > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 13px 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .bk-cash-person > summary::-webkit-details-marker {
+      display: none;
+    }
+    .bk-cash-name {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .bk-cash-name strong {
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bk-cash-name span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .bk-cash-remaining {
+      color: #f59e0b;
+      font-size: 18px;
+      font-weight: 950;
+      white-space: nowrap;
+      text-align: left;
+      margin-top: 5px;
+    }
+    .bk-cash-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .bk-cash-metric {
+      min-width: 0;
+      padding: 7px 8px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(148, 163, 184, 0.10);
+    }
+    .bk-cash-metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 850;
+      margin-bottom: 2px;
+    }
+    .bk-cash-metric strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bk-cash-metric.in strong { color: #22c55e; }
+    .bk-cash-metric.out strong { color: #fb7185; }
+    .bk-cash-metric.balance strong { color: #f59e0b; }
+    .bk-cash-person-body {
+      padding: 0 14px 14px;
+      display: grid;
+      gap: 10px;
+    }
+    .bk-cash-payment-list {
+      display: grid;
+      gap: 8px;
+    }
+    .bk-cash-payment {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid rgba(148, 163, 184, 0.10);
+    }
+    .bk-cash-payment strong,
+    .bk-cash-payment b {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .bk-cash-payment span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .bk-cash-payment b {
+      white-space: nowrap;
+      color: #22c55e;
+    }
+    .bk-pager {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148, 163, 184, 0.14);
+      flex-wrap: wrap;
+    }
+    .bk-pager-info {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .bk-pager-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .bk-pager-actions .btn.disabled {
+      opacity: .45;
+      pointer-events: none;
     }
     .bk-balance-inactive {
       color: #fb7185;
@@ -776,6 +1408,31 @@
       }
     }
     @media (max-width: 768px) {
+      .bookkeeping-topbar {
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+      }
+      .bookkeeping-topbar .tb-title {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .bookkeeping-topbar .tb-title span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bookkeeping-topbar .tb-right {
+        width: auto;
+        margin-left: auto;
+        padding-bottom: 0;
+        justify-content: flex-end;
+        overflow: visible;
+        gap: 7px;
+      }
+      .bookkeeping-topbar .adm-badge {
+        display: none;
+      }
       .bk-filter-card {
         padding: 14px;
       }
@@ -785,6 +1442,23 @@
       .bk-filter-top .btn {
         width: 100%;
         justify-content: center;
+      }
+      .bk-filter-cta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+      }
+      .bk-action-mini {
+        min-width: 0;
+        width: 100%;
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .bk-action-mini i {
+        font-size: 16px;
+      }
+      .bk-action-mini span {
+        font-size: 11px;
       }
       .bk-filter-form {
         display: block;
@@ -824,8 +1498,33 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
       }
+      .bk-filter-main-row.period-filter-row {
+        grid-template-columns: 1fr 1fr;
+      }
       .bk-filter-main-row .bk-search-mobile {
         display: none;
+      }
+      .bk-mode-head {
+        padding: 14px;
+        align-items: flex-start;
+      }
+      .bk-total-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+      }
+      .bk-total-card {
+        padding: 10px 9px;
+        border-radius: 15px;
+      }
+      .bk-total-card span {
+        font-size: 9px;
+        letter-spacing: .03em;
+        margin-bottom: 5px;
+      }
+      .bk-total-card strong {
+        font-size: clamp(12px, 3.3vw, 16px);
+        white-space: normal;
+        overflow-wrap: anywhere;
       }
       .bk-filter-actions {
         display: grid;
@@ -862,12 +1561,34 @@
       .bk-role-grid {
         grid-template-columns: 1fr 1fr;
       }
+      .bk-finance-menu {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-compact-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-cash-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .bk-balance-compact-row {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: flex-start;
+      }
+      .bk-balance-compact-amount {
+        text-align: left;
+      }
     }
     @media (max-width: 576px) {
       .bk-filter-panel {
         padding: 8px;
       }
       .bk-filter-main-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .bk-filter-main-row.period-filter-row {
+        grid-template-columns: 1fr 1fr;
+      }
+      .bk-filter-main-row.ledger-filter-row {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       .bk-filter-main-row .fs {
@@ -896,11 +1617,75 @@
         grid-template-columns: 1fr;
       }
       .bk-mobile-head,
-      .bk-inline-item {
+      .bk-inline-item,
+      .bk-detail-card,
+      .bk-detail-focus-row {
         flex-direction: column;
+      }
+      .bk-detail-focus-head,
+      .bk-detail-focus-row {
+        grid-template-columns: 1fr;
+      }
+      .bk-detail-focus-head {
+        padding: 15px 14px;
+      }
+      .bk-detail-focus-body {
+        padding: 14px;
+      }
+      .bk-detail-focus-stats {
+        grid-template-columns: 1fr;
+      }
+      .bk-detail-focus-title h3 {
+        font-size: 23px;
+      }
+      .bk-detail-amount {
+        text-align: left;
+      }
+      .bk-detail-focus-amount {
+        text-align: left;
       }
       .bk-role-grid {
         grid-template-columns: 1fr;
+      }
+      .bk-finance-menu {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-compact-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .bk-pager {
+        align-items: stretch;
+      }
+      .bk-pager-actions,
+      .bk-pager-actions .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .bk-mode-head {
+        flex-direction: column;
+      }
+      .bk-cash-person > summary {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .bk-cash-person-head {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+      .bk-cash-remaining {
+        text-align: left;
+      }
+      .bk-cash-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .bk-cash-metric {
+        padding: 6px 6px;
+      }
+      .bk-cash-metric span {
+        font-size: 9px;
+      }
+      .bk-cash-metric strong {
+        font-size: 11px;
+        white-space: normal;
       }
       .bk-amount,
       .bk-inline-amount {
@@ -917,7 +1702,7 @@
 <body>
 <%- include('partials/sidebar', { activePage: 'bookkeeping', company }) %>
 <div class="mw">
-  <div class="topbar">
+  <div class="topbar bookkeeping-topbar">
     <div class="tb-title">
       <button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
       <i class="bi bi-cash-coin"></i>
@@ -943,39 +1728,52 @@
         <div class="bk-filter-top">
           <div class="bk-filter-copy">
             <strong>Periode Pembukuan</strong>
-            <span><%= monthLabel %> <%= selectedYear %> - <%= pageEntries.length %> entri tampil</span>
+            <span><%= filterMeta %></span>
           </div>
           <div class="bk-filter-cta">
-            <a href="/admin/bookkeeping/export?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
-              <i class="bi bi-file-earmark-excel"></i> Export
+            <a href="/admin/bookkeeping/export?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm bk-action-mini">
+              <i class="bi bi-file-earmark-excel"></i> <span>Export</span>
             </a>
             <% if (!pageSession.isCashier) { %>
-            <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm">
-              <i class="bi bi-plus-circle"></i> Tambah Pembukuan
+            <a href="/admin/bookkeeping/new?month=<%= selectedMonth %>&year=<%= selectedYear %>" class="btn btn-g btn-sm bk-action-mini">
+              <i class="bi bi-plus-circle"></i> <span>Tambah</span>
             </a>
             <% } %>
           </div>
         </div>
         <form method="GET" action="/admin/bookkeeping" class="bk-filter-form" id="bkFilterForm">
+          <% if (selectedCategoryDetail) { %>
+            <input type="hidden" name="detail_section" value="<%= selectedDetailSection %>">
+            <input type="hidden" name="detail_bucket" value="<%= selectedDetailBucket %>">
+          <% } %>
+          <% if (!selectedCategoryDetail && selectedView !== 'summary') { %>
+            <input type="hidden" name="view" value="<%= selectedView %>">
+          <% } %>
           <div class="bk-filter-search-row">
-            <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari kategori / keterangan" aria-label="Cari kategori / keterangan">
+            <% if (isLedgerView) { %>
+              <input class="fs" type="text" name="search" value="<%= selectedSearch %>" placeholder="Cari transaksi" aria-label="Cari transaksi">
+            <% } else { %>
+              <div class="bk-period-pill"><i class="bi bi-calendar3"></i> <%= monthLabel %> <%= selectedYear %></div>
+            <% } %>
             <button class="btn btn-g btn-sm bk-filter-toggle" type="button" onclick="toggleBookkeepingFilterPanel()" aria-label="Filter pembukuan">
               <i class="bi bi-funnel"></i>
             </button>
           </div>
           <div class="bk-filter-panel" id="bkFilterPanel">
-            <div class="bk-filter-main-row">
+            <div class="bk-filter-main-row <%= isLedgerView ? 'ledger-filter-row' : 'period-filter-row' %>">
               <select class="fs" name="month" aria-label="Bulan">
                 <% for (let m = 1; m <= 12; m++) { %>
                   <option value="<%= m %>" <%= selectedMonth === m ? 'selected' : '' %>><%= monthNames[m - 1] %></option>
                 <% } %>
               </select>
               <input class="fs" type="number" name="year" value="<%= selectedYear %>" placeholder="Tahun" aria-label="Tahun">
-              <select class="fs" name="type" aria-label="Jenis transaksi">
-                <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
-                <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
-                <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
-              </select>
+              <% if (isLedgerView) { %>
+                <select class="fs" name="type" aria-label="Jenis transaksi">
+                  <option value="" <%= !selectedType ? 'selected' : '' %>>Semua jenis</option>
+                  <option value="income" <%= selectedType === 'income' ? 'selected' : '' %>>Pemasukan</option>
+                  <option value="expense" <%= selectedType === 'expense' ? 'selected' : '' %>>Pengeluaran</option>
+                </select>
+              <% } %>
             </div>
             <div class="bk-filter-actions">
               <button class="btn btn-p btn-sm" type="submit"><i class="bi bi-funnel"></i> Tampilkan</button>
@@ -985,24 +1783,164 @@
         </form>
       </section>
 
-      <div class="bk-summary-grid">
+      <% if (selectedCategoryDetail) { %>
+        <section class="bk-card bk-detail-focus" id="bk-category-detail">
+          <div class="bk-detail-focus-head">
+            <div class="bk-detail-focus-title">
+              <strong><i class="bi <%= selectedCategoryDetail.icon || 'bi-list-ul' %>"></i> <%= isAdminCashDetail ? adminCashTitle : selectedCategoryDetail.title %></strong>
+              <h3>Rp <%= Number(isAdminCashDetail ? (selectedCashHolderRow ? selectedCashHolderRow.currentBalance : cashOverviewRemaining) : selectedCategoryDetail.amount || 0).toLocaleString('id-ID') %></h3>
+              <span><%= monthLabel %> <%= selectedYear %></span>
+            </div>
+            <a class="bk-summary-badge" href="<%= selectedCashHolderRow ? bkDetailUrl('admin', 'cash') : bkBaseUrl() %>"><i class="bi bi-arrow-left"></i> Kembali</a>
+          </div>
+          <div class="bk-detail-focus-body">
+            <% if (isAdminCashDetail) { %>
+              <% if (selectedCashHolderRow) { %>
+                <div class="bk-detail-focus-stats">
+                  <div class="bk-detail-focus-stat"><span>Diterima</span><strong>Rp <%= Number(selectedCashHolderRow.totalReceived || 0).toLocaleString('id-ID') %></strong></div>
+                  <div class="bk-detail-focus-stat"><span>Setor</span><strong>Rp <%= Number(selectedCashHolderRow.settlementOut || 0).toLocaleString('id-ID') %></strong></div>
+                  <div class="bk-detail-focus-stat"><span>Sisa</span><strong>Rp <%= Number(selectedCashHolderRow.currentBalance || 0).toLocaleString('id-ID') %></strong></div>
+                </div>
+                <% if (!selectedCashHolderTransactions.length) { %>
+                  <div class="bk-empty" style="padding:18px 14px"><strong>Belum ada transaksi</strong></div>
+                <% } else { %>
+                  <div class="bk-detail-focus-list">
+                    <% selectedCashHolderTransactions.forEach((row) => { %>
+                      <article class="bk-detail-focus-row">
+                        <div class="bk-detail-focus-main">
+                          <strong><%= row.title || '-' %></strong>
+                          <span><%= row.subtitle || row.source || '-' %></span>
+                          <span><i class="bi bi-calendar3"></i> <%= row.date || '-' %></span>
+                        </div>
+                        <div class="bk-detail-focus-amount <%= row.type === 'expense' ? 'expense' : 'income' %>">
+                          Rp <%= Number(row.amount || 0).toLocaleString('id-ID') %>
+                        </div>
+                      </article>
+                    <% }) %>
+                  </div>
+                <% } %>
+              <% } else { %>
+                <div class="bk-cash-overview">
+                  <% cashOverviewRows.forEach((item) => { %>
+                    <article class="bk-cash-person">
+                      <div class="bk-cash-person-head">
+                        <a class="bk-cash-person-link" href="<%= bkCashHolderUrl(item) %>">
+                          <div class="bk-cash-name">
+                            <strong><%= item.label %></strong>
+                            <span><%= item.roleLabel || 'Petugas' %><%= item.isActive === false ? ' - Nonaktif' : '' %></span>
+                          </div>
+                          <div class="bk-cash-remaining">Rp <%= Number(item.currentBalance || 0).toLocaleString('id-ID') %></div>
+                        </a>
+                        <div class="bk-cash-actions">
+                          <a class="btn btn-g btn-sm" href="<%= bkCashHolderUrl(item) %>" aria-label="Lihat transaksi <%= item.label %>"><i class="bi bi-chevron-right"></i></a>
+                          <% if (!pageSession.isCashier && item.role !== 'admin' && Number(item.currentBalance || 0) > 0) { %>
+                            <a class="btn btn-p btn-sm" href="<%= bkViewUrl('settlements') %>"><i class="bi bi-box-arrow-in-down"></i> Setor</a>
+                          <% } %>
+                        </div>
+                      </div>
+                      <div class="bk-cash-metrics">
+                        <div class="bk-cash-metric in">
+                          <span>Diterima</span>
+                          <strong>Rp <%= Number(item.totalReceived || 0).toLocaleString('id-ID') %></strong>
+                        </div>
+                        <div class="bk-cash-metric out">
+                          <span>Setor</span>
+                          <strong>Rp <%= Number(item.settlementOut || 0).toLocaleString('id-ID') %></strong>
+                        </div>
+                        <div class="bk-cash-metric out">
+                          <span>Keluar</span>
+                          <strong>Rp <%= Number(item.expense || 0).toLocaleString('id-ID') %></strong>
+                        </div>
+                        <div class="bk-cash-metric">
+                          <span>Transaksi</span>
+                          <strong><%= Number(item.paidCount || 0) %> sukses</strong>
+                        </div>
+                        <div class="bk-cash-metric">
+                          <span>Invoice</span>
+                          <strong>Rp <%= Number(item.invoiceIncome || 0).toLocaleString('id-ID') %></strong>
+                        </div>
+                        <div class="bk-cash-metric">
+                          <span>Manual</span>
+                          <strong>Rp <%= Number(item.manualIncome || 0).toLocaleString('id-ID') %></strong>
+                        </div>
+                      </div>
+                    </article>
+                  <% }) %>
+                </div>
+              <% } %>
+            <% } else { %>
+            <div class="bk-detail-focus-stats">
+              <div class="bk-detail-focus-stat">
+                <span>Transaksi</span>
+                <strong><%= Number(selectedCategoryDetail.count || 0) %> data</strong>
+              </div>
+            </div>
+
+            <% if (!detailRows.length) { %>
+              <div class="bk-empty" style="padding:22px 14px">
+                <strong>Belum ada data</strong>
+              </div>
+            <% } else { %>
+              <div class="bk-detail-focus-list">
+                <% detailRows.forEach((row) => { %>
+                  <article class="bk-detail-focus-row">
+                    <div class="bk-detail-focus-main">
+                      <strong><%= row.title || '-' %></strong>
+                      <span><%= row.subtitle || row.source || '-' %></span>
+                      <span><i class="bi bi-calendar3"></i> <%= row.date || '-' %><% if (row.holderLabel) { %> - <%= row.holderLabel %><% } %></span>
+                    </div>
+                    <div class="bk-detail-focus-side">
+                      <div class="bk-detail-focus-amount <%= row.type === 'expense' ? 'expense' : 'income' %>">
+                        Rp <%= Number(row.amount || 0).toLocaleString('id-ID') %>
+                      </div>
+                      <% if (!pageSession.isCashier && (!row.source || String(row.source).toLowerCase() === 'manual')) { %>
+                        <a class="btn btn-g btn-sm" href="/admin/bookkeeping/<%= row.id %>/edit?month=<%= selectedMonth %>&year=<%= selectedYear %>"><i class="bi bi-pencil"></i> Edit</a>
+                      <% } %>
+                    </div>
+                  </article>
+                <% }) %>
+              </div>
+            <% } %>
+            <% } %>
+          </div>
+        </section>
+      <% } else { %>
+
+      <% if (isSummaryView) { %>
+      <div class="bk-total-strip">
+        <div class="bk-total-card income">
+          <span>Pemasukan</span>
+          <strong>Rp <%= totalIncome.toLocaleString('id-ID') %></strong>
+        </div>
+        <div class="bk-total-card expense">
+          <span>Pengeluaran</span>
+          <strong>Rp <%= totalExpense.toLocaleString('id-ID') %></strong>
+        </div>
+        <div class="bk-total-card net">
+          <span>Bersih</span>
+          <strong>Rp <%= Number(comparison.netAmount || balance).toLocaleString('id-ID') %></strong>
+        </div>
+      </div>
+
+      <div class="bk-summary-grid" id="bk-finance-summary">
         <section class="bk-card">
           <div class="bk-summary-panel-head">
             <div>
               <strong>Pemasukan Total</strong>
               <h3>Rp <%= totalIncome.toLocaleString('id-ID') %></h3>
-              <span><%= incomeCount %> transaksi masuk pada <%= monthLabel %> <%= selectedYear %></span>
+              <span><%= incomeCount %> transaksi</span>
             </div>
             <span class="bk-summary-badge"><i class="bi bi-arrow-down-left-circle"></i> Pemasukan</span>
           </div>
           <div class="bk-summary-panel-body">
             <div class="bk-breakdown-grid">
               <% incomeCards.forEach((item) => { %>
-                <div class="bk-breakdown-item tone-<%= item.tone %>">
+                <a class="bk-breakdown-item tone-<%= item.tone %>" href="<%= bkDetailUrl('income', item.bucket) %>">
                   <div class="bk-breakdown-top"><i class="bi <%= item.icon %>"></i><span><%= item.label %></span></div>
                   <div class="bk-breakdown-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
                   <div class="bk-breakdown-meta"><%= Number(item.count || 0) %> transaksi</div>
-                </div>
+                  <span class="bk-click-hint">Lihat detail <i class="bi bi-chevron-right"></i></span>
+                </a>
               <% }) %>
             </div>
           </div>
@@ -1011,30 +1949,22 @@
         <section class="bk-card">
           <div class="bk-summary-panel-head">
             <div>
-              <strong>Rekap Ringkas</strong>
-              <h3>Rp <%= Number(comparison.netAmount || balance).toLocaleString('id-ID') %></h3>
-              <span><%= Number(comparison.netAmount || balance) >= 0 ? 'Selisih bersih periode ini' : 'Selisih minus periode ini' %></span>
+              <strong>Pengeluaran Total</strong>
+              <h3>Rp <%= totalExpense.toLocaleString('id-ID') %></h3>
+              <span><%= expenseCount %> transaksi</span>
             </div>
-            <span class="bk-summary-badge"><i class="bi bi-wallet2"></i> Laba Rugi</span>
+            <span class="bk-summary-badge"><i class="bi bi-arrow-up-right-circle"></i> Pengeluaran</span>
           </div>
           <div class="bk-summary-panel-body">
             <div class="bk-profit-stack">
-              <div class="bk-comparison-card">
-                <div class="bk-comparison-row"><span>Total Pemasukan</span><strong>Rp <%= Number(comparison.incomeAmount || totalIncome).toLocaleString('id-ID') %></strong></div>
-                <div class="bk-comparison-row"><span>Total Pengeluaran</span><strong>Rp <%= Number(comparison.expenseAmount || totalExpense).toLocaleString('id-ID') %></strong></div>
-                <div class="bk-comparison-row" style="margin-bottom:0"><span>Total Bersih</span><strong>Rp <%= Number(comparison.netAmount || balance).toLocaleString('id-ID') %></strong></div>
-              </div>
-              <div class="bk-comparison-card">
-                <div class="bk-comparison-row"><span>Persentase pengeluaran</span><strong><%= Number(comparison.expenseVsIncomePercent || 0) %>%</strong></div>
-                <div class="bk-progress"><span style="width:<%= Math.min(100, Number(comparison.expenseVsIncomePercent || 0)) %>%"></span></div>
-              </div>
               <div class="bk-breakdown-grid">
-                <% expenseCards.forEach((item, idx) => { %>
-                  <div class="bk-breakdown-item">
-                    <div class="bk-breakdown-top"><i class="bi <%= idx % 2 === 0 ? 'bi-receipt-cutoff' : 'bi-tools' %>"></i><span><%= item.label %></span></div>
+                <% expenseCards.forEach((item) => { %>
+                  <a class="bk-breakdown-item" href="<%= bkDetailUrl('expense', item.bucket) %>">
+                    <div class="bk-breakdown-top"><i class="bi <%= item.icon %>"></i><span><%= item.label %></span></div>
                     <div class="bk-breakdown-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
                     <div class="bk-breakdown-meta"><%= Number(item.count || 0) %> transaksi</div>
-                  </div>
+                    <span class="bk-click-hint">Lihat detail <i class="bi bi-chevron-right"></i></span>
+                  </a>
                 <% }) %>
               </div>
             </div>
@@ -1043,11 +1973,53 @@
       </div>
 
       <section class="bk-card">
+          <div class="bk-summary-panel-head">
+            <div>
+              <strong>Menu Keuangan</strong>
+            </div>
+          <span class="bk-summary-badge"><i class="bi bi-grid"></i> Menu</span>
+        </div>
+        <div class="bk-summary-panel-body">
+          <div class="bk-finance-menu">
+            <a class="bk-finance-menu-item" href="<%= bkDetailUrl('admin', 'cash') %>">
+              <i class="bi bi-person-circle"></i>
+              <span>Uang di Admin</span>
+            </a>
+            <a class="bk-finance-menu-item" href="<%= bkViewUrl('ledger') %>">
+              <i class="bi bi-list-ul"></i>
+              <span>Semua Pembukuan</span>
+            </a>
+            <a class="bk-finance-menu-item" href="<%= bkViewUrl('role-payments') %>">
+              <i class="bi bi-person-check"></i>
+              <span>Pembayaran Peran</span>
+            </a>
+            <a class="bk-finance-menu-item" href="<%= bkViewUrl('staff-cash') %>">
+              <i class="bi bi-wallet2"></i>
+              <span>Saldo Petugas</span>
+            </a>
+            <a class="bk-finance-menu-item" href="<%= bkViewUrl('settlements') %>">
+              <i class="bi bi-box-arrow-in-down"></i>
+              <span>Riwayat Setor</span>
+            </a>
+          </div>
+        </div>
+      </section>
+      <% } %>
+
+      <% if (isRolePaymentsView) { %>
+      <section class="bk-card">
+        <div class="bk-mode-head">
+          <div>
+            <strong>Pembayaran Peran</strong>
+            <span><%= monthLabel %> <%= selectedYear %></span>
+          </div>
+          <a class="bk-summary-badge" href="<%= bkBaseUrl() %>"><i class="bi bi-arrow-left"></i> Kembali</a>
+        </div>
         <div class="bk-list-card card-bd">
           <div class="bk-list-head">
             <div class="bk-subtitle" style="margin-bottom:0">
               <strong>Pembayaran per Peran</strong>
-              <span>Ringkas peran yang menerima pembayaran lunas pada periode terpilih.</span>
+              <span><%= rolePaymentBreakdown.length %> peran</span>
             </div>
             <div class="bk-chip-row">
               <span class="bk-chip"><i class="bi bi-person-badge"></i> <strong><%= rolePaymentBreakdown.length %></strong> peran aktif</span>
@@ -1057,8 +2029,7 @@
           <% if (!rolePaymentBreakdown.length) { %>
             <div class="bk-empty">
               <i class="bi bi-people"></i>
-              <strong>Belum ada pembayaran per peran</strong>
-              <span>Pembayaran oleh admin, kasir, kolektor, dan teknisi akan dirangkum di sini.</span>
+              <strong>Belum ada data</strong>
             </div>
           <% } else { %>
             <div class="bk-role-grid">
@@ -1066,21 +2037,33 @@
                 <article class="bk-role-card">
                   <strong><%= item.label %></strong>
                   <div class="bk-role-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
-                  <div class="bk-role-meta"><%= Number(item.count || 0) %> transaksi • <%= Number(item.actorCount || 0) %> petugas</div>
+                  <div class="bk-role-meta"><%= Number(item.count || 0) %> transaksi - <%= Number(item.actorCount || 0) %> petugas</div>
                 </article>
               <% }) %>
             </div>
           <% } %>
         </div>
       </section>
+      <% } %>
 
-      <section class="bk-card">
-        <div class="bk-list-card card-bd">
-          <div class="bk-subtitle">
-            <strong>Saldo Kas Petugas</strong>
-            <span>Kas admin bersih dan saldo petugas yang belum/setengah disetor.</span>
+      <% if (isStaffCashView || isSettlementsView) { %>
+      <section class="bk-card bk-balance-toggle">
+        <div class="bk-mode-head">
+          <div>
+            <strong><%= isSettlementsView ? 'Riwayat Setor' : 'Saldo Kas Petugas' %></strong>
+            <span><%= monthLabel %> <%= selectedYear %></span>
           </div>
-          <div class="bk-balance-shell">
+          <a class="bk-summary-badge" href="<%= bkBaseUrl() %>"><i class="bi bi-arrow-left"></i> Kembali</a>
+        </div>
+        <div class="bk-toggle-body">
+          <div class="bk-compact-summary">
+            <div class="bk-compact-stat"><span>Kas Admin</span><strong>Rp <%= Number(adminCashBalance?.currentBalance || 0).toLocaleString('id-ID') %></strong></div>
+            <div class="bk-compact-stat"><span>Saldo Petugas</span><strong>Rp <%= Number(staffBalanceTotal || 0).toLocaleString('id-ID') %></strong></div>
+            <div class="bk-compact-stat"><span>Petugas Bersaldo</span><strong><%= staffWithBalance.length %> orang</strong></div>
+            <div class="bk-compact-stat"><span>Total Setor</span><strong>Rp <%= Number(settlementSummary.totalAmount || 0).toLocaleString('id-ID') %></strong></div>
+          </div>
+          <div class="bk-balance-shell <%= isSettlementsView ? 'settlements-only' : '' %>">
+            <% if (isStaffCashView) { %>
             <div class="bk-balance-list">
               <article class="bk-balance-card">
                 <div class="bk-balance-head">
@@ -1099,14 +2082,13 @@
                   <span class="bk-balance-chip">Keluar <b>Rp <%= Number(adminCashBalance?.expense || 0).toLocaleString('id-ID') %></b></span>
                 </div>
               </article>
-              <% if (!cashBalances.filter((item) => item.role !== 'admin').length) { %>
+              <% if (!staffBalances.length) { %>
                 <div class="bk-empty">
                   <i class="bi bi-wallet2"></i>
-                  <strong>Belum ada saldo petugas</strong>
-                  <span>Saldo kas kasir, kolektor, dan teknisi akan muncul otomatis saat ada pembayaran atau setoran.</span>
+                  <strong>Belum ada data</strong>
                 </div>
               <% } else { %>
-                <% cashBalances.filter((item) => item.role !== 'admin').forEach((item) => { %>
+                <% staffBalances.forEach((item) => { %>
                   <article class="bk-balance-card">
                     <div class="bk-balance-head">
                       <div>
@@ -1117,8 +2099,8 @@
                     </div>
                     <div class="bk-balance-amount">Rp <%= Number(item.currentBalance || 0).toLocaleString('id-ID') %></div>
                     <div class="bk-role-meta">
-                      <% if (!item.isActive) { %><span class="bk-balance-inactive">Nonaktif</span> • <% } %>
-                      Invoice Rp <%= Number(item.invoiceIncome || 0).toLocaleString('id-ID') %> • Manual Rp <%= Number(item.manualIncome || 0).toLocaleString('id-ID') %>
+                      <% if (!item.isActive) { %><span class="bk-balance-inactive">Nonaktif</span> - <% } %>
+                      Invoice Rp <%= Number(item.invoiceIncome || 0).toLocaleString('id-ID') %> - Manual Rp <%= Number(item.manualIncome || 0).toLocaleString('id-ID') %>
                     </div>
                     <div class="bk-balance-chip-row">
                       <span class="bk-balance-chip">Setor keluar <b>Rp <%= Number(item.settlementOut || 0).toLocaleString('id-ID') %></b></span>
@@ -1129,7 +2111,9 @@
                 <% }) %>
               <% } %>
             </div>
+            <% } %>
 
+            <% if (isSettlementsView) { %>
             <div class="bk-settlement-list">
               <% if (!pageSession.isCashier) { %>
               <article class="bk-settlement-card">
@@ -1183,16 +2167,15 @@
                 </div>
                 <% if (!settlementRows.length) { %>
                   <div class="bk-empty" style="padding:18px 14px">
-                    <strong>Belum ada setoran</strong>
-                    <span>Saat kasir, kolektor, atau teknisi setor ke admin, riwayatnya tampil di sini.</span>
+                    <strong>Belum ada data</strong>
                   </div>
                 <% } else { %>
                   <div class="bk-inline-list">
                     <% settlementRows.forEach((item) => { %>
                       <div class="bk-inline-item">
                         <div>
-                          <strong><%= item.fromLabel %> → <%= item.toLabel %></strong>
-                          <span><%= item.settlementDate || '-' %> • Dicatat oleh <b><%= item.createdByName || 'Admin' %></b></span>
+                          <strong><%= item.fromLabel %> -> <%= item.toLabel %></strong>
+                          <span><%= item.settlementDate || '-' %> - Dicatat oleh <b><%= item.createdByName || 'Admin' %></b></span>
                           <span><%= item.notes || 'Tanpa catatan' %></span>
                         </div>
                         <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
@@ -1202,124 +2185,34 @@
                 <% } %>
               </article>
             </div>
+            <% } %>
           </div>
         </div>
       </section>
+      <% } %>
 
-      <details class="bk-toggle">
-        <summary>
-          <div class="bk-toggle-copy">
-            <strong>Info Petugas & Approval Pembayaran</strong>
-            <span>Lihat ringkasan pembayaran per petugas dan approval lapangan.</span>
+      <% if (isLedgerView) { %>
+      <section class="bk-card bk-list-card" id="bk-all-ledger">
+        <div class="bk-mode-head">
+          <div>
+            <strong><i class="bi bi-journal-text"></i> Semua Pembukuan</strong>
+            <span><%= monthLabel %> <%= selectedYear %></span>
           </div>
-          <span class="bk-summary-badge"><i class="bi bi-chevron-down"></i> Buka</span>
-        </summary>
-        <div class="bk-toggle-body">
-          <section>
-            <div class="bk-subtitle">
-              <strong>Ringkasan Pembayaran per Petugas</strong>
-              <span>Diambil dari tagihan yang sudah lunas pada periode terpilih.</span>
-            </div>
-            <% if (!actorBreakdown.length) { %>
-              <div class="bk-empty" style="padding:18px 14px">
-                <strong>Belum ada data petugas</strong>
-                <span>Pembayaran yang sudah diproses admin, kasir, kolektor, atau teknisi akan muncul di sini.</span>
-              </div>
-            <% } else { %>
-              <div class="bk-actor-grid">
-                <% actorBreakdown.forEach((actor) => { %>
-                  <div class="bk-actor-card">
-                    <div class="bk-actor-title">
-                      <strong><%= actor.label %></strong>
-                      <span class="bk-actor-role"><%= actor.role %></span>
-                    </div>
-                    <div class="bk-actor-meta">
-                      <div>Total masuk: <b>Rp <%= Number(actor.amount || 0).toLocaleString('id-ID') %></b></div>
-                      <div>Cash: <b>Rp <%= Number(actor.cashAmount || 0).toLocaleString('id-ID') %></b> - Online: <b>Rp <%= Number(actor.onlineAmount || 0).toLocaleString('id-ID') %></b></div>
-                      <div><b><%= Number(actor.count || 0) %></b> transaksi - terakhir <%= actor.lastPaidAt || '-' %></div>
-                    </div>
-                  </div>
-                <% }) %>
-              </div>
-            <% } %>
-          </section>
-
-          <section>
-            <div class="bk-subtitle">
-              <strong>Daftar Pembayaran Terbaru</strong>
-              <span>Menampilkan pembayaran lunas per bulan dan siapa yang memprosesnya.</span>
-            </div>
-            <% if (!recentPayments.length) { %>
-              <div class="bk-empty" style="padding:18px 14px">
-                <strong>Belum ada pembayaran terbaru</strong>
-                <span>Daftar pembayaran lunas akan muncul otomatis di sini.</span>
-              </div>
-            <% } else { %>
-              <div class="bk-inline-list">
-                <% recentPayments.forEach((item) => { %>
-                  <div class="bk-inline-item">
-                    <div>
-                      <strong><%= item.customerName %> - <%= monthNames[Math.max(0, Math.min(11, (item.periodMonth || 1) - 1))] %> <%= item.periodYear %></strong>
-                      <span>Dilunaskan oleh <b><%= item.actorLabel %></b> - Kanal <b><%= item.gateway %></b></span>
-                      <span>Waktu: <%= item.paidAt || '-' %></span>
-                    </div>
-                    <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
-                  </div>
-                <% }) %>
-              </div>
-            <% } %>
-          </section>
-
-          <section>
-            <div class="bk-subtitle">
-              <strong>Approval Pembayaran Kolektor</strong>
-              <span>Ringkasan pembayaran lapangan yang di-OK-kan admin atau kasir.</span>
-            </div>
-            <% if (!approvalBreakdown.length) { %>
-              <div class="bk-empty" style="padding:18px 14px">
-                <strong>Belum ada approval periode ini</strong>
-                <span>Saat ada approval pembayaran kolektor, rangkumannya akan tampil di sini.</span>
-              </div>
-            <% } else { %>
-              <div class="bk-inline-list">
-                <% approvalBreakdown.forEach((item) => { %>
-                  <div class="bk-inline-item">
-                    <div>
-                      <strong><%= item.customerName %></strong>
-                      <span>Kolektor: <b><%= item.collectorName %></b> - Di-OK-kan oleh <b><%= item.approvedBy %></b></span>
-                      <span>Waktu approval: <%= item.decidedAt || '-' %></span>
-                    </div>
-                    <div class="bk-inline-amount">Rp <%= Number(item.amount || 0).toLocaleString('id-ID') %></div>
-                  </div>
-                <% }) %>
-              </div>
-            <% } %>
-          </section>
+          <a class="bk-summary-badge" href="<%= bkBaseUrl() %>"><i class="bi bi-arrow-left"></i> Kembali</a>
         </div>
-      </details>
-
-      <section class="bk-list-card">
-        <div class="card-hd">
-          <h6><i class="bi bi-journal-text"></i> Riwayat Pembukuan</h6>
+        <div class="bk-summary-panel-body">
+          <div class="bk-chip-row">
+            <span class="bk-chip"><i class="bi bi-wallet2"></i> Total <strong><%= totalEntryCount %></strong></span>
+            <span class="bk-chip"><i class="bi bi-list-ol"></i> Halaman <strong><%= bkCurrentPage %>/<%= bkTotalPages %></strong></span>
+            <span class="bk-chip"><i class="bi bi-arrow-down-left-circle"></i> Masuk <strong><%= incomeCount %></strong></span>
+            <span class="bk-chip"><i class="bi bi-arrow-up-right-circle"></i> Keluar <strong><%= expenseCount %></strong></span>
+          </div>
         </div>
         <div class="card-bd">
-          <div class="bk-list-head">
-            <div class="bk-subtitle" style="margin-bottom:0">
-              <strong>Riwayat Transaksi</strong>
-              <span>Semua entri untuk <%= monthLabel %> <%= selectedYear %></span>
-            </div>
-            <div class="bk-chip-row">
-              <span class="bk-chip"><i class="bi bi-wallet2"></i> Total <strong><%= pageEntries.length %></strong> entri</span>
-              <span class="bk-chip"><i class="bi bi-arrow-down-left-circle"></i> Masuk <strong><%= incomeCount %></strong></span>
-              <span class="bk-chip"><i class="bi bi-arrow-up-right-circle"></i> Keluar <strong><%= expenseCount %></strong></span>
-            </div>
-          </div>
-
           <% if (!pageEntries.length) { %>
             <div class="bk-empty">
               <i class="bi bi-journal-x"></i>
-              <strong>Belum ada data pembukuan</strong>
-              <span>Gunakan tombol tambah untuk mencatat pemasukan atau pengeluaran baru.</span>
+              <strong>Belum ada data</strong>
             </div>
           <% } else { %>
             <div class="tbl-wrap">
@@ -1351,6 +2244,7 @@
                           <% if (entry.source_type) { %>
                             <span class="bk-source <%= entry.source_type === 'invoice' ? 'invoice' : '' %>"><%= entry.source_type %></span>
                           <% } %>
+                          <span class="bk-source"><%= String(entry.payment_method || 'cash').toUpperCase() %></span>
                         </div>
                       </td>
                       <td>
@@ -1368,9 +2262,12 @@
                       <td class="num bk-amount <%= entry.type === 'income' ? 'income' : 'expense' %>">Rp <%= Number(entry.amount || 0).toLocaleString('id-ID') %></td>
                       <td class="num">
                         <% if (!pageSession.isCashier && String(entry.source_type || '') !== 'invoice') { %>
-                          <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
-                            <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i></button>
-                          </form>
+                          <div style="display:inline-flex;gap:6px;justify-content:flex-end">
+                            <a class="btn btn-g btn-sm" href="/admin/bookkeeping/<%= entry.id %>/edit?month=<%= selectedMonth %>&year=<%= selectedYear %>"><i class="bi bi-pencil"></i></a>
+                            <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
+                              <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i></button>
+                            </form>
+                          </div>
                         <% } %>
                       </td>
                     </tr>
@@ -1410,7 +2307,7 @@
                     <% } %>
                     <div class="bk-mobile-cell">
                       <div class="bk-mobile-label">Sumber</div>
-                      <div class="bk-mobile-value"><%= entry.source_type || 'manual' %></div>
+                      <div class="bk-mobile-value"><%= entry.source_type || 'manual' %> - <%= String(entry.payment_method || 'cash').toUpperCase() %></div>
                     </div>
                     <% if (entry.customer_name) { %>
                       <div class="bk-mobile-cell" style="grid-column:1 / -1">
@@ -1422,6 +2319,7 @@
 
                   <% if (!pageSession.isCashier && String(entry.source_type || '') !== 'invoice') { %>
                     <div class="bk-mobile-actions">
+                      <a class="btn btn-g btn-sm" href="/admin/bookkeeping/<%= entry.id %>/edit?month=<%= selectedMonth %>&year=<%= selectedYear %>"><i class="bi bi-pencil"></i> Edit</a>
                       <form method="POST" action="/admin/bookkeeping/<%= entry.id %>/delete" onsubmit="return confirm('Hapus data pembukuan ini?')">
                         <button class="btn btn-d btn-sm" type="submit"><i class="bi bi-trash"></i> Hapus</button>
                       </form>
@@ -1430,9 +2328,25 @@
                 </article>
               <% }) %>
             </div>
+            <div class="bk-pager">
+              <div class="bk-pager-info">
+                Menampilkan <%= ((bkCurrentPage - 1) * bkPageSize) + 1 %>-<%= Math.min(totalEntryCount, bkCurrentPage * bkPageSize) %> dari <%= totalEntryCount %> entri
+              </div>
+              <div class="bk-pager-actions">
+                <a class="btn btn-g btn-sm <%= bkCurrentPage <= 1 ? 'disabled' : '' %>" href="<%= bkPageUrl(Math.max(1, bkCurrentPage - 1)) %>">
+                  <i class="bi bi-chevron-left"></i> Sebelumnya
+                </a>
+                <span class="bk-chip"><i class="bi bi-list-ol"></i> <strong><%= bkCurrentPage %>/<%= bkTotalPages %></strong></span>
+                <a class="btn btn-g btn-sm <%= bkCurrentPage >= bkTotalPages ? 'disabled' : '' %>" href="<%= bkPageUrl(Math.min(bkTotalPages, bkCurrentPage + 1)) %>">
+                  Berikutnya <i class="bi bi-chevron-right"></i>
+                </a>
+              </div>
+            </div>
           <% } %>
         </div>
       </section>
+      <% } %>
+      <% } %>
     </div>
   </div>
 </div>

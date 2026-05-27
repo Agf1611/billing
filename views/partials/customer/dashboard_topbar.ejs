@@ -13,14 +13,13 @@
   const viewerProfile = typeof profile !== 'undefined' ? profile : {};
   const viewerCustomer = typeof customer !== 'undefined' ? customer : {};
   const resolvedCustomerName = String(viewerProfile.name || viewerCustomer.name || 'Pelanggan');
+  const resolvedCustomerPrefix = String(settings?.customer_id_prefix || 'SCK').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'SCK';
   const resolvedCustomerCode = String(
     (typeof customerCode !== 'undefined' && customerCode) ||
     viewerProfile.customer_code ||
-    viewerProfile.genieacs_tag ||
-    (/^\d{6,}$/.test(String(viewerProfile.phone || '').trim()) ? viewerProfile.phone : '') ||
-    (/^\d{6,}$/.test(String(viewerCustomer.phone || '').trim()) ? viewerCustomer.phone : '') ||
-    (viewerProfile.id ? `ID ${viewerProfile.id}` : '') ||
-    (viewerCustomer.id ? `ID ${viewerCustomer.id}` : '') ||
+    viewerCustomer.customer_code ||
+    (viewerProfile.id ? `${resolvedCustomerPrefix}${viewerProfile.id}` : '') ||
+    (viewerCustomer.id ? `${resolvedCustomerPrefix}${viewerCustomer.id}` : '') ||
     '-'
   ).trim();
   const resolvedRouterAccess = typeof hasRouterPortalAccess !== 'undefined'
@@ -37,9 +36,6 @@
 <header class="app-topbar">
   <div class="topbar-row">
     <div class="topbar-left">
-      <button type="button" class="header-menu" aria-label="Menu cepat" onclick="toggleAppMenu()">
-        <i class="bi bi-list"></i>
-      </button>
       <div class="brand-chip">
         <img src="<%= pageCompanyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
         <div class="brand-meta">

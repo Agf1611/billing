@@ -795,6 +795,23 @@ function normalizeWaTarget(to) {
   let digits = String(to || '').replace(/\D/g, '');
   if (!digits) return null;
   if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+  if (!String(to || '').includes('@')) {
+    const overrides = getSetting('whatsapp_lid_overrides', {});
+    if (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) {
+      const localDigits = digits.startsWith('62') ? `0${digits.slice(2)}` : digits;
+      const override = overrides[digits] || overrides[localDigits] || overrides[`+${digits}`] || null;
+      if (override) {
+        const overrideText = String(override).trim();
+        const overrideDigits = overrideText.replace(/\D/g, '');
+        if (overrideDigits) {
+          return {
+            digits,
+            jid: overrideText.includes('@') ? overrideText : `${overrideDigits}@lid`
+          };
+        }
+      }
+    }
+  }
   return {
     digits,
     jid: String(to || '').includes('@') ? String(to) : `${digits}@s.whatsapp.net`

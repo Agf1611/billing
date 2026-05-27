@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+    <section class="hero">
+      <h1>Bantuan Agent</h1>
+      <p>Gunakan halaman ini untuk menghubungi admin saat voucher gagal, kode tidak bisa dipakai, atau saldo tidak sesuai.</p>
+    </section>
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-headset"></i> Hubungi Admin</h2>
+        <span class="pill"><%= adminContact.display || '-' %></span>
+      </div>
+      <div class="bd">
+        <div class="listx">
+          <div class="itemx">
+            <div class="t1">Kendala voucher</div>
+            <div class="t2">Voucher tidak bisa login, durasi tidak sesuai, atau kode sudah terpakai.</div>
+          </div>
+          <div class="itemx">
+            <div class="t1">Kendala saldo</div>
+            <div class="t2">Saldo tidak berubah, transaksi tidak tercatat, atau butuh pengecekan topup.</div>
+          </div>
+        </div>
+        <% if (adminWaUrl) { %>
+          <a class="btn-action" href="<%= adminWaUrl %>" target="_blank" style="width:100%;margin-top:12px">
+            <i class="bi bi-whatsapp"></i> Hubungi Admin
+          </a>
+        <% } else { %>
+          <div class="empty">Nomor admin belum diatur.</div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'help' }) %>
+  <%- include('partials/scripts') %>
+</body>
+</html>

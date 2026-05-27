@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+
+    <section class="hero">
+      <h1>Topup Saldo</h1>
+      <p>Isi saldo mandiri dengan QRIS dinamis. Bayar sesuai nominal unik agar saldo masuk otomatis.</p>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-qr-code-scan"></i> Buat QRIS Topup</h2>
+        <span class="pill">Saldo Rp <%= Number(agent?.balance || 0).toLocaleString('id-ID') %></span>
+      </div>
+      <div class="bd">
+        <% if (!qrisReady) { %>
+          <div class="alert-agent alert-warning" style="margin-bottom:0">
+            QRIS dinamis belum aktif. Minta admin mengisi payload QRIS statis di pengaturan pembayaran.
+          </div>
+        <% } else { %>
+          <form method="POST" action="/agent/topup/create" class="inline-form">
+            <label>
+              <div class="t2">Nominal Topup</div>
+              <input class="form-control" type="number" name="amount" min="<%= minTopup %>" max="<%= maxTopup %>" step="1000" value="50000" inputmode="numeric" required>
+            </label>
+            <div class="quick-amounts" aria-label="Nominal cepat">
+              <% [50000, 100000, 200000, 500000].forEach(v => { %>
+                <button type="button" class="btn-mini quick-amount" data-amount="<%= v %>">Rp <%= v.toLocaleString('id-ID') %></button>
+              <% }) %>
+            </div>
+            <button class="btn-action" type="submit">
+              <i class="bi bi-qr-code"></i> Buat QRIS
+            </button>
+          </form>
+        <% } %>
+      </div>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-clock-history"></i> Riwayat Topup</h2>
+        <span class="pill"><%= topups?.length || 0 %></span>
+      </div>
+      <div class="bd">
+        <% if (!topups || topups.length === 0) { %>
+          <div class="empty">Belum ada topup saldo.</div>
+        <% } else { %>
+          <div class="listx">
+            <% topups.forEach(o => {
+              const status = String(o.status || 'pending').toLowerCase();
+            %>
+              <div class="itemx">
+                <div class="item-head">
+                  <div>
+                    <div class="t1">Topup #<%= o.id %> - Rp <%= Number(o.amount || 0).toLocaleString('id-ID') %></div>
+                    <div class="t2">Bayar Rp <%= Number(o.pay_amount || 0).toLocaleString('id-ID') %> - kode <%= Number(o.unique_code || 0).toLocaleString('id-ID') %></div>
+                    <div class="t2"><%= o.created_at ? new Date(o.created_at).toLocaleString('id-ID') : '-' %></div>
+                  </div>
+                  <span class="badgey <%= status === 'paid' ? 's' : status === 'pending' ? 'w' : 'd' %>"><%= status %></span>
+                </div>
+                <% if (status === 'pending') { %>
+                  <div class="btn-row" style="margin-top:10px">
+                    <a class="btn-mini" href="/agent/topup/<%= o.id %>"><i class="bi bi-qr-code-scan"></i> Bayar</a>
+                  </div>
+                <% } %>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'dashboard' }) %>
+  <%- include('partials/scripts') %>
+  <script>
+    (function () {
+      const amountInput = document.querySelector('input[name="amount"]');
+      document.querySelectorAll('.quick-amount').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (amountInput) amountInput.value = btn.getAttribute('data-amount') || '';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -54,6 +54,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_code TEXT DEFAULT '',
     name TEXT NOT NULL,
     phone TEXT DEFAULT '',
     address TEXT DEFAULT '',
@@ -68,6 +69,12 @@ db.exec(`
     isolir_profile TEXT DEFAULT 'BEATISOLIR',
     status TEXT DEFAULT 'active',
     install_date DATE,
+    discount_enabled INTEGER NOT NULL DEFAULT 0,
+    discount_amount INTEGER NOT NULL DEFAULT 0,
+    speed_boost_profile TEXT DEFAULT '',
+    speed_boost_until DATETIME,
+    speed_boost_started_at DATETIME,
+    speed_boost_note TEXT DEFAULT '',
     notes TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -325,6 +332,8 @@ db.exec(`
     profile_name TEXT NOT NULL,
     comment TEXT DEFAULT '',
     status TEXT DEFAULT 'pending',
+    sold_at DATETIME,
+    printed_at DATETIME,
     used_at DATETIME,
     last_seen_comment TEXT DEFAULT '',
     last_seen_uptime TEXT DEFAULT '',
@@ -404,6 +413,22 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS agent_topup_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL DEFAULT 0,
+    unique_code INTEGER NOT NULL DEFAULT 0,
+    pay_amount INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    qris_payload TEXT DEFAULT '',
+    paid_notif_id INTEGER REFERENCES webhook_payment_notifs(id) ON DELETE SET NULL,
+    paid_tx_id INTEGER REFERENCES agent_transactions(id) ON DELETE SET NULL,
+    expires_at DATETIME,
+    paid_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS digiflazz_staff_transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     role TEXT NOT NULL DEFAULT 'admin', -- admin, cashier
@@ -442,6 +467,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_agent_prices_router_profile ON agent_hotspot_prices(router_id, profile_name);
   CREATE INDEX IF NOT EXISTS idx_agent_tx_agent ON agent_transactions(agent_id);
   CREATE INDEX IF NOT EXISTS idx_agent_tx_created ON agent_transactions(created_at);
+  CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_agent ON agent_topup_orders(agent_id, id);
+  CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_status_amount ON agent_topup_orders(status, pay_amount);
+  CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_created ON agent_topup_orders(created_at);
   CREATE INDEX IF NOT EXISTS idx_digi_staff_tx_created ON digiflazz_staff_transactions(created_at);
   CREATE INDEX IF NOT EXISTS idx_digi_staff_tx_role ON digiflazz_staff_transactions(role);
   CREATE INDEX IF NOT EXISTS idx_digi_staff_tx_ref ON digiflazz_staff_transactions(ref_id);
@@ -574,11 +602,36 @@ try {
   db.exec("ALTER TABLE customers ADD COLUMN ktp_photo_url TEXT DEFAULT ''");
 } catch (e) { /* ignore if already exists */ }
 try {
+  db.exec("ALTER TABLE customers ADD COLUMN discount_enabled INTEGER NOT NULL DEFAULT 0");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN customer_code TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_customer_code_unique ON customers(customer_code) WHERE customer_code IS NOT NULL AND TRIM(customer_code) <> ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN speed_boost_profile TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN speed_boost_until DATETIME");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN speed_boost_started_at DATETIME");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN speed_boost_note TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
   db.exec("ALTER TABLE odps ADD COLUMN port_capacity INTEGER NOT NULL DEFAULT 16");
 } catch (e) { /* ignore if already exists */ }
 
 // Kolom untuk Payment Gateway di tabel invoices
 try { db.exec("ALTER TABLE invoices ADD COLUMN payment_gateway TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE invoices ADD COLUMN payment_method TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN payment_order_id TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN payment_link TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE invoices ADD COLUMN payment_reference TEXT"); } catch (e) {}
@@ -619,17 +672,32 @@ try { db.exec("ALTER TABLE olts ADD COLUMN web_password TEXT DEFAULT 'admin'"); 
 try { db.exec("ALTER TABLE olts ADD COLUMN api_base_url TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE olts ADD COLUMN telnet_port INTEGER DEFAULT 23"); } catch (e) {}
 try { db.exec("ALTER TABLE olts ADD COLUMN enable_password TEXT"); } catch (e) {}
+try { db.exec("CREATE TABLE IF NOT EXISTS olt_vlan_push_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, olt_id INTEGER REFERENCES olts(id) ON DELETE SET NULL, onu_index TEXT DEFAULT '', onu_name TEXT DEFAULT '', vlan INTEGER NOT NULL DEFAULT 0, vlan_mode TEXT DEFAULT 'tag', lan_ports TEXT DEFAULT '', ssid_ports TEXT DEFAULT '', dry_run INTEGER NOT NULL DEFAULT 1, commands TEXT DEFAULT '', output TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', error TEXT DEFAULT '', created_by TEXT DEFAULT '', created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_olt_vlan_push_logs_olt_created ON olt_vlan_push_logs(olt_id, created_at)"); } catch (e) {}
 try { db.exec("ALTER TABLE routers ADD COLUMN os_mode TEXT DEFAULT 'auto'"); } catch (e) {}
 
 try { db.exec("ALTER TABLE voucher_batches ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 try { db.exec("ALTER TABLE vouchers ADD COLUMN last_seen_comment TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE vouchers ADD COLUMN last_seen_uptime TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE vouchers ADD COLUMN last_seen_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE vouchers ADD COLUMN sold_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE vouchers ADD COLUMN printed_at DATETIME"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_vouchers_sold_at ON vouchers(sold_at)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_vouchers_printed_at ON vouchers(printed_at)"); } catch (e) {}
 try { db.exec("ALTER TABLE voucher_batches ADD COLUMN mode TEXT DEFAULT 'voucher'"); } catch (e) {}
 try { db.exec("ALTER TABLE voucher_batches ADD COLUMN charset TEXT DEFAULT 'numbers'"); } catch (e) {}
+try { db.exec("ALTER TABLE voucher_batches ADD COLUMN agent_id INTEGER REFERENCES agents(id) ON DELETE SET NULL"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_voucher_batches_agent ON voucher_batches(agent_id, id)"); } catch (e) {}
 
 // Relasi notifikasi webhook → invoice (untuk audit)
 try { db.exec("ALTER TABLE webhook_payment_notifs ADD COLUMN matched_invoice_id INTEGER"); } catch (e) {}
+try { db.exec("ALTER TABLE webhook_payment_notifs ADD COLUMN matched_agent_topup_id INTEGER"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_webhook_payment_notifs_agent_topup ON webhook_payment_notifs(matched_agent_topup_id)"); } catch (e) {}
+
+try { db.exec("CREATE TABLE IF NOT EXISTS agent_topup_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE, amount INTEGER NOT NULL DEFAULT 0, unique_code INTEGER NOT NULL DEFAULT 0, pay_amount INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', qris_payload TEXT DEFAULT '', paid_notif_id INTEGER REFERENCES webhook_payment_notifs(id) ON DELETE SET NULL, paid_tx_id INTEGER REFERENCES agent_transactions(id) ON DELETE SET NULL, expires_at DATETIME, paid_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_agent ON agent_topup_orders(agent_id, id)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_status_amount ON agent_topup_orders(status, pay_amount)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_topup_orders_created ON agent_topup_orders(created_at)"); } catch (e) {}
 
 try { db.exec("ALTER TABLE agent_transactions ADD COLUMN provider TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE agent_transactions ADD COLUMN digi_sku TEXT DEFAULT ''"); } catch (e) {}
@@ -641,8 +709,12 @@ try { db.exec("ALTER TABLE agent_transactions ADD COLUMN digi_status TEXT DEFAUL
 try { db.exec("ALTER TABLE agent_transactions ADD COLUMN digi_message TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE agent_transactions ADD COLUMN digi_price INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE agent_transactions ADD COLUMN digi_refunded INTEGER NOT NULL DEFAULT 0"); } catch (e) {}
+try { db.exec("ALTER TABLE agent_transactions ADD COLUMN voucher_batch_id INTEGER REFERENCES voucher_batches(id) ON DELETE SET NULL"); } catch (e) {}
+try { db.exec("ALTER TABLE agent_transactions ADD COLUMN agent_topup_order_id INTEGER REFERENCES agent_topup_orders(id) ON DELETE SET NULL"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_tx_digi_ref ON agent_transactions(digi_ref_id)"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_tx_type ON agent_transactions(type)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_tx_voucher_batch ON agent_transactions(voucher_batch_id)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_agent_tx_topup_order ON agent_transactions(agent_topup_order_id)"); } catch (e) {}
 
 // Kolom untuk Dynamic Speed & FUP di tabel packages
 try { db.exec("ALTER TABLE packages ADD COLUMN pppoe_profile TEXT DEFAULT ''"); } catch (e) {}
@@ -739,6 +811,7 @@ db.exec(`
     holder_role TEXT DEFAULT '',
     holder_entity_id INTEGER,
     holder_label TEXT DEFAULT '',
+    payment_method TEXT DEFAULT 'cash',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -771,6 +844,7 @@ db.exec(`
 try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_role TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_entity_id INTEGER"); } catch (e) {}
 try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN holder_label TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE bookkeeping_entries ADD COLUMN payment_method TEXT DEFAULT 'cash'"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_bookkeeping_holder ON bookkeeping_entries(holder_role, holder_entity_id)"); } catch (e) {}
 
 db.exec(`

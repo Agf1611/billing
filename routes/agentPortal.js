@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { getSetting } = require('../config/settingsManager');
+const { getSetting, getSettingsWithCache } = require('../config/settingsManager');
 const agentSvc = require('../services/agentService');
 const billingSvc = require('../services/billingService');
 const customerSvc = require('../services/customerService');
 const employeeLocationSvc = require('../services/employeeLocationService');
+const { buildDynamicQrisDataUrl, hasStaticQrisEnabled } = require('../services/qrisService');
 
 function requireAgentSession(req, res, next) {
   if (req.session && req.session.isAgent && req.session.agentId) return next();
@@ -28,6 +29,67 @@ function company() {
 }
 function companyLogo() {
   return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png';
+}
+
+function normalizePhoneDigits(v) {
+  let digits = String(v || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+  return digits;
+}
+
+function getAdminContact() {
+  const nums = getSetting('whatsapp_admin_numbers', []);
+  const first = Array.isArray(nums) ? nums.find(Boolean) : nums;
+  const phone = normalizePhoneDigits(first || getSetting('company_phone', ''));
+  return {
+    phone,
+    display: phone ? `+${phone}` : String(getSetting('company_phone', '') || '-')
+  };
+}
+
+function buildWaUrl(phone, message) {
+  const digits = normalizePhoneDigits(phone);
+  if (!digits) return '';
+  return `https://wa.me/${digits}?text=${encodeURIComponent(String(message || '').trim())}`;
+}
+
+function getAgentPricesSorted(agentId) {
+  return agentSvc
+    .getAgentPrices(agentId)
+    .filter(p => p && p.is_active)
+    .sort((a, b) => {
+      const as = Number(a.sell_price || 0);
+      const bs = Number(b.sell_price || 0);
+      if (as !== bs) return as - bs;
+      const ab = Number(a.buy_price || 0);
+      const bb = Number(b.buy_price || 0);
+      if (ab !== bb) return ab - bb;
+      return String(a.profile_name || '').localeCompare(String(b.profile_name || ''));
+    });
+}
+
+function calculateAgentProfit(txs = []) {
+  return (Array.isArray(txs) ? txs : []).reduce((sum, tx) => {
+    const type = String(tx?.type || '').toLowerCase();
+    if (type === 'voucher_sale' || type === 'pulsa') {
+      const gross = Number(tx?.amount_sell || 0);
+      const cost = Number(tx?.amount_buy || 0);
+      return sum + Math.max(0, gross - cost);
+    }
+    if (type === 'invoice_payment') return sum + Math.max(0, Number(tx?.fee || 0));
+    return sum;
+  }, 0);
+}
+
+function listAgentFinancialTransactions(agentId, limit = 200) {
+  return agentSvc
+    .listAgentTransactions({ agentId, limit })
+    .filter(tx => String(tx?.type || '').toLowerCase() !== 'voucher_sale');
+}
+
+function recordAgentVoucherOperations(txId) {
+  return Number(txId || 0) || 0;
 }
 
 router.get('/manifest.webmanifest', (req, res) => {
@@ -93,50 +155,251 @@ router.get('/', requireAgentSession, (req, res) => {
   res.set('Expires', '0');
   const agentId = req.session.agentId;
   const agent = agentSvc.getAgentById(agentId);
-  const q = String(req.query.q || '').trim();
-
-  const invoices = q ? billingSvc.getInvoicesByAny(q) : [];
-  const visibleInvoices = Array.isArray(invoices) ? invoices : [];
-
-  const prices = agentSvc
-    .getAgentPrices(agentId)
-    .filter(p => p && p.is_active)
-    .sort((a, b) => {
-      const as = Number(a.sell_price || 0);
-      const bs = Number(b.sell_price || 0);
-      if (as !== bs) return as - bs;
-      const ab = Number(a.buy_price || 0);
-      const bb = Number(b.buy_price || 0);
-      if (ab !== bb) return ab - bb;
-      const ap = String(a.profile_name || '');
-      const bp = String(b.profile_name || '');
-      return ap.localeCompare(bp);
-    });
-  const txs = agentSvc.listAgentTransactions({ agentId, limit: 40 });
-  const profit = (Array.isArray(txs) ? txs : []).reduce((sum, tx) => {
-    const type = String(tx?.type || '').toLowerCase();
-    if (type === 'voucher_sale' || type === 'pulsa') {
-      const gross = Number(tx?.amount_sell || 0);
-      const cost = Number(tx?.amount_buy || 0);
-      return sum + Math.max(0, gross - cost);
-    }
-    if (type === 'invoice_payment') {
-      return sum + Math.max(0, Number(tx?.fee || 0));
-    }
-    return sum;
-  }, 0);
+  const txs = listAgentFinancialTransactions(agentId, 40).slice(0, 8);
+  const prices = getAgentPricesSorted(agentId);
+  const batches = agentSvc.listAgentVoucherBatches(agentId, { limit: 5 });
+  const topups = agentSvc.listAgentTopupOrders(agentId, { limit: 5 });
+  const profit = calculateAgentProfit(agentSvc.listAgentTransactions({ agentId, limit: 200 }));
 
   res.render('agent/dashboard', {
     title: 'Dashboard Agent',
     company: company(),
     agent,
-    q,
-    invoices: visibleInvoices,
     prices,
+    batches,
+    topups,
     txs,
     profit,
     msg: flashMsg(req),
     receipt: popReceipt(req)
+  });
+});
+
+router.get('/billing', requireAgentSession, (req, res) => {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  const q = String(req.query.q || '').trim();
+  const invoices = q ? billingSvc.getInvoicesByAny(q) : [];
+  res.render('agent/billing', {
+    title: 'Tagihan Agent',
+    company: company(),
+    logoUrl: companyLogo(),
+    agent,
+    q,
+    invoices: Array.isArray(invoices) ? invoices : [],
+    msg: flashMsg(req),
+    receipt: popReceipt(req)
+  });
+});
+
+function renderAgentVoucherPage(req, res, pageMode = 'single') {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  res.render('agent/vouchers', {
+    title: pageMode === 'batch' ? 'Voucher Banyak Agent' : 'Voucher Satuan Agent',
+    company: company(),
+    agent,
+    pageMode,
+    prices: getAgentPricesSorted(agentId),
+    batches: agentSvc.listAgentVoucherBatches(agentId, { limit: 50 }),
+    msg: flashMsg(req)
+  });
+}
+
+router.get('/vouchers', requireAgentSession, (req, res) => {
+  return res.redirect('/agent/vouchers/single');
+});
+
+router.get('/vouchers/single', requireAgentSession, (req, res) => {
+  return renderAgentVoucherPage(req, res, 'single');
+});
+
+router.get('/vouchers/batch', requireAgentSession, (req, res) => {
+  return renderAgentVoucherPage(req, res, 'batch');
+});
+
+router.post('/vouchers/create', requireAgentSession, express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const result = await agentSvc.createVoucherBatchAsAgent(req.session.agentId, {
+      price_id: req.body.price_id,
+      qty: req.body.qty,
+      prefix: req.body.prefix,
+      code_length: req.body.code_length,
+      charset: req.body.charset,
+      mode: req.body.mode
+    });
+    const batchId = Number(result?.batch?.batch?.id || result?.tx?.batchId || 0);
+    recordAgentVoucherOperations(result?.tx?.txId);
+    const isSingleSale = String(req.body.sale_mode || '').trim() === 'single' || Number(req.body.qty || 1) === 1;
+    req.session._msg = {
+      type: result.failed > 0 ? 'warning' : 'success',
+      text: isSingleSale
+        ? 'Voucher satuan berhasil dibuat dan siap dibagikan.'
+        : `Voucher berhasil dibuat: ${result.created}${result.failed ? `, gagal ${result.failed}` : ''}.`
+    };
+    return res.redirect(batchId ? `/agent/vouchers/batches/${batchId}` : `/agent/vouchers/${isSingleSale ? 'single' : 'batch'}`);
+  } catch (e) {
+    const fallbackMode = String(req.body.sale_mode || '').trim() === 'batch' ? 'batch' : 'single';
+    req.session._msg = { type: 'error', text: 'Gagal membuat voucher: ' + e.message };
+    return res.redirect(`/agent/vouchers/${fallbackMode}`);
+  }
+});
+
+router.get('/vouchers/batches/:id', requireAgentSession, (req, res) => {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  const data = agentSvc.getAgentVoucherBatch(agentId, req.params.id);
+  if (!data) return res.status(404).send('Batch voucher tidak ditemukan');
+  res.render('agent/voucher_batch', {
+    title: 'Detail Voucher',
+    company: company(),
+    logoUrl: companyLogo(),
+    agent,
+    batch: data.batch,
+    vouchers: data.vouchers,
+    adminContact: getAdminContact(),
+    msg: flashMsg(req)
+  });
+});
+
+router.post('/vouchers/batches/:id/sync', requireAgentSession, async (req, res) => {
+  try {
+    const result = await agentSvc.syncAgentVoucherBatch(req.session.agentId, req.params.id);
+    return res.json(result);
+  } catch (e) {
+    return res.status(400).json({ success: false, error: e.message || 'Gagal sync voucher' });
+  }
+});
+
+router.post('/vouchers/:id/sold', requireAgentSession, express.json({ limit: '16kb' }), (req, res) => {
+  try {
+    const voucher = agentSvc.markAgentVoucherSold(req.session.agentId, req.params.id);
+    return res.json({ success: true, voucher });
+  } catch (e) {
+    return res.status(400).json({ success: false, error: e.message || 'Gagal tandai voucher terjual' });
+  }
+});
+
+router.get('/vouchers/batches/:id/print', requireAgentSession, (req, res) => {
+  let printResult = null;
+  try {
+    printResult = agentSvc.markAgentVoucherBatchPrinted(req.session.agentId, req.params.id);
+  } catch (_error) {}
+  const data = agentSvc.getAgentVoucherBatch(req.session.agentId, req.params.id);
+  if (!data) return res.status(404).send('Batch voucher tidak ditemukan');
+  const printableVouchers = Array.isArray(printResult?.vouchers)
+    ? printResult.vouchers
+    : (data.vouchers || []).filter((v) => !v.sold_at && !v.used_at && !v.printed_at);
+  res.render('agent/print_vouchers_a4', {
+    title: 'Print Voucher Agent',
+    company: company(),
+    settings: {
+      company_header: company(),
+      company_logo_url: companyLogo(),
+      company_phone: getSetting('company_phone', ''),
+      whatsapp_admin_numbers: getSetting('whatsapp_admin_numbers', [])
+    },
+    batch: data.batch,
+    vouchers: printableVouchers,
+    skippedCount: Math.max(0, Number(data.vouchers?.length || 0) - Number(printableVouchers.length || 0))
+  });
+});
+
+router.get('/vouchers/batches/:id/export.csv', requireAgentSession, (req, res) => {
+  const data = agentSvc.getAgentVoucherBatch(req.session.agentId, req.params.id);
+  if (!data) return res.status(404).send('Batch voucher tidak ditemukan');
+  const { batch, vouchers } = data;
+  const lines = [['code', 'password', 'profile', 'validity', 'price', 'router', 'batch_id', 'created_at'].join(',')];
+  for (const v of vouchers) {
+    lines.push([
+      v.code,
+      v.password,
+      v.profile_name,
+      batch.validity || '',
+      Number(batch.price || 0),
+      batch.router_name || '',
+      batch.id,
+      v.created_at || ''
+    ].map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename=agent_vouchers_batch_${batch.id}.csv`);
+  res.send(lines.join('\n'));
+});
+
+router.get('/topup', requireAgentSession, (req, res) => {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  const settings = getSettingsWithCache();
+  res.render('agent/topup', {
+    title: 'Topup Saldo Agent',
+    company: company(),
+    agent,
+    qrisReady: hasStaticQrisEnabled(settings) && Boolean(String(settings.qris_static_payload || '').trim()),
+    minTopup: 10000,
+    maxTopup: 5000000,
+    topups: agentSvc.listAgentTopupOrders(agentId, { limit: 20 }),
+    msg: flashMsg(req)
+  });
+});
+
+router.post('/topup/create', requireAgentSession, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const order = agentSvc.createAgentTopupOrder(req.session.agentId, req.body.amount, getSettingsWithCache());
+    req.session._msg = { type: 'success', text: 'QRIS topup berhasil dibuat. Scan sesuai nominal unik.' };
+    return res.redirect(`/agent/topup/${order.id}`);
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal membuat QRIS topup: ' + e.message };
+    return res.redirect('/agent/topup');
+  }
+});
+
+router.get('/topup/:id', requireAgentSession, async (req, res) => {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  const order = agentSvc.getAgentTopupOrder(agentId, req.params.id);
+  if (!order) return res.status(404).send('Order topup tidak ditemukan');
+  const qrisDataUrl = order.qris_payload ? await buildDynamicQrisDataUrl(order.qris_payload, { width: 720 }) : '';
+  res.render('agent/topup_order', {
+    title: 'Bayar Topup QRIS',
+    company: company(),
+    agent,
+    order,
+    qrisDataUrl,
+    msg: flashMsg(req)
+  });
+});
+
+router.get('/history', requireAgentSession, (req, res) => {
+  const agentId = req.session.agentId;
+  const agent = agentSvc.getAgentById(agentId);
+  const txs = agentSvc.listAgentTransactions({ agentId, limit: 300 });
+  res.render('agent/history', {
+    title: 'Riwayat Agent',
+    company: company(),
+    agent,
+    txs,
+    profit: calculateAgentProfit(txs),
+    msg: flashMsg(req)
+  });
+});
+
+router.get('/help', requireAgentSession, (req, res) => {
+  const agent = agentSvc.getAgentById(req.session.agentId);
+  const adminContact = getAdminContact();
+  const message = [
+    'Halo Admin, saya butuh bantuan portal agen.',
+    `Agent: ${agent?.name || '-'} (@${agent?.username || '-'})`,
+    `Saldo: Rp ${Number(agent?.balance || 0).toLocaleString('id-ID')}`,
+    'Kendala: voucher / transaksi'
+  ].join('\n');
+  res.render('agent/help', {
+    title: 'Bantuan Agent',
+    company: company(),
+    agent,
+    adminContact,
+    adminWaUrl: buildWaUrl(adminContact.phone, message),
+    msg: flashMsg(req)
   });
 });
 
@@ -220,34 +483,15 @@ router.post('/pay-invoice', requireAgentSession, express.urlencoded({ extended: 
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  res.redirect('/agent');
+  res.redirect('/agent/billing');
 });
 
 router.post('/sell-voucher', requireAgentSession, express.urlencoded({ extended: true }), async (req, res) => {
   try {
     const priceId = Number(req.body.price_id || 0);
     if (!priceId) throw new Error('Harga voucher tidak valid');
-    const buyerPhone = String(req.body.buyer_phone || '').trim();
     const result = await agentSvc.sellVoucherAsAgent(req.session.agentId, priceId, {});
-
-    let waSent = false;
-    if (getSetting('whatsapp_enabled', false) && buyerPhone) {
-      try {
-        const { sendWA, whatsappStatus } = await import('../services/whatsappBot.mjs');
-        if (whatsappStatus.connection === 'open') {
-          const msg =
-            `*Voucher WiFi*\n\n` +
-            `${result.receipt.profile ? `Paket: ${result.receipt.profile}\n` : ''}` +
-            `Kode Voucher: ${result.receipt.code}\n` +
-            `${result.receipt.password && result.receipt.password !== result.receipt.code ? `Password: ${result.receipt.password}\n` : ''}` +
-            `Masa Aktif: ${result.receipt.validity || '-'}\n` +
-            `Harga: Rp ${Number(result.receipt.sell_price || 0).toLocaleString('id-ID')}\n\n` +
-            `Silakan simpan voucher ini.`;
-          await sendWA(buyerPhone, msg);
-          waSent = true;
-        }
-      } catch (e) {}
-    }
+    recordAgentVoucherOperations(result?.tx?.id);
 
     req.session._agentReceipt = {
       type: 'voucher',
@@ -259,15 +503,15 @@ router.post('/sell-voucher', requireAgentSession, express.urlencoded({ extended:
       password: result.receipt.password,
       sell_price: Number(result.receipt.sell_price || 0),
       buy_price: Number(result.price.buy_price || 0),
-      waSent,
-      buyer_phone: buyerPhone
+      waSent: false,
+      buyer_phone: ''
     };
 
     req.session._msg = { type: 'success', text: 'Voucher berhasil dibuat.' };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
   }
-  res.redirect('/agent');
+  res.redirect('/agent/vouchers/single');
 });
 
 router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }), (req, res, next) => {
@@ -441,8 +685,10 @@ router.get('/print/tx/:id', requireAgentSession, (req, res) => {
 
     if (tx.type === 'voucher_sale') {
       const settings = {
+        company_logo_url: companyLogo(),
         company_address: getSetting('company_address', ''),
         company_phone: getSetting('company_phone', ''),
+        upstream_provider_name: getSetting('upstream_provider_name', ''),
         whatsapp_admin_numbers: getSetting('whatsapp_admin_numbers', [])
       };
       return res.render('agent/print_thermal_voucher', {
@@ -456,6 +702,7 @@ router.get('/print/tx/:id', requireAgentSession, (req, res) => {
       const invoice = billingSvc.getInvoiceById(tx.invoice_id);
       const customer = customerSvc.getCustomerById(tx.customer_id);
       const settings = {
+        company_logo_url: companyLogo(),
         company_address: getSetting('company_address', ''),
         company_phone: getSetting('company_phone', ''),
         whatsapp_admin_numbers: getSetting('whatsapp_admin_numbers', [])

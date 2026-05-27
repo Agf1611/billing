@@ -52,13 +52,13 @@
       .voucher-mobile-actions .btn { width:100%; min-height:40px; }
       .tbl-wrap { display:none; }
       .voucher-mobile-list { display:block; }
-      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .suite-topbar-shortcuts{display:flex;grid-template-columns:none;width:auto}
     }
     @media (max-width: 520px) {
       .voucher-mobile-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .voucher-mobile-head { flex-direction:column; }
       .voucher-mobile-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
-      .suite-topbar-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+      .suite-topbar-shortcuts{display:flex;grid-template-columns:none;width:auto;gap:6px}
     }
   </style>
 </head>
@@ -101,18 +101,6 @@
       <a href="/admin/mikrotik" class="mtab <%= mTab==='monitoring' ? 'active' : '' %>"><i class="bi bi-router"></i> Data MikroTik</a>
       <a href="/admin/vouchers" class="mtab <%= mTab==='vouchers' ? 'active' : '' %>"><i class="bi bi-ticket-perforated"></i> Voucher</a>
       <a href="/admin/routers" class="mtab <%= mTab==='routers' ? 'active' : '' %>"><i class="bi bi-hdd-network"></i> Router</a>
-    </div>
-
-    <div class="suite-intro">
-      <div class="suite-intro-copy">
-        <div class="suite-overline">Suite MikroTik</div>
-        <h1 class="suite-intro-title">Voucher hotspot yang konsisten, nyaman, dan ringkas di mobile.</h1>
-        <p class="suite-intro-desc">Halaman voucher sekarang mengikuti bahasa visual yang sama dengan Monitoring dan Router, jadi perpindahan menu terasa lebih mulus dan lebih ringan dipakai dari layar kecil.</p>
-      </div>
-      <div class="suite-intro-tags">
-        <span class="suite-note"><i class="bi bi-ticket-perforated"></i> <strong id="suite-tag-batches">0</strong> batch</span>
-        <span class="suite-note"><i class="bi bi-printer"></i> print, sync, dan detail dalam satu alur</span>
-      </div>
     </div>
 
     <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">

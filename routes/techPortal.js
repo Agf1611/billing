@@ -19,6 +19,7 @@ const {
 const {
   buildTechnicianPushExternalId
 } = require('../services/pushNotificationService');
+const { notifyApprovalRequired } = require('../services/adminPaymentNotificationService');
 const techUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 }
@@ -475,7 +476,7 @@ router.post('/customers', requireTechSession, techUpload.fields([
       throw new Error('Username PPPoE wajib diisi jika ingin membuat secret baru');
     }
 
-    db.prepare(`
+    const insertResult = db.prepare(`
       INSERT INTO technician_customer_requests (
         technician_id, customer_name, customer_phone, package_id, router_id, pppoe_username, payload_json, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
@@ -488,6 +489,17 @@ router.post('/customers', requireTechSession, techUpload.fields([
       customerData.pppoe_username || '',
       JSON.stringify(customerData)
     );
+
+    setImmediate(() => {
+      notifyApprovalRequired({
+        type: 'technician_customer_request',
+        title: 'Approval Pelanggan Teknisi',
+        requester: req.session.techName || req.session.techUsername || `Teknisi #${req.session.techId}`,
+        subject: `${customerData.name}${customerData.phone ? ` (${customerData.phone})` : ''}`,
+        detail: `Request #${Number(insertResult.lastInsertRowid || 0)}${customerData.pppoe_username ? ` - PPPoE ${customerData.pppoe_username}` : ''}`,
+        targetUrl: '/admin/customer-requests?status=pending'
+      }).catch((error) => console.warn('[TechApproval] Gagal kirim notif admin:', error.message || String(error)));
+    });
 
     req.session._msg = { type: 'success', text: `Pengajuan pelanggan "${name}" berhasil dikirim. Menunggu approval admin.` };
     res.redirect('/tech/customers/new');

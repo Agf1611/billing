@@ -13,6 +13,7 @@ const { getSetting } = require('../config/settingsManager');
 const { hasStaticQrisEnabled } = require('./qrisService');
 const {
   buildCustomerCheckBillingLink,
+  buildCustomerInvoiceCheckBillingLink,
   buildCustomerPortalLoginLink,
   buildPublicInvoicePrintLink,
   formatInvoiceDueDate,
@@ -38,6 +39,15 @@ function getDaysUntilInvoiceDue(invoice, customer, today = new Date()) {
   const dueDay = startOfLocalDay(dueAt);
   const currentDay = startOfLocalDay(today);
   return Math.round((dueDay.getTime() - currentDay.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function isCustomerSpeedBoostActive(customer, now = new Date()) {
+  const profile = String(customer?.speed_boost_profile || '').trim();
+  if (!profile) return false;
+  const untilRaw = String(customer?.speed_boost_until || '').trim();
+  if (!untilRaw) return false;
+  const until = new Date(untilRaw);
+  return !Number.isNaN(until.getTime()) && until.getTime() > now.getTime();
 }
 
 // Helper: Random delay generator untuk smart rate limiting
@@ -160,7 +170,9 @@ function buildWhatsappMessageContext(customer, invoices = []) {
     tagihan: Number(totalTagihan || 0).toLocaleString('id-ID'),
     rincian: buildInvoicePeriods(invoiceList),
     jatuh_tempo: primaryInvoice ? formatInvoiceDueDate(primaryInvoice, customer) : '-',
-    link: buildCustomerCheckBillingLink(customer),
+    link: primaryInvoice
+      ? buildCustomerInvoiceCheckBillingLink(primaryInvoice, customer)
+      : buildCustomerCheckBillingLink(customer),
     portal_link: buildCustomerPortalLoginLink(),
     invoice_link: primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer) : buildCustomerCheckBillingLink(customer),
     invoice_no: primaryInvoice?.id ? `INV-${primaryInvoice.id}` : '-',
@@ -247,10 +259,17 @@ function startCronJobs() {
     logger.info(`[CRON] Menjalankan generate tagihan otomatis H-${leadDays} sebelum jatuh tempo.`);
     try {
       const result = billingSvc.generateInvoicesDueInDays(leadDays);
-      logger.info(
-        `[CRON] Generate tagihan H-${leadDays} selesai: periode=${result.periodMonth}/${result.periodYear}, ` +
-        `jatuh_tempo_tgl=${result.dueDay}, eligible=${result.eligible}, dibuat=${result.count}.`
-      );
+      if (result.skipped && result.reason === 'cross-month-period') {
+        logger.info(
+          `[CRON] Generate tagihan H-${leadDays} dilewati: target jatuh tempo ${result.dueDay}/${result.periodMonth}/${result.periodYear} ` +
+          'berbeda bulan dari hari ini, supaya invoice bulan depan tidak ditagih di bulan berjalan.'
+        );
+      } else {
+        logger.info(
+          `[CRON] Generate tagihan H-${leadDays} selesai: periode=${result.periodMonth}/${result.periodYear}, ` +
+          `jatuh_tempo_tgl=${result.dueDay}, eligible=${result.eligible}, dibuat=${result.count}.`
+        );
+      }
     } catch (error) {
       logger.error(`[CRON] Gagal generate tagihan otomatis: ${error.message}`);
     }
@@ -274,20 +293,20 @@ function startCronJobs() {
       const isAutoIsolateEnabled = c.auto_isolate !== 0; // default aktif jika null/1
 
       if (isAutoIsolateEnabled && today >= customerIsolirDay) {
-        // Jika pelanggan aktif tapi punya tagihan belum bayar
-        if (c.status === 'active' && c.unpaid_count > 0) {
+        const dueUnpaidInvoices = billingSvc.getDueUnpaidInvoicesByCustomerId(c.id, now);
+        // Jika pelanggan aktif dan punya tagihan yang benar-benar sudah jatuh tempo
+        if (c.status === 'active' && dueUnpaidInvoices.length > 0) {
           try {
             logger.info(`[CRON] Isolir otomatis pelanggan: ${c.name} (${c.pppoe_username}) - Tanggal Tagihan: ${customerIsolirDay}`);
             
             // Gunakan fungsi terpusat untuk isolir
             await customerSvc.suspendCustomer(c.id);
-            const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
             const isolationTemplate = String(
               getSetting('whatsapp_isolation_message', defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))) ||
               defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))
             ).trim();
             if (c.phone) {
-              const messageContext = buildWhatsappMessageContext(c, unpaidInvoices);
+              const messageContext = buildWhatsappMessageContext(c, dueUnpaidInvoices);
               await sendCustomerWhatsapp(
                 c.phone,
                 ensureDueDateLine(fillWhatsappTemplate(isolationTemplate, {
@@ -380,6 +399,9 @@ function startCronJobs() {
       try {
         unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
         targetInvoice = unpaidInvoices.find((invoice) => {
+          if (Number(invoice.period_month || 0) !== today.getMonth() + 1 || Number(invoice.period_year || 0) !== today.getFullYear()) {
+            return false;
+          }
           const diff = getDaysUntilInvoiceDue(invoice, c, today);
           if (![7, 3, 2, 1].includes(diff)) return false;
           daysLeft = diff;
@@ -398,7 +420,7 @@ function startCronJobs() {
           tab: 'billing',
           title: daysLeft === 7 ? 'Tagihan baru tersedia' : `Pengingat jatuh tempo H-${daysLeft}`,
           body: `Tagihan internet Anda akan jatuh tempo ${dueText}. Silakan cek tagihan agar layanan tetap aktif.`
-        }, { dedupeWindowMs: 20 * 60 * 60 * 1000 });
+        }, { dedupeWindowMs: 20 * 60 * 60 * 1000, push: true });
       } catch (notificationError) {
         logger.warn(`[CRON] Gagal simpan notif jatuh tempo customer ${c.id}: ${notificationError.message || notificationError}`);
       }
@@ -433,7 +455,10 @@ function startCronJobs() {
           const randomDelay = getRandomDelay(baseDelayMs, 2000);
           await new Promise(r => setTimeout(r, randomDelay));
 
-          const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id);
+          const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(c.id).filter((invoice) =>
+            Number(invoice.period_month || 0) === today.getMonth() + 1 &&
+            Number(invoice.period_year || 0) === today.getFullYear()
+          );
           const messageContext = buildWhatsappMessageContext(c, unpaidInvoices);
 
           let formattedMsg = ensureDueDateLine(fillWhatsappTemplate(
@@ -503,9 +528,11 @@ function startCronJobs() {
     try {
       const customers = customerSvc.getAllCustomers();
       let count = 0;
+      const now = new Date();
 
       for (const c of customers) {
         if (!c.package_id || !c.pppoe_username) continue;
+        if (isCustomerSpeedBoostActive(c, now)) continue;
         
         const pkg = customerSvc.getPackageById(c.package_id);
         if (pkg && pkg.use_night_speed === 1 && pkg.night_profile_name) {
@@ -530,9 +557,11 @@ function startCronJobs() {
     try {
       const customers = customerSvc.getAllCustomers();
       let count = 0;
+      const now = new Date();
 
       for (const c of customers) {
         if (!c.package_id || !c.pppoe_username) continue;
+        if (isCustomerSpeedBoostActive(c, now)) continue;
 
         const pkg = customerSvc.getPackageById(c.package_id);
         if (pkg && pkg.use_night_speed === 1) {
@@ -553,7 +582,30 @@ function startCronJobs() {
     }
   });
 
-  // 6. Track Usage Pelanggan (Data Traffic) - Setiap 1 Menit
+  // 6. Boost Paket Sementara - kembali otomatis ke profil normal
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const expired = customerSvc.getExpiredSpeedBoostCustomers(new Date());
+      if (!expired.length) return;
+      let restored = 0;
+      for (const c of expired) {
+        const targetProfile = String(c.normal_pppoe_profile || c.package_pppoe_profile || c.package_name || 'default').trim();
+        try {
+          await mikrotikService.setPppoeProfile(c.pppoe_username, targetProfile, c.router_id, { forceKick: true });
+          customerSvc.clearSpeedBoost(c.id);
+          restored++;
+          logger.info(`[CRON] Boost paket selesai untuk ${c.name}, kembali ke profil ${targetProfile}`);
+        } catch (err) {
+          logger.error(`[CRON] Gagal restore boost paket ${c.name}: ${err.message}`);
+        }
+      }
+      if (restored) logger.info(`[CRON] Boost paket dikembalikan untuk ${restored} pelanggan.`);
+    } catch (e) {
+      logger.error(`[CRON] Error restore boost paket: ${e.message}`);
+    }
+  });
+
+  // 7. Track Usage Pelanggan (Data Traffic) - Setiap 1 Menit
   cron.schedule('* * * * *', async () => {
     const enabled = getSetting('usage_tracking_enabled', true);
     if (!enabled) return;
@@ -592,7 +644,7 @@ function startCronJobs() {
     }
   });
 
-  // 7. FUP (Fair Usage Policy) Check - Setiap Jam
+  // 8. FUP (Fair Usage Policy) Check - Setiap Jam
   cron.schedule('0 * * * *', async () => {
     logger.info('[CRON] Mengecek FUP Pelanggan...');
     try {
@@ -603,6 +655,7 @@ function startCronJobs() {
 
       for (const c of customers) {
         if (!c.package_id || !c.pppoe_username) continue;
+        if (isCustomerSpeedBoostActive(c, now)) continue;
         
         const pkg = customerSvc.getPackageById(c.package_id);
         if (!pkg || pkg.use_fup !== 1 || !pkg.fup_limit_gb || pkg.fup_limit_gb <= 0 || !pkg.fup_profile_name) continue;

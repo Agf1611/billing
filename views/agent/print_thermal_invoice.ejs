@@ -5,57 +5,123 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= t('agent.print_thermal', 'Print Thermal') %> #<%= invoice?.id || tx.id %></title>
   <style>
-    @page { margin: 0; }
+    @page { margin: 0; size: 58mm auto; }
     * { box-sizing: border-box; }
     body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 13px;
       line-height: 1.3;
       color: #000;
+      margin: 0;
+      padding: 0;
+      background: #eef5ff;
+    }
+    .receipt-card{
+      width: min(100%, 460px);
       margin: 0 auto;
-      padding: 5px 7px 8px;
-      max-width: 58mm;
-      background: #fff;
+      background:#fff;
+      border:1px solid #cbd5e1;
+      border-radius:14px;
+      padding:14px 14px 15px;
+      box-shadow:0 24px 60px rgba(15,23,42,.14);
     }
     .text-center { text-align: center; }
     .bold { font-weight: bold; }
-    .divider { border-bottom: 1px dashed #000; margin: 7px 0; }
-    .row { display: flex; justify-content: space-between; gap: 10px; }
-    .small { font-size: 10px; }
+    .divider { border-bottom: 1px dashed #111; margin: 7px 0; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 18px;
+      line-height: 1.22;
+      font-weight: 900;
+    }
+    .row > div:first-child {
+      flex: 1 1 42%;
+      min-width: 0;
+    }
+    .row > div:last-child {
+      flex: 1 1 58%;
+      min-width: 0;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+    .small { font-size: 11px; color:#000; font-weight:700; }
     .tiny { font-size: 9px; }
-    .title { font-size: 14px; letter-spacing: 0.5px; }
+    .title { font-size: 18px; letter-spacing: 0.2px; font-weight:900; text-transform:uppercase; }
     .mt { margin-top: 8px; }
     .mb { margin-bottom: 6px; }
+    .logo{
+      width:58px;height:58px;object-fit:contain;
+      display:block;margin:0 auto 6px;
+    }
     .summary{
-      border: 1px solid #000;
-      padding: 6px 6px 4px;
+      border: 1px dashed #333;
+      border-radius:6px;
+      padding: 8px 8px;
+      background:#fff;
     }
     .summary .row + .row{
-      margin-top: 5px;
+      margin-top: 7px;
     }
     .total-box{
-      border: 1px dashed #000;
-      padding: 8px 6px;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      background:#fff;
+      border-radius:0;
+      padding: 7px 0;
     }
     .total-box .row{
       align-items:flex-end;
     }
     .total-box .value{
-      font-size: 16px;
+      font-size: 22px;
       font-weight: 900;
       letter-spacing: .02em;
+      color:#000;
+    }
+    .section-title{
+      font-size:15px;
+      font-weight:900;
+      text-align:center;
+      text-transform:uppercase;
+      margin:4px 0 8px;
+    }
+    .paid-stamp{
+      display:inline-block;
+      border:1px dashed #16a34a;
+      border-radius:999px;
+      padding:5px 16px;
+      margin:10px auto 2px;
+      color:#000;
+      font-size:14px;
+      font-weight:900;
+      letter-spacing:.18em;
     }
     .foot-note{
       margin-top: 6px;
       text-align: center;
       font-size: 10px;
       line-height: 1.4;
+      color:#000;
+      font-weight:800;
+    }
+    .support-note{
+      margin-top:4px;
+      text-align:center;
+      font-size:11px;
+      line-height:1.25;
+      color:#000;
+      font-weight:900;
     }
     .top-actions{
       position: fixed;
       top: 8px;
       right: 8px;
       display: flex;
+      flex-wrap:wrap;
+      justify-content:flex-end;
       gap: 8px;
       z-index: 10;
     }
@@ -69,72 +135,137 @@
       cursor: pointer;
     }
     @media print {
-      body { width: 100%; max-width: 100%; margin: 0; padding: 5mm 5mm 0 5mm; }
+      body { background:#fff; padding:0; width:58mm; }
+      .receipt-card{width:58mm;box-shadow:none;border-radius:0;border:0;padding:1.5mm}
+      .summary{padding:6px 5px}
+      .row{font-size:15.5px;line-height:1.2;gap:7px}
+      .section-title{font-size:13.5px}
       .top-actions{ display:none; }
     }
   </style>
 </head>
 <body>
   <div class="top-actions">
-    <button type="button" onclick="window.print()"><%= t('agent.print_thermal', 'Print Thermal') %></button>
+    <button type="button" id="saveReceiptBtn">Simpan Gambar</button>
+    <button type="button" id="shareReceiptBtn">Bagikan Gambar</button>
+    <button type="button" onclick="window.print()">Print</button>
     <button type="button" onclick="try{window.close()}catch(e){}">Close</button>
   </div>
 
+  <div class="receipt-card" id="receiptCapture">
   <div class="text-center">
+    <img class="logo" src="<%= settings?.company_logo_url || '/img/logo.png' %>" alt="Logo" onerror="this.style.display='none'">
     <div class="title bold"><%= company %></div>
-    <% if (settings && settings.company_address) { %>
-      <div class="small"><%= settings.company_address %></div>
-    <% } %>
     <% const wa = (settings && settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length) ? settings.whatsapp_admin_numbers[0] : (settings && settings.company_phone ? settings.company_phone : ''); %>
     <% if (wa) { %>
       <div class="small">Telp/WA: <%= String(wa).startsWith('0') ? wa : ('+' + wa) %></div>
     <% } %>
+    <% if (settings && settings.company_address) { %>
+      <div class="small"><%= settings.company_address %></div>
+    <% } %>
   </div>
 
   <div class="divider"></div>
 
-  <div class="text-center bold mb"><%= t('agent.receipt.payment_title', 'STRUK PEMBAYARAN') %></div>
-  <div class="text-center tiny">Ref: #<%= tx.id %></div>
+  <div class="section-title"><%= t('agent.receipt.payment_title', 'STRUK PEMBAYARAN') %></div>
 
   <% const mns=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']; %>
+  <% const receiptDate = tx.created_at ? new Date(tx.created_at).toLocaleDateString('id-ID') : new Date().toLocaleDateString('id-ID'); %>
+  <% const receiptAmount = Number(invoice?.amount || tx.amount_invoice || 0); %>
+  <% const customerPhone = customer?.phone || customer?.genieacs_tag || '-'; %>
   <div class="summary small">
-    <div class="row"><div><%= t('agent.receipt.transaction_no', 'No. Transaksi') %></div><div class="bold">#<%= tx.id %></div></div>
-    <div class="row"><div><%= t('agent.receipt.date', 'Tanggal') %></div><div class="bold"><%= tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID') %></div></div>
-    <div class="row"><div><%= t('admin.nav.agents', 'Agent') %></div><div class="bold"><%= tx.agent_name || '' %><%= tx.agent_username ? (' (@' + tx.agent_username + ')') : '' %></div></div>
+    <div class="row"><div>No. Transaksi</div><div class="bold">#<%= tx.id %></div></div>
+    <div class="row"><div>Invoice</div><div class="bold">#<%= invoice?.id || tx.invoice_id %></div></div>
+    <div class="row"><div>Tanggal</div><div class="bold"><%= receiptDate %></div></div>
+    <div class="row"><div>Agent</div><div class="bold"><%= tx.agent_name || '' %></div></div>
   </div>
 
   <div class="divider"></div>
 
+  <div class="section-title">Data Pelanggan</div>
   <div class="summary small">
     <div class="row"><div><%= t('agent.customer', 'Pelanggan') %></div><div class="bold"><%= customer?.name || '-' %></div></div>
-    <% if (customer && (customer.phone || customer.genieacs_tag)) { %>
-      <div class="row"><div>ID/HP</div><div class="bold"><%= customer.phone || customer.genieacs_tag %></div></div>
-    <% } %>
-    <div class="row"><div><%= t('agent.invoice', 'Invoice') %></div><div class="bold">#<%= invoice?.id || tx.invoice_id %></div></div>
+    <div class="row"><div>ID/HP</div><div class="bold"><%= customerPhone %></div></div>
     <% if (invoice && invoice.period_month && invoice.period_year) { %>
       <div class="row"><div><%= t('agent.period', 'Periode') %></div><div class="bold"><%= mns[invoice.period_month-1] %> <%= invoice.period_year %></div></div>
     <% } %>
+    <div class="row"><div>Status</div><div class="bold">LUNAS</div></div>
   </div>
 
   <div class="divider"></div>
+
+  <div class="section-title">Rincian</div>
+  <div class="summary small">
+    <div class="row"><div>Tagihan Internet</div><div class="bold">Rp <%= receiptAmount.toLocaleString('id-ID') %></div></div>
+    <div class="row"><div>Biaya Lainnya</div><div class="bold">Rp 0</div></div>
+  </div>
 
   <div class="total-box">
     <div class="row bold">
       <div><%= t('agent.receipt.total_paid', 'TOTAL BAYAR') %></div>
-      <div class="value">Rp <%= Number(invoice?.amount || tx.amount_invoice || 0).toLocaleString('id-ID') %></div>
+      <div class="value">Rp <%= receiptAmount.toLocaleString('id-ID') %></div>
     </div>
   </div>
 
   <div class="divider"></div>
 
+  <div class="text-center"><span class="paid-stamp">LUNAS</span></div>
+
   <div class="foot-note">
-    <%= String(t('agent.receipt.thanks_payment', 'Terima kasih atas pembayaran Anda.\nSimpan struk ini sebagai bukti pembayaran yang sah.')).replace(/\n/g,'<br>') %>
+    Simpan struk ini sebagai bukti pembayaran.
+  </div>
+  <% const receiptSupportName = String(settings?.upstream_provider_name || settings?.company_legal_name || company || '').trim(); %>
+  <% if (receiptSupportName) { %>
+    <div class="support-note">Support by <%= receiptSupportName %></div>
+  <% } %>
   </div>
 
   <script>
-    window.onload = function () {
-      setTimeout(function () { window.print(); }, 350);
-    };
+    (function () {
+      const receiptData = {
+        logo: <%- JSON.stringify(settings?.company_logo_url || '/img/logo.png') %>,
+        company: <%- JSON.stringify(company || 'SICKAS WIFI') %>,
+        address: <%- JSON.stringify(settings?.company_address || '') %>,
+        phone: <%- JSON.stringify(wa ? (String(wa).startsWith('0') ? wa : ('+' + wa)) : '-') %>,
+        support: <%- JSON.stringify(receiptSupportName) %>,
+        title: 'STRUK PEMBAYARAN',
+        invoice: <%- JSON.stringify('#' + (invoice?.id || tx.invoice_id || '-')) %>,
+        tx: <%- JSON.stringify('#' + (tx.id || '-')) %>,
+        date: <%- JSON.stringify(receiptDate) %>,
+        agent: <%- JSON.stringify(tx.agent_name || '-') %>,
+        customer: <%- JSON.stringify(customer?.name || '-') %>,
+        customerPhone: <%- JSON.stringify(customerPhone) %>,
+        period: <%- JSON.stringify(invoice && invoice.period_month && invoice.period_year ? `${mns[invoice.period_month-1]} ${invoice.period_year}` : '-') %>,
+        amount: <%- JSON.stringify('Rp ' + receiptAmount.toLocaleString('id-ID')) %>
+      };
+      function rr(ctx,x,y,w,h,r){const q=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+q,y);ctx.arcTo(x+w,y,x+w,y+h,q);ctx.arcTo(x+w,y+h,x,y+h,q);ctx.arcTo(x,y+h,x,y,q);ctx.arcTo(x,y,x+w,y,q);ctx.closePath();}
+      function loadImage(src){return new Promise(resolve=>{const u=String(src||'').trim();if(!u)return resolve(null);try{const p=new URL(u,location.origin);if(p.origin!==location.origin&&!u.startsWith('data:'))return resolve(null);}catch(e){if(!u.startsWith('/'))return resolve(null);}const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=u;});}
+      function fit(ctx,t,x,y,max,size,weight,color,align,minSize){let s=size;const v=String(t||'-');const min=Number(minSize||16);ctx.textAlign=align||'left';ctx.fillStyle=color;do{ctx.font=`${weight||800} ${s}px Arial,sans-serif`;if(ctx.measureText(v).width<=max||s<=min)break;s-=1;}while(s>min);ctx.fillText(v,x,y);ctx.textAlign='left';}
+      async function buildBlob(){
+        const canvas=document.createElement('canvas');canvas.width=384;canvas.height=970;const ctx=canvas.getContext('2d');
+        const W=384,left=8,right=376,mid=192,boxW=368;
+        ctx.fillStyle='#fff';ctx.fillRect(0,0,W,860);
+        const logo=await loadImage(receiptData.logo);if(logo){const ratio=Math.min(58/logo.width,38/logo.height);const w=logo.width*ratio,h=logo.height*ratio;ctx.drawImage(logo,163+(58-w)/2,10+(38-h)/2,w,h);}
+        fit(ctx,receiptData.company.toUpperCase(),mid,66,350,19,900,'#000','center',16);fit(ctx,'Telp/WA: '+receiptData.phone,mid,86,350,13,900,'#000','center',11);fit(ctx,receiptData.address,mid,103,350,11,900,'#000','center',9);
+        ctx.setLineDash([5,5]);ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(left,114);ctx.lineTo(right,114);ctx.stroke();ctx.setLineDash([]);
+        fit(ctx,receiptData.title,mid,140,350,17,900,'#000','center',14);
+        function rows(title,items,y){const rowH=39;fit(ctx,title,mid,y,330,16,900,'#000','center',13);y+=11;ctx.setLineDash([3,3]);ctx.strokeStyle='#333';ctx.lineWidth=1.2;rr(ctx,left,y,boxW,(items.length*rowH)+22,5);ctx.stroke();ctx.setLineDash([]);y+=30;items.forEach(([l,v])=>{ctx.fillStyle='#000';ctx.font='900 17px Arial,sans-serif';ctx.fillText(l,left+10,y);fit(ctx,v,right-8,y,232,18,900,'#000','right',14);y+=rowH;});return y+14;}
+        let y=170;
+        y=rows('DATA TRANSAKSI',[['No. Transaksi',receiptData.tx],['Invoice',receiptData.invoice],['Tanggal',receiptData.date],['Agent',receiptData.agent]],y);
+        y=rows('DATA PELANGGAN',[['Pelanggan',receiptData.customer],['ID/HP',receiptData.customerPhone],['Periode',receiptData.period],['Status','LUNAS']],y);
+        y=rows('RINCIAN',[['Tagihan Internet',receiptData.amount],['Biaya Lainnya','Rp 0']],y);
+        ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(left,y+6);ctx.lineTo(right,y+6);ctx.stroke();ctx.beginPath();ctx.moveTo(left,y+44);ctx.lineTo(right,y+44);ctx.stroke();
+        fit(ctx,'TOTAL BAYAR',left+2,y+34,160,17,900,'#000','left',14);fit(ctx,receiptData.amount,right-2,y+36,210,24,900,'#000','right',18);y+=62;
+        ctx.setLineDash([4,4]);rr(ctx,116,y,152,30,999);ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();ctx.setLineDash([]);fit(ctx,'LUNAS',mid,y+21,120,13,900,'#000','center');y+=43;
+        ctx.setLineDash([5,5]);ctx.strokeStyle='#111';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.setLineDash([]);
+        fit(ctx,'Simpan struk ini sebagai bukti pembayaran.',mid,y+24,340,11,900,'#000','center');
+        if(receiptData.support){fit(ctx,'Support by '+receiptData.support,mid,y+42,340,11,900,'#000','center');}
+        return new Promise(resolve=>{try{canvas.toBlob(resolve,'image/png',0.95)}catch(e){resolve(null)}});
+      }
+      async function saveOrShare(share){const blob=await buildBlob();if(!blob)return window.print();const name='struk-'+receiptData.tx.replace(/[^\w.-]+/g,'-')+'.png';const file=new File([blob],name,{type:'image/png'});if(share&&navigator.canShare&&navigator.canShare({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:receiptData.title,text:receiptData.tx});return;}catch(e){}}const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}
+      document.getElementById('saveReceiptBtn')?.addEventListener('click',()=>saveOrShare(false));
+      document.getElementById('shareReceiptBtn')?.addEventListener('click',()=>saveOrShare(true));
+    })();
   </script>
 </body>
 </html>

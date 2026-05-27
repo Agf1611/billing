@@ -41,6 +41,7 @@ const { getSetting, getSettingsWithCache } = require('./config/settingsManager')
 const { SUPPORTED_LANGS, FALLBACK_LANG, normalizeLang, t } = require('./config/i18n');
 const { createSqliteSessionStore } = require('./config/sqliteSessionStore');
 const billingSvc = require('./services/billingService');
+const agentSvc = require('./services/agentService');
 const {
   buildCustomerCheckBillingLink,
   buildCustomerPortalLoginLink,
@@ -366,15 +367,21 @@ const updateWebhookPaymentNotifMatch = db.prepare(`
   WHERE id = ?
 `);
 
+const updateWebhookPaymentNotifAgentTopupMatch = db.prepare(`
+  UPDATE webhook_payment_notifs
+  SET matched_agent_topup_id = ?
+  WHERE id = ?
+`);
+
 const selectRecentDuplicateWebhookMatched = db.prepare(`
-  SELECT id, matched_invoice_id, created_at
+  SELECT id, matched_invoice_id, matched_agent_topup_id, created_at
   FROM webhook_payment_notifs
   WHERE service = ?
     AND content = ?
     AND parsed_amount = ?
     AND id != ?
     AND created_at >= datetime('now', '-2 day')
-    AND matched_invoice_id IS NOT NULL
+    AND (matched_invoice_id IS NOT NULL OR matched_agent_topup_id IS NOT NULL)
   ORDER BY id DESC
   LIMIT 1
 `);
@@ -477,14 +484,141 @@ function pushAmountCandidate(target, raw) {
   if (amount && !target.includes(amount)) target.push(amount);
 }
 
+function firstTextValue(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function buildPaymentNotificationInput(body = {}) {
+  const payload = body && typeof body === 'object' ? body : {};
+  const nestedNotification = payload.notification && typeof payload.notification === 'object' ? payload.notification : {};
+  const nestedData = payload.data && typeof payload.data === 'object' ? payload.data : {};
+  const appName = firstTextValue(
+    payload.service,
+    payload.app,
+    payload.app_name,
+    payload.appName,
+    payload.package,
+    payload.package_name,
+    payload.packageName,
+    payload.source,
+    nestedNotification.service,
+    nestedNotification.app,
+    nestedNotification.appName,
+    nestedNotification.packageName,
+    nestedData.service,
+    nestedData.app,
+    nestedData.appName
+  );
+  const title = firstTextValue(
+    payload.title,
+    payload.notification_title,
+    payload.notificationTitle,
+    payload.subject,
+    nestedNotification.title,
+    nestedData.title
+  );
+  const text = firstTextValue(
+    payload.content,
+    payload.text,
+    payload.message,
+    payload.body,
+    payload.notification,
+    payload.data,
+    payload.notification_text,
+    payload.notificationText,
+    nestedNotification.content,
+    nestedNotification.text,
+    nestedNotification.message,
+    nestedNotification.body,
+    nestedData.content,
+    nestedData.text,
+    nestedData.message
+  );
+  const bigText = firstTextValue(
+    payload.big_text,
+    payload.bigText,
+    payload.extra_text,
+    payload.extraText,
+    payload.sub_text,
+    payload.subText,
+    payload.summary,
+    nestedNotification.big_text,
+    nestedNotification.bigText,
+    nestedNotification.extraText,
+    nestedNotification.subText,
+    nestedNotification.summary,
+    nestedData.bigText,
+    nestedData.summary
+  );
+  const amount = firstTextValue(
+    payload.amount,
+    payload.nominal,
+    payload.value,
+    payload.total,
+    nestedNotification.amount,
+    nestedData.amount,
+    nestedData.nominal,
+    nestedData.total
+  );
+  const parts = [title, text, bigText, amount].filter(Boolean);
+  return {
+    service: appName || 'NOTIFICATION',
+    content: parts.length ? parts.join('\n') : firstTextValue(payload.raw, payload.raw_text, payload.rawText)
+  };
+}
+
+function isLikelyOutgoingPaymentNotification(content) {
+  const text = String(content || '').toLowerCase();
+  if (!text) return false;
+
+  const incomingHints = [
+    'masuk',
+    'menerima',
+    'diterima',
+    'terima uang',
+    'uang masuk',
+    'saldo bertambah',
+    'dana masuk',
+    'qris masuk',
+    'pembayaran diterima',
+    'kredit',
+    'credit'
+  ];
+  if (incomingHints.some((hint) => text.includes(hint))) return false;
+
+  const outgoingHints = [
+    'mengirim',
+    'kirim uang',
+    'terkirim',
+    'transfer keluar',
+    'saldo berkurang',
+    'top up',
+    'topup',
+    'isi saldo',
+    'bayar ke',
+    'pembayaran ke',
+    'belanja',
+    'pembelian',
+    'tarik saldo',
+    'withdraw'
+  ];
+  return outgoingHints.some((hint) => text.includes(hint));
+}
+
 function parseRupiahAmountsFromNotification(content) {
   const text = String(content || '').replace(/\u00A0/g, ' ').trim();
   if (!text) return [];
 
   const amounts = [];
   const patterns = [
+    /(?:\+\s*)?(?:Rp\.?\s*|IDR\s*)([0-9][0-9.,]*)/gi,
     /(?:\bRp\.?\s*|IDR\s*)(?:\+|:|=)?\s*([0-9][0-9.,]*)/gi,
-    /(?:sebesar|senilai|nominal|masuk|diterima|terima|transfer|top\s*up|topup|saldo\s+masuk|payment|pembayaran|bayar|setoran|kredit|credit)\s*(?:saldo\s*)?(?:\bRp\.?\s*)?(?:\+|:|=)?\s*([0-9][0-9.,]*)/gi
+    /(?:sebesar|senilai|nominal|masuk|diterima|terima|menerima|saldo\s+masuk|payment|pembayaran|setoran|kredit|credit)\s*(?:saldo\s*)?(?:\bRp\.?\s*)?(?:\+|:|=)?\s*([0-9][0-9.,]*)/gi,
+    /([0-9][0-9.,]*)\s*(?:telah\s+)?(?:masuk|diterima|ditambahkan|credited)/gi
   ];
 
   for (const re of patterns) {
@@ -492,11 +626,6 @@ function parseRupiahAmountsFromNotification(content) {
     while ((match = re.exec(text)) !== null) {
       if (match[1]) pushAmountCandidate(amounts, match[1]);
     }
-  }
-
-  if (!amounts.length) {
-    const looseMatches = text.match(/\b\d{4,}(?:[.,]\d{3})*(?:[.,]\d{2})?\b/g) || [];
-    if (looseMatches.length === 1) pushAmountCandidate(amounts, looseMatches[0]);
   }
 
   return amounts;
@@ -579,7 +708,18 @@ async function trySendWebhookPaidWhatsapp(req, customerId, invoiceId, gatewayLab
 }
 
 app.post('/api/webhook/v1/payment-notif', async (req, res) => {
-  const { service, content, secret_key } = req.body || {};
+  const payload = req.body || {};
+  const providedSecret = firstTextValue(
+    payload.secret_key,
+    payload.secret,
+    payload.token,
+    req.headers['x-webhook-secret'],
+    req.headers['x-payment-secret'],
+    req.headers['x-api-key']
+  );
+  const notificationInput = buildPaymentNotificationInput(payload);
+  const service = notificationInput.service;
+  const content = notificationInput.content;
   const expected = String(
     process.env.MY_WEBHOOK_SECRET ||
     getSetting('payment_notif_secret', '') ||
@@ -591,7 +731,7 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
     return res.status(403).send('Forbidden');
   }
 
-  if (String(secret_key || '') !== expected) {
+  if (providedSecret !== expected) {
     logger.warn(`[WEBHOOK][payment-notif] Forbidden: secret_key mismatch. service=${String(service || '-')}`);
     return res.status(403).send('Forbidden');
   }
@@ -600,9 +740,13 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
   logger.info(`[WEBHOOK][payment-notif] IN service=${String(service || '-')} content="${rawText.replace(/\r?\n/g, ' ').slice(0, 500)}"`);
 
   try {
+    const ignoredOutgoing = isLikelyOutgoingPaymentNotification(rawText);
     const amountCandidates = parseRupiahAmountsFromNotification(rawText);
-    const qrisMatch = findUniqueQrisInvoiceMatch(amountCandidates);
-    const amount = qrisMatch.amount || amountCandidates[0] || null;
+    const qrisMatch = ignoredOutgoing ? { amount: null, invoice: null, checked: [], ambiguous: [] } : findUniqueQrisInvoiceMatch(amountCandidates);
+    const agentTopupMatch = ignoredOutgoing || qrisMatch.invoice
+      ? { amount: null, order: null, checked: [], ambiguous: [] }
+      : agentSvc.findPendingAgentTopupByPayAmounts(amountCandidates);
+    const amount = qrisMatch.amount || agentTopupMatch.amount || amountCandidates[0] || null;
     const ip = String((req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '');
     const ua = String(req.get('user-agent') || '');
     let notifId = null;
@@ -621,6 +765,7 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
     }
 
     let matchedInvoiceId = null;
+    let matchedAgentTopupId = null;
     if (amount != null) {
       try {
         const normalizedService = String(service || '');
@@ -633,16 +778,27 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
         const duplicateMatchedInvoiceId = duplicateMatched
           ? (Number(duplicateMatched.matched_invoice_id || 0) || null)
           : null;
+        const duplicateMatchedAgentTopupId = duplicateMatched
+          ? (Number(duplicateMatched.matched_agent_topup_id || 0) || null)
+          : null;
         if (
           duplicateMatched &&
-          (!qrisMatch.invoice || Number(qrisMatch.invoice.id || 0) === duplicateMatchedInvoiceId)
+          (
+            (!qrisMatch.invoice && !agentTopupMatch.order) ||
+            (qrisMatch.invoice && Number(qrisMatch.invoice.id || 0) === duplicateMatchedInvoiceId) ||
+            (agentTopupMatch.order && Number(agentTopupMatch.order.id || 0) === duplicateMatchedAgentTopupId)
+          )
         ) {
           matchedInvoiceId = duplicateMatchedInvoiceId;
+          matchedAgentTopupId = duplicateMatchedAgentTopupId;
           if (notifId && matchedInvoiceId) {
             try { updateWebhookPaymentNotifMatch.run(matchedInvoiceId, notifId); } catch {}
           }
+          if (notifId && matchedAgentTopupId) {
+            try { updateWebhookPaymentNotifAgentTopupMatch.run(matchedAgentTopupId, notifId); } catch {}
+          }
           logger.warn(
-            `[WEBHOOK][payment-notif] DUPLICATE ignored service=${normalizedService || '-'} amount=${amount} prior_notif=${duplicateMatched.id || '-'} prior_match=${matchedInvoiceId || '-'}`
+            `[WEBHOOK][payment-notif] DUPLICATE ignored service=${normalizedService || '-'} amount=${amount} prior_notif=${duplicateMatched.id || '-'} prior_invoice=${matchedInvoiceId || '-'} prior_agent_topup=${matchedAgentTopupId || '-'}`
           );
           return res.status(200).json({
             status: 'processed',
@@ -650,6 +806,7 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
             amount,
             amounts: amountCandidates,
             matched_invoice_id: matchedInvoiceId,
+            matched_agent_topup_id: matchedAgentTopupId,
             duplicate: true
           });
         }
@@ -659,7 +816,9 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
           );
         }
 
-        if (qrisMatch.invoice) {
+        if (ignoredOutgoing) {
+          logger.warn(`[WEBHOOK][payment-notif] IGNORED outgoing/debit notification service=${normalizedService || '-'} amount=${amount || '-'} content="${rawText.replace(/\r?\n/g, ' ').slice(0, 240)}"`);
+        } else if (qrisMatch.invoice) {
           const inv = qrisMatch.invoice;
           const invId = Number(inv.id || 0);
           const custId = Number(inv.customer_id || 0);
@@ -694,10 +853,25 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
 
             logger.info(`[WEBHOOK][payment-notif] MATCH invoice=${invId} amount=${amount}`);
           }
+        } else if (agentTopupMatch.order) {
+          const order = agentTopupMatch.order;
+          const orderId = Number(order.id || 0);
+          if (orderId > 0) {
+            const completed = agentSvc.completeAgentTopupOrder(orderId, notifId, String(service || 'QRIS').toUpperCase());
+            matchedAgentTopupId = orderId;
+            if (notifId) {
+              try { updateWebhookPaymentNotifAgentTopupMatch.run(orderId, notifId); } catch {}
+            }
+            logger.info(
+              `[WEBHOOK][payment-notif] MATCH agent_topup=${orderId} agent=${order.agent_id || '-'} amount=${amount} credited=${Number(completed?.order?.amount || order.amount || 0)}`
+            );
+          }
         } else if (qrisMatch.ambiguous.length) {
           logger.error(`[WEBHOOK][payment-notif] MATCH ambiguous: ${qrisMatch.ambiguous.map((item) => `amount=${item.amount} candidates=${item.ids.join(',')}`).join(' | ')}`);
+        } else if (agentTopupMatch.ambiguous.length) {
+          logger.error(`[WEBHOOK][payment-notif] TOPUP ambiguous: ${agentTopupMatch.ambiguous.map((item) => `amount=${item.amount} candidates=${item.ids.join(',')}`).join(' | ')}`);
         } else if (amountCandidates.length) {
-          logger.warn(`[WEBHOOK][payment-notif] Tidak ada invoice unpaid dengan nominal unik: ${amountCandidates.join(', ')}`);
+          logger.warn(`[WEBHOOK][payment-notif] Tidak ada invoice/topup pending dengan nominal unik: ${amountCandidates.join(', ')}`);
         }
       } catch (e) {
         logger.error(`[WEBHOOK][payment-notif] MATCH error: ${e && e.message ? e.message : String(e)}`);
@@ -706,7 +880,15 @@ app.post('/api/webhook/v1/payment-notif', async (req, res) => {
 
     if (amount != null) {
       logger.info(`[WEBHOOK][payment-notif] PARSED service=${String(service || '-')} amount=${amount} candidates=${amountCandidates.join(',')}`);
-      return res.status(200).json({ status: 'processed', parsed: true, amount, amounts: amountCandidates, matched_invoice_id: matchedInvoiceId });
+      return res.status(200).json({
+        status: 'processed',
+        parsed: true,
+        amount,
+        amounts: amountCandidates,
+        matched_invoice_id: matchedInvoiceId,
+        matched_agent_topup_id: matchedAgentTopupId,
+        ignored: ignoredOutgoing ? 'outgoing_payment' : false
+      });
     }
 
     logger.error(`[WEBHOOK][payment-notif] FAILED parse: "${rawText.replace(/\r?\n/g, ' ').slice(0, 500)}"`);
@@ -960,27 +1142,63 @@ logger.info(`Attempting to start server on configured port: ${port}`);
 // Mulai server dengan port dari konfigurasi
 startServer(port);
 
-if (getSetting('whatsapp_enabled', false)) {
+function parseEnvFlag(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (['1', 'true', 'yes', 'y', 'on', 'enable', 'enabled'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off', 'disable', 'disabled'].includes(normalized)) return false;
+  return null;
+}
+
+function shouldRunBackgroundWorkers() {
+  const explicit =
+    parseEnvFlag(process.env.BILLING_BACKGROUND_WORKER) ??
+    parseEnvFlag(process.env.RUN_BACKGROUND_JOBS);
+  if (explicit !== null) return explicit;
+
+  const configuredPort = String(global.appSettings?.port || process.env.PORT || '').trim();
+  if (configuredPort === '3001') return false;
+  return true;
+}
+
+function shouldRunWhatsappWorker() {
+  const explicit =
+    parseEnvFlag(process.env.BILLING_WHATSAPP_WORKER) ??
+    parseEnvFlag(process.env.RUN_WHATSAPP_BOT);
+  if (explicit !== null) return explicit;
+  return true;
+}
+
+const backgroundWorkersEnabled = shouldRunBackgroundWorkers();
+const whatsappWorkerEnabled = shouldRunWhatsappWorker();
+
+if (whatsappWorkerEnabled && getSetting('whatsapp_enabled', false)) {
   import('./services/whatsappBot.mjs')
     .then((mod) => mod.startWhatsAppBot())
     .catch((err) => logger.error('Gagal memulai WhatsApp bot:', err));
+} else if (!whatsappWorkerEnabled) {
+  logger.info(`[WA] Worker WhatsApp dinonaktifkan untuk port ${global.appSettings?.port || process.env.PORT || '-'}.`);
 }
 
-if (getSetting('telegram_enabled', false)) {
-  const { initTelegram } = require('./services/telegramBot');
-  initTelegram();
+if (backgroundWorkersEnabled) {
+  if (getSetting('telegram_enabled', false)) {
+    const { initTelegram } = require('./services/telegramBot');
+    initTelegram();
+  }
+
+  // Mulai cron jobs (generate tagihan otomatis, dll)
+  const { startCronJobs } = require('./services/cronService');
+  startCronJobs();
+
+  // Mulai collector snapshot MikroTik agar dashboard memakai sumber data yang konsisten.
+  const monitoringCollectorSvc = require('./services/monitoringCollectorService');
+  monitoringCollectorSvc.startCollectorService();
+
+  // Mulai auto backup
+  scheduleAutoBackup();
+} else {
+  logger.info(`[Background] Worker dinonaktifkan untuk port ${global.appSettings?.port || process.env.PORT || '-'}. Web tetap berjalan.`);
 }
-
-// Mulai cron jobs (generate tagihan otomatis, dll)
-const { startCronJobs } = require('./services/cronService');
-startCronJobs();
-
-// Mulai collector snapshot MikroTik agar dashboard memakai sumber data yang konsisten.
-const monitoringCollectorSvc = require('./services/monitoringCollectorService');
-monitoringCollectorSvc.startCollectorService();
-
-// Mulai auto backup
-scheduleAutoBackup();
 
 // Error handling middleware (harus di akhir setelah semua routes)
 app.use(notFoundHandler);

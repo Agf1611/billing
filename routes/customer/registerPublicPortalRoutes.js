@@ -4,7 +4,8 @@ function registerPublicPortalRoutes(router, deps) {
     customerSvc,
     billingSvc,
     getCustomerPaymentChannels,
-    signPublicToken
+    signPublicToken,
+    verifyPublicToken
   } = deps;
 
   function resolveLoggedInCustomer(req) {
@@ -66,6 +67,7 @@ function registerPublicPortalRoutes(router, deps) {
   router.get('/check-billing', async (req, res) => {
     const settings = getSettingsWithCache();
     const query = String(req.query.q || '').trim();
+    const publicToken = String(req.query.t || req.query.token || '').trim();
     const error = String(req.query.err || '').trim() || null;
     const info = String(req.query.info || '').trim() || null;
 
@@ -74,16 +76,46 @@ function registerPublicPortalRoutes(router, deps) {
     let unpaidInvoices = [];
     let invoiceTokens = {};
     let matches = [];
+    let tokenError = '';
     const paymentChannels = await getCustomerPaymentChannels(settings);
+    const secret = settings.session_secret || '';
 
-    if (query) {
+    if (publicToken && verifyPublicToken) {
+      const payload = verifyPublicToken(publicToken, secret);
+      const invoiceId = Number(payload?.invoiceId || 0);
+      const customerId = Number(payload?.customerId || 0);
+      if (payload && invoiceId > 0 && customerId > 0) {
+        const invoice = billingSvc.getInvoiceById(invoiceId);
+        const invoiceCustomerId = Number(invoice?.customer_id || 0);
+        if (invoice && invoiceCustomerId === customerId) {
+          customer = customerSvc.getCustomerById(customerId);
+          if (customer) {
+            const lookup = payload.lookup || customer.pppoe_username || customer.genieacs_tag || customer.phone || String(customer.id);
+            invoices = [invoice];
+            unpaidInvoices = String(invoice.status || '').toLowerCase() === 'unpaid' ? [invoice] : [];
+            if (unpaidInvoices.length > 0) {
+              const exp = Date.now() + 15 * 60 * 1000;
+              invoiceTokens[String(invoice.id)] = signPublicToken(
+                { invoiceId: Number(invoice.id), customerId: Number(invoice.customer_id), lookup, exp },
+                secret
+              );
+            }
+          }
+        }
+      }
+      if (!customer && !error) {
+        matches = [];
+        tokenError = 'Link tagihan tidak valid atau sudah kadaluarsa.';
+      }
+    }
+
+    if (!customer && query) {
       customer = customerSvc.findCustomerByAny(query);
       if (customer) {
         const lookup = customer.pppoe_username || customer.genieacs_tag || customer.phone || String(customer.id);
         invoices = billingSvc.getInvoicesByAny(lookup) || [];
         unpaidInvoices = invoices.filter((item) => item.status === 'unpaid');
 
-        const secret = settings.session_secret || '';
         const exp = Date.now() + 15 * 60 * 1000;
         invoiceTokens = unpaidInvoices.reduce((acc, inv) => {
           acc[String(inv.id)] = signPublicToken(
@@ -128,7 +160,7 @@ function registerPublicPortalRoutes(router, deps) {
       invoiceTokens,
       matches,
       paymentChannels,
-      error,
+      error: error || tokenError || null,
       info
     });
   });

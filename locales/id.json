@@ -495,7 +495,7 @@
       "add": "Tambah Pelanggan",
       "export_excel": "Export Excel",
       "import_excel": "Import Excel",
-      "search_placeholder": "Cari nama, telepon, tag...",
+      "search_placeholder": "Cari nama, telepon, PPPoE, tag...",
       "empty": "Belum ada pelanggan",
       "stats": {
         "total": "Total",

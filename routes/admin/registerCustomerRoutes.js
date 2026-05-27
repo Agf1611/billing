@@ -32,7 +32,9 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     redirectBack,
     resolvePaidByName,
     sendPaidWhatsappNotification,
-    usageSvc
+    usageSvc,
+    isPushConfigured,
+    sendPushToCustomer
   } = deps;
 
   const CUSTOMER_IMAGE_FIELDS = [
@@ -59,6 +61,129 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     return (date.getMonth() + 1) === targetMonth && date.getFullYear() === targetYear;
   }
 
+  function isEnabledSwitch(value) {
+    return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+  }
+
+  function resolveAdminPathFromRequest(req, fallback = '/admin/customers') {
+    const candidates = [
+      req?.body?._admin_return_to,
+      req?.body?.return_to,
+      req?.query?._admin_return_to,
+      req?.query?.return_to,
+      req?.get ? req.get('referer') : '',
+      fallback
+    ];
+    for (const candidate of candidates) {
+      const raw = String(candidate || '').trim();
+      if (!raw) continue;
+      try {
+        const parsed = new URL(raw, 'http://admin.local');
+        if (!parsed.pathname.startsWith('/admin')) continue;
+        return `${parsed.pathname}${parsed.search || ''}`;
+      } catch (_error) {
+        if (raw.startsWith('/admin')) return raw;
+      }
+    }
+    return fallback;
+  }
+
+  function buildPostIsolationRedirect(req, fallback = '/admin/customers?status=suspended') {
+    const current = resolveAdminPathFromRequest(req, fallback);
+    try {
+      const parsed = new URL(current, 'http://admin.local');
+      if (parsed.pathname === '/admin/billing') {
+        parsed.searchParams.set('status', 'isolated');
+        parsed.searchParams.set('page', '1');
+        return `${parsed.pathname}${parsed.search}`;
+      }
+      if (parsed.pathname === '/admin/customers') {
+        parsed.searchParams.set('status', 'suspended');
+        parsed.searchParams.set('page', '1');
+        return `${parsed.pathname}${parsed.search}`;
+      }
+    } catch (_error) {}
+    return fallback;
+  }
+
+  function forceAdminRedirect(res, target) {
+    res.statusCode = 302;
+    res.setHeader('Location', target || '/admin');
+    return res.end();
+  }
+
+  async function applySubmittedSpeedBoost(reqBody = {}, customer) {
+    const profile = String(reqBody.speed_boost_profile || '').trim();
+    if (!profile || !customer?.pppoe_username) return false;
+    const untilRaw = String(reqBody.speed_boost_until || customer.speed_boost_until || '').trim();
+    const untilDate = untilRaw ? new Date(untilRaw) : null;
+    if (untilDate && !Number.isNaN(untilDate.getTime()) && untilDate.getTime() <= Date.now()) return false;
+    await mikrotikService.setPppoeProfile(customer.pppoe_username, profile, customer.router_id, { forceKick: true });
+    return true;
+  }
+
+  function queueManualIsolationNotifications({ req, customer, unpaidInvoices = [] }) {
+    if (!customer?.id) return;
+    const requestBaseUrl = resolveRequestBaseUrl(req);
+    const unpaidTotal = unpaidInvoices.reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
+    const periodLine = unpaidInvoices.length
+      ? unpaidInvoices.map((inv) => `${inv.period_month}/${inv.period_year}`).join(', ')
+      : 'tagihan aktif';
+    const body = unpaidTotal > 0
+      ? `Layanan internet Anda sementara diisolir. Tagihan belum lunas: Rp ${unpaidTotal.toLocaleString('id-ID')} (${periodLine}). Buka aplikasi pelanggan untuk bayar dan aktif kembali.`
+      : 'Layanan internet Anda sementara diisolir. Buka aplikasi pelanggan untuk melihat status tagihan atau hubungi admin.';
+
+    customerSvc.addPortalNotification(customer.id, {
+      kind: 'suspension',
+      tab: 'billing',
+      title: 'Layanan internet diisolir',
+      body,
+      payload: {
+        source: 'admin-manual-isolate',
+        unpaidInvoiceIds: unpaidInvoices.map((inv) => Number(inv.id || 0)).filter(Boolean)
+      }
+    }, { dedupeWindowMs: 15 * 60 * 1000 });
+
+    setImmediate(async () => {
+      const settings = getSettings ? getSettings() : null;
+      try {
+        if (typeof isPushConfigured === 'function' && typeof sendPushToCustomer === 'function' && isPushConfigured(settings)) {
+          await sendPushToCustomer(customer, {
+            settings,
+            title: 'Layanan Internet Diisolir',
+            message: body,
+            targetUrl: `${requestBaseUrl}/customer/dashboard#billing`,
+            data: {
+              kind: 'suspension',
+              source: 'admin-manual-isolate',
+              customerId: Number(customer.id || 0) || null
+            },
+            timeoutMs: 7000
+          });
+        }
+      } catch (error) {
+        logger.warn(`[ManualIsolation] Gagal kirim push pelanggan ${customer.id}: ${error.message || String(error)}`);
+      }
+
+      try {
+        if (customer.phone) {
+          const waSent = await trySendWhatsappPayment(
+            customer.phone,
+            buildIsolationWhatsappMessage(
+              customer,
+              unpaidInvoices,
+              'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
+              { baseUrl: requestBaseUrl }
+            )
+          );
+          if (!waSent) logger.warn(`[ManualIsolation] WhatsApp isolir pelanggan ${customer.id} tidak terkirim.`);
+        }
+      } catch (error) {
+        logger.warn(`[ManualIsolation] Gagal kirim WhatsApp pelanggan ${customer.id}: ${error.message || String(error)}`);
+      }
+    });
+  }
+
   router.get('/customers', requireAdminSession, (req, res) => {
     const statusQueryProvided = Object.prototype.hasOwnProperty.call(req.query || {}, 'status');
     const {
@@ -71,7 +196,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       year: rawYear = '',
       page: rawPage = '1',
       sortBy: rawSortBy = 'name',
-      sortDir: rawSortDir = 'asc'
+      sortDir: rawSortDir = 'asc',
+      package_id: rawPackageId = ''
     } = req.query;
     const now = new Date();
     const selectedMonth = Math.min(12, Math.max(1, parseInt(rawMonth, 10) || (now.getMonth() + 1)));
@@ -80,6 +206,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const pageSize = 25;
     const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
     const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
+    const filterPackageId = Math.max(0, parseInt(rawPackageId, 10) || 0);
     const allowedSortBy = new Set(['name', 'address', 'package', 'status', 'billing']);
     const sortBy = allowedSortBy.has(String(rawSortBy || '').trim()) ? String(rawSortBy).trim() : 'name';
     const sortDir = String(rawSortDir || '').trim().toLowerCase() === 'desc' ? 'desc' : 'asc';
@@ -99,6 +226,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     let filteredCustomers = normalizedFilterStatus
       ? customers.filter((customer) => customer.status === normalizedFilterStatus)
       : customers;
+
+    if (filterPackageId > 0) {
+      filteredCustomers = filteredCustomers.filter((customer) => Number(customer.package_id || 0) === filterPackageId);
+    }
 
     if (normalizedBillingDayStart || normalizedBillingDayEnd) {
       filteredCustomers = filteredCustomers.filter((customer) => {
@@ -238,6 +369,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       customerOverview,
       billingDayStart: normalizedBillingDayStart || '',
       billingDayEnd: normalizedBillingDayEnd || '',
+      filterPackageId,
       sortBy,
       sortDir,
       currentPage: safePage,
@@ -356,6 +488,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         }
       }
 
+      try {
+        if (await applySubmittedSpeedBoost(req.body, createdCustomer)) {
+          syncWarnings.push(`Boost paket "${String(req.body.speed_boost_profile || '').trim()}" langsung diterapkan.`);
+        }
+      } catch (boostErr) {
+        syncWarnings.push(`Boost paket belum berhasil diterapkan: ${boostErr.message}`);
+      }
+
       if (createdCustomer && createdCustomer.phone) {
         const welcomeMessage = buildWelcomeWhatsappMessage(createdCustomer, { baseUrl: resolveRequestBaseUrl(req) });
         if (welcomeMessage) {
@@ -387,6 +527,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         const ktpPhotoResult = await persistCompressedImageUpload(ktpPhotoFile, 'admin-ktp-photo', { maxBytes: DEFAULT_MAX_BYTES });
         req.body.ktp_photo_url = ktpPhotoResult.publicUrl;
       }
+      const syncWarnings = [];
       if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
         const customerId = Number(req.params.id);
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;
@@ -410,6 +551,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       }
 
       customerSvc.updateCustomer(req.params.id, req.body);
+      const updatedCustomer = customerSvc.getCustomerById(req.params.id);
 
       if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
         const desiredProfile = resolveCustomerPppoeProfile(
@@ -428,11 +570,21 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
             await mikrotikService.setPppoeProfile(req.body.pppoe_username, targetProfile, req.body.router_id);
           } catch (mErr) {
             console.error('Mikrotik sync error (update):', mErr);
+            syncWarnings.push(`Profil PPPoE belum berhasil disinkronkan: ${mErr.message}`);
           }
         }
       }
 
-      req.session._msg = { type: 'success', text: 'Data pelanggan berhasil diperbarui.' };
+      try {
+        if (await applySubmittedSpeedBoost(req.body, updatedCustomer)) {
+          syncWarnings.push(`Boost paket "${String(req.body.speed_boost_profile || '').trim()}" langsung diterapkan.`);
+        }
+      } catch (boostErr) {
+        syncWarnings.push(`Boost paket belum berhasil diterapkan: ${boostErr.message}`);
+      }
+
+      const warningText = syncWarnings.length ? ` Catatan: ${syncWarnings.join(' | ')}` : '';
+      req.session._msg = { type: 'success', text: `Data pelanggan berhasil diperbarui.${warningText}` };
     } catch (e) {
       logger.error(`[AdminCustomers] Gagal memperbarui pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
       req.session._msg = { type: 'error', text: 'Gagal memperbarui: ' + e.message };
@@ -453,6 +605,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
   function buildCustomerImportTemplateWorkbook() {
     const templateHeaders = [
+      'ID Pelanggan',
       'Nama',
       'Telepon',
       'Email',
@@ -474,7 +627,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
     const wsTemplate = XLSX.utils.aoa_to_sheet([
       templateHeaders,
-      ['', '', '', '', '', '', '', '', 'BEATISOLIR', 'active', '', 'YA', '10', '', '', '', '']
+      ['', '', '', '', '', '', '', '', '', 'BEATISOLIR', 'active', '', 'YA', '10', '', '', '', '']
     ]);
     wsTemplate['!cols'] = templateHeaders.map((header) => ({
       wch: Math.max(String(header).length + 4, 14)
@@ -483,7 +636,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const wsGuide = XLSX.utils.aoa_to_sheet([
       ['Panduan Import Pelanggan'],
       ['1. Isi data mulai baris ke-2.'],
-      ['2. Kolom wajib minimal: Nama.'],
+      ['2. Kolom wajib minimal: Nama. ID Pelanggan boleh dikosongkan agar dibuat otomatis.'],
       ['3. Kolom Paket harus sama persis dengan nama paket di aplikasi.'],
       ['4. Kolom ODP harus sama persis dengan nama ODP di aplikasi jika dipakai.'],
       ['5. Status yang disarankan: active, suspended, inactive.'],
@@ -517,7 +670,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     try {
       const customers = customerSvc.getAllCustomers();
       const headers = [
-        'ID',
+        'ID Sistem',
+        'ID Pelanggan',
         'Nama',
         'Telepon',
         'Email',
@@ -538,6 +692,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       ];
       const mapCustomerRow = (customer) => ([
         customer.id,
+        customer.customer_code || '',
         customer.name,
         customer.phone,
         customer.email || '',
@@ -610,6 +765,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         const odp = odps.find((item) => item.name === odpName);
 
         const data = {
+          customer_code: cleanRow['ID Pelanggan'] || cleanRow.customer_code || cleanRow.kode_pelanggan || '',
           name,
           phone: cleanRow.Telepon || cleanRow.phone || cleanRow.Phone,
           email: cleanRow.Email || cleanRow.email || cleanRow.email_address,
@@ -629,7 +785,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
           notes: cleanRow.Catatan || cleanRow.notes
         };
 
-        const id = cleanRow.ID || cleanRow.id;
+        const id = cleanRow['ID Sistem'] || cleanRow.ID || cleanRow.id;
         if (id && !Number.isNaN(Number(id)) && id !== '') {
           logger.info(`[Import] Updating customer ID: ${id}`);
           customerSvc.updateCustomer(id, data);
@@ -650,27 +806,20 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
   });
 
   router.post('/customers/:id/isolate', requireAdminSession, async (req, res) => {
+    let redirectTarget = buildPostIsolationRedirect(req);
     try {
       await customerSvc.suspendCustomer(req.params.id);
       const customer = customerSvc.getCustomerById(req.params.id);
       const unpaidInvoices = customer ? billingSvc.getUnpaidInvoicesByCustomerId(customer.id) : [];
-      if (customer && customer.phone) {
-        const requestBaseUrl = resolveRequestBaseUrl(req);
-        await trySendWhatsappPayment(
-          customer.phone,
-          buildIsolationWhatsappMessage(
-            customer,
-            unpaidInvoices,
-            'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
-            { baseUrl: requestBaseUrl }
-          )
-        );
+      if (customer) {
+        queueManualIsolationNotifications({ req, customer, unpaidInvoices });
       }
-      req.session._msg = { type: 'success', text: `Pelanggan "${customer.name}" berhasil di-isolir manual.` };
+      req.session._msg = { type: 'success', text: `Pelanggan "${customer?.name || req.params.id}" berhasil di-isolir manual. Info internet dimatikan sudah masuk inbox pelanggan, push/WhatsApp sedang dikirim.` };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal isolir: ' + e.message };
+      redirectTarget = resolveAdminPathFromRequest(req, '/admin/customers');
     }
-    return redirectBack(res, '/admin/customers');
+    return forceAdminRedirect(res, redirectTarget);
   });
 
   router.post('/customers/:id/unisolate', requireAdminSession, async (req, res) => {

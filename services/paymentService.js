@@ -32,6 +32,10 @@ async function createTripayTransaction(invoice, customer, method = 'QRIS', appUr
   const privateKey = settings.tripay_private_key;
   const merchantCode = settings.tripay_merchant_code;
   const isLive = settings.tripay_mode === 'live' || settings.tripay_mode === 'production';
+
+  if (!apiKey || !privateKey || !merchantCode) {
+    throw new Error('Konfigurasi Tripay belum lengkap. Isi API Key, Private Key, dan Merchant Code.');
+  }
   
   const baseUrl = isLive 
     ? 'https://tripay.co.id/api/transaction/create' 
@@ -79,7 +83,8 @@ async function createTripayTransaction(invoice, customer, method = 'QRIS', appUr
 
   try {
     const res = await axios.post(baseUrl, payload, {
-      headers: { Authorization: `Bearer ${apiKey}` }
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: Math.max(5000, Math.min(30000, Number(process.env.TRIPAY_CREATE_TIMEOUT_MS || 15000) || 15000))
     });
     
     if (res.data && res.data.success) {
@@ -402,18 +407,21 @@ async function getTripayChannels() {
   const settings = getSettingsWithCache();
   const apiKey = settings.tripay_api_key;
   const isLive = settings.tripay_mode === 'live' || settings.tripay_mode === 'production';
+  if (!apiKey) return [];
   
   const baseUrl = isLive 
     ? 'https://tripay.co.id/api/merchant/payment-channel' 
     : 'https://tripay.co.id/api-sandbox/merchant/payment-channel';
+  const timeoutMs = Math.max(1000, Math.min(15000, Number(process.env.TRIPAY_CHANNEL_TIMEOUT_MS || 1800) || 1800));
 
   try {
     const res = await axios.get(baseUrl, {
-      headers: { Authorization: `Bearer ${apiKey}` }
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: timeoutMs
     });
     return res.data.success ? res.data.data : [];
   } catch (error) {
-    logger.error('[Tripay] Gagal ambil channel:', error.message);
+    logger.warn(`[Tripay] Gagal ambil channel dalam ${timeoutMs}ms: ${error.message || String(error)}`);
     return [];
   }
 }

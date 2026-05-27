@@ -5117,7 +5117,7 @@
     }
     body.admin-dashboard-page .dash-finance-hero-metrics{
       display:grid;
-      grid-template-columns:repeat(3,minmax(0,1fr));
+      grid-template-columns:repeat(5,minmax(0,1fr));
       gap:5px;
     }
     body.admin-dashboard-page .dash-finance-pill{
@@ -5158,6 +5158,15 @@
       line-height:1.2;
       color:rgba(255,255,255,.72);
     }
+    body.admin-dashboard-page .dash-finance-pill.is-expense strong{
+      color:#fecdd3;
+    }
+    body.admin-dashboard-page .dash-finance-pill.is-net strong{
+      color:#bbf7d0;
+    }
+    body.admin-dashboard-page .dash-finance-pill.is-net.is-minus strong{
+      color:#fecdd3;
+    }
     body.admin-dashboard-page[data-theme="light"] .dash-finance-hero{
       border-color:rgba(129,140,248,.18);
       box-shadow:0 24px 50px rgba(99,102,241,.18);
@@ -5187,7 +5196,7 @@
         font-size:11px;
       }
       body.admin-dashboard-page .dash-finance-hero-metrics{
-        grid-template-columns:repeat(3,minmax(0,1fr));
+        grid-template-columns:repeat(2,minmax(0,1fr));
       }
       body.admin-dashboard-page .dash-finance-pill strong{
         font-size:18px;
@@ -5265,7 +5274,7 @@
         font-size:8.5px;
       }
       body.admin-dashboard-page .dash-finance-hero-metrics{
-        grid-template-columns:repeat(3,minmax(0,1fr));
+        grid-template-columns:repeat(2,minmax(0,1fr));
         gap:8px;
       }
       body.admin-dashboard-page .dash-finance-pill{
@@ -5306,7 +5315,7 @@
         font-size:9.5px !important;
       }
       body.admin-dashboard-page .dash-finance-hero-metrics{
-        grid-template-columns:repeat(3,minmax(0,1fr));
+        grid-template-columns:repeat(2,minmax(0,1fr));
       }
     }
 
@@ -6589,7 +6598,9 @@
       <% const totalPriorityCustomers = Number(dashboardTopUnpaid.length || 0); %>
       <% const totalDueToday = Number(priorityTodayCount || 0); %>
       <% const totalOverdueHard = Number(prioritySevereCount || 0); %>
-      <% const monthlyRevenue = (typeof billing !== 'undefined' && billing) ? Number(billing.thisMonth || 0) : Number(finance.revenue || 0); %>
+      <% const monthlyRevenue = Number(finance.revenue || 0); %>
+      <% const monthlyExpense = Number(finance.expense_amount || 0); %>
+      <% const monthlyNet = Number(finance.net_amount || (monthlyRevenue - monthlyExpense)); %>
       <% const monthlyReceivable = Number(ops.pendingAmount || 0); %>
       <% const monthlyPaymentsToday = Number(paymentTodayAmount || 0); %>
       <% const dashboardCashierOnly = (typeof session !== 'undefined' && session.isCashier && !session.isAdmin); %>
@@ -6626,7 +6637,9 @@
               <p class="dash-finance-hero-value"><%= formatCompactRupiah(monthlyRevenue) %></p>
               <p class="dash-finance-hero-meta">
                 <strong><%= monthNamesDash[dashboardMonth - 1] %> <%= dashboardYear %></strong> fokus cashflow.
-                Piutang <strong><%= formatCompactRupiah(monthlyReceivable) %></strong>
+                Pengeluaran <strong><%= formatCompactRupiah(monthlyExpense) %></strong>
+                · Bersih <strong><%= formatCompactRupiah(monthlyNet) %></strong>
+                · Piutang <strong><%= formatCompactRupiah(monthlyReceivable) %></strong>
                 · Hari ini <strong><%= formatCompactRupiah(monthlyPaymentsToday) %></strong>
                 · <strong><%= Number(collectionRate || 0).toLocaleString('id-ID') %>%</strong> kolektibilitas.
               </p>
@@ -6641,6 +6654,16 @@
               <small>Pendapatan</small>
               <strong><%= formatCompactRupiah(monthlyRevenue) %></strong>
               <span><%= revenueDelta >= 0 ? 'Naik' : 'Turun' %> <%= formatCompactRupiah(Math.abs(revenueDelta)) %></span>
+            </div>
+            <div class="dash-finance-pill is-expense">
+              <small>Pengeluaran</small>
+              <strong><%= formatCompactRupiah(monthlyExpense) %></strong>
+              <span><%= Number(finance.expense_count || 0).toLocaleString('id-ID') %> transaksi</span>
+            </div>
+            <div class="dash-finance-pill is-net <%= monthlyNet < 0 ? 'is-minus' : '' %>">
+              <small>Bersih</small>
+              <strong><%= formatCompactRupiah(monthlyNet) %></strong>
+              <span><%= monthlyNet >= 0 ? 'Surplus' : 'Minus' %> bulan ini</span>
             </div>
             <div class="dash-finance-pill">
               <small>Piutang</small>
@@ -6745,6 +6768,7 @@
             <div class="dash-chart-legend">
               <span><i class="bi bi-circle-fill text-violet"></i> Pendapatan</span>
               <span><i class="bi bi-circle-fill text-info"></i> Pembayaran</span>
+              <span><i class="bi bi-circle-fill text-danger"></i> Pengeluaran</span>
             </div>
             <div class="dash-chart-surface">
               <canvas id="financeChart"></canvas>
@@ -7394,11 +7418,13 @@ function initFinanceChart() {
   const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
   const monthlyRevenue = new Array(12).fill(0);
   const monthlyPayments = new Array(12).fill(0);
+  const monthlyExpenses = new Array(12).fill(0);
   (Array.isArray(financeChartData) ? financeChartData : []).forEach((item) => {
     const month = Math.max(1, Math.min(12, Number(item?.month || 0)));
     if (!month) return;
     monthlyRevenue[month - 1] = Number(item?.revenue || 0);
     monthlyPayments[month - 1] = Number(item?.paid_amount || 0);
+    monthlyExpenses[month - 1] = Number(item?.expense_amount || 0);
   });
 
   if (financeChart) financeChart.destroy();
@@ -7428,6 +7454,19 @@ function initFinanceChart() {
           pointRadius: 3,
           pointHoverRadius: 6,
           pointBackgroundColor: '#38bdf8',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          fill: false,
+          tension: 0.35
+        },{
+          label: 'Pengeluaran',
+          data: monthlyExpenses,
+          borderColor: '#fb7185',
+          backgroundColor: 'rgba(251,113,133,.08)',
+          borderWidth: 3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          pointBackgroundColor: '#fb7185',
           pointBorderColor: '#ffffff',
           pointBorderWidth: 2,
           fill: false,

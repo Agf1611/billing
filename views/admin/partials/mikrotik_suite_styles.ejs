@@ -26,13 +26,17 @@
     .mikrotik-suite-page .stat-grid .sc-label{max-width:74%;font-size:10px;line-height:1.25;letter-spacing:.05em}
     .mikrotik-suite-page .stat-grid .sc-val{font-size:19px;line-height:1.05;margin-top:10px}
     @media (max-width: 768px) {
-      .topbar { align-items:flex-start; }
-      .topbar .tb-right { width:100%; }
-      .suite-topbar-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
-      .suite-topbar-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
-      .suite-topbar-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
-      .suite-topbar-shortcuts .btn,
-      .suite-topbar-shortcuts .adm-badge{justify-content:center}
+      .topbar{align-items:center}
+      .topbar .tb-right{width:auto;margin-left:auto}
+      .suite-topbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;width:auto}
+      .suite-topbar-main,
+      .suite-topbar-shortcuts{display:flex;align-items:center;justify-content:flex-end;gap:7px;width:auto;flex:0 0 auto}
+      .suite-topbar-main .router-selector,
+      .suite-topbar-main .suite-pill,
+      .suite-topbar-main .suite-note,
+      .suite-topbar-shortcuts .adm-badge{display:none}
+      .suite-topbar-shortcuts .btn{width:40px;min-width:40px;padding-inline:0;justify-content:center}
+      .suite-topbar-shortcuts .btn span{display:none}
       .mtabs { overflow:auto; padding-bottom:0; scrollbar-width:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; border-bottom:none; margin-bottom:12px; }
       .mtabs::-webkit-scrollbar { display:none; }
       .mtab { white-space:nowrap; justify-content:center; padding:10px 12px; border-radius:14px; text-align:center; }
@@ -48,8 +52,8 @@
     }
     @media (max-width: 520px) {
       .topbar { padding:12px 14px; border-radius:20px; }
-      .suite-topbar-main{grid-template-columns:minmax(0,1fr) 42px;gap:6px}
-      .suite-topbar-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+      .suite-topbar-main,
+      .suite-topbar-shortcuts{gap:6px}
       .suite-topbar-shortcuts .btn,
       .suite-topbar-shortcuts .adm-badge{min-height:38px;height:38px;font-size:11px}
       .suite-topbar-shortcuts .tb-theme-btn span,

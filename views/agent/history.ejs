@@ -1,0 +1,157 @@
+<%
+  const historyTxs = Array.isArray(txs) ? txs : [];
+  const txSummary = historyTxs.reduce((acc, tx) => {
+    const type = String(tx.type || '').toLowerCase();
+    const buy = Number(tx.amount_buy || 0);
+    const sell = Number(tx.amount_sell || 0);
+    const fee = Number(tx.fee || 0);
+    if (type === 'topup') {
+      acc.topupCount += 1;
+      acc.topupAmount += buy || sell;
+    } else if (type === 'voucher_sale') {
+      acc.voucherCount += 1;
+      acc.voucherCost += buy;
+      acc.voucherSell += sell;
+      acc.profit += Math.max(0, fee || (sell - buy));
+    } else if (type === 'invoice_payment') {
+      acc.invoiceCount += 1;
+      acc.invoiceAmount += sell || Number(tx.amount_invoice || 0);
+      acc.profit += Math.max(0, fee);
+    } else {
+      acc.otherCount += 1;
+    }
+    return acc;
+  }, {
+    topupCount: 0,
+    topupAmount: 0,
+    voucherCount: 0,
+    voucherCost: 0,
+    voucherSell: 0,
+    invoiceCount: 0,
+    invoiceAmount: 0,
+    otherCount: 0,
+    profit: 0
+  });
+  const txTypeInfo = (tx) => {
+    const type = String(tx.type || '').toLowerCase();
+    if (type === 'topup') return { label: 'Topup Saldo', icon: 'bi-plus-circle', sign: '+', tone: 's' };
+    if (type === 'voucher_sale') return { label: 'Jual Voucher', icon: 'bi-ticket-perforated', sign: '-', tone: 'w' };
+    if (type === 'invoice_payment') return { label: 'Bayar Tagihan', icon: 'bi-receipt-cutoff', sign: '-', tone: 'd' };
+    if (type === 'pulsa') return { label: 'Produk Digital', icon: 'bi-phone', sign: '-', tone: 'w' };
+    return { label: type.replace(/_/g, ' ').toUpperCase() || 'Transaksi', icon: 'bi-clock-history', sign: '', tone: '' };
+  };
+%>
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+    <section class="hero">
+      <h1>Riwayat Transaksi</h1>
+      <p>Semua mutasi agen: topup saldo, pembayaran tagihan, dan penjualan voucher.</p>
+    </section>
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-graph-up-arrow"></i> Ringkasan</h2>
+        <span class="pill"><%= historyTxs.length %> mutasi</span>
+      </div>
+      <div class="bd">
+        <div class="grid grid-2" style="margin-bottom:12px">
+          <div class="kpi">
+            <div class="lbl">Topup Saldo</div>
+            <div class="val">Rp <%= Number(txSummary.topupAmount || 0).toLocaleString('id-ID') %></div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">Jual Voucher</div>
+            <div class="val">Rp <%= Number(txSummary.voucherSell || 0).toLocaleString('id-ID') %></div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">Bayar Tagihan</div>
+            <div class="val">Rp <%= Number(txSummary.invoiceAmount || 0).toLocaleString('id-ID') %></div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">Estimasi Untung</div>
+            <div class="val">Rp <%= Number(txSummary.profit || profit || 0).toLocaleString('id-ID') %></div>
+          </div>
+        </div>
+
+        <% if (!historyTxs.length) { %>
+          <div class="empty">Belum ada transaksi.</div>
+        <% } else { %>
+          <div class="listx">
+            <% historyTxs.forEach(tx => {
+              const type = String(tx.type || '').toLowerCase();
+              const isTopup = type === 'topup';
+              const isVoucher = type === 'voucher_sale';
+              const isInvoice = type === 'invoice_payment';
+              const info = txTypeInfo(tx);
+              const mutationAmount = Number(isTopup ? (tx.amount_buy || tx.amount_sell || 0) : (tx.amount_buy || tx.amount_sell || 0));
+              const sellAmount = Number(tx.amount_sell || tx.amount_invoice || 0);
+              const costAmount = Number(tx.amount_buy || 0);
+              const voucherCount = Number(tx.voucher_count || 0);
+            %>
+              <div class="itemx">
+                <div class="item-head">
+                  <div style="min-width:0">
+                    <div class="t1"><i class="bi <%= info.icon %>"></i> <%= info.label %> #<%= tx.id %></div>
+                    <div class="t2"><%= tx.created_at ? new Date(tx.created_at).toLocaleString('id-ID') : '-' %></div>
+                    <div class="t2">
+                      <% if (isInvoice) { %>
+                        Invoice #<%= tx.invoice_id || '-' %> - <%= tx.customer_name || '-' %>
+                      <% } else if (isVoucher) { %>
+                        <%= tx.profile_name || 'Voucher' %><% if (tx.router_name) { %> - <%= tx.router_name %><% } %>
+                        <% if (voucherCount > 0) { %> - <%= voucherCount %> kode<% } else if (tx.voucher_code) { %> - kode <%= tx.voucher_code %><% } %>
+                      <% } else { %>
+                        <%= tx.note || '-' %>
+                      <% } %>
+                    </div>
+                    <% if (isVoucher) { %>
+                      <div class="t2">
+                        Harga jual Rp <%= sellAmount.toLocaleString('id-ID') %>
+                        - Potong saldo Rp <%= costAmount.toLocaleString('id-ID') %>
+                        - Untung Rp <%= Number(tx.fee || Math.max(0, sellAmount - costAmount)).toLocaleString('id-ID') %>
+                      </div>
+                      <% if (voucherCount > 0) { %>
+                        <div class="t2">Status: <%= Number(tx.voucher_sold_count || 0) %> terjual - <%= Number(tx.voucher_used_count || 0) %> digunakan</div>
+                      <% } %>
+                    <% } %>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="t1"><%= info.sign %>Rp <%= mutationAmount.toLocaleString('id-ID') %></div>
+                    <div class="t2">Saldo Rp <%= Number(tx.balance_after || 0).toLocaleString('id-ID') %></div>
+                  </div>
+                </div>
+                <div class="btn-row" style="margin-top:10px">
+                  <% if (type === 'topup' && tx.agent_topup_order_id) { %>
+                    <a class="btn-mini" href="/agent/topup/<%= tx.agent_topup_order_id %>"><i class="bi bi-qr-code"></i> Detail Topup</a>
+                  <% } else if (isInvoice) { %>
+                    <a class="btn-mini" href="/agent/print/tx/<%= tx.id %>" target="_blank"><i class="bi bi-printer"></i> Print Thermal</a>
+                  <% } else if (isVoucher) { %>
+                    <% if (tx.voucher_batch_id) { %>
+                      <a class="btn-mini" href="/agent/vouchers/batches/<%= tx.voucher_batch_id %>"><i class="bi bi-ticket-perforated"></i> Detail Voucher</a>
+                      <% if (Number(tx.voucher_count || 0) > 1) { %>
+                        <a class="btn-mini" href="/agent/vouchers/batches/<%= tx.voucher_batch_id %>/print" target="_blank" data-agent-print-confirm data-ready-count="<%= Math.max(0, Number(tx.voucher_count || 0) - Number(tx.voucher_sold_count || 0) - Number(tx.voucher_printed_count || 0)) %>" data-total-count="<%= Number(tx.voucher_count || 0) %>"><i class="bi bi-printer"></i> Print A4</a>
+                      <% } %>
+                    <% } %>
+                    <% if (tx.voucher_code) { %>
+                      <a class="btn-mini" href="/agent/print/tx/<%= tx.id %>" target="_blank"><i class="bi bi-receipt"></i> Print Thermal</a>
+                    <% } %>
+                  <% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'history' }) %>
+  <%- include('partials/scripts') %>
+</body>
+</html>

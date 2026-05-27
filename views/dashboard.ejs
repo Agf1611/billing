@@ -21,15 +21,19 @@
     if (/pppoe/i.test(raw)) return false;
     return true;
   }
+  const customerIdPrefix = String(settings?.customer_id_prefix || 'SCK').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'SCK';
+  const generatedCustomerCode = profileData.id ? `${customerIdPrefix}${profileData.id}` : '';
   const customerCode = String(
     [
       profileData.customer_code,
-      profileData.genieacs_tag,
-      /^\d{6,}$/.test(String(profileData.phone || '').trim()) ? profileData.phone : '',
-      /^\d{6,}$/.test(String(customerData.phone || '').trim()) ? customerData.phone : '',
-      profileData.id ? `ID ${profileData.id}` : ''
+      customerData.customer_code,
+      generatedCustomerCode
     ].find((value) => isSafePortalIdentity(value)) || '-'
   ).trim();
+  const portalBannerSlides = [1, 2, 3]
+    .map((idx) => String(settings?.[`customer_portal_banner_${idx}_url`] || '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
   const customerName = profileData.name || customerData.name || 'Pelanggan';
   const packageName = profileData.package_name || customerData.package_name || 'Paket Internet';
   const customerPhone = profileData.phone || customerData.phone || '-';
@@ -81,12 +85,13 @@
   const supportPhone = String(settings?.whatsapp_admin || settings?.admin_phone || settings?.company_phone || '').trim();
   const supportUrl = supportPhone ? buildWhatsAppLink(supportPhone) : '/customer/contact';
   const appNotif = (typeof notif !== 'undefined' ? notif : null) || null;
+  const settingsLocalNotif = (typeof settingsActionNotif !== 'undefined' && settingsActionNotif) ? settingsActionNotif : null;
   const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
   const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
   const pushFeatureEnabled = Boolean(settings?.onesignal_enabled && settings?.onesignal_app_id);
   const oneSignalAppId = String(settings?.onesignal_app_id || '').trim();
-  const oneSignalDirectEmbedEnabled = Boolean(pushFeatureEnabled && oneSignalAppId && [3001, 3002].includes(Number(settings?.server_port || 0)));
   const customerPushExternalId = profileData.id || customerData.id ? `customer-${profileData.id || customerData.id}` : '';
+  const oneSignalDirectEmbedEnabled = Boolean(pushFeatureEnabled && oneSignalAppId && customerPushExternalId);
   const recentActivities = [];
 
   function formatCurrency(value) {
@@ -465,6 +470,9 @@
       flex: 1 1 auto;
       min-width: 0;
       max-width: 100%;
+      min-height: 46px;
+      padding: 8px 14px;
+      gap: 10px;
     }
 
     .topbar-left,
@@ -592,6 +600,52 @@
       color: var(--app-text-soft) !important;
     }
 
+    html[data-theme="dark"] :is(.text-dark, .text-body, .text-black):not(.badge),
+    body[data-theme="dark"] :is(.text-dark, .text-body, .text-black):not(.badge) {
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] :is(.bg-white, .bg-light, .card, .modal-content, .dropdown-menu, .offcanvas, .popover, .list-group-item),
+    body[data-theme="dark"] :is(.bg-white, .bg-light, .card, .modal-content, .dropdown-menu, .offcanvas, .popover, .list-group-item) {
+      background: var(--app-surface) !important;
+      color: var(--app-text) !important;
+      border-color: var(--app-line) !important;
+    }
+
+    html[data-theme="dark"] :is(.dropdown-item, .modal-content, .offcanvas, .popover, .list-group-item, .card) :is(h1, h2, h3, h4, h5, h6, p, label, span, strong, small, div):not(.badge),
+    body[data-theme="dark"] :is(.dropdown-item, .modal-content, .offcanvas, .popover, .list-group-item, .card) :is(h1, h2, h3, h4, h5, h6, p, label, span, strong, small, div):not(.badge) {
+      color: inherit;
+    }
+
+    html[data-theme="dark"] :is(.text-muted, .text-secondary, .small, small),
+    body[data-theme="dark"] :is(.text-muted, .text-secondary, .small, small) {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] :is(.form-control, .form-select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select),
+    body[data-theme="dark"] :is(.form-control, .form-select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select) {
+      background-color: rgba(15, 23, 42, 0.92) !important;
+      color: var(--app-text) !important;
+      border-color: var(--app-line) !important;
+    }
+
+    html[data-theme="dark"] :is(.form-control, .form-select, textarea, input, select)::placeholder,
+    body[data-theme="dark"] :is(.form-control, .form-select, textarea, input, select)::placeholder {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] option,
+    body[data-theme="dark"] option {
+      background: var(--app-surface-strong);
+      color: var(--app-text);
+    }
+
+    html[data-theme="dark"] .btn-close,
+    body[data-theme="dark"] .btn-close {
+      filter: invert(1) grayscale(1) brightness(200%);
+      opacity: .8;
+    }
+
     html[data-theme="dark"] .notification-summary-card,
     body[data-theme="dark"] .notification-summary-card {
       background: rgba(18, 31, 53, 0.92);
@@ -704,6 +758,8 @@
     body[data-theme="dark"] .home-code,
     html[data-theme="dark"] .status-banner,
     body[data-theme="dark"] .status-banner,
+    html[data-theme="dark"] .portal-banner-slider,
+    body[data-theme="dark"] .portal-banner-slider,
     html[data-theme="dark"] .page-title,
     body[data-theme="dark"] .page-title {
       background: rgba(17, 27, 45, 0.82) !important;
@@ -746,6 +802,34 @@
     body[data-theme="dark"] .home-hero-card {
       background: linear-gradient(135deg, #1f5fde 0%, #2f7fff 46%, #1d4fcc 100%) !important;
       box-shadow: 0 26px 52px rgba(7, 18, 42, 0.38);
+    }
+
+    html[data-theme="dark"] .home-push-card,
+    body[data-theme="dark"] .home-push-card {
+      background: linear-gradient(135deg, rgba(47, 107, 255, 0.18), rgba(20, 184, 166, 0.1)) !important;
+      border-color: rgba(146, 176, 230, 0.14) !important;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
+    }
+
+    html[data-theme="dark"] .settings-form-alert,
+    body[data-theme="dark"] .settings-form-alert {
+      background: rgba(28, 165, 111, 0.16) !important;
+      border-color: rgba(91, 226, 166, 0.22) !important;
+      color: #8bf0bd !important;
+    }
+
+    html[data-theme="dark"] .settings-form-alert.danger,
+    body[data-theme="dark"] .settings-form-alert.danger {
+      background: rgba(242, 72, 91, 0.16) !important;
+      border-color: rgba(255, 135, 150, 0.22) !important;
+      color: #ffadba !important;
+    }
+
+    html[data-theme="dark"] .settings-form-alert.warning,
+    body[data-theme="dark"] .settings-form-alert.warning {
+      background: rgba(245, 158, 11, 0.16) !important;
+      border-color: rgba(255, 204, 117, 0.22) !important;
+      color: #ffd47f !important;
     }
 
     html[data-theme="dark"] .home-hero-info-box,
@@ -999,8 +1083,8 @@
     }
 
     .brand-chip img {
-      width: 18px;
-      height: 18px;
+      width: 28px;
+      height: 28px;
       object-fit: contain;
       flex: 0 0 auto;
     }
@@ -1014,7 +1098,7 @@
     }
 
     .brand-meta strong {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 800;
       letter-spacing: -0.02em;
       white-space: nowrap;
@@ -1023,7 +1107,7 @@
     }
 
     .brand-meta span {
-      font-size: 10px;
+      font-size: 10.5px;
       color: var(--app-text-soft);
       font-weight: 700;
       white-space: nowrap;
@@ -2477,6 +2561,75 @@
       font-weight: 800;
     }
 
+    .home-push-card {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 11px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(47, 107, 255, 0.12), rgba(20, 184, 166, 0.08));
+      border: 1px solid rgba(47, 107, 255, 0.16);
+      box-shadow: 0 14px 28px rgba(47, 107, 255, 0.1);
+    }
+
+    .home-push-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #2f6bff;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .home-push-copy {
+      min-width: 0;
+      display: grid;
+      gap: 2px;
+    }
+
+    .home-push-copy strong {
+      color: var(--app-text);
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.2;
+    }
+
+    .home-push-copy span {
+      color: var(--app-muted);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .home-push-button {
+      border: 0;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      background: linear-gradient(135deg, #2f6bff, #5f8fff);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+      box-shadow: 0 12px 22px rgba(47, 107, 255, 0.24);
+    }
+
+    .home-push-button.is-active,
+    .home-push-button:disabled {
+      background: rgba(32, 178, 107, 0.14);
+      color: #159456;
+      box-shadow: none;
+      opacity: 1;
+    }
+
     .home-hero-card {
       padding: 8px 10px;
       border-radius: 20px;
@@ -2742,6 +2895,62 @@
       display: none;
     }
 
+    .portal-banner-slider {
+      position: relative;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid rgba(145, 167, 216, 0.24);
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: 0 16px 34px rgba(54, 86, 152, 0.12);
+      min-height: 118px;
+    }
+
+    .portal-banner-track {
+      display: flex;
+      width: calc(100% * var(--banner-count, 1));
+      transform: translate3d(0, 0, 0);
+      transition: transform .45s ease;
+    }
+
+    .portal-banner-slide {
+      flex: 0 0 calc(100% / var(--banner-count, 1));
+      aspect-ratio: 16 / 7;
+      min-height: 118px;
+      background: linear-gradient(135deg, rgba(47, 107, 255, .08), rgba(19, 194, 150, .08));
+    }
+
+    .portal-banner-slide img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .portal-banner-dots {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 10px;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      pointer-events: none;
+    }
+
+    .portal-banner-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .7);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .16);
+      transition: width .22s ease, background .22s ease;
+    }
+
+    .portal-banner-dots span.active {
+      width: 20px;
+      background: #ffffff;
+    }
+
     .status-banner {
       display: flex;
       align-items: flex-start;
@@ -2992,6 +3201,23 @@
       font-size: 16px;
       font-weight: 800;
       letter-spacing: -0.03em;
+    }
+
+    html[data-theme="dark"] :is(.activity-item, .billing-item, .ticket-item, .detail-item, .device-item),
+    body[data-theme="dark"] :is(.activity-item, .billing-item, .ticket-item, .detail-item, .device-item) {
+      background: rgba(15, 23, 42, 0.72) !important;
+      border-color: var(--app-line) !important;
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] :is(.billing-code, .billing-amount, .item-text strong, .detail-item strong, .device-item strong, .item-meta strong),
+    body[data-theme="dark"] :is(.billing-code, .billing-amount, .item-text strong, .detail-item strong, .device-item strong, .item-meta strong) {
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] :is(.billing-period, .billing-detail-line, .item-text p, .detail-item span, .device-item span, .item-meta span),
+    body[data-theme="dark"] :is(.billing-period, .billing-detail-line, .item-text p, .detail-item span, .device-item span, .item-meta span) {
+      color: var(--app-text-soft) !important;
     }
 
     .notification-summary-grid {
@@ -3255,6 +3481,17 @@
       font-weight: 700;
     }
 
+    .notification-thumb {
+      width: 100%;
+      max-height: 120px;
+      border-radius: 16px;
+      object-fit: cover;
+      border: 1px solid rgba(47, 107, 255, 0.1);
+      background: rgba(47, 107, 255, 0.06);
+      margin-top: 2px;
+      box-shadow: 0 10px 22px rgba(85, 104, 148, 0.09);
+    }
+
     .notification-arrow {
       width: 32px;
       height: 32px;
@@ -3346,6 +3583,11 @@
       color: #fff;
       font-size: 18px;
       flex: 0 0 auto;
+    }
+
+    .notification-detail-avatar i {
+      font-size: 20px;
+      line-height: 1;
     }
 
     .notification-detail-sender strong {
@@ -3702,6 +3944,39 @@
       font-size: 11px;
       line-height: 1.45;
       color: var(--app-text-soft);
+    }
+
+    .settings-form-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(28, 165, 111, 0.1);
+      border: 1px solid rgba(28, 165, 111, 0.18);
+      color: #128052;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .settings-form-alert i {
+      margin-top: 1px;
+      font-size: 15px;
+      flex: 0 0 auto;
+    }
+
+    .settings-form-alert.danger {
+      background: rgba(242, 72, 91, 0.1);
+      border-color: rgba(242, 72, 91, 0.18);
+      color: #c73345;
+    }
+
+    .settings-form-alert.warning {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.18);
+      color: #a7660b;
     }
 
     .settings-inline-note {
@@ -4088,6 +4363,14 @@
       opacity: 0.65;
     }
 
+    html[data-theme="dark"] .modal-content.app-modal,
+    body[data-theme="dark"] .modal-content.app-modal {
+      background: linear-gradient(180deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.96) 100%) !important;
+      border-color: var(--app-line) !important;
+      color: var(--app-text) !important;
+      box-shadow: none;
+    }
+
     .payment-modal-list {
       display: grid;
       gap: 12px;
@@ -4280,6 +4563,34 @@
       grid-column: 1 / -1;
     }
 
+    html[data-theme="dark"] :is(.business-card, .business-info-card, .manual-payment-box),
+    body[data-theme="dark"] :is(.business-card, .business-info-card, .manual-payment-box) {
+      background: rgba(17, 24, 39, 0.94) !important;
+      border-color: var(--app-line) !important;
+      color: var(--app-text) !important;
+      box-shadow: none;
+    }
+
+    html[data-theme="dark"] .business-info-card,
+    body[data-theme="dark"] .business-info-card {
+      background: rgba(15, 23, 42, 0.72) !important;
+    }
+
+    html[data-theme="dark"] :is(.business-title, .business-head strong, .business-info-card span, .manual-payment-box h5, .manual-payment-line strong),
+    body[data-theme="dark"] :is(.business-title, .business-head strong, .business-info-card span, .manual-payment-box h5, .manual-payment-line strong) {
+      color: var(--app-text) !important;
+    }
+
+    html[data-theme="dark"] :is(.business-head span, .business-info-card strong, .manual-payment-line),
+    body[data-theme="dark"] :is(.business-head span, .business-info-card strong, .manual-payment-line) {
+      color: var(--app-text-soft) !important;
+    }
+
+    html[data-theme="dark"] .manual-payment-bank,
+    body[data-theme="dark"] .manual-payment-bank {
+      color: #9bb7ff !important;
+    }
+
     @media (min-width: 600px) {
       body.pwa-body {
         padding: 16px 0;
@@ -4300,6 +4611,14 @@
       .home-intro h1 { font-size: 14px; }
       .home-intro-line strong { font-size: 20px; }
       .home-code { font-size: 13px; }
+      .home-push-card {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 9px;
+      }
+      .home-push-button {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
       .hero-card { padding: 10px 10px; border-radius: 18px; }
       .hero-package { font-size: 18px; }
       .home-hero-grid { grid-template-columns: 1fr; }
@@ -4544,11 +4863,29 @@
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.__CUSTOMER_ONESIGNAL_DIRECT_APP_ID = <%- JSON.stringify(oneSignalAppId) %>;
+    window.__CUSTOMER_ONESIGNAL_EXTERNAL_ID = <%- JSON.stringify(customerPushExternalId) %>;
     OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: window.__CUSTOMER_ONESIGNAL_DIRECT_APP_ID,
-      });
-      window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED = true;
+      try {
+        window.__CUSTOMER_ONESIGNAL_INIT_PROMISE = window.__CUSTOMER_ONESIGNAL_INIT_PROMISE || (async function () {
+          await OneSignal.init({
+            appId: window.__CUSTOMER_ONESIGNAL_DIRECT_APP_ID,
+            notifyButton: { enable: false },
+            allowLocalhostAsSecureOrigin: true,
+            serviceWorkerPath: '/OneSignalSDKWorker.js',
+            serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+            serviceWorkerParam: { scope: '/' },
+            autoResubscribe: true
+          });
+          window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED = true;
+          return OneSignal;
+        })();
+        await window.__CUSTOMER_ONESIGNAL_INIT_PROMISE;
+        if (window.__CUSTOMER_ONESIGNAL_EXTERNAL_ID && typeof OneSignal.login === 'function') {
+          await OneSignal.login(window.__CUSTOMER_ONESIGNAL_EXTERNAL_ID);
+        }
+      } catch (error) {
+        console.warn('OneSignal pelanggan gagal dipasang:', error);
+      }
     });
   </script>
   <% } %>
@@ -4602,6 +4939,8 @@
         uploadBytes,
         downloadBytes,
         appNotif,
+        portalBannerSlides,
+        pushFeatureEnabled,
         hasRouterPortalAccess,
         formatDate,
         formatCurrency,
@@ -4876,11 +5215,11 @@
                   <i class="bi bi-app-indicator"></i>
                   <div>
                     <strong>Status Push</strong>
-                    <span id="pushStatusText">Belum dicek</span>
+                    <span id="pushStatusText" data-push-status-text>Belum dicek</span>
                   </div>
                 </div>
-                <button class="settings-submit" type="button" onclick="enableCustomerPushNotifications()">
-                  <i class="bi bi-bell"></i> Aktifkan Notifikasi
+                <button class="settings-submit" type="button" onclick="enableCustomerPushNotifications()" data-push-subscribe-button>
+                  <i class="bi bi-bell"></i> <span data-push-subscribe-label>Aktifkan Notifikasi</span>
                 </button>
               </div>
             <% } %>
@@ -5123,6 +5462,12 @@
               <button class="settings-submit" type="submit" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                 <i class="bi bi-broadcast-pin"></i> Simpan SSID
               </button>
+              <% if (settingsLocalNotif && settingsLocalNotif.target === 'ssid') { %>
+                <div class="settings-form-alert <%= settingsLocalNotif.type === 'danger' ? 'danger' : settingsLocalNotif.type === 'warning' ? 'warning' : '' %>">
+                  <i class="bi <%= settingsLocalNotif.type === 'danger' ? 'bi-x-circle-fill' : settingsLocalNotif.type === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill' %>"></i>
+                  <span><%= settingsLocalNotif.text %></span>
+                </div>
+              <% } %>
             </form>
 
             <form class="settings-form" method="POST" action="/customer/change-password">
@@ -5139,6 +5484,12 @@
               <button class="settings-submit" type="submit" <%= portalServiceActionLocked ? 'disabled' : '' %>>
                 <i class="bi bi-shield-lock"></i> Update Password
               </button>
+              <% if (settingsLocalNotif && settingsLocalNotif.target === 'password') { %>
+                <div class="settings-form-alert <%= settingsLocalNotif.type === 'danger' ? 'danger' : settingsLocalNotif.type === 'warning' ? 'warning' : '' %>">
+                  <i class="bi <%= settingsLocalNotif.type === 'danger' ? 'bi-x-circle-fill' : settingsLocalNotif.type === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill' %>"></i>
+                  <span><%= settingsLocalNotif.text %></span>
+                </div>
+              <% } %>
             </form>
           </div>
 
@@ -5418,11 +5769,14 @@
   <script>
     const INITIAL_NOTIFICATION_UNREAD = <%- JSON.stringify(notificationUnread) %>;
     const INITIAL_NOTIFICATION_ITEMS = <%- JSON.stringify(notificationItems) %>;
+    const CUSTOMER_PORTAL_ID = <%- JSON.stringify(profileData.id || '') %>;
+    const NOTIFICATION_AUTO_POPUP_KEY = `customer-latest-inbox-popup:${CUSTOMER_PORTAL_ID || 'guest'}`;
     let notificationState = {
       unreadCount: Number(INITIAL_NOTIFICATION_UNREAD || 0) || 0,
       items: Array.isArray(INITIAL_NOTIFICATION_ITEMS) ? INITIAL_NOTIFICATION_ITEMS : []
     };
     let notificationFilter = 'all';
+    let notificationAutoPopupBusy = false;
     let notificationPollTimer = null;
     let notificationToastTimer = null;
     let knownNotificationSignatures = new Set((notificationState.items || []).map((item) => `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`));
@@ -5501,8 +5855,20 @@
     }
 
     function setPushStatus(message) {
-      const node = document.getElementById('pushStatusText');
-      if (node) node.textContent = message;
+      document.querySelectorAll('[data-push-status-text]').forEach((node) => {
+        node.textContent = message;
+      });
+    }
+
+    function setPushActionState(isActive) {
+      document.querySelectorAll('[data-push-subscribe-button]').forEach((button) => {
+        button.classList.toggle('is-active', Boolean(isActive));
+        button.disabled = Boolean(isActive);
+        const label = button.querySelector('[data-push-subscribe-label]');
+        const icon = button.querySelector('i');
+        if (label) label.textContent = isActive ? 'Notifikasi Aktif' : 'Aktifkan Notifikasi';
+        if (icon) icon.className = `bi ${isActive ? 'bi-bell-fill' : 'bi-bell'}`;
+      });
     }
 
     function isSecurePushOrigin() {
@@ -5561,15 +5927,22 @@
           window.OneSignalDeferred.push(async (OneSignalInstance) => {
             try {
               if (!window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED) {
-                await OneSignalInstance.init({
-                  appId: ONESIGNAL_APP_ID,
-                  notifyButton: { enable: false },
-                  allowLocalhostAsSecureOrigin: true,
-                  serviceWorkerPath: '/OneSignalSDKWorker.js',
-                  serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
-                  serviceWorkerParam: { scope: '/' },
-                  autoResubscribe: true
-                });
+                window.__CUSTOMER_ONESIGNAL_INIT_PROMISE = window.__CUSTOMER_ONESIGNAL_INIT_PROMISE || (async function () {
+                  await OneSignalInstance.init({
+                    appId: ONESIGNAL_APP_ID,
+                    notifyButton: { enable: false },
+                    allowLocalhostAsSecureOrigin: true,
+                    serviceWorkerPath: '/OneSignalSDKWorker.js',
+                    serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+                    serviceWorkerParam: { scope: '/' },
+                    autoResubscribe: true
+                  });
+                  window.__CUSTOMER_ONESIGNAL_DIRECT_INITIALIZED = true;
+                  return OneSignalInstance;
+                })();
+              }
+              if (window.__CUSTOMER_ONESIGNAL_INIT_PROMISE) {
+                await window.__CUSTOMER_ONESIGNAL_INIT_PROMISE;
               }
               resolve(OneSignalInstance);
             } catch (error) {
@@ -5591,6 +5964,9 @@
           async register() {
             if (OneSignal?.Notifications?.requestPermission) {
               await OneSignal.Notifications.requestPermission();
+            }
+            if (OneSignal?.User?.PushSubscription?.optIn) {
+              await OneSignal.User.PushSubscription.optIn();
             }
             return buildOneSignalInfo(OneSignal);
           },
@@ -5650,6 +6026,7 @@
       const info = await syncCustomerPushIdentity();
       const optedIn = Boolean(info?.subscription?.optedIn);
       setPushStatus(optedIn ? 'Sudah aktif di aplikasi ini' : 'Belum diizinkan di aplikasi ini');
+      setPushActionState(optedIn);
       return info;
     }
 
@@ -5664,6 +6041,7 @@
         return;
       }
       setPushStatus('Meminta izin notifikasi...');
+      setPushActionState(false);
       try {
         if (pushBridge.userPrivacyConsent?.grant) {
           await pushBridge.userPrivacyConsent.grant();
@@ -5875,8 +6253,61 @@
       });
     }
 
-    function renderNotificationDetail(index) {
+    function getNotificationPopupKey(item) {
+      if (!item) return '';
+      return String(item.sourceId || item.id || `${item.kind || 'system'}|${item.title || ''}|${item.time || ''}`).trim();
+    }
+
+    function getLatestUnreadNotificationIndex() {
+      const items = Array.isArray(notificationState.items) ? notificationState.items : [];
+      let latest = { index: -1, time: -1 };
+      items.forEach((item, index) => {
+        if (!item || item.unread !== true) return;
+        const itemTime = Number(new Date(item.time || 0).getTime()) || Number(item.time || 0) || 0;
+        if (itemTime >= latest.time) latest = { index, time: itemTime };
+      });
+      return latest.index;
+    }
+
+    function shouldAutoOpenNotification(item) {
+      const key = getNotificationPopupKey(item);
+      if (!key) return false;
+      try {
+        return localStorage.getItem(NOTIFICATION_AUTO_POPUP_KEY) !== key;
+      } catch {
+        return true;
+      }
+    }
+
+    function rememberAutoOpenedNotification(item) {
+      const key = getNotificationPopupKey(item);
+      if (!key) return;
+      try {
+        localStorage.setItem(NOTIFICATION_AUTO_POPUP_KEY, key);
+      } catch {}
+    }
+
+    function maybeAutoOpenLatestNotification(reason = 'load') {
+      if (notificationAutoPopupBusy || !notificationModal) return false;
+      const items = Array.isArray(notificationState.items) ? notificationState.items : [];
+      const latestIndex = getLatestUnreadNotificationIndex();
+      if (latestIndex < 0) return false;
+      const latestItem = items[latestIndex];
+      if (!latestItem || !shouldAutoOpenNotification(latestItem)) return false;
+      notificationAutoPopupBusy = true;
+      rememberAutoOpenedNotification(latestItem);
+      renderNotificationDetail(latestIndex, { auto: true, reason });
+      notificationModal.show();
+      window.setTimeout(() => {
+        notificationAutoPopupBusy = false;
+      }, 500);
+      return true;
+    }
+
+    function renderNotificationDetail(index, options = {}) {
       const container = document.getElementById('notificationModalBodyContent');
+      const hint = document.getElementById('notificationModalHint');
+      const markAllButton = document.getElementById('markAllNotificationsBtn');
       if (!container) return;
       const items = Array.isArray(notificationState.items) ? notificationState.items : [];
       const item = items[Number(index)];
@@ -5889,6 +6320,11 @@
       const targetTab = item.tab || 'home';
       const body = String(item.body || '').trim() || 'Tidak ada isi pesan.';
       const bodyHtml = linkifyNotificationText(body);
+      const avatarHtml = item.kind === 'announcement'
+        ? '<i class="bi bi-megaphone-fill" aria-hidden="true"></i>'
+        : escapeNotificationHtml(getSenderInitials(sender.name));
+      if (hint) hint.textContent = options.auto ? 'Pesan terbaru' : 'Detail pesan';
+      if (markAllButton) markAllButton.hidden = true;
       container.innerHTML = `
         <article class="notification-detail">
           <div class="notification-detail-head">
@@ -5904,7 +6340,7 @@
             </div>
           </div>
           <div class="notification-detail-sender">
-            <span class="notification-detail-avatar">${escapeNotificationHtml(getSenderInitials(sender.name))}</span>
+            <span class="notification-detail-avatar">${avatarHtml}</span>
             <div>
               <strong>${escapeNotificationHtml(sender.name)}</strong>
               <span>${escapeNotificationHtml(sender.role)}</span>
@@ -6037,6 +6473,7 @@
       const listHtml = filteredItems.map((item) => {
         const itemIndex = items.indexOf(item);
         const sender = getNotificationSender(item);
+        const imageUrl = getNotificationImageUrl(item);
         return `
         <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-index="${itemIndex}">
           <span class="notification-icon">
@@ -6050,6 +6487,7 @@
             <strong>${escapeNotificationHtml(item.title || 'Info pelanggan')}</strong>
             <span class="notification-time">Dari ${escapeNotificationHtml(sender.name)}</span>
             <p>${escapeNotificationHtml(item.body || '')}</p>
+            ${imageUrl ? `<img class="notification-thumb" src="${escapeNotificationHtml(imageUrl)}" alt="Foto pengumuman">` : ''}
           </div>
           <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
         </button>
@@ -6099,6 +6537,7 @@
         renderNotificationUI();
         if (freshItems.length) {
           showNotificationToast(freshItems);
+          window.setTimeout(() => maybeAutoOpenLatestNotification('poll'), 150);
         }
         return true;
       } catch {
@@ -6332,6 +6771,25 @@
       }
     }
 
+    function initPortalBannerSlider() {
+      const slider = document.querySelector('[data-portal-banner-slider]');
+      if (!slider) return;
+      const track = slider.querySelector('.portal-banner-track');
+      const slides = Array.from(slider.querySelectorAll('.portal-banner-slide'));
+      const dots = Array.from(slider.querySelectorAll('[data-portal-banner-dot]'));
+      if (!track || slides.length <= 1) return;
+      let index = 0;
+      const render = () => {
+        track.style.transform = `translate3d(-${index * (100 / slides.length)}%, 0, 0)`;
+        dots.forEach((dot, dotIndex) => dot.classList.toggle('active', dotIndex === index));
+      };
+      window.setInterval(() => {
+        if (document.hidden) return;
+        index = (index + 1) % slides.length;
+        render();
+      }, 4200);
+    }
+
     window.addEventListener('error', () => {
       hideAppSplash(true);
     });
@@ -6393,8 +6851,10 @@
 
         setSpeedMeter('rx', 0);
         setSpeedMeter('tx', 0);
+        initPortalBannerSlider();
         renderNotificationUI();
         scheduleNotificationPolling();
+        window.setTimeout(() => maybeAutoOpenLatestNotification('load'), 450);
 
         const initialTab = getTabFromHash();
         openAppTab(initialTab, true);

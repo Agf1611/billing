@@ -165,7 +165,12 @@ function buildBalanceMap() {
       settlementIn: 0,
       settlementOut: 0,
       periodInvoiceIncome: 0,
-      periodExpense: 0
+      periodExpense: 0,
+      invoiceCount: 0,
+      manualCount: 0,
+      expenseCount: 0,
+      settlementInCount: 0,
+      settlementOutCount: 0
     });
   }
 
@@ -187,7 +192,12 @@ function buildBalanceMap() {
         settlementIn: 0,
         settlementOut: 0,
         periodInvoiceIncome: 0,
-        periodExpense: 0
+        periodExpense: 0,
+        invoiceCount: 0,
+        manualCount: 0,
+        expenseCount: 0,
+        settlementInCount: 0,
+        settlementOutCount: 0
       });
     } else if (label && !holderSeed.get(key).label) {
       holderSeed.get(key).label = label;
@@ -209,11 +219,14 @@ function buildBalanceMap() {
     if (String(entry.type || '').trim().toLowerCase() === 'income') {
       if (String(entry.source_type || '').trim().toLowerCase() === 'invoice') {
         bucket.invoiceIncome += amount;
+        bucket.invoiceCount += 1;
       } else {
         bucket.manualIncome += amount;
+        bucket.manualCount += 1;
       }
     } else {
       bucket.expense += amount;
+      bucket.expenseCount += 1;
     }
   }
 
@@ -227,7 +240,9 @@ function buildBalanceMap() {
     const fromBucket = ensureBucket(row.from_role, row.from_entity_id, row.from_label);
     const toBucket = ensureBucket(row.to_role, row.to_entity_id, row.to_label);
     fromBucket.settlementOut += amount;
+    fromBucket.settlementOutCount += 1;
     toBucket.settlementIn += amount;
+    toBucket.settlementInCount += 1;
   }
 
   return holderSeed;
@@ -260,6 +275,11 @@ function getCashBalances() {
       expense: Number(bucket.expense || 0),
       settlementIn: Number(bucket.settlementIn || 0),
       settlementOut: Number(bucket.settlementOut || 0),
+      invoiceCount: Number(bucket.invoiceCount || 0),
+      manualCount: Number(bucket.manualCount || 0),
+      expenseCount: Number(bucket.expenseCount || 0),
+      settlementInCount: Number(bucket.settlementInCount || 0),
+      settlementOutCount: Number(bucket.settlementOutCount || 0),
       currentBalance,
       statusLabel
     });
@@ -416,6 +436,75 @@ function listSettlements({ month = '', year = '', limit = 120 } = {}) {
     createdByName: row.created_by_name || '',
     createdAt: row.created_at || ''
   }));
+}
+
+function listCashHolderTransactions({ role = '', entityId = null, month = '', year = '', limit = 200 } = {}) {
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const normalizedEntityId = Number.isFinite(Number(entityId)) ? Number(entityId) : (normalizedRole === 'admin' ? 0 : null);
+  if (!normalizedRole) return [];
+  const maxLimit = Math.max(1, Math.min(parseInt(limit, 10) || 200, 500));
+
+  const entryParams = [];
+  const entryWhere = buildPeriodWhere('b.entry_date', month, year, entryParams);
+  entryParams.push(normalizedRole);
+  entryParams.push(normalizedEntityId == null ? -1 : normalizedEntityId);
+  const entryRows = db.prepare(`
+    SELECT b.*, c.name AS customer_name
+    FROM bookkeeping_entries b
+    LEFT JOIN customers c ON c.id = b.customer_id
+    ${entryWhere}
+      AND LOWER(COALESCE(b.holder_role, '')) = ?
+      AND COALESCE(b.holder_entity_id, -1) = ?
+    ORDER BY date(b.entry_date) DESC, b.id DESC
+    LIMIT ${maxLimit}
+  `).all(...entryParams).map((row) => ({
+    id: Number(row.id || 0),
+    date: row.entry_date || '',
+    title: row.description || row.customer_name || row.category || '-',
+    subtitle: [
+      row.category || '',
+      row.customer_name ? `Pelanggan ${row.customer_name}` : '',
+      row.source_type || 'manual'
+    ].filter(Boolean).join(' - '),
+    amount: Number(row.amount || 0),
+    type: String(row.type || '').trim().toLowerCase() === 'expense' ? 'expense' : 'income',
+    source: row.source_type || 'manual'
+  }));
+
+  const settlementParams = [];
+  const settlementWhere = buildPeriodWhere('s.settlement_date', month, year, settlementParams);
+  settlementParams.push(normalizedRole, normalizedEntityId == null ? -1 : normalizedEntityId, normalizedRole, normalizedEntityId == null ? -1 : normalizedEntityId);
+  const settlementRows = db.prepare(`
+    SELECT s.*
+    FROM cash_settlements s
+    ${settlementWhere}
+      AND (
+        (LOWER(COALESCE(s.from_role, '')) = ? AND COALESCE(s.from_entity_id, -1) = ?)
+        OR
+        (LOWER(COALESCE(s.to_role, '')) = ? AND COALESCE(s.to_entity_id, -1) = ?)
+      )
+    ORDER BY date(s.settlement_date) DESC, s.id DESC
+    LIMIT ${maxLimit}
+  `).all(...settlementParams).map((row) => {
+    const isOut = String(row.from_role || '').trim().toLowerCase() === normalizedRole
+      && Number(row.from_entity_id ?? -1) === (normalizedEntityId == null ? -1 : normalizedEntityId);
+    return {
+      id: Number(row.id || 0),
+      date: row.settlement_date || '',
+      title: isOut ? `Setor ke ${row.to_label || 'Admin'}` : `Setor dari ${row.from_label || 'Petugas'}`,
+      subtitle: [
+        row.notes || 'Setoran kas',
+        row.created_by_name ? `dicatat ${row.created_by_name}` : ''
+      ].filter(Boolean).join(' - '),
+      amount: Number(row.amount || 0),
+      type: isOut ? 'expense' : 'income',
+      source: 'settlement'
+    };
+  });
+
+  return entryRows.concat(settlementRows)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id || 0) - Number(a.id || 0))
+    .slice(0, maxLimit);
 }
 
 function createSettlement(data = {}) {
@@ -620,6 +709,7 @@ module.exports = {
   getCashBalances,
   getSettlementSummary,
   listSettlements,
+  listCashHolderTransactions,
   createSettlement,
   backfillBookkeepingHolders,
   getBookkeepingDashboard,

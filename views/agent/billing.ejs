@@ -1,0 +1,230 @@
+<%
+  const pageInvoices = Array.isArray(invoices) ? invoices : [];
+  const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const agentBalance = Number(agent?.balance || 0);
+  const agentFee = Math.max(0, Number(agent?.billing_fee || 0) || 0);
+  const logoSrc = String(typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png').trim() || '/img/logo.png';
+  const resultTotal = pageInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
+  const unpaidTotal = pageInvoices.reduce((sum, inv) => String(inv.status || '').toLowerCase() === 'paid' ? sum : sum + Number(inv.amount || 0), 0);
+%>
+<!DOCTYPE html>
+<html lang="<%= lang || 'id' %>">
+<head>
+  <%- include('partials/head', { title, company }) %>
+  <style>
+    .pay-check-hero{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr);
+      gap:14px;
+      align-items:center;
+      border:1px solid var(--border);
+      border-radius:26px;
+      padding:16px;
+      background:linear-gradient(135deg, rgba(20,184,166,.16), rgba(37,99,235,.16)), var(--panel);
+      box-shadow:var(--shadow);
+    }
+    .pay-check-logo{
+      width:64px;
+      height:64px;
+      border-radius:20px;
+      display:grid;
+      place-items:center;
+      background:#fff;
+      border:1px solid rgba(148,163,184,.18);
+      overflow:hidden;
+    }
+    .pay-check-logo img{max-width:88%;max-height:88%;display:block;object-fit:contain}
+    .pay-check-title{min-width:0}
+    .pay-check-title h1{margin:0;font-size:22px;font-weight:950;letter-spacing:-.02em}
+    .pay-check-title .sub{margin:5px 0 0;color:var(--muted);font-size:12px;font-weight:800}
+    .pay-kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+    .pay-kpi{
+      border:1px solid rgba(148,163,184,.14);
+      border-radius:18px;
+      background:rgba(255,255,255,.045);
+      padding:12px;
+      min-width:0;
+    }
+    .pay-kpi span{display:block;color:var(--muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    .pay-kpi strong{display:block;margin-top:5px;font-size:15px;font-weight:950;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pay-search-form{display:grid;grid-template-columns:minmax(0,1fr) 54px;gap:10px}
+    .pay-search-form .btn-action{min-width:54px;padding:0}
+    .payment-list{display:grid;gap:12px}
+    .payment-card{
+      border:1px solid rgba(148,163,184,.16);
+      border-radius:22px;
+      background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+      overflow:hidden;
+    }
+    .payment-card-head{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:12px;
+      align-items:start;
+      padding:14px;
+      border-bottom:1px solid rgba(148,163,184,.12);
+    }
+    .customer-name{font-size:16px;font-weight:950;line-height:1.25;overflow-wrap:anywhere}
+    .customer-meta{margin-top:5px;color:var(--muted);font-size:11px;font-weight:800;line-height:1.5}
+    .invoice-total{text-align:right;white-space:nowrap}
+    .invoice-total strong{display:block;font-size:18px;font-weight:950;color:#7dd3fc}
+    html[data-theme="light"] .invoice-total strong{color:#1d4ed8}
+    .payment-card-body{padding:14px;display:grid;gap:12px}
+    .pay-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .pay-detail{
+      border:1px solid rgba(148,163,184,.13);
+      border-radius:15px;
+      background:rgba(255,255,255,.035);
+      padding:10px;
+      min-width:0;
+    }
+    .pay-detail span{display:block;color:var(--muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    .pay-detail strong{display:block;margin-top:4px;font-size:12px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}
+    .pay-method-box{
+      border:1px solid rgba(20,184,166,.22);
+      border-radius:17px;
+      background:linear-gradient(135deg, rgba(20,184,166,.10), rgba(37,99,235,.08));
+      padding:11px 12px;
+      display:grid;
+      gap:8px;
+    }
+    .method-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:900}
+    .method-row span{color:var(--muted)}
+    .method-row strong{text-align:right}
+    .pay-note-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,190px);gap:8px}
+    .pay-note-row .btn-action{min-height:48px}
+    .paid-info{
+      border:1px solid rgba(34,197,94,.26);
+      border-radius:17px;
+      background:rgba(34,197,94,.10);
+      padding:11px 12px;
+      color:#bbf7d0;
+      font-size:12px;
+      font-weight:900;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    html[data-theme="light"] .paid-info{color:#166534;background:#dcfce7}
+    @media(max-width:640px){
+      .pay-check-hero{grid-template-columns:auto minmax(0,1fr);border-radius:22px;padding:14px}
+      .pay-check-logo{width:54px;height:54px;border-radius:17px}
+      .pay-check-title h1{font-size:20px}
+      .pay-kpi-row{grid-template-columns:1fr}
+      .payment-card-head{grid-template-columns:1fr}
+      .invoice-total{text-align:left}
+      .pay-detail-grid{grid-template-columns:1fr}
+      .pay-note-row{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <%- include('partials/topbar', { agent, company }) %>
+  <main class="wrap">
+    <% if (msg) { %>
+      <div class="alert-agent alert-<%= msg.type === 'error' ? 'danger' : msg.type === 'warning' ? 'warning' : 'success' %>"><%= msg.text %></div>
+    <% } %>
+
+    <section class="pay-check-hero">
+      <div class="pay-check-logo">
+        <img src="<%= logoSrc %>" alt="<%= company %>">
+      </div>
+      <div class="pay-check-title">
+        <h1>Cek Pembayaran</h1>
+        <div class="sub"><%= company %></div>
+      </div>
+    </section>
+
+    <div class="pay-kpi-row">
+      <div class="pay-kpi"><span>Saldo Agent</span><strong>Rp <%= agentBalance.toLocaleString('id-ID') %></strong></div>
+      <div class="pay-kpi"><span>Biaya Admin</span><strong>Rp <%= agentFee.toLocaleString('id-ID') %></strong></div>
+      <div class="pay-kpi"><span>Tagihan Belum Lunas</span><strong>Rp <%= unpaidTotal.toLocaleString('id-ID') %></strong></div>
+    </div>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-search"></i> Cari Pelanggan</h2>
+        <% if (q) { %><span class="pill"><%= pageInvoices.length %> data</span><% } %>
+      </div>
+      <div class="bd">
+        <form method="GET" action="/agent/billing" class="pay-search-form">
+          <input class="form-control" type="text" name="q" value="<%= q || '' %>" placeholder="Nama / nomor HP / PPPoE / tag" autocomplete="off">
+          <button class="btn-action" type="submit" aria-label="Cari"><i class="bi bi-search"></i></button>
+        </form>
+      </div>
+    </section>
+
+    <section class="cardx">
+      <div class="hd">
+        <h2><i class="bi bi-receipt-cutoff"></i> Detail Tagihan</h2>
+        <% if (q && pageInvoices.length) { %><span class="pill">Rp <%= resultTotal.toLocaleString('id-ID') %></span><% } %>
+      </div>
+      <div class="bd">
+        <% if (!q) { %>
+          <div class="empty">Masukkan kata kunci pencarian.</div>
+        <% } else if (!pageInvoices.length) { %>
+          <div class="empty">Data tidak ditemukan.</div>
+        <% } else { %>
+          <div class="payment-list">
+            <% pageInvoices.forEach(inv => {
+              const isPaid = String(inv.status || '').toLowerCase() === 'paid';
+              const amount = Number(inv.amount || 0);
+              const debit = Math.max(0, amount - agentFee);
+              const hasEnough = agentBalance >= debit;
+              const periodLabel = `${monthNames[Math.max(0, Math.min(11, Number(inv.period_month || 1) - 1))]} ${inv.period_year || ''}`.trim();
+              const paidBy = String(inv.paid_by_name || inv.payment_gateway || '').trim();
+            %>
+              <article class="payment-card">
+                <div class="payment-card-head">
+                  <div>
+                    <div class="customer-name"><%= inv.customer_name || '-' %></div>
+                    <div class="customer-meta"><%= inv.customer_phone || '-' %> &bull; <%= inv.package_name || 'Internet' %></div>
+                  </div>
+                  <div class="invoice-total">
+                    <strong>Rp <%= amount.toLocaleString('id-ID') %></strong>
+                    <span class="badgey <%= isPaid ? 's' : 'd' %>"><%= isPaid ? 'Lunas' : 'Belum Bayar' %></span>
+                  </div>
+                </div>
+
+                <div class="payment-card-body">
+                  <div class="pay-detail-grid">
+                    <div class="pay-detail"><span>Invoice</span><strong>#<%= inv.id %></strong></div>
+                    <div class="pay-detail"><span>Periode</span><strong><%= periodLabel %></strong></div>
+                    <div class="pay-detail"><span>Status Pelanggan</span><strong><%= inv.customer_status || '-' %></strong></div>
+                    <div class="pay-detail"><span>Router</span><strong><%= inv.router_name || '-' %></strong></div>
+                    <div class="pay-detail"><span>PPPoE / Tag</span><strong><%= inv.pppoe_username || inv.genieacs_tag || '-' %></strong></div>
+                    <div class="pay-detail"><span>Alamat</span><strong><%= inv.customer_address || inv.address || '-' %></strong></div>
+                  </div>
+
+                  <% if (isPaid) { %>
+                    <div class="paid-info">
+                      <span><i class="bi bi-check-circle"></i> Pembayaran lunas</span>
+                      <strong><%= paidBy || (inv.paid_at || '-') %></strong>
+                    </div>
+                  <% } else { %>
+                    <div class="pay-method-box">
+                      <div class="method-row"><span>Metode</span><strong>Saldo Agent</strong></div>
+                      <div class="method-row"><span>Potong Saldo</span><strong>Rp <%= debit.toLocaleString('id-ID') %></strong></div>
+                      <div class="method-row"><span>Saldo Setelah Bayar</span><strong>Rp <%= Math.max(0, agentBalance - debit).toLocaleString('id-ID') %></strong></div>
+                    </div>
+                    <form method="POST" action="/agent/pay-invoice" class="pay-note-row">
+                      <input type="hidden" name="invoice_id" value="<%= inv.id %>">
+                      <input class="form-control" type="text" name="note" placeholder="Catatan" autocomplete="off">
+                      <button class="btn-action" type="submit" <%= hasEnough ? '' : 'disabled style="opacity:.62"' %>>
+                        <i class="bi bi-wallet2"></i> <%= hasEnough ? 'Bayar' : 'Saldo Kurang' %>
+                      </button>
+                    </form>
+                  <% } %>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </main>
+  <%- include('partials/bottom_nav', { activeAgentPage: 'billing' }) %>
+  <%- include('partials/scripts') %>
+</body>
+</html>

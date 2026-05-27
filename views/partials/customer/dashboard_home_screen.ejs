@@ -44,6 +44,20 @@
       </div>
     <% } %>
 
+    <% if (typeof pushFeatureEnabled !== 'undefined' && pushFeatureEnabled) { %>
+      <div class="home-push-card" id="homePushSubscribeCard">
+        <div class="home-push-icon"><i class="bi bi-bell-fill"></i></div>
+        <div class="home-push-copy">
+          <strong>Notifikasi Portal</strong>
+          <span data-push-status-text>Belum dicek</span>
+        </div>
+        <button class="home-push-button" type="button" onclick="enableCustomerPushNotifications()" data-push-subscribe-button>
+          <i class="bi bi-bell"></i>
+          <span data-push-subscribe-label>Aktifkan Notifikasi</span>
+        </button>
+      </div>
+    <% } %>
+
     <div class="hero-card home-hero-card">
       <div class="home-hero-grid">
         <div class="home-hero-top">
@@ -128,5 +142,24 @@
         </button>
       </div>
     </div>
+
+    <% if (Array.isArray(portalBannerSlides) && portalBannerSlides.length) { %>
+      <div class="portal-banner-slider" data-portal-banner-slider>
+        <div class="portal-banner-track" style="--banner-count:<%= portalBannerSlides.length %>">
+          <% portalBannerSlides.forEach((bannerUrl, index) => { %>
+            <div class="portal-banner-slide">
+              <img src="<%= bannerUrl %>" alt="Banner <%= index + 1 %>" loading="lazy">
+            </div>
+          <% }) %>
+        </div>
+        <% if (portalBannerSlides.length > 1) { %>
+          <div class="portal-banner-dots" aria-hidden="true">
+            <% portalBannerSlides.forEach((_, index) => { %>
+              <span class="<%= index === 0 ? 'active' : '' %>" data-portal-banner-dot="<%= index %>"></span>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    <% } %>
   </div>
 </section>

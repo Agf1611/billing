@@ -1,0 +1,17 @@
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">
+      <div class="icon"><i class="bi bi-person-badge"></i></div>
+      <div style="min-width:0">
+        <p class="title">Agent: <%= agent?.name || '-' %></p>
+        <p class="sub"><%= company %></p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="theme-toggle" id="agentThemeToggle" aria-label="Ganti tema portal agent">
+        <i class="bi bi-sun"></i>
+      </button>
+      <a href="/agent/logout" class="icon-btn" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></a>
+    </div>
+  </div>
+</div>

@@ -66,6 +66,12 @@
   const dueDate = new Date(Number(invoice?.period_year || now.getFullYear()), Number(invoice?.period_month || (now.getMonth() + 1)) - 1, dueDay);
   const invoiceCode = `INV-${invoice.id}-${invoice.period_month}-${invoice.period_year}`;
   const printTarget = printBasePath || '';
+  function printStyleUrl(styleName) {
+    const base = String(printTarget || '').trim();
+    if (!base) return '#';
+    const cleanStyle = String(styleName || 'a4').toLowerCase() === 'receipt' ? 'receipt' : 'a4';
+    return `${base}${base.includes('?') ? '&' : '?'}style=${cleanStyle}`;
+  }
   const normalizedStatus = String(invoice?.status || '').trim().toLowerCase();
   const isPaid = normalizedStatus === 'paid' || normalizedStatus === 'lunas';
   const statusText = isPaid ? 'LUNAS' : 'BELUM LUNAS';
@@ -75,11 +81,15 @@
   const amountLabel = isPaid ? 'Total Dibayar' : 'Total Tagihan';
   const paymentInfoTitle = isPaid ? 'Informasi Pembayaran' : 'Cara Pembayaran';
   const footerDocText = isPaid ? 'Dokumen bukti pembayaran pelanggan yang sah.' : 'Dokumen tagihan pelanggan yang sah.';
+  const paidByDisplay = String(invoice?.paid_by_name || '').trim() || 'Admin';
   const packageName = customer?.package_name || 'Internet Service';
-  const customerCode = customer?.customer_code || customer?.phone || customer?.genieacs_tag || customer?.pppoe_username || customer?.id || '-';
+  const invoiceCustomerPrefix = String(settings?.customer_id_prefix || 'SCK').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'SCK';
+  const customerCode = customer?.customer_code || (customer?.id ? `${invoiceCustomerPrefix}${customer.id}` : '-');
   const customerPhoneDisplay = formatPhoneLocal(customer?.phone || '');
   const customerAddress = String(customer?.address || customer?.install_address || '').trim() || '-';
   const invoicePeriodLabel = `${shortMns[Number(invoice.period_month) - 1] || invoice.period_month} ${invoice.period_year}`;
+  const receiptDateLabel = (paidDate || invoiceDate).toLocaleDateString('id-ID');
+  const dueDateLabel = dueDate.toLocaleDateString('id-ID');
   const invoiceServiceLabel = `${packageName} - Periode ${invoicePeriodLabel}`;
   const invoiceAmount = Number(invoice?.amount || 0);
   const packageIncludePpn = Number(customer?.package_include_ppn || 0) === 1;
@@ -95,6 +105,7 @@
   const invoiceUniqueAmount = Number(invoice?.qris_amount_unique || 0) || 0;
   const invoiceUniqueCode = Number(invoice?.qris_unique_code || 0) || 0;
   const supportBrandName = settings?.upstream_provider_name || companyLegalName || companyName;
+  const receiptSupportBrandName = String(settings?.upstream_provider_name || companyLegalName || companyName || '').trim();
   const showSupportFooter = supportByEnabled && String(supportBrandName || '').trim().length > 0;
   const supportLines = [companyAddress, companyPhone !== '-' ? `Telp/WA: ${companyPhone}` : '', companyEmail ? `Email: ${companyEmail}` : ''].filter(Boolean);
 %>
@@ -398,6 +409,61 @@
       font-size:10.5px;
       line-height:1.35;
     }
+    .paid-proof-card{
+      display:grid;
+      gap:8px;
+      padding:10px 11px;
+      border-radius:6px;
+      border:1px solid rgba(22,163,74,.2);
+      background:#f0fdf4;
+      color:#14532d;
+    }
+    .paid-proof-title{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .paid-proof-status{
+      display:inline-flex;
+      border-radius:999px;
+      padding:5px 9px;
+      background:#16a34a;
+      color:#fff;
+      font-size:10px;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .paid-proof-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:7px;
+    }
+    .paid-proof-item{
+      padding:8px;
+      border-radius:6px;
+      background:#fff;
+      border:1px solid rgba(22,163,74,.14);
+    }
+    .paid-proof-item span{
+      display:block;
+      margin-bottom:4px;
+      color:#15803d;
+      font-size:9px;
+      font-weight:800;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+    .paid-proof-item strong{
+      display:block;
+      color:#0f172a;
+      font-size:10.5px;
+      line-height:1.3;
+    }
     .info-list{
       margin:0;
       padding-left:16px;
@@ -534,69 +600,131 @@
     }
 
     .receipt-page{
-      max-width:70mm;
+      width:min(100%, 460px);
       margin:0 auto;
       background:#fff;
-      border-radius:24px;
+      border-radius:14px;
       box-shadow:var(--shadow);
-      padding:18px 14px 20px;
-      font-family:"Courier New", monospace;
+      padding:14px 14px 15px;
+      font-family:"Courier New", Courier, monospace;
       color:#000;
+      border:1px solid #e2e8f0;
     }
     .receipt-logo{
-      width:62px;
-      height:62px;
+      width:58px;
+      height:58px;
       object-fit:contain;
       display:block;
-      margin:0 auto 8px;
+      margin:0 auto 6px;
     }
     .receipt-center{text-align:center;}
     .receipt-title{
-      font-size:16px;
-      font-weight:800;
+      font-size:17px;
+      font-weight:900;
       text-transform:uppercase;
-      margin:0 0 4px;
+      margin:0 0 3px;
     }
     .receipt-sub{
-      font-size:10px;
-      line-height:1.45;
-      color:#111;
+      font-size:10.5px;
+      line-height:1.32;
+      color:#000;
+      font-weight:700;
     }
     .receipt-divider{
-      border-bottom:1px dashed #000;
-      margin:10px 0;
+      border-bottom:1px dashed #111;
+      margin:7px 0;
+    }
+    .receipt-section-title{
+      font-size:15px;
+      font-weight:900;
+      text-align:center;
+      text-transform:uppercase;
+      margin:4px 0 8px;
+      color:#000;
+    }
+    .receipt-box{
+      border:1px dashed #333;
+      border-radius:6px;
+      padding:8px 8px;
+      margin:6px 0;
+      background:#fff;
     }
     .receipt-row{
       display:flex;
       justify-content:space-between;
-      gap:10px;
-      font-size:11px;
-      margin:4px 0;
+      align-items:flex-start;
+      gap:12px;
+      font-size:18px;
+      line-height:1.22;
+      margin:6px 0;
+      color:#000;
+      font-weight:900;
     }
-    .receipt-row strong{ font-size:12px; }
+    .receipt-row span{
+      flex:1 1 42%;
+      min-width:0;
+    }
+    .receipt-row strong{
+      flex:1 1 58%;
+      font-size:18px;
+      line-height:1.22;
+      font-weight:900;
+      color:#000;
+      text-align:right;
+      overflow-wrap:anywhere;
+    }
     .receipt-total{
-      font-size:15px;
+      border-top:2px solid #0f172a;
+      border-bottom:2px solid #0f172a;
+      padding:7px 0;
+      font-size:20px;
+      font-weight:900;
+      text-align:right;
+      margin-top:10px;
+      color:#000;
+    }
+    .receipt-paid-box{
+      border:1px dashed #16a34a;
+      background:#fff;
+      border-radius:6px;
+      padding:6px 8px;
+      margin-top:7px;
+      text-align:center;
+      font-size:12px;
+      line-height:1.35;
+      color:#000;
+    }
+    .receipt-paid-box .paid-stamp{
+      display:inline-block;
+      border:1px solid #22c55e;
+      border-radius:999px;
+      padding:4px 12px;
+      margin-bottom:5px;
+      font-size:12px;
+      font-weight:900;
+      letter-spacing:.18em;
+    }
+    .receipt-foot{
+      margin-top:12px;
+      text-align:center;
+      font-size:10px;
+      line-height:1.35;
+      color:#000;
       font-weight:800;
-      text-align:right;
-      margin-top:6px;
     }
-    .receipt-sign{
-      margin-top:16px;
-      text-align:right;
-      font-size:11px;
-    }
-    .receipt-sign img{
-      max-width:110px;
-      max-height:48px;
-      object-fit:contain;
-      display:block;
-      margin:6px 0 6px auto;
+    .receipt-support{
+      margin-top:4px;
+      text-align:center;
+      font-size:10.5px;
+      line-height:1.25;
+      color:#000;
+      font-weight:900;
     }
 
     @media print{
       @page{
-        size: <%= activeStyle === 'receipt' ? '80mm auto' : 'A4' %>;
-        margin:<%= activeStyle === 'receipt' ? '4mm' : '6mm' %>;
+        size: <%= activeStyle === 'receipt' ? '58mm auto' : 'A4' %>;
+        margin:<%= activeStyle === 'receipt' ? '0' : '6mm' %>;
       }
       body{
         background:#fff;
@@ -607,9 +735,29 @@
       .receipt-page{
         box-shadow:none;
         border-radius:0;
-        width:auto;
+        width:<%= activeStyle === 'receipt' ? '58mm' : 'auto' %>;
         min-height:auto;
         margin:0;
+        border:0;
+        padding:<%= activeStyle === 'receipt' ? '1.5mm' : '0' %>;
+      }
+      .receipt-section-title{
+        font-size:<%= activeStyle === 'receipt' ? '13.5px' : '15px' %>;
+      }
+      .receipt-box{
+        padding:<%= activeStyle === 'receipt' ? '6px 5px' : '8px' %>;
+      }
+      .receipt-row,
+      .receipt-row strong{
+        font-size:<%= activeStyle === 'receipt' ? '15.5px' : '18px' %>;
+        line-height:1.2;
+      }
+      .receipt-row{
+        gap:<%= activeStyle === 'receipt' ? '7px' : '12px' %>;
+        margin:<%= activeStyle === 'receipt' ? '5px 0' : '6px 0' %>;
+      }
+      .receipt-total{
+        font-size:<%= activeStyle === 'receipt' ? '18px' : '20px' %>;
       }
       .sheet-head{ padding-top:6px; }
       .sheet-foot{ padding-bottom:5px; }
@@ -627,63 +775,89 @@
 <body>
   <div class="top-actions">
     <% if (printTarget) { %>
-      <a class="<%= activeStyle === 'a4' ? '' : 'alt' %>" href="<%= printTarget %>?style=a4">Mode A4</a>
-      <a class="<%= activeStyle === 'receipt' ? '' : 'alt' %>" href="<%= printTarget %>?style=receipt">Mode Struk</a>
+      <a class="<%= activeStyle === 'a4' ? '' : 'alt' %>" href="<%= printStyleUrl('a4') %>">Mode A4</a>
+      <a class="<%= activeStyle === 'receipt' ? '' : 'alt' %>" href="<%= printStyleUrl('receipt') %>">Mode Struk</a>
+    <% } %>
+    <% if (activeStyle === 'receipt') { %>
+      <button type="button" id="saveReceiptBtn">Simpan Gambar</button>
+      <button type="button" id="shareReceiptBtn">Bagikan Gambar</button>
     <% } %>
     <button type="button" class="alt" onclick="window.print()">Print</button>
   </div>
 
   <% if (activeStyle === 'receipt') { %>
-    <div class="receipt-page">
+    <div class="receipt-page" id="receiptCapture">
       <img class="receipt-logo" src="<%= companyLogo %>" alt="Logo" onerror="this.style.display='none'">
       <div class="receipt-center">
         <div class="receipt-title"><%= companyName %></div>
-        <% if (companyLegalName) { %><div class="receipt-sub"><%= companyLegalName %></div><% } %>
-        <div class="receipt-sub"><%= companyAddress %></div>
         <div class="receipt-sub">Telp/WA: <%= companyPhone %></div>
+        <% if (companyAddress) { %>
+          <div class="receipt-sub"><%= companyAddress %></div>
+        <% } %>
       </div>
 
       <div class="receipt-divider"></div>
 
-      <div class="receipt-center" style="font-weight:800;"><%= isPaid ? 'STRUK PEMBAYARAN' : 'STRUK TAGIHAN' %></div>
-      <div class="receipt-row"><span>No. Invoice</span><strong><%= invoiceCode %></strong></div>
-      <div class="receipt-row"><span><%= isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih' %></span><strong><%= (paidDate || invoiceDate).toLocaleString('id-ID') %></strong></div>
-      <div class="receipt-row"><span>Status</span><strong><%= statusText %></strong></div>
+      <div class="receipt-section-title"><%= isPaid ? 'STRUK PEMBAYARAN' : 'STRUK TAGIHAN' %></div>
+      <div class="receipt-box">
+        <div class="receipt-row"><span>No. Invoice</span><strong><%= invoiceCode %></strong></div>
+        <div class="receipt-row"><span><%= isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih' %></span><strong><%= receiptDateLabel %></strong></div>
+        <div class="receipt-row"><span>Status</span><strong><%= statusText %></strong></div>
+      </div>
 
       <div class="receipt-divider"></div>
 
-      <div class="receipt-row"><span>Pelanggan</span><strong><%= customer.name %></strong></div>
-      <div class="receipt-row"><span>ID Pelanggan</span><strong><%= customerCode %></strong></div>
-      <div class="receipt-row"><span>Paket</span><strong><%= packageName %></strong></div>
-      <div class="receipt-row"><span>Periode</span><strong><%= invoicePeriodLabel %></strong></div>
-      <div class="receipt-row"><span>Jatuh Tempo</span><strong><%= dueDate.toLocaleDateString('id-ID') %></strong></div>
+      <div class="receipt-section-title">Data Pelanggan</div>
+      <div class="receipt-box">
+        <div class="receipt-row"><span>ID Pelanggan</span><strong><%= customerCode %></strong></div>
+        <div class="receipt-row"><span>Nama</span><strong><%= customer.name %></strong></div>
+        <% if (customerPhoneDisplay && customerPhoneDisplay !== '-') { %>
+          <div class="receipt-row"><span>Telepon</span><strong><%= customerPhoneDisplay %></strong></div>
+        <% } %>
+        <% if (customerAddress && customerAddress !== '-') { %>
+          <div class="receipt-row"><span>Alamat</span><strong><%= customerAddress %></strong></div>
+        <% } %>
+        <div class="receipt-row"><span>Paket</span><strong><%= packageName %></strong></div>
+        <div class="receipt-row"><span>Periode</span><strong><%= invoicePeriodLabel %></strong></div>
+        <% if (isPaid) { %>
+          <div class="receipt-row"><span>Dibayar Oleh</span><strong><%= paidByDisplay %></strong></div>
+        <% } else { %>
+          <div class="receipt-row"><span>Jatuh Tempo</span><strong><%= dueDateLabel %></strong></div>
+        <% } %>
+      </div>
 
       <div class="receipt-divider"></div>
 
-      <% if (packageIncludePpn) { %>
-        <div class="receipt-row"><span>Dasar Tagihan</span><strong>Rp <%= invoiceBaseAmount.toLocaleString('id-ID') %></strong></div>
-        <div class="receipt-row"><span>PPN <%= packagePpnPercent.toLocaleString('id-ID') %>%</span><strong>Rp <%= invoicePpnAmount.toLocaleString('id-ID') %></strong></div>
-      <% } %>
-      <div class="receipt-row"><span><%= isPaid ? 'Dibayar' : 'Tagihan' %></span><strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong></div>
+      <div class="receipt-section-title">Rincian</div>
+      <div class="receipt-box">
+        <div class="receipt-row"><span>Layanan</span><strong><%= packageName %></strong></div>
+        <div class="receipt-row"><span>Subtotal</span><strong>Rp <%= invoiceBaseAmount.toLocaleString('id-ID') %></strong></div>
+        <% if (packageIncludePpn) { %>
+          <div class="receipt-row"><span>PPN <%= packagePpnPercent.toLocaleString('id-ID') %>%</span><strong>Rp <%= invoicePpnAmount.toLocaleString('id-ID') %></strong></div>
+        <% } %>
+        <div class="receipt-row"><span>Biaya Lainnya</span><strong>Rp 0</strong></div>
+      </div>
+
       <div class="receipt-total"><%= isPaid ? 'TOTAL DIBAYAR' : 'TOTAL TAGIHAN' %>: Rp <%= invoiceAmount.toLocaleString('id-ID') %></div>
 
-      <div class="receipt-divider"></div>
-
-      <div class="receipt-sub">
-        <%= isPaid ? 'Pembayaran melalui' : 'Pembayaran ke' %>: <strong><%= manualPaymentBank %></strong><br>
-        No. Rek: <strong><%= manualPaymentAccountNumber %></strong><br>
-        A/N: <strong><%= manualPaymentAccountName %></strong>
-      </div>
-      <% if (manualPaymentNotes) { %>
-        <div class="receipt-sub" style="margin-top:8px;"><%= manualPaymentNotes %></div>
+      <% if (isPaid) { %>
+        <div class="receipt-paid-box">
+          <span class="paid-stamp">LUNAS</span><br>
+          Pembayaran telah diterima pada <%= receiptDateLabel %>.
+        </div>
+      <% } else { %>
+        <div class="receipt-divider"></div>
+        <div class="receipt-sub">
+          Pembayaran ke: <strong><%= manualPaymentBank %></strong><br>
+          No. Rek: <strong><%= manualPaymentAccountNumber %></strong><br>
+          A/N: <strong><%= manualPaymentAccountName %></strong>
+        </div>
       <% } %>
 
-      <div class="receipt-sign">
-        Hormat Kami,<br>
-        <% if (signatureUrl) { %><img src="<%= signatureUrl %>" alt="Tanda Tangan"><% } %>
-        <strong><%= companyManager %></strong><br>
-        <span><%= signerTitle %></span>
-      </div>
+      <div class="receipt-foot">Simpan struk ini sebagai bukti pembayaran.</div>
+      <% if (receiptSupportBrandName) { %>
+        <div class="receipt-support">Support by <%= receiptSupportBrandName %></div>
+      <% } %>
     </div>
   <% } else { %>
     <div class="invoice-sheet">
@@ -703,7 +877,7 @@
 
         <div class="invoice-meta-card">
           <div class="label">Invoice</div>
-          <div class="title">INVOICE</div>
+          <div class="title"><%= isPaid ? 'NOTA' : 'INVOICE' %></div>
           <div style="font-size:10.5px;color:var(--muted);margin-bottom:8px;"><%= documentLabel %></div>
           <div class="meta-grid">
             <div class="meta-item">
@@ -819,7 +993,32 @@
           <div class="panel">
             <h3><%= paymentInfoTitle %></h3>
             <div class="payment-card">
-              <% if (manualPaymentBank !== '-' || manualPaymentAccountNumber !== '-' || manualPaymentAccountName !== '-') { %>
+              <% if (isPaid) { %>
+              <div class="paid-proof-card">
+                <div class="paid-proof-title">
+                  <span>Bukti Pembayaran</span>
+                  <span class="paid-proof-status">Lunas</span>
+                </div>
+                <div class="paid-proof-grid">
+                  <div class="paid-proof-item">
+                    <span>Tanggal Bayar</span>
+                    <strong><%= receiptDateLabel %></strong>
+                  </div>
+                  <div class="paid-proof-item">
+                    <span>Dibayar Oleh</span>
+                    <strong><%= paidByDisplay %></strong>
+                  </div>
+                  <div class="paid-proof-item">
+                    <span>No. Invoice</span>
+                    <strong><%= invoiceCode %></strong>
+                  </div>
+                  <div class="paid-proof-item">
+                    <span>Nominal</span>
+                    <strong>Rp <%= invoiceAmount.toLocaleString('id-ID') %></strong>
+                  </div>
+                </div>
+              </div>
+              <% } else if (manualPaymentBank !== '-' || manualPaymentAccountNumber !== '-' || manualPaymentAccountName !== '-') { %>
               <span class="bank-pill">Transfer <%= manualPaymentBank %></span>
               <div class="bank-number"><%= manualPaymentAccountNumber %></div>
               <div style="font-size:15px;font-weight:700;"><%= manualPaymentAccountName %></div>
@@ -836,7 +1035,7 @@
                   <li>Jika ingin pembayaran terbaca otomatis, transfer manual bank seperti BRI/BRImo maupun bayar QRIS harus sesuai nominal tepat: <strong>Rp <%= invoiceUniqueAmount.toLocaleString('id-ID') %></strong><% if (invoiceUniqueCode > 0) { %> (kode unik <%= String(invoiceUniqueCode).padStart(3, '0') %>)<% } %>.</li>
                 <% } %>
                 <% if (packageIncludePpn) { %><li>Nominal sudah termasuk PPN <%= packagePpnPercent.toLocaleString('id-ID') %>% sebesar Rp <%= invoicePpnAmount.toLocaleString('id-ID') %>.</li><% } %>
-                <% if (manualPaymentNotes) { %><li><%= manualPaymentNotes %></li><% } %>
+                <% if (!isPaid && manualPaymentNotes) { %><li><%= manualPaymentNotes %></li><% } %>
               </ul>
             </div>
           </div>
@@ -859,7 +1058,7 @@
               <div class="status-box">
                 <strong><%= isPaid ? 'Status Pembayaran' : 'Status Tagihan' %></strong>
                 <div class="big"><%= statusText %></div>
-                <div style="font-size:11px;color:#475569;margin-top:6px;">Dicetak pada <%= now.toLocaleString('id-ID') %></div>
+                <div style="font-size:11px;color:#475569;margin-top:6px;">Dicetak pada <%= now.toLocaleDateString('id-ID') %></div>
               </div>
             </div>
           </div>
@@ -879,11 +1078,216 @@
   <% } %>
 
   <script>
-    window.onload = function () {
-      setTimeout(function () {
-        window.print();
-      }, 450);
-    };
+    (function () {
+      const activeStyle = <%- JSON.stringify(activeStyle) %>;
+      const receiptData = {
+        logo: <%- JSON.stringify(companyLogo) %>,
+        company: <%- JSON.stringify(companyName) %>,
+        address: <%- JSON.stringify(companyAddress) %>,
+        phone: <%- JSON.stringify(companyPhone) %>,
+        support: <%- JSON.stringify(receiptSupportBrandName) %>,
+        title: <%- JSON.stringify(isPaid ? 'STRUK PEMBAYARAN' : 'STRUK TAGIHAN') %>,
+        invoice: <%- JSON.stringify(invoiceCode) %>,
+        dateLabel: <%- JSON.stringify(isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih') %>,
+        date: <%- JSON.stringify(receiptDateLabel) %>,
+        status: <%- JSON.stringify(statusText) %>,
+        customerCode: <%- JSON.stringify(customerCode) %>,
+        customer: <%- JSON.stringify(customer?.name || '-') %>,
+        customerPhone: <%- JSON.stringify(customerPhoneDisplay) %>,
+        customerAddress: <%- JSON.stringify(customerAddress) %>,
+        packageName: <%- JSON.stringify(packageName) %>,
+        period: <%- JSON.stringify(invoicePeriodLabel) %>,
+        subtotal: <%- JSON.stringify('Rp ' + invoiceBaseAmount.toLocaleString('id-ID')) %>,
+        ppn: <%- JSON.stringify(packageIncludePpn ? 'Rp ' + invoicePpnAmount.toLocaleString('id-ID') : '') %>,
+        ppnLabel: <%- JSON.stringify(packageIncludePpn ? 'PPN ' + packagePpnPercent.toLocaleString('id-ID') + '%' : '') %>,
+        paidBy: <%- JSON.stringify(isPaid ? paidByDisplay : '') %>,
+        due: <%- JSON.stringify(!isPaid ? dueDateLabel : '') %>,
+        amount: <%- JSON.stringify('Rp ' + invoiceAmount.toLocaleString('id-ID')) %>,
+        paid: <%- JSON.stringify(isPaid) %>
+      };
+
+      function roundRect(ctx, x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + rr, y);
+        ctx.arcTo(x + w, y, x + w, y + h, rr);
+        ctx.arcTo(x + w, y + h, x, y + h, rr);
+        ctx.arcTo(x, y + h, x, y, rr);
+        ctx.arcTo(x, y, x + w, y, rr);
+        ctx.closePath();
+      }
+
+      function loadImage(src) {
+        return new Promise((resolve) => {
+          const url = String(src || '').trim();
+          if (!url) return resolve(null);
+          try {
+            const parsed = new URL(url, window.location.origin);
+            if (parsed.origin !== window.location.origin && !url.startsWith('data:')) return resolve(null);
+          } catch (e) {
+            if (!url.startsWith('/')) return resolve(null);
+          }
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = url;
+        });
+      }
+
+      function fitText(ctx, text, x, y, maxWidth, size, weight, color, align, minSize) {
+        const value = String(text || '-');
+        let fontSize = size;
+        const minFontSize = Number(minSize || 16);
+        ctx.fillStyle = color;
+        ctx.textAlign = align || 'left';
+        do {
+          ctx.font = `${weight || 800} ${fontSize}px Arial, sans-serif`;
+          if (ctx.measureText(value).width <= maxWidth || fontSize <= minFontSize) break;
+          fontSize -= 1;
+        } while (fontSize > minFontSize);
+        ctx.fillText(value, x, y);
+        ctx.textAlign = 'left';
+      }
+
+      async function buildReceiptBlob() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 384;
+        canvas.height = 1040;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const left = 8;
+        const right = W - 8;
+        const mid = W / 2;
+        const boxW = W - 16;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const logo = await loadImage(receiptData.logo);
+        if (logo) {
+          const ratio = Math.min(58 / logo.width, 38 / logo.height);
+          const w = logo.width * ratio;
+          const h = logo.height * ratio;
+          ctx.drawImage(logo, 163 + (58 - w) / 2, 10 + (38 - h) / 2, w, h);
+        }
+
+        fitText(ctx, receiptData.company.toUpperCase(), mid, 66, 350, 19, 900, '#000000', 'center', 16);
+        fitText(ctx, 'Telp/WA: ' + receiptData.phone, mid, 86, 350, 13, 900, '#000000', 'center', 11);
+        fitText(ctx, receiptData.address, mid, 103, 350, 11, 900, '#000000', 'center', 9);
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(left, 114); ctx.lineTo(right, 114); ctx.stroke();
+        ctx.setLineDash([]);
+
+        fitText(ctx, receiptData.title, mid, 140, 350, 17, 900, '#000000', 'center', 14);
+
+        function drawRows(title, rows, y) {
+          const rowHeight = 39;
+          fitText(ctx, title, mid, y, 330, 16, 900, '#000000', 'center', 13);
+          y += 11;
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = '#333333';
+          ctx.lineWidth = 1.2;
+          roundRect(ctx, left, y, boxW, (rows.length * rowHeight) + 22, 5);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          y += 30;
+          rows.forEach(([label, value]) => {
+            ctx.fillStyle = '#000000';
+            ctx.font = '900 17px Arial, sans-serif';
+            ctx.fillText(label, left + 10, y);
+            fitText(ctx, value, right - 8, y, 232, 18, 900, '#000000', 'right', 14);
+            y += rowHeight;
+          });
+          return y + 14;
+        }
+
+        let y = 170;
+        y = drawRows('DATA INVOICE', [
+          ['No. Invoice', receiptData.invoice],
+          [receiptData.dateLabel, receiptData.date],
+          ['Status', receiptData.status]
+        ], y);
+
+        const customerRows = [
+          ['ID Pelanggan', receiptData.customerCode],
+          ['Nama', receiptData.customer],
+          ['Telepon', receiptData.customerPhone],
+          ['Paket', receiptData.packageName],
+          ['Periode', receiptData.period]
+        ];
+        if (receiptData.paidBy) customerRows.push(['Dibayar Oleh', receiptData.paidBy]);
+        if (receiptData.due) customerRows.push(['Jatuh Tempo', receiptData.due]);
+        y = drawRows('DATA PELANGGAN', customerRows, y);
+
+        const detailRows = [
+          ['Subtotal', receiptData.subtotal],
+          ['Biaya Lainnya', 'Rp 0']
+        ];
+        if (receiptData.ppn) detailRows.splice(1, 0, [receiptData.ppnLabel, receiptData.ppn]);
+        y = drawRows('RINCIAN', detailRows, y);
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(left, y + 6); ctx.lineTo(right, y + 6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left, y + 44); ctx.lineTo(right, y + 44); ctx.stroke();
+        fitText(ctx, receiptData.paid ? 'TOTAL DIBAYAR' : 'TOTAL TAGIHAN', left + 2, y + 34, 160, 17, 900, '#000000', 'left', 14);
+        fitText(ctx, receiptData.amount, right - 2, y + 36, 210, 24, 900, '#000000', 'right', 18);
+        y += 62;
+
+        if (receiptData.paid) {
+          roundRect(ctx, 116, y, 152, 30, 999);
+          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = '#111111';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.setLineDash([]);
+          fitText(ctx, 'LUNAS', mid, y + 21, 120, 13, 900, '#000000', 'center');
+          y += 43;
+        }
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+        ctx.setLineDash([]);
+        fitText(ctx, 'Simpan struk ini sebagai bukti pembayaran.', mid, y + 24, 340, 11, 900, '#000000', 'center');
+        if (receiptData.support) {
+          fitText(ctx, 'Support by ' + receiptData.support, mid, y + 42, 340, 11, 900, '#000000', 'center');
+        }
+        return new Promise((resolve) => {
+          try { canvas.toBlob(resolve, 'image/png', 0.95); } catch (e) { resolve(null); }
+        });
+      }
+
+      async function saveOrShareReceipt(share) {
+        const blob = await buildReceiptBlob();
+        if (!blob) return window.print();
+        const fileName = `struk-${receiptData.invoice.replace(/[^\w.-]+/g, '-')}.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
+        if (share && navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+          try {
+            await navigator.share({ files: [file], title: receiptData.title, text: receiptData.invoice });
+            return;
+          } catch (e) {}
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
+
+      document.getElementById('saveReceiptBtn')?.addEventListener('click', () => saveOrShareReceipt(false));
+      document.getElementById('shareReceiptBtn')?.addEventListener('click', () => saveOrShareReceipt(true));
+      if (activeStyle !== 'receipt') {
+        window.onload = function () {
+          setTimeout(function () { window.print(); }, 450);
+        };
+      }
+    })();
   </script>
 </body>
 </html>

@@ -54,6 +54,7 @@ const crypto = require('crypto');
 const { normalizePhoneDigits, formatPhoneDisplay, normalizePhoneList } = require('../services/phoneService');
 const {
   buildCustomerCheckBillingLink,
+  buildCustomerInvoiceCheckBillingLink,
   buildCustomerPortalLoginLink,
   buildPublicInvoicePrintLink,
   buildPublicInvoiceReceiptLink,
@@ -75,6 +76,7 @@ const {
   isStrongSessionSecret,
   isStrongXenditCallbackToken
 } = require('../config/security');
+const { verifyPassword } = require('../config/passwords');
 const {
   getRuntimeConfigurationWarnings,
   isSelfUpdateEnabled
@@ -132,7 +134,17 @@ const digiflazzApi = axios.create({
 });
 const DEFAULT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
-const IMAGE_UPLOAD_FIELDS = ['company_logo_file', 'pwa_logo_file', 'support_isp_logo_file', 'invoice_signature_file', 'invoice_stamp_file', 'qris_static_qr_file'];
+const IMAGE_UPLOAD_FIELDS = [
+  'company_logo_file',
+  'pwa_logo_file',
+  'support_isp_logo_file',
+  'invoice_signature_file',
+  'invoice_stamp_file',
+  'qris_static_qr_file',
+  'customer_portal_banner_1_file',
+  'customer_portal_banner_2_file',
+  'customer_portal_banner_3_file'
+];
 
 function isEnabledSwitch(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
@@ -165,6 +177,115 @@ async function trySendInvoiceCreatedPush(customer, invoice, req, options = {}) {
   } catch (error) {
     logger.warn(`[PushNotification] Gagal kirim push tagihan: ${error.message}`);
   }
+}
+
+function resolveAdminPathFromRequest(req, fallback = '/admin/customers') {
+  const candidates = [
+    req?.body?._admin_return_to,
+    req?.body?.return_to,
+    req?.query?._admin_return_to,
+    req?.query?.return_to,
+    req?.get ? req.get('referer') : '',
+    fallback
+  ];
+  for (const candidate of candidates) {
+    const raw = String(candidate || '').trim();
+    if (!raw) continue;
+    try {
+      const parsed = new URL(raw, 'http://admin.local');
+      if (!parsed.pathname.startsWith('/admin')) continue;
+      return `${parsed.pathname}${parsed.search || ''}`;
+    } catch (_error) {
+      if (raw.startsWith('/admin')) return raw;
+    }
+  }
+  return fallback;
+}
+
+function buildPostIsolationRedirect(req, fallback = '/admin/customers?status=suspended') {
+  const current = resolveAdminPathFromRequest(req, fallback);
+  try {
+    const parsed = new URL(current, 'http://admin.local');
+    if (parsed.pathname === '/admin/billing') {
+      parsed.searchParams.set('status', 'isolated');
+      parsed.searchParams.set('page', '1');
+      return `${parsed.pathname}${parsed.search}`;
+    }
+    if (parsed.pathname === '/admin/customers') {
+      parsed.searchParams.set('status', 'suspended');
+      parsed.searchParams.set('page', '1');
+      return `${parsed.pathname}${parsed.search}`;
+    }
+  } catch (_error) {}
+  return fallback;
+}
+
+function forceAdminRedirect(res, target) {
+  res.statusCode = 302;
+  res.setHeader('Location', target || '/admin');
+  return res.end();
+}
+
+function queueManualIsolationNotifications({ req, customer, unpaidInvoices = [] }) {
+  if (!customer?.id) return;
+  const requestBaseUrl = resolveRequestBaseUrl(req);
+  const unpaidTotal = unpaidInvoices.reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
+  const periodLine = unpaidInvoices.length
+    ? unpaidInvoices.map((inv) => `${inv.period_month}/${inv.period_year}`).join(', ')
+    : 'tagihan aktif';
+  const body = unpaidTotal > 0
+    ? `Layanan internet Anda sementara diisolir. Tagihan belum lunas: Rp ${unpaidTotal.toLocaleString('id-ID')} (${periodLine}). Buka aplikasi pelanggan untuk bayar dan aktif kembali.`
+    : 'Layanan internet Anda sementara diisolir. Buka aplikasi pelanggan untuk melihat status tagihan atau hubungi admin.';
+
+  customerSvc.addPortalNotification(customer.id, {
+    kind: 'suspension',
+    tab: 'billing',
+    title: 'Layanan internet diisolir',
+    body,
+    payload: {
+      source: 'admin-manual-isolate',
+      unpaidInvoiceIds: unpaidInvoices.map((inv) => Number(inv.id || 0)).filter(Boolean)
+    }
+  }, { dedupeWindowMs: 15 * 60 * 1000 });
+
+  setImmediate(async () => {
+    const settings = getSettings();
+    try {
+      if (isPushConfigured(settings)) {
+        await sendPushToCustomer(customer, {
+          settings,
+          title: 'Layanan Internet Diisolir',
+          message: body,
+          targetUrl: `${requestBaseUrl}/customer/dashboard#billing`,
+          data: {
+            kind: 'suspension',
+            source: 'admin-manual-isolate',
+            customerId: Number(customer.id || 0) || null
+          },
+          timeoutMs: 7000
+        });
+      }
+    } catch (error) {
+      logger.warn(`[ManualIsolation] Gagal kirim push pelanggan ${customer.id}: ${error.message || String(error)}`);
+    }
+
+    try {
+      if (customer.phone) {
+        const waSent = await trySendWhatsappPayment(
+          customer.phone,
+          buildIsolationWhatsappMessage(
+            customer,
+            unpaidInvoices,
+            'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
+            { baseUrl: requestBaseUrl }
+          )
+        );
+        if (!waSent) logger.warn(`[ManualIsolation] WhatsApp isolir pelanggan ${customer.id} tidak terkirim.`);
+      }
+    } catch (error) {
+      logger.warn(`[ManualIsolation] Gagal kirim WhatsApp pelanggan ${customer.id}: ${error.message || String(error)}`);
+    }
+  });
 }
 
 function getUploadedSingleFile(req, fieldName) {
@@ -461,9 +582,15 @@ async function trySendWhatsappPayment(customerPhone, message) {
     if (!getSetting('whatsapp_enabled', false)) return false;
     const to = String(customerPhone || '').trim();
     if (!to) return false;
-    const { sendWA } = await import('../services/whatsappBot.mjs');
+    const { sendWA, ensureWhatsAppReady, whatsappStatus } = await import('../services/whatsappBot.mjs');
+    const ready = typeof ensureWhatsAppReady === 'function' ? await ensureWhatsAppReady(12000) : true;
+    if (!ready) {
+      logger.warn(`[WhatsApp] Kirim pesan pelanggan dibatalkan karena bot belum siap (${whatsappStatus?.connection || 'unknown'}).`);
+      return false;
+    }
     return Boolean(await sendWA(to, String(message || '').trim()));
-  } catch {
+  } catch (error) {
+    logger.warn(`[WhatsApp] Gagal kirim pesan pelanggan: ${error.message || String(error)}`);
     return false;
   }
 }
@@ -680,6 +807,81 @@ function restrictCashierLimitedAccess(req, res, next) {
 function company() { return getSetting('company_header', 'ISP Admin'); }
 function companyLogo() { return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png'; }
 
+function normalizeAdminReturnTo(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('//') || raw.includes('\\')) return '';
+  try {
+    const parsed = new URL(raw, 'http://admin.local');
+    if (parsed.origin !== 'http://admin.local') return '';
+    const target = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!target.startsWith('/admin')) return '';
+    if (/^\/admin\/(?:login|logout)(?:\/|$|\?)/i.test(target)) return '';
+    if (/^\/admin\/api(?:\/|$|\?)/i.test(target)) return '';
+    return target;
+  } catch (_error) {
+    return '';
+  }
+}
+
+function adminPathSection(pathValue) {
+  const pathname = String(pathValue || '').split('?')[0].split('#')[0];
+  const parts = pathname.split('/').filter(Boolean);
+  return parts[0] === 'admin' ? (parts[1] || '') : '';
+}
+
+function shouldPreferAdminReturnTo(req, redirectTarget, returnTo) {
+  if (!returnTo || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase())) return false;
+  const rawRedirect = String(redirectTarget || '').trim();
+  if (!rawRedirect || rawRedirect === 'back' || rawRedirect.startsWith('//')) return false;
+  try {
+    const parsedRedirect = new URL(rawRedirect, 'http://admin.local');
+    if (parsedRedirect.origin !== 'http://admin.local') return false;
+    const redirectPath = parsedRedirect.pathname || '';
+    const returnPath = new URL(returnTo, 'http://admin.local').pathname || '';
+    if (!redirectPath.startsWith('/admin') || !returnPath.startsWith('/admin')) return false;
+    if (/^\/admin\/(?:login|logout)(?:\/|$)/i.test(redirectPath)) return false;
+    if (/^\/admin\/api(?:\/|$)/i.test(redirectPath)) return false;
+    return adminPathSection(redirectPath) === adminPathSection(returnPath);
+  } catch (_error) {
+    return false;
+  }
+}
+
+router.use((req, res, next) => {
+  const originalRedirect = res.redirect.bind(res);
+  const originalSafeRedirect = typeof res.safeRedirect === 'function' ? res.safeRedirect.bind(res) : null;
+
+  const getReturnTo = () => normalizeAdminReturnTo(
+    req.body?._admin_return_to ||
+    req.body?.return_to ||
+    req.query?._admin_return_to ||
+    req.query?.return_to ||
+    ''
+  );
+
+  res.redirect = function adminReturnAwareRedirect(statusOrUrl, maybeUrl) {
+    const hasStatus = typeof statusOrUrl === 'number';
+    const redirectTarget = hasStatus ? maybeUrl : statusOrUrl;
+    const returnTo = getReturnTo();
+    if (typeof redirectTarget === 'string' && shouldPreferAdminReturnTo(req, redirectTarget, returnTo)) {
+      return hasStatus ? originalRedirect(statusOrUrl, returnTo) : originalRedirect(returnTo);
+    }
+    return hasStatus ? originalRedirect(statusOrUrl, maybeUrl) : originalRedirect(statusOrUrl);
+  };
+
+  res.safeRedirect = function adminReturnAwareSafeRedirect(target, fallback = '/admin') {
+    const returnTo = getReturnTo();
+    const redirectTarget = target || fallback;
+    if (shouldPreferAdminReturnTo(req, redirectTarget, returnTo)) {
+      return originalRedirect(returnTo);
+    }
+    if (originalSafeRedirect) return originalSafeRedirect(target, fallback);
+    return originalRedirect(redirectTarget || fallback || '/admin');
+  };
+
+  next();
+});
+
 router.use([
   /^\/olts(?:\/.*)?$/,
   '/map',
@@ -819,6 +1021,12 @@ async function buildInvoiceQrisImageBuffer(invoice, settings = getSettings()) {
   return buildDynamicQrisBuffer(dynamicPayload, { width: 720, margin: 1 });
 }
 
+function wantsJsonResponse(req) {
+  const accept = String(req?.headers?.accept || '').toLowerCase();
+  const requestedWith = String(req?.headers?.['x-requested-with'] || '').toLowerCase();
+  return requestedWith === 'xmlhttprequest' || accept.includes('application/json') || req?.body?.ajax === '1';
+}
+
 function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice = null, options = {}) {
   const invoiceList = Array.isArray(invoices) ? invoices.filter(Boolean) : [];
   let primaryInvoice = fallbackInvoice || invoiceList[0] || null;
@@ -854,7 +1062,9 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
     customer?.packageName ||
     '-'
   ).trim() || '-';
-  const checkBillingLink = buildCustomerCheckBillingLink(customer, options);
+  const checkBillingLink = primaryInvoice
+    ? buildCustomerInvoiceCheckBillingLink(primaryInvoice, customer, 7 * 24 * 60 * 60 * 1000, options)
+    : buildCustomerCheckBillingLink(customer, options);
   const portalLink = buildCustomerPortalLoginLink(options);
   const groupLink = String(getSetting('whatsapp_group_invite_link', '') || '').trim();
   const invoiceLink = primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer, 48 * 60 * 60 * 1000, options) : '';
@@ -1206,6 +1416,19 @@ function getPendingCustomerRequestCount() {
   return technicianRequests + packageChangeRequests;
 }
 
+function getPendingApprovalBreakdown() {
+  const technicianCustomerRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM technician_customer_requests WHERE status = 'pending'").get()?.c || 0);
+  const packageChangeRequests = packageChangeSvc.countPendingRequests();
+  const collectorRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM collector_payment_requests WHERE status = 'pending'").get()?.c || 0);
+  return {
+    technicianCustomerRequests,
+    packageChangeRequests,
+    collectorRequests,
+    customerRequests: technicianCustomerRequests + packageChangeRequests,
+    total: technicianCustomerRequests + packageChangeRequests + collectorRequests
+  };
+}
+
 function getAdminHomeSummary({ billing = null, custStats = null } = {}) {
   const safeCount = (sql) => Number(db.prepare(sql).get()?.c || 0);
   return {
@@ -1381,7 +1604,38 @@ function getDashboardFinanceSnapshot({ year, month } = {}) {
   const filterYear = Math.max(2000, parseInt(year, 10) || now.getFullYear());
   const filterMonth = Math.max(1, Math.min(12, parseInt(month, 10) || (now.getMonth() + 1)));
   const monthlyDataRaw = billingSvc.getMonthlyRevenue(filterYear);
-  const monthlyData = Array.isArray(monthlyDataRaw) ? monthlyDataRaw : [];
+  const billingMonthlyData = Array.isArray(monthlyDataRaw) ? monthlyDataRaw : [];
+  const billingMonthlyMap = new Map(billingMonthlyData.map((item) => [Number(item.month || 0), item]));
+  const monthlyData = [];
+
+  for (let itemMonth = 1; itemMonth <= 12; itemMonth++) {
+    const billingBucket = billingMonthlyMap.get(itemMonth) || {
+      month: itemMonth,
+      revenue: 0,
+      paid_amount: 0,
+      unpaid_amount: 0,
+      total_invoices: 0,
+      paid_count: 0,
+      unpaid_count: 0,
+      ontime_paid_count: 0,
+      ontime_paid_amount: 0,
+      late_paid_count: 0,
+      late_paid_amount: 0
+    };
+    const bookkeepingSummary = bookkeepingSvc.getSummary({ month: itemMonth, year: filterYear }) || {};
+    const expenseAmount = Number(bookkeepingSummary.total_expense || 0);
+    const bookkeepingIncomeAmount = Number(bookkeepingSummary.total_income || 0);
+
+    monthlyData.push({
+      ...billingBucket,
+      expense_amount: expenseAmount,
+      expense_count: Number(bookkeepingSummary.expense_count || 0),
+      bookkeeping_income_amount: bookkeepingIncomeAmount,
+      bookkeeping_income_count: Number(bookkeepingSummary.income_count || 0),
+      net_amount: Number(billingBucket.revenue || 0) - expenseAmount
+    });
+  }
+
   const selectedMonthData = monthlyData.find((item) => Number(item.month || 0) === filterMonth) || {
     month: filterMonth,
     revenue: 0,
@@ -1393,7 +1647,12 @@ function getDashboardFinanceSnapshot({ year, month } = {}) {
     ontime_paid_count: 0,
     ontime_paid_amount: 0,
     late_paid_count: 0,
-    late_paid_amount: 0
+    late_paid_amount: 0,
+    expense_amount: 0,
+    expense_count: 0,
+    bookkeeping_income_amount: 0,
+    bookkeeping_income_count: 0,
+    net_amount: 0
   };
 
   const recentPaymentsRaw = billingSvc.getRecentPayments(40);
@@ -1939,7 +2198,14 @@ async function createVoucherBatchAsync(batchId) {
 // Global locals middleware
 router.use((req, res, next) => {
   res.locals.session = req.session;
-  res.locals.adminPendingCustomerRequests = (req.session?.isAdmin || req.session?.isCashier) ? getPendingCustomerRequestCount() : 0;
+  const approvalBreakdown = (req.session?.isAdmin || req.session?.isCashier)
+    ? getPendingApprovalBreakdown()
+    : { technicianCustomerRequests: 0, packageChangeRequests: 0, collectorRequests: 0, customerRequests: 0, total: 0 };
+  res.locals.adminPendingCustomerRequests = approvalBreakdown.customerRequests;
+  res.locals.adminPendingTechnicianCustomerRequests = approvalBreakdown.technicianCustomerRequests;
+  res.locals.adminPendingPackageChangeRequests = approvalBreakdown.packageChangeRequests;
+  res.locals.adminPendingCollectorApprovals = approvalBreakdown.collectorRequests;
+  res.locals.adminPendingApprovalsTotal = approvalBreakdown.total;
   const adminOneSignalAppId = String(getSetting('onesignal_app_id', '') || '').trim();
   res.locals.adminPushEnabled = Boolean(req.session?.isAdmin && getSetting('onesignal_enabled', false) === true && adminOneSignalAppId);
   res.locals.adminOneSignalAppId = adminOneSignalAppId;
@@ -2021,7 +2287,7 @@ router.get('/olts/:id/stats', requireAdminSession, async (req, res) => {
     const section = String(req.query.section || '').trim().toLowerCase();
     const wantsFull = req.query.full === 'true';
     const tableOnly = section === 'table';
-    const timeoutMs = tableOnly ? 25000 : (wantsFull ? 35000 : 10000);
+    const timeoutMs = tableOnly ? 65000 : (wantsFull ? 65000 : 30000);
     const statsOptions = tableOnly
       ? {
           skipTelnetDetails: true,
@@ -2085,6 +2351,25 @@ router.post('/olts/:id/onu/configure-wan', requireAdminSession, restrictToAdmin,
       output = await oltSvc.configureOnuWan(req.params.id, req.body);
     }
     res.json({ success: true, message: 'Konfigurasi WAN berhasil.', output });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/olts/:id/vlan-logs', requireAdminSession, async (req, res) => {
+  try {
+    const logs = oltSvc.getOltVlanPushLogs(req.params.id, req.query.limit || 20);
+    res.json({ success: true, logs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/olts/:id/onu/push-vlan', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), async (req, res) => {
+  try {
+    const actor = req.session.adminUser || 'Admin';
+    const output = await oltSvc.pushOnuVlan(req.params.id, req.body, actor);
+    res.json({ success: true, message: output.dryRun ? 'Mode uji berhasil dibuat.' : 'VLAN berhasil dikirim ke OLT.', output });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -3402,19 +3687,29 @@ router.get('/bulk', requireAdminSession, (req, res) => {
 });
 
 // ─── CUSTOMERS ─────────────────────────────────────────────────────────────
-function buildInvoiceSummaryFromList(invoices = []) {
+function buildInvoiceSummaryFromList(invoices = [], options = {}) {
   const summary = {
     total: { count: 0, total: 0 },
     paid: { count: 0, total: 0 },
     unpaid: { count: 0, total: 0 },
-    isolated: { count: 0, total: 0 }
+    isolated: { count: 0, total: 0 },
+    overdue: { count: 0, total: 0 }
   };
+  const getDueDate = typeof options.getDueDate === 'function' ? options.getDueDate : null;
+  const todayStart = options.todayStart instanceof Date
+    ? options.todayStart
+    : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
 
   for (const inv of invoices) {
     const amount = Number(inv?.amount || 0);
     const status = String(inv?.status || '').toLowerCase();
     const customerStatus = String(inv?.customer_status || '').toLowerCase();
     const isIsolated = customerStatus === 'suspended';
+    const dueDate = getDueDate ? getDueDate(inv) : null;
+    const isOverdue = status === 'unpaid'
+      && !isIsolated
+      && dueDate instanceof Date
+      && dueDate.getTime() < todayStart.getTime();
     summary.total.count += 1;
     summary.total.total += amount;
     if (status === 'paid') {
@@ -3426,6 +3721,10 @@ function buildInvoiceSummaryFromList(invoices = []) {
     } else {
       summary.unpaid.count += 1;
       summary.unpaid.total += amount;
+      if (isOverdue) {
+        summary.overdue.count += 1;
+        summary.overdue.total += amount;
+      }
     }
   }
 
@@ -3792,6 +4091,7 @@ router.post('/customers/:id/delete', requireAdminSession, restrictToAdmin, async
 // ─── EXPORT/IMPORT CUSTOMERS ──────────────────────────────────────
 function buildCustomerImportTemplateWorkbook() {
   const headers = [
+    'ID Pelanggan',
     'Nama',
     'Telepon',
     'Email',
@@ -3811,6 +4111,7 @@ function buildCustomerImportTemplateWorkbook() {
     'Catatan'
   ];
   const exampleRow = [
+    '',
     'Budi Setiawan',
     '6281234567890',
     'budi@example.com',
@@ -3831,7 +4132,7 @@ function buildCustomerImportTemplateWorkbook() {
   ];
   const guideRows = [
     ['Panduan Import Pelanggan'],
-    ['1. Isi minimal kolom Nama, Telepon, Alamat, dan Paket.'],
+    ['1. Isi minimal kolom Nama, Telepon, Alamat, dan Paket. ID Pelanggan boleh dikosongkan agar dibuat otomatis.'],
     ['2. Gunakan format nomor HP 628xxxxxxxxxx agar sinkron ke WhatsApp.'],
     ['3. Nama paket harus sama persis dengan nama paket di aplikasi.'],
     ['4. Status boleh: active, suspended, atau inactive.'],
@@ -3938,7 +4239,8 @@ router.get('/customers/export', requireAdminSession, restrictToAdmin, (req, res)
   try {
     const customers = customerSvc.getAllCustomers();
     const headers = [
-      'ID',
+      'ID Sistem',
+      'ID Pelanggan',
       'Nama',
       'Telepon',
       'Email',
@@ -3959,6 +4261,7 @@ router.get('/customers/export', requireAdminSession, restrictToAdmin, (req, res)
     ];
     const mapCustomerRow = (c) => ([
       c.id,
+      c.customer_code || '',
       c.name,
       c.phone,
       c.email || '',
@@ -4034,6 +4337,7 @@ router.post('/customers/import', requireAdminSession, restrictToAdmin, upload.si
       const odp = odps.find(o => o.name === odpName);
       
       const data = {
+        customer_code: cleanRow['ID Pelanggan'] || cleanRow['customer_code'] || cleanRow['kode_pelanggan'] || '',
         name: name,
         phone: cleanRow['Telepon'] || cleanRow['phone'] || cleanRow['Phone'],
         email: cleanRow['Email'] || cleanRow['email'] || cleanRow['email_address'],
@@ -4053,7 +4357,7 @@ router.post('/customers/import', requireAdminSession, restrictToAdmin, upload.si
         notes: cleanRow['Catatan'] || cleanRow['notes']
       };
       
-      const id = cleanRow['ID'] || cleanRow['id'];
+      const id = cleanRow['ID Sistem'] || cleanRow['ID'] || cleanRow['id'];
       if (id && !isNaN(id) && id !== '') {
         logger.info(`[Import] Updating customer ID: ${id}`);
         customerSvc.updateCustomer(id, data);
@@ -4074,27 +4378,20 @@ router.post('/customers/import', requireAdminSession, restrictToAdmin, upload.si
 });
 
 router.post('/customers/:id/isolate', requireAdminSession, restrictToAdmin, async (req, res) => {
+  let redirectTarget = buildPostIsolationRedirect(req);
   try {
     await customerSvc.suspendCustomer(req.params.id);
     const customer = customerSvc.getCustomerById(req.params.id);
     const unpaidInvoices = customer ? billingSvc.getUnpaidInvoicesByCustomerId(customer.id) : [];
-    if (customer && customer.phone) {
-      const requestBaseUrl = resolveRequestBaseUrl(req);
-      await trySendWhatsappPayment(
-        customer.phone,
-        buildIsolationWhatsappMessage(
-          customer,
-          unpaidInvoices,
-          'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
-          { baseUrl: requestBaseUrl }
-        )
-      );
+    if (customer) {
+      queueManualIsolationNotifications({ req, customer, unpaidInvoices });
     }
-    req.session._msg = { type: 'success', text: `Pelanggan "${customer.name}" berhasil di-isolir manual.` };
+    req.session._msg = { type: 'success', text: `Pelanggan "${customer?.name || req.params.id}" berhasil di-isolir manual. Info internet dimatikan sudah masuk inbox pelanggan, push/WhatsApp sedang dikirim.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal isolir: ' + e.message };
+    redirectTarget = resolveAdminPathFromRequest(req, '/admin/customers');
   }
-  return redirectBack(res, '/admin/customers');
+  return forceAdminRedirect(res, redirectTarget);
 });
 
 router.post('/customers/:id/unisolate', requireAdminSession, restrictToAdmin, async (req, res) => {
@@ -4324,7 +4621,9 @@ registerCustomerRoutes(router, {
   redirectBack,
   resolvePaidByName,
   sendPaidWhatsappNotification,
-  usageSvc
+  usageSvc,
+  isPushConfigured,
+  sendPushToCustomer
 });
 /*
 router.get('/billing', requireAdminSession, (req, res) => {
@@ -4574,9 +4873,13 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
   return redirectBack(res, '/admin/billing');
 });
 
-router.post('/billing/:id/unpay', requireAdminSession, restrictToAdmin, (req, res) => {
+router.post('/billing/:id/unpay', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
   try {
-    billingSvc.markAsUnpaid(req.params.id);
+    const confirmPassword = String(req.body.confirm_password || '').trim();
+    if (!verifyPassword(confirmPassword, getSetting('admin_password', ''))) {
+      throw new Error('Password admin salah. Batalkan lunas tidak diproses.');
+    }
+    billingSvc.markAsUnpaid(req.params.id, resolvePaymentActor(req, 'Admin'));
     req.session._msg = { type: 'success', text: 'Status tagihan direset ke Belum Bayar.' };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal: ' + e.message };
@@ -4617,6 +4920,7 @@ router.post('/billing/:id/qris-clear', requireAdminSession, restrictToAdmin, (re
 });
 
 router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
+  const asJson = wantsJsonResponse(req);
   try {
     let inv = billingSvc.getInvoiceById(req.params.id);
     if (!inv) throw new Error('Tagihan tidak ditemukan');
@@ -4627,36 +4931,57 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
     const customer = customerSvc.getCustomerById(inv.customer_id);
     if (!customer || !customer.phone) throw new Error('Nomor WhatsApp pelanggan tidak ditemukan');
 
-    const { sendWA, sendWAImage, whatsappStatus, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
-    const ready = await ensureWhatsAppReady(25000);
-    if (!ready) {
-      const waState = String(whatsappStatus.connection || 'unknown');
-      throw new Error(`Bot WhatsApp belum siap (${waState}). Silakan cek status WhatsApp di menu Admin.`);
-    }
-
-    const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id);
     const requestBaseUrl = resolveRequestBaseUrl(req);
-    let finalMessage = buildBillingWhatsappMessage(customer, unpaidInvoices, inv, { baseUrl: requestBaseUrl });
-    const manualPaymentInfo = buildManualPaymentMessage();
-    if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
+    const queuedInvoice = { ...inv };
+    const queuedCustomer = { ...customer };
 
-    const qrisAmountUnique = Number(inv.qris_amount_unique || 0) || 0;
-    const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(inv) : Buffer.alloc(0);
-    if (qrisImageBuffer.length) {
-      finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
+    setImmediate(async () => {
+      try {
+        const { sendWA, sendWAImage, whatsappStatus, ensureWhatsAppReady } = await import('../services/whatsappBot.mjs');
+        const ready = await ensureWhatsAppReady(25000);
+        if (!ready) {
+          const waState = String(whatsappStatus?.connection || 'unknown');
+          throw new Error(`Bot WhatsApp belum siap (${waState}).`);
+        }
+
+        const unpaidInvoices = billingSvc.getUnpaidInvoicesByCustomerId(queuedCustomer.id);
+        let finalMessage = buildBillingWhatsappMessage(queuedCustomer, unpaidInvoices, queuedInvoice, { baseUrl: requestBaseUrl });
+        const manualPaymentInfo = buildManualPaymentMessage();
+        if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
+
+        const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
+        const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
+        if (qrisImageBuffer.length) {
+          finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
+        }
+
+        const sent = qrisImageBuffer.length
+          ? await sendWAImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
+          : await sendWA(queuedCustomer.phone, finalMessage);
+        if (!sent) {
+          const waState = String(whatsappStatus?.connection || 'unknown');
+          throw new Error(`WhatsApp Bot menolak pengiriman. Status saat ini: ${waState}.`);
+        }
+      } catch (error) {
+        logger.warn(`[BillingWA] Gagal kirim tagihan invoice ${queuedInvoice.id}: ${error.message || String(error)}`);
+      }
+    });
+
+    req.session._msg = { type: 'success', text: `Tagihan WhatsApp untuk ${customer.name} sedang dikirim di latar belakang.` };
+    if (asJson) {
+      return res.json({
+        success: true,
+        queued: true,
+        message: req.session._msg.text,
+        customerName: customer.name,
+        invoiceId: Number(inv.id || 0) || null
+      });
     }
-
-    const sent = qrisImageBuffer.length
-      ? await sendWAImage(customer.phone, qrisImageBuffer, finalMessage)
-      : await sendWA(customer.phone, finalMessage);
-    if (!sent) {
-      const waState = String(whatsappStatus.connection || 'unknown');
-      throw new Error(`Gagal mengirim pesan melalui WhatsApp Bot. Status saat ini: ${waState}.`);
-    }
-
-    req.session._msg = { type: 'success', text: `Tagihan WhatsApp berhasil dikirim ke ${customer.name}.` };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal kirim WA: ' + e.message };
+    if (asJson) {
+      return res.status(400).json({ success: false, error: req.session._msg.text });
+    }
   }
   return redirectBack(res, '/admin/billing');
 });
@@ -5217,20 +5542,35 @@ router.get('/reports', requireAdminSession, (req, res) => {
 });
 
 // ─── SETTINGS ──────────────────────────────────────────────────────────────
-function renderBookkeepingFormPage(req, res, formData = {}, msg = null) {
+function renderBookkeepingFormPage(req, res, formData = {}, msg = null, options = {}) {
   const now = new Date();
+  const isEdit = Boolean(options.isEdit);
+  const categories = bookkeepingSvc.getCategories();
+  const normalizedType = String(formData.type || 'expense').trim().toLowerCase() === 'income' ? 'income' : 'expense';
+  const categoryOptions = Array.isArray(categories[normalizedType]) ? categories[normalizedType] : [];
+  let selectedCategory = String(formData.category || '').trim();
+  let customCategory = String(formData.custom_category || '').trim();
+  if (selectedCategory && !categoryOptions.includes(selectedCategory) && !customCategory) {
+    customCategory = selectedCategory;
+    selectedCategory = '';
+  }
   return res.render('admin/bookkeeping_form', {
-    title: 'Tambah Pembukuan',
+    title: isEdit ? 'Edit Pembukuan' : 'Tambah Pembukuan',
     company: company(),
     activePage: 'bookkeeping',
-    categories: bookkeepingSvc.getCategories(),
+    categories,
+    paymentMethods: typeof bookkeepingSvc.getPaymentMethods === 'function' ? bookkeepingSvc.getPaymentMethods() : [],
+    formAction: options.formAction || '/admin/bookkeeping/new',
+    formMode: isEdit ? 'edit' : 'create',
     formData: {
-      type: String(formData.type || 'expense').trim().toLowerCase() === 'income' ? 'income' : 'expense',
+      id: formData.id || '',
+      type: normalizedType,
       entry_date: String(formData.entry_date || new Date().toISOString().slice(0, 10)).trim(),
       amount: String(formData.amount || '').trim(),
-      category: String(formData.category || '').trim(),
-      custom_category: String(formData.custom_category || '').trim(),
+      category: selectedCategory,
+      custom_category: customCategory,
       description: String(formData.description || '').trim(),
+      payment_method: String(formData.payment_method || 'cash').trim(),
       month: String(formData.month || (now.getMonth() + 1)).trim(),
       year: String(formData.year || now.getFullYear()).trim(),
       source_type: String(formData.source_type || '').trim()
@@ -5246,26 +5586,64 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
   const type = String(req.query.type || '').trim();
   const category = String(req.query.category || '').trim();
   const search = String(req.query.search || '').trim();
+  const detailSection = String(req.query.detail_section || '').trim().toLowerCase();
+  const detailBucket = String(req.query.detail_bucket || '').trim().toLowerCase();
+  const cashHolder = String(req.query.cash_holder || '').trim().toLowerCase();
+  const requestedView = String(req.query.view || '').trim().toLowerCase();
+  const allowedViews = new Set(['summary', 'ledger', 'staff-cash', 'settlements', 'role-payments']);
+  const view = allowedViews.has(requestedView) ? requestedView : 'summary';
+  const pageSize = 20;
+  const requestedPage = Math.max(1, parseInt(req.query.page || '1', 10) || 1);
   const categories = bookkeepingSvc.getCategories();
   try {
     bookkeepingSvc.syncPaidInvoiceIncomeEntries();
+    if (typeof bookkeepingSvc.syncAgentVoucherIncomeEntries === 'function') bookkeepingSvc.syncAgentVoucherIncomeEntries();
     cashLedgerSvc.backfillBookkeepingHolders();
   } catch (syncError) {
     console.warn('[BOOKKEEPING] Sync paid invoice income failed:', syncError.message);
   }
   const summary = bookkeepingSvc.getSummary({ month: filterMonth, year: filterYear });
   const dashboard = bookkeepingSvc.getDashboardDetails({ month: filterMonth, year: filterYear });
+  const categoryDetail = (detailSection && detailBucket && typeof bookkeepingSvc.listDashboardCategoryDetails === 'function')
+    ? bookkeepingSvc.listDashboardCategoryDetails({
+      section: detailSection,
+      bucket: detailBucket,
+      month: filterMonth,
+      year: filterYear
+    })
+    : null;
   const cashLedger = cashLedgerSvc.getBookkeepingDashboard({ month: filterMonth, year: filterYear });
+  const [cashHolderRole = '', cashHolderEntityRaw = ''] = cashHolder.split(':');
+  const cashHolderEntityId = cashHolderEntityRaw === 'null' ? null : Number(cashHolderEntityRaw);
+  const cashHolderTransactions = (detailSection === 'admin' && detailBucket === 'cash' && cashHolderRole)
+    ? cashLedgerSvc.listCashHolderTransactions({
+      role: cashHolderRole,
+      entityId: Number.isFinite(cashHolderEntityId) ? cashHolderEntityId : (cashHolderRole === 'admin' ? 0 : null),
+      month: filterMonth,
+      year: filterYear,
+      limit: 200
+    })
+    : [];
   const settlementSourceOptions = cashLedgerSvc
     .listManagedCashHolders({ includeInactive: true })
     .filter((item) => item.role !== 'admin');
+  const totalEntries = bookkeepingSvc.countEntries({
+    type,
+    category,
+    search,
+    month: filterMonth,
+    year: filterYear
+  });
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
   const entries = bookkeepingSvc.listEntries({
     type,
     category,
     search,
     month: filterMonth,
     year: filterYear,
-    limit: 300
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize
   });
   res.render('admin/bookkeeping', {
     title: 'Pembukuan',
@@ -5276,18 +5654,47 @@ router.get('/bookkeeping', requireAdminSession, (req, res) => {
     type,
     category,
     search,
+    view,
     categories,
     summary,
     dashboard,
+    categoryDetail,
+    detailSection,
+    detailBucket,
+    cashHolder,
+    cashHolderTransactions,
     cashLedger,
     settlementSourceOptions,
     entries,
+    totalEntries,
+    currentPage,
+    totalPages,
+    pageSize,
     msg: flashMsg(req)
   });
 });
 
 router.get('/bookkeeping/new', requireAdminSession, restrictToAdmin, (req, res) => {
   renderBookkeepingFormPage(req, res);
+});
+
+router.get('/bookkeeping/:id/edit', requireAdminSession, restrictToAdmin, (req, res) => {
+  try {
+    const entry = bookkeepingSvc.getEntryById(req.params.id);
+    if (!entry) throw new Error('Data pembukuan tidak ditemukan.');
+    if (String(entry.source_type || '') === 'invoice') throw new Error('Pembukuan otomatis dari invoice tidak bisa diedit manual.');
+    renderBookkeepingFormPage(req, res, {
+      ...entry,
+      month: req.query.month || (entry.entry_date ? Number(String(entry.entry_date).slice(5, 7)) : ''),
+      year: req.query.year || (entry.entry_date ? Number(String(entry.entry_date).slice(0, 4)) : '')
+    }, null, {
+      isEdit: true,
+      formAction: `/admin/bookkeeping/${entry.id}/update`
+    });
+  } catch (e) {
+    req.session._msg = { type: 'error', text: e.message || String(e) };
+    return redirectBack(res, '/admin/bookkeeping');
+  }
 });
 
 router.post('/bookkeeping/new', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
@@ -5305,6 +5712,24 @@ router.post('/bookkeeping/new', requireAdminSession, restrictToAdmin, express.ur
     return renderBookkeepingFormPage(req, res, req.body, {
       type: 'error',
       text: 'Gagal menambah pembukuan: ' + (e.message || String(e))
+    });
+  }
+});
+
+router.post('/bookkeeping/:id/update', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    bookkeepingSvc.updateEntry(req.params.id, req.body);
+    req.session._msg = { type: 'success', text: 'Pembukuan berhasil diperbarui.' };
+    const month = String(req.body.month || '').trim();
+    const year = String(req.body.year || '').trim();
+    return res.redirect(`/admin/bookkeeping${month && year ? `?month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}&view=ledger` : '?view=ledger'}`);
+  } catch (e) {
+    return renderBookkeepingFormPage(req, res, { ...req.body, id: req.params.id }, {
+      type: 'error',
+      text: 'Gagal memperbarui pembukuan: ' + (e.message || String(e))
+    }, {
+      isEdit: true,
+      formAction: `/admin/bookkeeping/${req.params.id}/update`
     });
   }
 });
@@ -5347,6 +5772,7 @@ router.get('/bookkeeping/export', requireAdminSession, (req, res) => {
   const filterYear = parseInt(req.query.year || now.getFullYear(), 10) || now.getFullYear();
   try {
     bookkeepingSvc.syncPaidInvoiceIncomeEntries();
+    if (typeof bookkeepingSvc.syncAgentVoucherIncomeEntries === 'function') bookkeepingSvc.syncAgentVoucherIncomeEntries();
     cashLedgerSvc.backfillBookkeepingHolders();
 
     const summary = bookkeepingSvc.getSummary({ month: filterMonth, year: filterYear });
@@ -5925,6 +6351,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
   const settingsFieldGroups = {
     usaha: [
       'company_header',
+      'customer_id_prefix',
       'footer_info',
       'company_legal_name',
       'upstream_provider_name',
@@ -5945,7 +6372,10 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'office_lng',
       'operational_hours',
       'server_port',
-      'login_otp_enabled'
+      'login_otp_enabled',
+      'customer_portal_banner_1_url',
+      'customer_portal_banner_2_url',
+      'customer_portal_banner_3_url'
     ],
     payment: [
       'default_gateway',
@@ -6100,10 +6530,14 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
 
     [
       'company_header',
+      'customer_id_prefix',
       'company_legal_name',
       'upstream_provider_name',
       'support_isp_logo_url',
       'company_logo_url',
+      'customer_portal_banner_1_url',
+      'customer_portal_banner_2_url',
+      'customer_portal_banner_3_url',
       'pwa_logo_url',
       'invoice_signature_url',
       'invoice_stamp_url',
@@ -6155,6 +6589,12 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     if ('company_phone' in newSettings) {
       newSettings.company_phone = normalizePhoneDigits(newSettings.company_phone || '');
     }
+    if ('customer_id_prefix' in newSettings) {
+      newSettings.customer_id_prefix = String(newSettings.customer_id_prefix || 'SCK')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 10) || 'SCK';
+    }
     if ('whatsapp_test_number' in newSettings) {
       newSettings.whatsapp_test_number = normalizePhoneDigits(newSettings.whatsapp_test_number || '');
     }
@@ -6190,6 +6630,21 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       newSettings.pwa_logo_url = '';
     } else if (settingsSection === 'usaha') {
       newSettings.pwa_logo_url = String(newSettings.pwa_logo_url || currentSettings.pwa_logo_url || '').trim();
+    }
+
+    if (settingsSection === 'usaha') {
+      for (let index = 1; index <= 3; index += 1) {
+        const settingKey = `customer_portal_banner_${index}_url`;
+        const fileField = `customer_portal_banner_${index}_file`;
+        const uploadedBanner = getUploadedSingleFile(req, fileField);
+        const previousBanner = String(getSetting(settingKey, '') || '').trim();
+        if (uploadedBanner) {
+          safeRemoveUploadAsset(previousBanner, /^\/uploads\/customer-portal-banner-\d+\.(png|jpg|jpeg|webp|svg)$/i);
+          newSettings[settingKey] = persistUploadedImageSetting(uploadedBanner, 'customer-portal-banner');
+        } else {
+          newSettings[settingKey] = String(newSettings[settingKey] || currentSettings[settingKey] || '').trim();
+        }
+      }
     }
 
     const uploadedSupportLogo = settingsSection === 'usaha' ? getUploadedSingleFile(req, 'support_isp_logo_file') : null;
@@ -6764,6 +7219,11 @@ router.get('/api/mikrotik/users', requireAdmin, async (req, res) => {
 // ─── MIKROTIK MONITORING ───────────────────────────────────────────────────
 router.get('/mikrotik', requireAdminSession, (req, res) => {
     const routers = mikrotikService.getAllRouters();
+    const defaultRouter = routers.find((router) => Number(router.is_active || 0) === 1) || routers[0] || null;
+    const autoRefreshRouterId = defaultRouter?.id || null;
+    monitoringCollectorSvc.refreshRouterSnapshot(autoRefreshRouterId, { mode: 'full' }).catch((error) => {
+        logger.warn(`[MikroTik] Auto refresh saat membuka menu gagal untuk router ${autoRefreshRouterId || 'default'}: ${error.message || error}`);
+      });
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
@@ -6821,27 +7281,40 @@ router.get('/api/webhook/payment-notif/logs', requireAdminSession, (req, res) =>
     const where = [];
     const params = [];
     if (service) {
-      where.push('service = ? COLLATE NOCASE');
+      where.push('n.service = ? COLLATE NOCASE');
       params.push(service);
     }
     if (q) {
-      where.push('(content LIKE ? OR service LIKE ?)');
-      params.push(`%${q}%`, `%${q}%`);
+      where.push('(n.content LIKE ? OR n.service LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR CAST(n.matched_invoice_id AS TEXT) LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
 
     const sql = `
-      SELECT id,
-             created_at,
-             strftime('%Y-%m-%d %H:%M:%S', created_at, 'localtime') AS created_at_local,
-             service,
-             content,
-             parsed_amount,
-             parsed_ok,
-             matched_invoice_id,
-             ip
-      FROM webhook_payment_notifs
+      SELECT n.id,
+             n.created_at,
+             strftime('%Y-%m-%d %H:%M:%S', n.created_at, 'localtime') AS created_at_local,
+             n.service,
+             n.content,
+             n.parsed_amount,
+             n.parsed_ok,
+             n.matched_invoice_id,
+             n.matched_agent_topup_id,
+             n.ip,
+             i.customer_id AS matched_customer_id,
+             i.period_month AS matched_period_month,
+             i.period_year AS matched_period_year,
+             i.status AS matched_invoice_status,
+             c.name AS matched_customer_name,
+             c.phone AS matched_customer_phone,
+             a.name AS matched_agent_name,
+             ato.pay_amount AS matched_agent_pay_amount
+      FROM webhook_payment_notifs n
+      LEFT JOIN invoices i ON i.id = n.matched_invoice_id
+      LEFT JOIN customers c ON c.id = i.customer_id
+      LEFT JOIN agent_topup_orders ato ON ato.id = n.matched_agent_topup_id
+      LEFT JOIN agents a ON a.id = ato.agent_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-      ORDER BY id DESC
+      ORDER BY n.id DESC
       LIMIT ?
     `;
     const rows = db.prepare(sql).all(...params, limit);
@@ -7589,6 +8062,86 @@ router.get('/api/mikrotik/summary', requireAdmin, async (req, res) => {
       cache: {
         summary: metadata.source
       }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/mikrotik/interfaces', requireAdmin, async (req, res) => {
+  try {
+    const { routerId } = resolveRouterSelection(req.query.routerId);
+    const rows = await mikrotikService.getInterfaces(routerId, {
+      bypassCache: shouldForceMonitoringRefresh(req)
+    });
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const filtered = q
+      ? rows.filter((row) => matchesMonitoringSearch(row, q, ['name', 'type', 'comment', 'macAddress']))
+      : rows;
+    res.json({
+      items: filtered,
+      total: rows.length,
+      filteredTotal: filtered.length,
+      sampledAt: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/mikrotik/interface-traffic', requireAdmin, async (req, res) => {
+  try {
+    const { routerId } = resolveRouterSelection(req.query.routerId);
+    const interfaceName = String(req.query.interface || '').trim();
+    if (!interfaceName) return res.status(400).json({ error: 'Interface wajib dipilih' });
+    const traffic = await mikrotikService.getInterfaceTraffic(routerId, interfaceName);
+    res.json({ success: true, traffic });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/mikrotik/pppoe-sync', requireAdmin, async (req, res) => {
+  try {
+    const { routerId } = resolveRouterSelection(req.query.routerId);
+    const listQuery = parseMonitoringListQuery(req, 25);
+    const data = await mikrotikService.getPppoeCustomerSync(routerId, {
+      bypassCache: shouldForceMonitoringRefresh(req)
+    });
+    const section = ['matched', 'routerOnly', 'customerOnly'].includes(listQuery.status)
+      ? listQuery.status
+      : String(req.query.section || 'all').trim();
+    const allRows = [
+      ...data.matched.map((row) => ({ ...row, section: 'matched' })),
+      ...data.routerOnly.map((row) => ({ ...row, section: 'routerOnly' })),
+      ...data.customerOnly.map((row) => ({ ...row, section: 'customerOnly' }))
+    ];
+    let rows = section && section !== 'all'
+      ? allRows.filter((row) => row.section === section)
+      : allRows;
+    if (listQuery.q) {
+      rows = rows.filter((row) => {
+        const customer = row.customer || {};
+        return matchesMonitoringSearch({
+          username: row.username,
+          profile: row.profile,
+          name: customer.name,
+          phone: customer.phone,
+          status: customer.status,
+          genieacs_tag: customer.genieacs_tag
+        }, listQuery.q, ['username', 'profile', 'name', 'phone', 'status', 'genieacs_tag']);
+      });
+    }
+    const pageData = paginateMonitoringRows(rows, listQuery.page, listQuery.limit);
+    res.json({
+      ...data,
+      items: pageData.items,
+      page: pageData.page,
+      limit: pageData.limit,
+      total: allRows.length,
+      totalPages: pageData.totalPages,
+      filteredTotal: rows.length,
+      section
     });
   } catch (e) {
     res.status(500).json({ error: e.message });

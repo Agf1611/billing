@@ -13,6 +13,8 @@ const {
 } = require('./publicLinkService');
 
 let portalNotificationsSchemaReady = false;
+let customerCodeSchemaReady = false;
+let customerCodeBackfillDone = false;
 
 function ensurePortalNotificationsSchema() {
   if (portalNotificationsSchemaReady) return;
@@ -64,6 +66,7 @@ async function trySendLifecycleWhatsapp(phone, message) {
 
 // ─── CUSTOMERS ───────────────────────────────────────────────
 function getAllCustomers(search = '') {
+  ensureMissingCustomerCodes();
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -77,7 +80,13 @@ function getAllCustomers(search = '') {
            r.name as router_name,
            o.name as olt_name,
            odp.name as odp_name,
-           (SELECT COUNT(*) FROM invoices WHERE customer_id=c.id AND status='unpaid') as unpaid_count,
+           (
+             SELECT COUNT(*)
+             FROM invoices
+             WHERE customer_id=c.id
+               AND status='unpaid'
+               AND ((period_year * 100) + period_month) <= (${year} * 100 + ${month})
+           ) as unpaid_count,
            u.bytes_in, u.bytes_out
     FROM customers c
     LEFT JOIN packages p ON c.package_id = p.id
@@ -88,12 +97,13 @@ function getAllCustomers(search = '') {
   `;
   if (search) {
     const s = `%${search}%`;
-    return db.prepare(base + ` WHERE c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s, s);
+    return db.prepare(base + ` WHERE c.name LIKE ? OR c.customer_code LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s, s, s);
   }
   return db.prepare(base + ` ORDER BY c.name ASC`).all();
 }
 
 function getCustomerSearchSuggestions(search = '', limit = 8) {
+  ensureMissingCustomerCodes();
   const keyword = String(search || '').trim();
   if (!keyword) return [];
   const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 8, 20));
@@ -101,6 +111,7 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
   return db.prepare(`
     SELECT
       c.id,
+      c.customer_code,
       c.name,
       c.phone,
       c.pppoe_username,
@@ -108,6 +119,7 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
       c.address
     FROM customers c
     WHERE c.name LIKE ?
+       OR c.customer_code LIKE ?
        OR c.phone LIKE ?
        OR c.pppoe_username LIKE ?
        OR c.genieacs_tag LIKE ?
@@ -115,16 +127,17 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
     ORDER BY
       CASE
         WHEN c.name LIKE ? THEN 0
-        WHEN c.phone LIKE ? THEN 1
-        WHEN c.pppoe_username LIKE ? THEN 2
-        WHEN c.genieacs_tag LIKE ? THEN 3
+        WHEN c.customer_code LIKE ? THEN 1
+        WHEN c.phone LIKE ? THEN 2
+        WHEN c.pppoe_username LIKE ? THEN 3
+        WHEN c.genieacs_tag LIKE ? THEN 4
         ELSE 4
       END,
       c.name ASC
     LIMIT ${safeLimit}
   `).all(
-    like, like, like, like, like,
-    `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`
+    like, like, like, like, like, like,
+    `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`
   );
 }
 
@@ -134,7 +147,176 @@ function resetPromoCyclesUsed(customerId) {
   return db.prepare('UPDATE customers SET promo_cycles_used = 0 WHERE id=?').run(id);
 }
 
+function parseMoneyInput(value) {
+  if (value == null) return 0;
+  const raw = String(value).trim();
+  if (!raw) return 0;
+  const numeric = Number(raw.replace(/[^\d.-]/g, ''));
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.round(numeric));
+}
+
+function normalizeCustomerDiscount(data = {}) {
+  const enabled = data.discount_enabled === true
+    || data.discount_enabled === 1
+    || data.discount_enabled === '1'
+    || data.discount_enabled === 'on'
+    || data.discount_enabled === 'true';
+  const amount = parseMoneyInput(data.discount_amount);
+  return {
+    discountEnabled: enabled && amount > 0 ? 1 : 0,
+    discountAmount: enabled ? amount : 0
+  };
+}
+
+function hasOwn(data, key) {
+  return Object.prototype.hasOwnProperty.call(data || {}, key);
+}
+
+function normalizeDateTimeInput(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString();
+}
+
+function normalizeSpeedBoost(data = {}, current = {}) {
+  const hasBoostInput = ['speed_boost_profile', 'speed_boost_until', 'speed_boost_days', 'speed_boost_note']
+    .some((key) => hasOwn(data, key));
+  if (!hasBoostInput) {
+    return {
+      profile: String(current.speed_boost_profile || '').trim(),
+      until: String(current.speed_boost_until || '').trim(),
+      startedAt: String(current.speed_boost_started_at || '').trim(),
+      note: String(current.speed_boost_note || '').trim()
+    };
+  }
+
+  const profile = String(data.speed_boost_profile || '').trim();
+  if (!profile) {
+    return { profile: '', until: '', startedAt: '', note: '' };
+  }
+
+  let until = normalizeDateTimeInput(data.speed_boost_until);
+  const days = Number(data.speed_boost_days || 0);
+  if (!until && Number.isFinite(days) && days > 0) {
+    const untilDate = new Date();
+    untilDate.setDate(untilDate.getDate() + Math.min(365, Math.max(1, Math.round(days))));
+    until = untilDate.toISOString();
+  }
+
+  return {
+    profile,
+    until,
+    startedAt: String(current.speed_boost_started_at || '').trim() || new Date().toISOString(),
+    note: String(data.speed_boost_note || '').trim()
+  };
+}
+
+function applyCustomerDiscountToAmount(customer = {}, amount = 0) {
+  const base = Math.max(0, Math.round(Number(amount || 0) || 0));
+  if (Number(customer.discount_enabled || 0) !== 1) return base;
+  const discount = Math.max(0, Math.round(Number(customer.discount_amount || 0) || 0));
+  return Math.max(0, base - Math.min(discount, base));
+}
+
+function normalizeCustomerCodePrefix(value) {
+  const raw = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (raw || 'SCK').slice(0, 10);
+}
+
+function normalizeCustomerCodeValue(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function getCustomerCodePrefix() {
+  return normalizeCustomerCodePrefix(getSetting('customer_id_prefix', 'SCK'));
+}
+
+function ensureCustomerCodeSchema() {
+  if (customerCodeSchemaReady) return;
+  try {
+    db.exec("ALTER TABLE customers ADD COLUMN customer_code TEXT DEFAULT ''");
+  } catch (_) {}
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_customer_code_unique ON customers(customer_code) WHERE customer_code IS NOT NULL AND TRIM(customer_code) <> ''");
+  } catch (_) {}
+  customerCodeSchemaReady = true;
+}
+
+function resolveCustomerCodeSuffix(code, prefix) {
+  const raw = String(code || '').trim().toUpperCase();
+  const safePrefix = normalizeCustomerCodePrefix(prefix);
+  if (!raw.startsWith(safePrefix)) return 0;
+  const suffix = raw.slice(safePrefix.length);
+  if (!/^\d+$/.test(suffix)) return 0;
+  return Math.max(0, parseInt(suffix, 10) || 0);
+}
+
+function getNextCustomerCode(prefix = getCustomerCodePrefix(), usedCodes = null) {
+  ensureCustomerCodeSchema();
+  const safePrefix = normalizeCustomerCodePrefix(prefix);
+  const rows = db.prepare(`
+    SELECT customer_code
+    FROM customers
+    WHERE customer_code IS NOT NULL
+      AND TRIM(customer_code) <> ''
+      AND UPPER(customer_code) LIKE ?
+  `).all(`${safePrefix}%`);
+  let maxSuffix = 0;
+  for (const row of rows) {
+    maxSuffix = Math.max(maxSuffix, resolveCustomerCodeSuffix(row.customer_code, safePrefix));
+  }
+
+  let next = maxSuffix + 1;
+  const isUsed = (code) => {
+    if (usedCodes && usedCodes.has(code)) return true;
+    return Boolean(db.prepare('SELECT id FROM customers WHERE customer_code = ? LIMIT 1').get(code));
+  };
+  let code = `${safePrefix}${next}`;
+  while (isUsed(code)) {
+    next += 1;
+    code = `${safePrefix}${next}`;
+  }
+  return code;
+}
+
+function ensureMissingCustomerCodes() {
+  ensureCustomerCodeSchema();
+  if (customerCodeBackfillDone) return;
+  const prefix = getCustomerCodePrefix();
+  const rows = db.prepare(`
+    SELECT id
+    FROM customers
+    WHERE customer_code IS NULL OR TRIM(customer_code) = ''
+    ORDER BY id ASC
+  `).all();
+  if (!rows.length) {
+    customerCodeBackfillDone = true;
+    return;
+  }
+
+  const usedRows = db.prepare(`
+    SELECT customer_code
+    FROM customers
+    WHERE customer_code IS NOT NULL AND TRIM(customer_code) <> ''
+  `).all();
+  const usedCodes = new Set(usedRows.map((row) => String(row.customer_code || '').trim()).filter(Boolean));
+  const updateStmt = db.prepare('UPDATE customers SET customer_code = ? WHERE id = ?');
+  const backfill = db.transaction((items) => {
+    for (const item of items) {
+      const code = getNextCustomerCode(prefix, usedCodes);
+      usedCodes.add(code);
+      updateStmt.run(code, item.id);
+    }
+  });
+  backfill(rows);
+  customerCodeBackfillDone = true;
+}
+
 function getCustomerById(id) {
+  ensureMissingCustomerCodes();
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -157,11 +339,16 @@ function getCustomerById(id) {
 }
 
 function createCustomer(data) {
+  ensureMissingCustomerCodes();
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
+  const discount = normalizeCustomerDiscount(data);
+  const speedBoost = normalizeSpeedBoost(data, {});
+  const customerCode = normalizeCustomerCodeValue(data.customer_code) || getNextCustomerCode();
   return db.prepare(`
-    INSERT INTO customers (name, phone, email, address, nik, npwp, house_photo_url, ktp_photo_url, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO customers (customer_code, name, phone, email, address, nik, npwp, house_photo_url, ktp_photo_url, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
+    customerCode,
     data.name, normalizedPhone || '', data.email || '', data.address || '',
     data.nik || '', data.npwp || '', data.house_photo_url || '', data.ktp_photo_url || '',
     data.package_id ? parseInt(data.package_id) : null,
@@ -175,7 +362,14 @@ function createCustomer(data) {
     data.normal_pppoe_profile || '',
     data.isolir_profile || 'BEATISOLIR',
     data.status || 'active',
-    data.install_date || null, data.notes || '',
+    data.install_date || null,
+    discount.discountEnabled,
+    discount.discountAmount,
+    speedBoost.profile,
+    speedBoost.until || null,
+    speedBoost.startedAt || null,
+    speedBoost.note,
+    data.notes || '',
     data.auto_isolate !== undefined ? parseInt(data.auto_isolate) : 1,
     data.isolate_day !== undefined ? parseInt(data.isolate_day) : 10,
     data.connection_type || 'pppoe',
@@ -185,14 +379,23 @@ function createCustomer(data) {
 }
 
 function updateCustomer(id, data) {
-  const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url FROM customers WHERE id=?').get(id) || {};
-  const prev = db.prepare('SELECT package_id FROM customers WHERE id=?').get(id);
+  ensureMissingCustomerCodes();
+  const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note FROM customers WHERE id=?').get(id) || {};
+  const prev = db.prepare('SELECT package_id, discount_enabled, discount_amount FROM customers WHERE id=?').get(id);
   const newPkgId = data.package_id ? parseInt(data.package_id, 10) : null;
   const pkgChanged = prev && Number(prev.package_id || 0) !== Number(newPkgId || 0);
+  const hasDiscountInput = Object.prototype.hasOwnProperty.call(data, 'discount_enabled') || Object.prototype.hasOwnProperty.call(data, 'discount_amount');
+  const discount = hasDiscountInput
+    ? normalizeCustomerDiscount(data)
+    : {
+        discountEnabled: Number(current.discount_enabled || 0) === 1 ? 1 : 0,
+        discountAmount: Math.max(0, Math.round(Number(current.discount_amount || 0) || 0))
+      };
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
+  const speedBoost = normalizeSpeedBoost(data, current);
 
   const result = db.prepare(`
-    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?
+    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, discount_enabled=?, discount_amount=?, speed_boost_profile=?, speed_boost_until=?, speed_boost_started_at=?, speed_boost_note=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?
     WHERE id=?
   `).run(
     data.name, normalizedPhone || '', data.email || '', data.address || '',
@@ -211,7 +414,14 @@ function updateCustomer(id, data) {
     data.normal_pppoe_profile || '',
     data.isolir_profile || 'BEATISOLIR',
     data.status || 'active',
-    data.install_date || null, data.notes || '',
+    data.install_date || null,
+    discount.discountEnabled,
+    discount.discountAmount,
+    speedBoost.profile,
+    speedBoost.until || null,
+    speedBoost.startedAt || null,
+    speedBoost.note,
+    data.notes || '',
     data.auto_isolate !== undefined ? parseInt(data.auto_isolate) : 1,
     data.isolate_day !== undefined ? parseInt(data.isolate_day) : 10,
     data.cable_path || null,
@@ -324,11 +534,49 @@ function addPortalNotification(customerId, data = {}, options = {}) {
     INSERT INTO customer_portal_notifications (customer_id, kind, tab, title, body, payload_json)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(id, kind, tab, title, body, payloadJson);
-  return db.prepare(`
+  const row = db.prepare(`
     SELECT id, customer_id, kind, tab, title, body, payload_json, created_at
     FROM customer_portal_notifications
     WHERE id = ?
   `).get(result.lastInsertRowid);
+
+  if (row?.id && options.push === true) {
+    setImmediate(() => {
+      try {
+        const { getSettingsWithCache } = require('../config/settingsManager');
+        const { isPushConfigured, sendPushToCustomer } = require('./pushNotificationService');
+        const settings = getSettingsWithCache();
+        if (!isPushConfigured(settings)) return;
+        const targetTab = String(tab || 'home').replace(/^#/, '') || 'home';
+        Promise.resolve(sendPushToCustomer({ id }, {
+          settings,
+          title,
+          message: body || title,
+          targetUrl: `/customer/dashboard#${targetTab}`,
+          data: {
+            kind,
+            source: 'portal-notification',
+            notificationId: Number(row.id || 0) || null,
+            customerId: id,
+            ...(data.payload && typeof data.payload === 'object' ? data.payload : {})
+          },
+          timeoutMs: Number(options.pushTimeoutMs || 7000)
+        })).catch((error) => {
+          try {
+            const { logger } = require('../config/logger');
+            logger.warn(`[CustomerPortal] Gagal kirim push pelanggan ${id}: ${error.message || String(error)}`);
+          } catch (_) {}
+        });
+      } catch (error) {
+        try {
+          const { logger } = require('../config/logger');
+          logger.warn(`[CustomerPortal] Gagal menyiapkan push pelanggan ${id}: ${error.message || String(error)}`);
+        } catch (_) {}
+      }
+    });
+  }
+
+  return row;
 }
 
 function addPortalNotificationsBulk(customerIds = [], data = {}, options = {}) {
@@ -523,6 +771,7 @@ async function applyCustomerPackageChange(customerId, targetPackageId, options =
 
   const currentPackage = customer.package_id ? getPackageById(customer.package_id) : null;
   const targetProfile = resolvePackageNormalProfile(targetPackage);
+  const targetInvoiceAmount = applyCustomerDiscountToAmount(customer, targetPackage.price);
   const note = String(options.changeNote || `Paket diubah dari ${currentPackage?.name || '-'} ke ${targetPackage.name}`).trim();
   const invoiceAdjustmentMode = normalizeInvoiceAdjustmentMode(options.invoiceAdjustmentMode);
   const effectiveMonth = Number(options.effectiveMonth || 0) || null;
@@ -542,7 +791,7 @@ async function applyCustomerPackageChange(customerId, targetPackageId, options =
             period_year > ?
             OR (period_year = ? AND period_month >= ?)
           )
-      `).run(Number(targetPackage.price || 0), note, cid, effectiveYear, effectiveYear, effectiveMonth);
+      `).run(targetInvoiceAmount, note, cid, effectiveYear, effectiveYear, effectiveMonth);
       return updated.changes || 0;
     }
 
@@ -551,7 +800,7 @@ async function applyCustomerPackageChange(customerId, targetPackageId, options =
       SET amount = ?,
           notes = TRIM(COALESCE(notes, '') || CASE WHEN COALESCE(notes, '') = '' THEN '' ELSE ' | ' END || ?)
       WHERE customer_id = ? AND status = 'unpaid'
-    `).run(Number(targetPackage.price || 0), note, cid);
+    `).run(targetInvoiceAmount, note, cid);
     return updated.changes || 0;
   });
 
@@ -612,8 +861,12 @@ async function applyPortalPackageChange(customerId, targetPackageId) {
 }
 
 function findCustomerByAny(val) {
+  ensureMissingCustomerCodes();
   if (!val) return null;
   const cleanVal = val.toString().trim();
+
+  const byCode = db.prepare('SELECT id FROM customers WHERE UPPER(customer_code) = UPPER(?)').get(cleanVal);
+  if (byCode) return getCustomerById(byCode.id);
   
   // 1. Try Phone (Priority for Login)
   const normalizedPhone = normalizePhoneDigits(cleanVal);
@@ -650,6 +903,34 @@ function findCustomerByAny(val) {
   }
   
   return null;
+}
+
+function getExpiredSpeedBoostCustomers(now = new Date()) {
+  ensureCustomerCodeSchema();
+  const iso = (now instanceof Date ? now : new Date(now)).toISOString();
+  return db.prepare(`
+    SELECT c.*, p.pppoe_profile AS package_pppoe_profile, p.name AS package_name
+    FROM customers c
+    LEFT JOIN packages p ON p.id = c.package_id
+    WHERE TRIM(COALESCE(c.speed_boost_profile, '')) <> ''
+      AND c.speed_boost_until IS NOT NULL
+      AND TRIM(c.speed_boost_until) <> ''
+      AND datetime(c.speed_boost_until) <= datetime(?)
+      AND TRIM(COALESCE(c.pppoe_username, '')) <> ''
+  `).all(iso);
+}
+
+function clearSpeedBoost(customerId) {
+  const id = Number(customerId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error('ID pelanggan tidak valid');
+  return db.prepare(`
+    UPDATE customers
+    SET speed_boost_profile = '',
+        speed_boost_until = NULL,
+        speed_boost_started_at = NULL,
+        speed_boost_note = ''
+    WHERE id = ?
+  `).run(id);
 }
 
 async function suspendCustomer(id) {
@@ -707,7 +988,7 @@ async function activateCustomer(id) {
   } else if (customer.pppoe_username) {
     const pkg = getPackageById(customer.package_id);
     const targetProfile = customer.normal_pppoe_profile || (pkg ? (pkg.pppoe_profile || pkg.name) : 'default');
-    await mikrotikSvc.setPppoeProfile(customer.pppoe_username, targetProfile, customer.router_id);
+    await mikrotikSvc.setPppoeProfile(customer.pppoe_username, targetProfile, customer.router_id, { forceKick: true });
   }
 
   if (customer.phone) {
@@ -741,5 +1022,6 @@ module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
   getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
   suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath, updateCustomerMapLocation, updateCustomerOdpLink,
-  resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk, getCustomerSearchSuggestions
+  resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk,
+  getCustomerSearchSuggestions, getExpiredSpeedBoostCustomers, clearSpeedBoost
 };

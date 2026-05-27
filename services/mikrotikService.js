@@ -7,10 +7,22 @@ const { getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const db = require('../config/database');
 
-const MIKROTIK_CONNECT_TIMEOUT_MS = 1200;
+function envNumber(name, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
+const MIKROTIK_CONNECT_TIMEOUT_MS = envNumber('MIKROTIK_CONNECT_TIMEOUT_MS', 1800, 500);
+const MIKROTIK_QUEUE_WAIT_TIMEOUT_MS = envNumber('MIKROTIK_QUEUE_WAIT_TIMEOUT_MS', 45000, 5000);
+const MIKROTIK_CONNECTION_HOLD_TIMEOUT_MS = envNumber('MIKROTIK_CONNECTION_HOLD_TIMEOUT_MS', 45000, 10000);
+const MIKROTIK_SUCCESS_LOG_TTL_MS = envNumber('MIKROTIK_SUCCESS_LOG_TTL_MS', 120000, 30000);
 const connectionProbeCache = new Map();
+const connectionQueueByRouter = new Map();
+const connectionSuccessLogCache = new Map();
 const listCache = new Map();
 const missingRouterNoticeCache = new Map();
+const throttledWarnCache = new Map();
 
 function cacheKey(routerId, name) {
   const rid = routerId == null || String(routerId).trim() === '' ? 'default' : String(routerId).trim();
@@ -43,6 +55,15 @@ function logMissingRouterNotice(context, routerId) {
   if ((now - lastLoggedAt) < 60000) return;
   missingRouterNoticeCache.set(key, now);
   logger.warn(`[MikroTik] ${context}: router ${normalizedRouterId} sudah tidak ada. Referensi akan di-skip.`);
+}
+
+function logThrottledWarn(key, message, ttlMs = 120000) {
+  const cacheKey = String(key || message || 'warning');
+  const now = Date.now();
+  const lastLoggedAt = Number(throttledWarnCache.get(cacheKey) || 0);
+  if ((now - lastLoggedAt) < Math.max(1000, Number(ttlMs) || 0)) return;
+  throttledWarnCache.set(cacheKey, now);
+  logger.warn(message);
 }
 
 function invalidateRouterCaches(routerId = null) {
@@ -86,6 +107,83 @@ function withTimeout(promise, timeoutMs, label) {
       }, ms);
     })
   ]);
+}
+
+function buildConnectionQueueKey(config = {}) {
+  return [
+    String(config.host || '').trim() || 'unknown-host',
+    String(config.user || '').trim() || 'unknown-user',
+    String(config.port || '').trim() || 'unknown-port'
+  ].join(':');
+}
+
+async function acquireConnectionQueueSlot(key) {
+  const queueKey = String(key || 'default');
+  const previous = connectionQueueByRouter.get(queueKey) || Promise.resolve();
+  let releaseNext = () => {};
+  const next = new Promise((resolve) => {
+    releaseNext = resolve;
+  });
+  const current = previous.catch(() => {}).then(() => next);
+  connectionQueueByRouter.set(queueKey, current);
+
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (holdTimer) clearTimeout(holdTimer);
+    releaseNext();
+    current.finally(() => {
+      if (connectionQueueByRouter.get(queueKey) === current) connectionQueueByRouter.delete(queueKey);
+    }).catch(() => {});
+  };
+
+  let holdTimer = null;
+  try {
+    await withTimeout(previous.catch(() => {}), MIKROTIK_QUEUE_WAIT_TIMEOUT_MS, `MikroTik queue ${queueKey}`);
+  } catch (error) {
+    release();
+    throw error;
+  }
+
+  holdTimer = setTimeout(() => {
+    logger.warn(`[MikroTik] Queue slot ${queueKey} ditutup otomatis karena koneksi terlalu lama.`);
+    release();
+  }, MIKROTIK_CONNECTION_HOLD_TIMEOUT_MS);
+  if (typeof holdTimer.unref === 'function') holdTimer.unref();
+
+  return release;
+}
+
+function logConnectionSuccess(config, driverName) {
+  const key = `${buildConnectionQueueKey(config)}:${driverName}:${config.routerOsMode || 'auto'}`;
+  const now = Date.now();
+  const last = Number(connectionSuccessLogCache.get(key) || 0);
+  if ((now - last) < MIKROTIK_SUCCESS_LOG_TTL_MS) return;
+  connectionSuccessLogCache.set(key, now);
+  logger.info(`[MikroTik] Connected to ${config.host}:${config.port} via ${driverName} (${config.routerOsMode})`);
+}
+
+function attachQueueRelease(connection, release) {
+  if (!connection || !connection.api || typeof release !== 'function') return connection;
+  const originalClose = typeof connection.api.close === 'function'
+    ? connection.api.close.bind(connection.api)
+    : null;
+  const originalDisconnect = typeof connection.api.disconnect === 'function'
+    ? connection.api.disconnect.bind(connection.api)
+    : null;
+
+  connection.api.close = async () => {
+    try {
+      if (originalClose) return await originalClose();
+      if (originalDisconnect) return await originalDisconnect();
+      return undefined;
+    } finally {
+      release();
+    }
+  };
+  connection.api.disconnect = connection.api.close;
+  return connection;
 }
 
 async function canConnectTcp(host, port, timeoutMs = MIKROTIK_CONNECT_TIMEOUT_MS) {
@@ -151,6 +249,7 @@ function countUniqueMonitoringRows(rows = [], candidates = []) {
 
 function normalizeRouterOsMode(value) {
   const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'ros-client' || raw === 'ros_client' || raw === 'rosclient') return 'ros-client';
   if (raw === 'routeros_v6' || raw === 'v6' || raw === 'ros6') return 'routeros_v6';
   if (raw === 'routeros_v7' || raw === 'v7' || raw === 'ros7') return 'routeros_v7';
   return 'auto';
@@ -432,8 +531,13 @@ async function resolveConnectableConfig(baseConfig) {
 
 async function getConnection(routerId = null) {
   const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
+  const queueKey = buildConnectionQueueKey(config);
+  const releaseQueueSlot = await acquireConnectionQueueSlot(queueKey);
+  let releaseOnFailure = true;
   const attempts = [];
-  if (config.routerOsMode === 'routeros_v6') {
+  if (config.routerOsMode === 'ros-client') {
+    attempts.push(['ros-client', () => getRosClientConnection(config)]);
+  } else if (config.routerOsMode === 'routeros_v6') {
     attempts.push(['routeros-client', () => getRouterOsClientConnection(config)]);
     attempts.push(['ros-client', () => getRosClientConnection(config)]);
   } else if (config.routerOsMode === 'routeros_v7') {
@@ -445,29 +549,34 @@ async function getConnection(routerId = null) {
   }
 
   let lastError = null;
-  for (const [driverName, connectFn] of attempts) {
-    try {
-      const connection = await connectFn();
-      logger.info(`[MikroTik] Connected to ${config.host}:${config.port} via ${driverName} (${config.routerOsMode})`);
-      return connection;
-    } catch (err) {
-      lastError = err;
-      const probeKey = `${String(config.host || '').trim()}:${String(config.user || '').trim()}:${String(config.port || '').trim()}`;
-      const msg = String(err?.message || err || '');
-      if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('EHOSTUNREACH') || msg.includes('Timeout')) {
-        connectionProbeCache.set(probeKey, {
-          port: 0,
-          okUntil: 0,
-          failUntil: Date.now() + 5000,
-          failMessage: `Tidak bisa konek ke MikroTik ${config.host}:${config.port}. ${msg}`
-        });
+  try {
+    for (const [driverName, connectFn] of attempts) {
+      try {
+        const connection = await connectFn();
+        logConnectionSuccess(config, driverName);
+        releaseOnFailure = false;
+        return attachQueueRelease(connection, releaseQueueSlot);
+      } catch (err) {
+        lastError = err;
+        const probeKey = `${String(config.host || '').trim()}:${String(config.user || '').trim()}:${String(config.port || '').trim()}`;
+        const msg = String(err?.message || err || '');
+        if (msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT') || msg.includes('EHOSTUNREACH') || msg.includes('Timeout')) {
+          connectionProbeCache.set(probeKey, {
+            port: 0,
+            okUntil: 0,
+            failUntil: Date.now() + 15000,
+            failMessage: `Tidak bisa konek ke MikroTik ${config.host}:${config.port}. ${msg}`
+          });
+        }
+        logger.warn(`[MikroTik] Connection attempt via ${driverName} failed for ${config.host}:${config.port}: ${err.message}`);
       }
-      logger.warn(`[MikroTik] Connection attempt via ${driverName} failed for ${config.host}:${config.port}: ${err.message}`);
     }
-  }
 
-  logger.error(`Failed to connect to MikroTik (${config.host}:${config.port}) after compatibility fallback`, lastError);
-  throw lastError || new Error('Gagal terhubung ke MikroTik');
+    logger.error(`Failed to connect to MikroTik (${config.host}:${config.port}) after compatibility fallback`, lastError);
+    throw lastError || new Error('Gagal terhubung ke MikroTik');
+  } finally {
+    if (releaseOnFailure) releaseQueueSlot();
+  }
 }
 
 async function getPppoeProfilesViaRouterOsClient(routerId = null) {
@@ -480,6 +589,11 @@ async function getForcedRouterOsConnection(routerId = null) {
 }
 
 async function getForcedRosConnection(routerId = null) {
+  const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
+  return await getRosClientConnection(config);
+}
+
+async function getWriteConnection(routerId = null) {
   const config = await resolveConnectableConfig(resolveRouterConfig(routerId));
   return await getRosClientConnection(config);
 }
@@ -519,14 +633,18 @@ async function getMenuRowsViaRouterOsClient(routerId = null, menuPath, proplist 
   }
 }
 
-async function getMenuRowsViaStableConnection(routerId = null, menuPath, proplist = []) {
+async function getMenuRowsViaStableConnection(routerId = null, menuPath, proplist = [], optionsOverride = {}) {
   let conn = null;
   try {
     conn = await getConnection(routerId);
     const options = Array.isArray(proplist) && proplist.length
       ? { proplist: proplist.map((item) => String(item || '').trim()).filter(Boolean) }
       : {};
-    const results = await conn.client.menu(menuPath).get(options);
+    const request = conn.client.menu(menuPath).get(options);
+    const timeoutMs = Number(optionsOverride?.timeoutMs || 0) || 0;
+    const results = timeoutMs > 0
+      ? await withTimeout(request, timeoutMs, optionsOverride?.label || menuPath)
+      : await request;
     return Array.isArray(results) ? results.map(augmentRow) : [];
   } finally {
     try {
@@ -610,10 +728,11 @@ async function getPppoeUsers(routerId = null) {
 }
 
 // Function to isolate a user
-async function setPppoeProfile(username, profileName, routerId = null) {
+async function setPppoeProfile(username, profileName, routerId = null, options = {}) {
   let conn = null;
+  let shouldKick = false;
   try {
-    conn = await getConnection(routerId);
+    conn = await getWriteConnection(routerId);
     const secretMenu = conn.client.menu('/ppp/secret');
     const secrets = await secretMenu.where('name', username).get();
     
@@ -632,11 +751,24 @@ async function setPppoeProfile(username, profileName, routerId = null) {
     if (currentProfile !== profileName) {
       logger.info(`[MikroTik] Changing profile for ${username}: ${currentProfile} -> ${profileName}`);
       await secretMenu.set({ profile: profileName }, secretId);
-      
-      // Disconnect active connection so they reconnect with new profile
-      await kickPppoeUser(username, routerId);
+      shouldKick = true;
     } else {
-      logger.info(`[MikroTik] Profile for ${username} is already ${profileName}. Skipping update and kick.`);
+      shouldKick = Boolean(options && options.forceKick);
+      logger.info(`[MikroTik] Profile for ${username} is already ${profileName}.${shouldKick ? ' Reconnect tetap dijalankan.' : ' Skipping update and kick.'}`);
+    }
+
+    if (conn && conn.api) {
+      await conn.api.close();
+      conn = null;
+    }
+
+    // Buka koneksi baru untuk kick supaya tidak menunggu queue koneksi yang sedang dipakai.
+    if (shouldKick) {
+      try {
+        await kickPppoeUser(username, routerId);
+      } catch (kickError) {
+        logger.warn(`[MikroTik] Profile ${username} sudah diset ke ${profileName}, tetapi gagal kick sesi aktif: ${kickError.message || String(kickError)}`);
+      }
     }
 
     return true;
@@ -656,7 +788,7 @@ async function kickPppoeUser(username, routerId = null) {
   }
   let conn = null;
   try {
-    conn = await getConnection(routerId);
+    conn = await getWriteConnection(routerId);
     const sessions = await conn.client.menu('/ppp/active').where('name', normalizedUsername).get();
     
     if (sessions.length > 0) {
@@ -769,13 +901,14 @@ async function deletePppoeSecret(id, routerId = null) {
 async function getPppoeActive(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
   const ck = cacheKey(routerId, 'pppoeActive');
-  const cached = bypassCache ? null : getCachedList(ck, 3000);
+  const cached = bypassCache ? null : getCachedList(ck, 10000);
   if (cached) return cached;
   try {
     const activeRows = await getMenuRowsViaStableConnection(
       routerId,
       '/ppp/active',
-      ['.id', 'session-id', 'name', 'service', 'address', 'uptime', 'caller-id', 'interface', 'bytes-in', 'bytes-out']
+      ['.id', 'session-id', 'name', 'service', 'address', 'uptime', 'caller-id', 'interface', 'bytes-in', 'bytes-out'],
+      { timeoutMs: 15000, label: 'getPppoeActive' }
     );
     const sessions = Array.isArray(activeRows) ? activeRows.map(augmentRow) : [];
     const needsInterfaceStats = sessions.some((row) =>
@@ -791,7 +924,8 @@ async function getPppoeActive(routerId = null, options = {}) {
           const interfaceRows = await getMenuRowsViaStableConnection(
             routerId,
             '/interface',
-            ['.id', 'name', 'type', 'rx-byte', 'tx-byte', 'running', 'dynamic']
+            ['.id', 'name', 'type', 'rx-byte', 'tx-byte', 'running', 'dynamic'],
+            { timeoutMs: 12000, label: 'getPppoeInterfaceStats' }
           );
           const interfaceMap = new Map();
           for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
@@ -816,7 +950,11 @@ async function getPppoeActive(routerId = null, options = {}) {
             if (row.interface === undefined || row.interface === null || row.interface === '') row.interface = iface.name;
           }
         } catch (ifaceErr) {
-          logger.warn(`[MikroTik] Failed to enrich PPPoE interface byte counters: ${ifaceErr.message}`);
+          logThrottledWarn(
+            `pppoe-interface-stats:${cacheKey(routerId, 'pppoeActive')}`,
+            `[MikroTik] Failed to enrich PPPoE interface byte counters: ${ifaceErr.message}`,
+            120000
+          );
         }
       }
       setCachedList(ck, sessions);
@@ -826,7 +964,8 @@ async function getPppoeActive(routerId = null, options = {}) {
     const interfaceRows = await getMenuRowsViaStableConnection(
       routerId,
       '/interface',
-      ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time']
+      ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time'],
+      { timeoutMs: 12000, label: 'getPppoeInterfaceFallback' }
     );
     const fallbackSessions = [];
     for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
@@ -1020,6 +1159,240 @@ function withMikrotikTimeout(promise, timeoutMs, fallbackValue = null) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+function readNumberValue(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === '') continue;
+    const normalized = String(value).replace(/[^\d.-]/g, '');
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function normalizeInterfaceRow(row = {}) {
+  const r = augmentRow(row && typeof row === 'object' ? row : {});
+  return {
+    id: String(r['.id'] || r.id || '').trim(),
+    name: String(r.name || '').trim(),
+    type: String(r.type || '').trim(),
+    running: toBooleanLike(r.running),
+    disabled: toBooleanLike(r.disabled),
+    dynamic: toBooleanLike(r.dynamic),
+    comment: String(r.comment || '').trim(),
+    macAddress: String(r.macAddress || r['mac-address'] || '').trim(),
+    mtu: String(r.mtu || '').trim(),
+    rxByte: readNumberValue(r.rxByte, r['rx-byte']),
+    txByte: readNumberValue(r.txByte, r['tx-byte']),
+    rxPacket: readNumberValue(r.rxPacket, r['rx-packet']),
+    txPacket: readNumberValue(r.txPacket, r['tx-packet'])
+  };
+}
+
+async function getInterfaces(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'interfaces');
+  const cached = bypassCache ? null : getCachedList(ck, 5000);
+  if (cached) return cached;
+  try {
+    const rows = await getMenuRowsViaStableConnection(
+      routerId,
+      '/interface',
+      ['.id', 'name', 'type', 'running', 'disabled', 'dynamic', 'comment', 'mac-address', 'mtu', 'rx-byte', 'tx-byte', 'rx-packet', 'tx-packet']
+    );
+    const mapped = (Array.isArray(rows) ? rows : [])
+      .map(normalizeInterfaceRow)
+      .filter((row) => row.name && !String(row.name).startsWith('<pppoe-'));
+    setCachedList(ck, mapped);
+    return mapped;
+  } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getInterfaces', routerId);
+      return [];
+    }
+    logger.error('Error getting MikroTik interfaces:', e);
+    return [];
+  }
+}
+
+async function readInterfaceCounter(routerId = null, interfaceName = '') {
+  const target = String(interfaceName || '').trim();
+  if (!target) return null;
+  const rows = await getMenuRowsViaStableConnection(
+    routerId,
+    '/interface',
+    ['.id', 'name', 'type', 'running', 'disabled', 'rx-byte', 'tx-byte', 'rx-packet', 'tx-packet']
+  );
+  const match = (Array.isArray(rows) ? rows : []).find((row) => String(row?.name || '').trim() === target);
+  return match ? normalizeInterfaceRow(match) : null;
+}
+
+function normalizeTrafficMonitorRow(row = {}, iface = {}) {
+  const r = augmentRow(row && typeof row === 'object' ? row : {});
+  const rxBps = readNumberValue(
+    r.rxBitsPerSecond,
+    r['rx-bits-per-second'],
+    r.rxBps,
+    r['rx-bps']
+  );
+  const txBps = readNumberValue(
+    r.txBitsPerSecond,
+    r['tx-bits-per-second'],
+    r.txBps,
+    r['tx-bps']
+  );
+  return {
+    interface: String(r.name || r.interface || iface.name || '').trim(),
+    type: String(iface.type || r.type || '').trim(),
+    running: iface.running === true || toBooleanLike(r.running),
+    disabled: iface.disabled === true || toBooleanLike(r.disabled),
+    rxBps,
+    txBps,
+    rxMbps: rxBps / 1000000,
+    txMbps: txBps / 1000000,
+    rxByte: readNumberValue(iface.rxByte, r.rxByte, r['rx-byte']),
+    txByte: readNumberValue(iface.txByte, r.txByte, r['tx-byte']),
+    sampledAt: new Date().toISOString(),
+    source: 'monitor-traffic',
+    raw: r
+  };
+}
+
+async function getInterfaceTraffic(routerId = null, interfaceName = '') {
+  const target = String(interfaceName || '').trim();
+  if (!target) throw new Error('Interface wajib dipilih');
+  let conn = null;
+  try {
+    const iface = await readInterfaceCounter(routerId, target);
+    if (!iface) throw new Error(`Interface ${target} tidak ditemukan`);
+
+    try {
+      conn = await getConnection(routerId);
+      const rows = await withTimeout(
+        conn.client.menu('/interface').exec('monitor-traffic', { interface: target, once: '' }),
+        6500,
+        `monitor traffic ${target}`
+      );
+      const row = Array.isArray(rows) && rows.length ? rows[0] : rows;
+      const normalized = normalizeTrafficMonitorRow(row, iface);
+      if (normalized.rxBps > 0 || normalized.txBps > 0) return normalized;
+    } catch (monitorErr) {
+      logger.warn(`[MikroTik] monitor-traffic ${target} gagal, fallback counter delta: ${monitorErr.message}`);
+    } finally {
+      try {
+        if (conn && conn.api) await conn.api.close();
+      } catch {}
+      conn = null;
+    }
+
+    const before = iface;
+    await sleep(1200);
+    const after = await readInterfaceCounter(routerId, target);
+    if (!after) throw new Error(`Interface ${target} tidak ditemukan`);
+    const elapsed = 1.2;
+    const rxBps = Math.max(0, ((Number(after.rxByte || 0) - Number(before.rxByte || 0)) * 8) / elapsed);
+    const txBps = Math.max(0, ((Number(after.txByte || 0) - Number(before.txByte || 0)) * 8) / elapsed);
+    return {
+      interface: target,
+      type: after.type || before.type || '',
+      running: after.running,
+      disabled: after.disabled,
+      rxBps,
+      txBps,
+      rxMbps: rxBps / 1000000,
+      txMbps: txBps / 1000000,
+      rxByte: after.rxByte,
+      txByte: after.txByte,
+      sampledAt: new Date().toISOString(),
+      source: 'counter-delta'
+    };
+  } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getInterfaceTraffic', routerId);
+    }
+    throw e;
+  } finally {
+    try {
+      if (conn && conn.api) await conn.api.close();
+    } catch {}
+  }
+}
+
+async function getPppoeCustomerSync(routerId = null, options = {}) {
+  const secrets = await getPppoeUsers(routerId, { bypassCache: Boolean(options?.bypassCache) });
+  const rows = db.prepare(`
+    SELECT id, name, phone, status, router_id, pppoe_username, genieacs_tag
+    FROM customers
+    WHERE pppoe_username IS NOT NULL
+      AND TRIM(pppoe_username) != ''
+      AND (? IS NULL OR router_id IS ?)
+    ORDER BY name ASC
+  `).all(routerId, routerId);
+
+  const normalizeKey = (value) => String(value || '').trim().toLowerCase();
+  const customersByPppoe = new Map();
+  for (const customer of rows) {
+    const key = normalizeKey(customer.pppoe_username);
+    if (!key || customersByPppoe.has(key)) continue;
+    customersByPppoe.set(key, customer);
+  }
+
+  const secretsByName = new Map();
+  for (const secret of Array.isArray(secrets) ? secrets : []) {
+    const key = normalizeKey(secret?.name);
+    if (!key || secretsByName.has(key)) continue;
+    secretsByName.set(key, secret);
+  }
+
+  const matched = [];
+  const routerOnly = [];
+  const customerOnly = [];
+
+  for (const [key, secret] of secretsByName.entries()) {
+    const customer = customersByPppoe.get(key);
+    if (customer) {
+      matched.push({
+        username: secret.name,
+        profile: secret.profile || '',
+        disabled: Boolean(secret.disabled),
+        customer
+      });
+    } else {
+      routerOnly.push({
+        username: secret.name,
+        profile: secret.profile || '',
+        disabled: Boolean(secret.disabled),
+        remoteAddress: secret.remoteAddress || ''
+      });
+    }
+  }
+
+  for (const [key, customer] of customersByPppoe.entries()) {
+    if (secretsByName.has(key)) continue;
+    customerOnly.push({
+      username: customer.pppoe_username,
+      customer
+    });
+  }
+
+  return {
+    summary: {
+      matched: matched.length,
+      routerOnly: routerOnly.length,
+      customerOnly: customerOnly.length,
+      totalSecrets: secretsByName.size,
+      totalCustomersWithPppoe: customersByPppoe.size
+    },
+    matched,
+    routerOnly,
+    customerOnly,
+    checkedAt: new Date().toISOString()
+  };
+}
+
 function buildPppoeCustomerSnapshot({ username, secret, active, profile } = {}) {
   const secretProfile = pickPppoeSnapshotText(secret?.profile);
   const activeAddress = pickPppoeSnapshotText(active?.address, active?.['address']);
@@ -1108,7 +1481,9 @@ async function getPppoeCustomerSnapshot(username, routerId = null, reuseConn = n
 
   const config = resolveRouterConfig(routerId);
   const attempts = [];
-  if (config.routerOsMode === 'routeros_v6') {
+  if (config.routerOsMode === 'ros-client') {
+    attempts.push('ros-client');
+  } else if (config.routerOsMode === 'routeros_v6') {
     attempts.push('routeros-client', 'ros-client');
   } else if (config.routerOsMode === 'routeros_v7') {
     attempts.push('ros-client', 'routeros-client');
@@ -1192,14 +1567,15 @@ async function getPppoeCustomerSnapshot(username, routerId = null, reuseConn = n
 async function getHotspotActive(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
   const ck = cacheKey(routerId, 'hotspotActive');
-  const cached = bypassCache ? null : getCachedList(ck, 5000);
+  const cached = bypassCache ? null : getCachedList(ck, 10000);
   if (cached) return cached;
   try {
-    const rows = await withTimeout(getMenuRowsViaStableConnection(
+    const rows = await getMenuRowsViaStableConnection(
       routerId,
       '/ip/hotspot/active',
-      ['.id', 'user', 'address', 'mac-address', 'uptime', 'login-by', 'server']
-    ), 5000, 'getHotspotActive');
+      ['.id', 'user', 'address', 'mac-address', 'uptime', 'login-by', 'server'],
+      { timeoutMs: 8000, label: 'getHotspotActive' }
+    );
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
@@ -1207,18 +1583,20 @@ async function getHotspotActive(routerId = null, options = {}) {
       logMissingRouterNotice('getHotspotActive', routerId);
       return [];
     }
-    logger.error('Error getting active Hotspot sessions:', e);
+    logThrottledWarn(
+      `hotspot-active:${ck}`,
+      `[MikroTik] Active Hotspot sessions tidak terbaca: ${e.message || String(e)}`,
+      180000
+    );
     return [];
   }
 }
 
 async function getMonitoringSnapshot(routerId = null) {
-  const [secrets, activePppoe, hotspotUsers, hotspotActive] = await Promise.all([
-    withMikrotikTimeout(getPppoeSecrets(routerId), 10000, []),
-    withMikrotikTimeout(getPppoeActive(routerId), 12000, []),
-    withMikrotikTimeout(getHotspotUsers(routerId), 10000, []),
-    withMikrotikTimeout(getHotspotActive(routerId), 12000, [])
-  ]);
+  const secrets = await withMikrotikTimeout(getPppoeSecrets(routerId), 10000, []);
+  const activePppoe = await withMikrotikTimeout(getPppoeActive(routerId), 12000, []);
+  const hotspotUsers = await withMikrotikTimeout(getHotspotUsers(routerId), 10000, []);
+  const hotspotActive = await withMikrotikTimeout(getHotspotActive(routerId), 12000, []);
   return {
     secrets: Array.isArray(secrets) ? secrets : [],
     activePppoe: Array.isArray(activePppoe) ? activePppoe : [],
@@ -1230,12 +1608,10 @@ async function getMonitoringSnapshot(routerId = null) {
 
 async function getMonitoringSummary(routerId = null) {
     try {
-      const [secrets, activePppoe, hotspotUsers, activeHotspot] = await Promise.all([
-        withMikrotikTimeout(getPppoeSecrets(routerId, { bypassCache: true }), 10000, []),
-        withMikrotikTimeout(getPppoeActive(routerId, { bypassCache: true }), 12000, []),
-        withMikrotikTimeout(getHotspotUsers(routerId, { bypassCache: true }), 10000, []),
-        withMikrotikTimeout(getHotspotActive(routerId, { bypassCache: true }), 12000, [])
-      ]);
+      const secrets = await withMikrotikTimeout(getPppoeSecrets(routerId, { bypassCache: true }), 10000, []);
+      const activePppoe = await withMikrotikTimeout(getPppoeActive(routerId, { bypassCache: true }), 12000, []);
+      const hotspotUsers = await withMikrotikTimeout(getHotspotUsers(routerId, { bypassCache: true }), 10000, []);
+      const activeHotspot = await withMikrotikTimeout(getHotspotActive(routerId, { bypassCache: true }), 12000, []);
       const snapshotSource = 'direct-live-services';
 
       return {
@@ -1374,7 +1750,7 @@ async function getHotspotUsers(routerId = null, options = {}) {
   const cached = bypassCache ? null : getCachedList(ck, 15000);
   if (cached) return cached;
   try {
-    const rows = await withTimeout(getMenuRowsViaStableConnection(routerId, '/ip/hotspot/user'), 10000, 'getHotspotUsers');
+    const rows = await getMenuRowsViaStableConnection(routerId, '/ip/hotspot/user', [], { timeoutMs: 15000, label: 'getHotspotUsers' });
     setCachedList(ck, rows);
     return rows;
   } catch (e) {
@@ -1382,7 +1758,11 @@ async function getHotspotUsers(routerId = null, options = {}) {
       logMissingRouterNotice('getHotspotUsers', routerId);
       return [];
     }
-    logger.error('Error getting Hotspot users:', e);
+    logThrottledWarn(
+      `hotspot-users:${ck}`,
+      `[MikroTik] Hotspot users tidak terbaca: ${e.message || String(e)}`,
+      180000
+    );
     return [];
   }
 }
@@ -1917,6 +2297,9 @@ module.exports = {
   buildPppoeCustomerSnapshot,
   setPppoeProfile,
   getPppoeSecrets,
+  getInterfaces,
+  getInterfaceTraffic,
+  getPppoeCustomerSync,
   addPppoeSecret,
   updatePppoeSecret,
   deletePppoeSecret,
