@@ -571,6 +571,7 @@ export const whatsappStatus = {
 let currentSock = null;
 let currentStartPromise = null;
 let reconnectTimer = null;
+let connectingWatchdogTimer = null;
 let socketEpoch = 0;
 let qrShownSinceStart = false;
 let notifiedAdminForQr = false;
@@ -666,6 +667,36 @@ function clearReconnectTimer() {
   }
   whatsappStatus.reconnectAt = null;
   writeSharedWhatsappStatus();
+}
+
+function clearConnectingWatchdogTimer() {
+  if (connectingWatchdogTimer) {
+    clearTimeout(connectingWatchdogTimer);
+    connectingWatchdogTimer = null;
+  }
+}
+
+function getWhatsappStatusAgeMs() {
+  const lastUpdate = whatsappStatus.lastUpdate instanceof Date
+    ? whatsappStatus.lastUpdate.getTime()
+    : Date.parse(whatsappStatus.lastUpdate || '');
+  return Number.isFinite(lastUpdate) ? Date.now() - lastUpdate : Number.MAX_SAFE_INTEGER;
+}
+
+function scheduleConnectingWatchdog(context = 'connecting') {
+  if (connectingWatchdogTimer) return;
+  const delayMs = Math.max(30000, Number(getSetting('whatsapp_connecting_watchdog_ms', 120000)) || 120000);
+  connectingWatchdogTimer = setTimeout(() => {
+    connectingWatchdogTimer = null;
+    const state = String(whatsappStatus.connection || '').toLowerCase();
+    if (state !== 'connecting') return;
+    const ageMs = getWhatsappStatusAgeMs();
+    logger.warn(`[WA] Status connecting macet ${Math.round(ageMs / 1000)} detik (${context}); memulai ulang socket otomatis.`);
+    restartWhatsAppBot().catch((error) => {
+      logger.warn(`[WA] Gagal restart otomatis dari watchdog: ${error.message || error}`);
+      scheduleReconnect('watchdog_failed', 10000);
+    });
+  }, delayMs);
 }
 
 function getWhatsappLockPath() {
@@ -952,7 +983,13 @@ function getDisconnectReasonLabel(code) {
 }
 
 function scheduleReconnect(code, delayMs = 3000) {
-  if (reconnectTimer) return;
+  if (reconnectTimer) {
+    const reconnectAtMs = Date.parse(whatsappStatus.reconnectAt || '');
+    if (Number.isFinite(reconnectAtMs) && reconnectAtMs > Date.now() + 500) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    logger.warn('[WA] Reconnect timer lama sudah stale; menjadwalkan ulang reconnect.');
+  }
   const reconnectAt = new Date(Date.now() + delayMs).toISOString();
   updateWhatsappStatus({ reconnectAt });
   logger.info(`[WA] Menjadwalkan reconnect ${Math.round(delayMs / 1000)} detik lagi (reason=${getDisconnectReasonLabel(code)}).`);
@@ -1048,6 +1085,16 @@ export async function ensureWhatsAppReady(maxWaitMs = 20000) {
       logger.warn(`[WA] Gagal mengambil alih sesi passive: ${error.message || error}`);
     });
     return waitForWhatsappOpen(maxWaitMs, 1000);
+  }
+  if (state === 'connecting' && currentSock) {
+    const staleMs = Math.max(30000, Number(getSetting('whatsapp_connecting_stale_ms', 120000)) || 120000);
+    if (getWhatsappStatusAgeMs() > staleMs) {
+      logger.warn('[WA] Koneksi WhatsApp terlalu lama di status connecting; restart otomatis sebelum kirim pesan.');
+      await restartWhatsAppBot().catch((error) => {
+        logger.warn(`[WA] Restart otomatis sebelum kirim pesan gagal: ${error.message || error}`);
+      });
+      return waitForWhatsappOpen(maxWaitMs, 1000);
+    }
   }
 
   try {
@@ -1228,11 +1275,13 @@ export async function startWhatsAppBot(options = {}) {
 
   clearReconnectTimer();
   updateWhatsappStatus({ connection: 'connecting', reason: 'starting', qr: null });
+  scheduleConnectingWatchdog(force ? 'forced_start' : 'start');
 
   const lock = tryAcquireWhatsappLock();
   if (!lock.ok) {
     const shared = getSharedWhatsappStatus();
     const sharedOpen = isSharedWhatsappOpen(shared);
+    clearConnectingWatchdogTimer();
     updateWhatsappStatus({
       connection: sharedOpen ? 'open' : 'passive',
       qr: null,
@@ -1279,6 +1328,7 @@ export async function startWhatsAppBot(options = {}) {
     updateWhatsappStatus({});
     
     if (qr && isCurrentSocket) {
+      clearConnectingWatchdogTimer();
       updateWhatsappStatus({
         qr,
         connection: 'qr',
@@ -1312,6 +1362,11 @@ export async function startWhatsAppBot(options = {}) {
         reason: reasonLabel,
         connection: code === DisconnectReason.loggedOut ? 'loggedOut' : 'connecting'
       });
+      if (code === DisconnectReason.loggedOut || code === DisconnectReason.badSession || code === DisconnectReason.forbidden) {
+        clearConnectingWatchdogTimer();
+      } else {
+        scheduleConnectingWatchdog(`close_${reasonLabel}`);
+      }
       
       logger.warn(
         `WhatsApp terputus (kode ${code}). ` +
@@ -1323,6 +1378,7 @@ export async function startWhatsAppBot(options = {}) {
         return;
       }
       if (code === DisconnectReason.connectionReplaced) {
+        clearConnectingWatchdogTimer();
         updateWhatsappStatus({
           connection: 'passive',
           reason: 'connection_replaced',
@@ -1336,6 +1392,7 @@ export async function startWhatsAppBot(options = {}) {
       return;
     } else if (connection === 'open') {
       clearReconnectTimer();
+      clearConnectingWatchdogTimer();
       updateWhatsappStatus({
         qr: null,
         connection: 'open',
@@ -1362,6 +1419,7 @@ export async function startWhatsAppBot(options = {}) {
       }
     } else if (connection === 'connecting') {
       updateWhatsappStatus({ connection: 'connecting', reason: 'connecting' });
+      scheduleConnectingWatchdog('connection_update');
     }
   });
 
