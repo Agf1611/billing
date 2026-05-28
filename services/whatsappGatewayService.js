@@ -158,11 +158,12 @@ async function sendText(to, text) {
   return Boolean(await mod.sendWA(digits, message));
 }
 
-async function sendImage(to, imageBuffer, caption = '') {
+async function sendImage(to, imageBuffer, caption = '', options = {}) {
   if (!getSetting('whatsapp_enabled', false)) return false;
   const digits = normalizePhoneDigits(to);
   const buffer = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer || []);
   const captionText = String(caption || '').trim();
+  const mediaUrl = String(options.mediaUrl || options.url || '').trim();
   if (!digits) return false;
   if (!buffer.length) return sendText(digits, captionText);
 
@@ -172,19 +173,21 @@ async function sendImage(to, imageBuffer, caption = '') {
       logger.warn('[MPWA] Endpoint gambar belum diisi, mengirim caption sebagai teks.');
       return sendText(digits, captionText || 'Lampiran gambar tersedia.');
     }
-    const payload = {
-      [config.numberField]: digits,
-      [config.messageField]: captionText,
-      phone: digits,
-      to: digits,
-      caption: captionText,
-      image: buffer.toString('base64'),
-      image_base64: buffer.toString('base64'),
-      mimetype: 'image/png',
-      filename: 'whatsapp-image.png'
-    };
-    await postMpwa(config.imagePath, payload);
-    return true;
+    if (mediaUrl) {
+      const payload = {
+        [config.numberField]: digits,
+        [config.messageField]: captionText,
+        phone: digits,
+        to: digits,
+        media_type: 'image',
+        caption: captionText,
+        url: mediaUrl
+      };
+      await postMpwa(config.imagePath, payload);
+      return true;
+    }
+    logger.warn('[MPWA] URL gambar publik belum tersedia, mengirim caption sebagai teks.');
+    return sendText(digits, captionText || 'Lampiran gambar tersedia.');
   }
 
   const mod = await getLocalModule();

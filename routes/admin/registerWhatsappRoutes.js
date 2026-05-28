@@ -85,11 +85,11 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     };
   }
 
-  async function sendWhatsappAnnouncement({ phone, message, imageFilePath = '', fs }) {
+  async function sendWhatsappAnnouncement({ phone, message, imageFilePath = '', imageUrl = '', fs }) {
     const caption = String(message || '').trim();
     if (imageFilePath && fs?.existsSync(imageFilePath)) {
       const buffer = fs.readFileSync(imageFilePath);
-      return Boolean(await whatsappGateway.sendImage(phone, buffer, caption));
+      return Boolean(await whatsappGateway.sendImage(phone, buffer, caption, { mediaUrl: imageUrl }));
     }
     return Boolean(await whatsappGateway.sendText(phone, caption));
   }
@@ -358,6 +358,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
           phone: customer.phone,
           message: formattedMsg,
           imageFilePath,
+          imageUrl: absoluteImageUrl,
           fs
         });
         if (!sentOk) throw new Error('sendWA mengembalikan gagal');
@@ -433,6 +434,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
                 phone: customer.phone,
                 message: formattedMsg,
                 imageFilePath,
+                imageUrl: absoluteImageUrl,
                 fs
               });
               if (!sentOk) throw new Error('sendWA mengembalikan gagal');
