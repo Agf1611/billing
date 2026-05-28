@@ -254,6 +254,10 @@ function extractRequestApiKey(req) {
     req.headers['x-whatsapp-api-key'] ||
     req.headers.apikey ||
     bearer ||
+    req.query?.api_key ||
+    req.query?.apikey ||
+    req.query?.key ||
+    req.query?.token ||
     req.body?.api_key ||
     req.body?.apikey ||
     ''
@@ -355,6 +359,152 @@ app.post('/api/whatsapp/send-message', requireWhatsappApiKey, async (req, res) =
       success: false,
       error: error.message || 'Gagal mengirim WhatsApp.'
     });
+  }
+});
+
+function firstWebhookTextValue(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function findWebhookValue(source, keys = [], depth = 0) {
+  if (!source || typeof source !== 'object' || depth > 4) return '';
+  for (const key of keys) {
+    const direct = source[key];
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    if (typeof direct === 'number' && Number.isFinite(direct)) return String(direct);
+  }
+  for (const value of Object.values(source)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = findWebhookValue(item, keys, depth + 1);
+        if (found) return found;
+      }
+    } else if (value && typeof value === 'object') {
+      const found = findWebhookValue(value, keys, depth + 1);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
+function extractIncomingWhatsappPayload(body = {}) {
+  const source = body?.data && typeof body.data === 'object' ? body.data : body;
+  const numberRaw = firstWebhookTextValue(
+    source.number,
+    source.phone,
+    source.from,
+    source.remoteJid,
+    source.chatId,
+    source.sender,
+    source.participant,
+    findWebhookValue(source, ['number', 'phone', 'from', 'remoteJid', 'chatId', 'sender', 'participant'])
+  );
+  const text = firstWebhookTextValue(
+    source.message,
+    source.text,
+    source.body,
+    source.caption,
+    source.conversation,
+    source.content,
+    source.messageText,
+    findWebhookValue(source, ['message', 'text', 'body', 'caption', 'conversation', 'content', 'messageText'])
+  );
+  return {
+    number: normalizePhoneDigits(String(numberRaw || '').replace(/@.+$/, '')),
+    text: String(text || '').trim(),
+    rawNumber: numberRaw
+  };
+}
+
+function formatRupiah(value) {
+  return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+}
+
+function buildIncomingWhatsappReply({ customer, text, settings, req }) {
+  const normalized = String(text || '').trim().toLowerCase();
+  const companyName = settings?.company_header || 'SICKAS WIFI';
+  const wantsMenu = !normalized || ['menu', 'halo', 'hallo', 'hai', 'hi', 'hello', 'bantuan', 'help'].includes(normalized);
+  if (wantsMenu) {
+    return [
+      `Halo${customer?.name ? ` Kak ${customer.name}` : ''}, selamat datang di ${companyName}.`,
+      '',
+      'Silakan balas dengan angka:',
+      '1. Cek tagihan',
+      '2. Cara bayar',
+      '3. Lapor gangguan',
+      '4. Hubungi admin'
+    ].join('\n');
+  }
+
+  const wantsBill = normalized === '1'
+    || normalized.includes('tagihan')
+    || normalized.includes('cek bayar')
+    || normalized.includes('cek pembayaran')
+    || normalized.includes('invoice');
+  if (wantsBill) {
+    if (!customer) {
+      return 'Nomor WhatsApp ini belum ditemukan di data pelanggan. Silakan kirim nama/ID pelanggan atau hubungi admin.';
+    }
+    const invoices = billingSvc.getUnpaidInvoicesByCustomerId(customer.id) || [];
+    if (!invoices.length) {
+      return `Halo Kak ${customer.name}, tagihan aktif belum ditemukan. Terima kasih.`;
+    }
+    const total = invoices.reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
+    const rows = invoices.slice(0, 5).map((inv, index) => {
+      const period = [inv.period_month, inv.period_year].filter(Boolean).join('/') || `INV-${inv.id}`;
+      return `${index + 1}. ${period} - ${formatRupiah(inv.amount)}`;
+    });
+    return [
+      `Tagihan Kak ${customer.name}:`,
+      ...rows,
+      '',
+      `Total: ${formatRupiah(total)}`,
+      `Link cek/bayar: ${buildCustomerCheckBillingLink(customer, { baseUrl: resolveRequestBaseUrl(req) })}`
+    ].join('\n');
+  }
+
+  if (normalized === '2' || normalized.includes('cara bayar') || normalized.includes('bayar')) {
+    return `Cara bayar dapat dibuka melalui link cek tagihan. Balas 1 atau ketik "cek tagihan" untuk melihat nominal dan link pembayaran.`;
+  }
+
+  if (normalized === '3' || normalized.includes('gangguan') || normalized.includes('lapor')) {
+    return 'Laporan gangguan diterima. Mohon kirim detail kendala, nama pelanggan, dan alamat singkat agar teknisi/admin bisa mengecek.';
+  }
+
+  if (normalized === '4' || normalized.includes('admin')) {
+    return 'Baik, pesan Kakak akan diteruskan ke admin. Mohon tunggu sebentar.';
+  }
+
+  return '';
+}
+
+app.post('/api/whatsapp/chatsmart-webhook', requireWhatsappApiKey, async (req, res) => {
+  try {
+    const payload = extractIncomingWhatsappPayload(req.body || {});
+    const text = payload.text;
+    const from = payload.number;
+    const fromMe = Boolean(req.body?.fromMe || req.body?.from_me || req.body?.key?.fromMe || req.body?.data?.fromMe || req.body?.data?.from_me);
+
+    logger.info(`[WA Webhook] incoming from=${from || payload.rawNumber || '-'} fromMe=${fromMe ? 1 : 0} text="${String(text || '').replace(/\r?\n/g, ' ').slice(0, 180)}"`);
+    if (fromMe || !from || !text) {
+      return res.json({ success: true, processed: false });
+    }
+
+    const settings = getSettingsWithCache();
+    const customer = customerSvc.findCustomerByAny(from);
+    const reply = buildIncomingWhatsappReply({ customer, text, settings, req });
+    if (reply) {
+      await whatsappGateway.sendText(from, reply);
+      return res.json({ success: true, processed: true, replied: true });
+    }
+    return res.json({ success: true, processed: true, replied: false });
+  } catch (error) {
+    logger.error(`[WA Webhook] Gagal proses ChatSmart webhook: ${error.stack || error.message || error}`);
+    return res.status(500).json({ success: false, error: error.message || 'Gagal proses webhook WhatsApp.' });
   }
 });
 
