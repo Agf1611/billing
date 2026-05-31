@@ -4,9 +4,11 @@ const { logger } = require('../config/logger');
 const { getSetting } = require('../config/settingsManager');
 const {
   isPushConfigured,
+  sendPushToAdmins,
   sendPushToTechnicians
 } = require('./pushNotificationService');
 const whatsappGateway = require('./whatsappGatewayService');
+const { normalizePhoneDigits } = require('./phoneService');
 
 const evaluationLocks = new Map();
 
@@ -15,7 +17,12 @@ const DEFAULTS = {
   delayMinutes: 10,
   thresholdCount: 5,
   thresholdPercent: 20,
-  sampleLimit: 5
+  sampleLimit: 5,
+  notifyWhatsappAdminNoc: true,
+  notifyWhatsappTechnician: true,
+  notifyTelegram: true,
+  notifyPushAdmin: true,
+  notifyPushTechnician: true
 };
 
 function normalizeText(value) {
@@ -52,6 +59,13 @@ function parsePercent(value, fallback) {
   return Number.isFinite(num) && num > 0 ? num : fallback;
 }
 
+function parseBooleanSetting(key, fallback = false) {
+  const value = getSetting(key, fallback);
+  if (value === true || value === 'true' || value === 1 || value === '1' || value === 'on') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0' || value === 'off') return false;
+  return Boolean(fallback);
+}
+
 function getRouterKey(routerId = null) {
   const normalized = Number(routerId);
   return Number.isFinite(normalized) && normalized > 0 ? `router:${normalized}` : 'default';
@@ -63,6 +77,12 @@ function getFeatureConfig() {
     delayMinutes: parsePositiveInt(getSetting('mass_outage_delay_minutes', DEFAULTS.delayMinutes), DEFAULTS.delayMinutes),
     thresholdCount: parsePositiveInt(getSetting('mass_outage_threshold_count', DEFAULTS.thresholdCount), DEFAULTS.thresholdCount),
     thresholdPercent: parsePercent(getSetting('mass_outage_threshold_percent', DEFAULTS.thresholdPercent), DEFAULTS.thresholdPercent),
+    sampleLimit: parsePositiveInt(getSetting('mass_outage_sample_limit', DEFAULTS.sampleLimit), DEFAULTS.sampleLimit),
+    notifyWhatsappAdminNoc: parseBooleanSetting('mass_outage_notify_whatsapp_admin_noc', DEFAULTS.notifyWhatsappAdminNoc),
+    notifyWhatsappTechnician: parseBooleanSetting('mass_outage_notify_whatsapp_technician', DEFAULTS.notifyWhatsappTechnician),
+    notifyTelegram: parseBooleanSetting('mass_outage_notify_telegram', DEFAULTS.notifyTelegram),
+    notifyPushAdmin: parseBooleanSetting('mass_outage_notify_push_admin', DEFAULTS.notifyPushAdmin),
+    notifyPushTechnician: parseBooleanSetting('mass_outage_notify_push_technician', DEFAULTS.notifyPushTechnician),
     zoneAliases: parseZoneAliasMap(getSetting('mass_outage_zone_aliases', ''))
   };
 }
@@ -180,7 +200,9 @@ async function sendTelegramAdminMessage(text) {
 }
 
 async function sendWhatsappMessages(numbers = [], text = '') {
-  const targets = [...new Set((Array.isArray(numbers) ? numbers : []).map((item) => normalizeText(item)).filter(Boolean))];
+  const targets = [...new Set((Array.isArray(numbers) ? numbers : [])
+    .map((item) => normalizePhoneDigits(item))
+    .filter(Boolean))];
   if (!targets.length || !normalizeText(text)) return [];
   const results = [];
   for (const target of targets) {
@@ -195,13 +217,36 @@ async function sendWhatsappMessages(numbers = [], text = '') {
   return results;
 }
 
-function getAdminWhatsappNumbers() {
-  const raw = getSetting('whatsapp_admin_numbers', []);
-  if (Array.isArray(raw)) return raw.map((item) => normalizeText(item)).filter(Boolean);
-  return String(raw || '')
-    .split(',')
+function parsePhoneSetting(value) {
+  if (Array.isArray(value)) return value.map((item) => normalizeText(item)).filter(Boolean);
+  return String(value || '')
+    .split(/[\s,;]+/)
     .map((item) => normalizeText(item))
     .filter(Boolean);
+}
+
+function getAdminWhatsappNumbers() {
+  return parsePhoneSetting(getSetting('whatsapp_admin_numbers', []));
+}
+
+function getNocWhatsappNumbers() {
+  const configured = parsePhoneSetting(getSetting('whatsapp_noc_numbers', []));
+  if (configured.length) return configured;
+  return getAdminWhatsappNumbers();
+}
+
+function getAdminAndNocWhatsappNumbers() {
+  return [
+    ...getAdminWhatsappNumbers(),
+    ...getNocWhatsappNumbers()
+  ];
+}
+
+function getAdminPushRecipients() {
+  const username = normalizeText(getSetting('admin_username', 'admin')) || 'admin';
+  const recipients = [{ username }];
+  if (username.toLowerCase() !== 'admin') recipients.push({ username: 'admin' });
+  return recipients;
 }
 
 function getTechnicianWhatsappNumbers() {
@@ -282,15 +327,16 @@ function listRecentIncidents(limit = 20) {
   `).all().map(getIncidentSummaryRow);
 }
 
-function buildOutageMessage(kind, incident) {
-  const sample = (incident.sampleCustomers || []).slice(0, DEFAULTS.sampleLimit);
+function buildOutageMessage(kind, incident, config = getFeatureConfig()) {
+  const sampleLimit = parsePositiveInt(config.sampleLimit, DEFAULTS.sampleLimit);
+  const sample = (incident.sampleCustomers || []).slice(0, sampleLimit);
   const sampleText = sample.length
     ? sample.map((item) => `- ${item.name || item.pppoe_username || item.id}`).join('\n')
     : '-';
 
   if (kind === 'recovered') {
     return [
-      `✅ *Gangguan Pulih*`,
+      '*Gangguan Pulih*',
       `Area: *${incident.zoneLabel}*`,
       `Terdampak sebelumnya: *${incident.offlineCount}/${incident.baselineCount}* pelanggan aktif`,
       `Pulih: ${incident.recoveredAt ? new Date(incident.recoveredAt).toLocaleString('id-ID') : '-'}`,
@@ -299,7 +345,7 @@ function buildOutageMessage(kind, incident) {
   }
 
   return [
-    `🚨 *Gangguan Massal Terdeteksi*`,
+    '*Gangguan Massal Terdeteksi*',
     `Area: *${incident.zoneLabel}*`,
     `Dampak: *${incident.offlineCount}/${incident.baselineCount}* pelanggan aktif (${incident.offlinePercent.toFixed(1)}%)`,
     `Terdeteksi: ${incident.detectedAt ? new Date(incident.detectedAt).toLocaleString('id-ID') : '-'}`,
@@ -310,18 +356,30 @@ function buildOutageMessage(kind, incident) {
 }
 
 async function notifyIncident(kind, incidentRow) {
+  const config = getFeatureConfig();
   const incident = getIncidentSummaryRow(incidentRow);
-  const message = buildOutageMessage(kind, incident);
-  const adminNumbers = getAdminWhatsappNumbers();
-  const technicianNumbers = getTechnicianWhatsappNumbers();
+  const message = buildOutageMessage(kind, incident, config);
+  const adminNumbers = config.notifyWhatsappAdminNoc ? getAdminAndNocWhatsappNumbers() : [];
+  const technicianNumbers = config.notifyWhatsappTechnician ? getTechnicianWhatsappNumbers() : [];
   const technicians = getActiveTechnicians();
   const pushTitle = kind === 'recovered' ? 'Gangguan pulih' : 'Gangguan massal terdeteksi';
   const pushMessage = `${incident.zoneLabel}: ${incident.offlineCount}/${incident.baselineCount} pelanggan terdampak (${incident.offlinePercent.toFixed(1)}%).`;
   await Promise.allSettled([
     sendWhatsappMessages(adminNumbers, message),
     sendWhatsappMessages(technicianNumbers, message),
-    sendTelegramAdminMessage(message),
-    isPushConfigured() ? sendPushToTechnicians(technicians, {
+    config.notifyTelegram ? sendTelegramAdminMessage(message) : Promise.resolve({ skipped: true, reason: 'telegram-disabled-by-setting' }),
+    (config.notifyPushAdmin && isPushConfigured()) ? sendPushToAdmins(getAdminPushRecipients(), {
+      title: pushTitle,
+      message: pushMessage,
+      targetUrl: '/admin#gangguan',
+      data: {
+        kind: 'mass_outage',
+        incidentId: incident.id,
+        status: incident.status,
+        zone: incident.zoneKey
+      }
+    }) : Promise.resolve({ skipped: true, reason: 'push-admin-disabled-or-not-configured' }),
+    (config.notifyPushTechnician && isPushConfigured()) ? sendPushToTechnicians(technicians, {
       title: pushTitle,
       message: pushMessage,
       targetUrl: '/tech',
@@ -331,7 +389,7 @@ async function notifyIncident(kind, incidentRow) {
         status: incident.status,
         zone: incident.zoneKey
       }
-    }) : Promise.resolve({ skipped: true, reason: 'push-not-configured' })
+    }) : Promise.resolve({ skipped: true, reason: 'push-technician-disabled-or-not-configured' })
   ]);
 }
 
@@ -370,7 +428,7 @@ function buildZoneStats(snapshot, config) {
     if (offlineStable) {
       target.offlineCount += 1;
       target.affectedCustomerIds.push(customer.id);
-      if (target.sampleCustomers.length < DEFAULTS.sampleLimit) {
+        if (target.sampleCustomers.length < config.sampleLimit) {
         target.sampleCustomers.push({
           id: customer.id,
           name: customer.name,

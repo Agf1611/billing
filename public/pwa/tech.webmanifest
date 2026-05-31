@@ -1,5 +1,5 @@
 {
-  "id": "/tech/",
+  "id": "/pwa/tech",
   "name": "Portal Teknisi",
   "short_name": "Teknisi",
   "description": "Portal Teknisi SICKAS WIFI",
@@ -7,6 +7,9 @@
   "scope": "/tech/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",

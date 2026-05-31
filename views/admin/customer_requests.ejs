@@ -333,14 +333,23 @@
             const payload = row.request_type === 'new_customer' ? JSON.parse(String(row.payload_json || '{}') || '{}') : {};
             const requestStatus = String(row.status || '').toLowerCase();
             const isPackageChange = row.request_type === 'package_change';
+            const isProfileChange = row.request_type === 'profile_change';
             const canForceProcess = isPackageChange && ['approved', 'scheduled', 'processing'].includes(requestStatus);
             const canCancelRequest = isPackageChange && ['approved', 'scheduled', 'processing', 'pending'].includes(requestStatus);
             const detailId = `request-detail-${row.request_type || 'request'}-${row.id}-${index}`;
-            const requestLabel = isPackageChange ? (packageChangeLabels[String(row.change_kind || '').toLowerCase()] || 'Perubahan Paket') : 'Pelanggan Baru';
-            const summarySecondary = isPackageChange
+            const requestLabel = isProfileChange ? 'Perubahan Profil' : (isPackageChange ? (packageChangeLabels[String(row.change_kind || '').toLowerCase()] || 'Perubahan Paket') : 'Pelanggan Baru');
+            const summarySecondary = isProfileChange
+              ? 'Nama / No HP / Alamat'
+              : isPackageChange
               ? `${row.current_package_name || '-'} → ${row.target_package_name || '-'}`
               : `${row.package_name || '-'} • ${row.router_name || 'Tanpa router'}`;
-            const summaryMetaDate = isPackageChange ? formatDateTime(row.requested_at || row.created_at) : (payload.install_date || '-');
+            const summaryMetaDate = (isPackageChange || isProfileChange) ? formatDateTime(row.requested_at || row.created_at) : (payload.install_date || '-');
+            const approveAction = isProfileChange
+              ? `/admin/profile-change-requests/${row.id}/approve`
+              : isPackageChange ? `/admin/package-change-requests/${row.id}/approve` : `/admin/customer-requests/${row.id}/approve`;
+            const rejectAction = isProfileChange
+              ? `/admin/profile-change-requests/${row.id}/reject`
+              : isPackageChange ? `/admin/package-change-requests/${row.id}/reject` : `/admin/customer-requests/${row.id}/reject`;
           %>
             <div class="request-card" data-request-card>
               <div class="request-summary">
@@ -348,12 +357,14 @@
                   <div class="request-title-row">
                     <div class="request-title"><%= row.customer_name %></div>
                     <span class="request-type">
-                      <i class="bi bi-<%= isPackageChange ? 'arrow-left-right' : 'person-plus' %>"></i>
+                      <i class="bi bi-<%= isProfileChange ? 'person-lines-fill' : isPackageChange ? 'arrow-left-right' : 'person-plus' %>"></i>
                       <%= requestLabel %>
                     </span>
                   </div>
                   <div class="request-subtitle">
-                    <% if (isPackageChange) { %>
+                    <% if (isProfileChange) { %>
+                      Portal pelanggan - <%= row.customer_phone || '-' %>
+                    <% } else if (isPackageChange) { %>
                       Portal pelanggan • <%= row.customer_phone || '-' %>
                     <% } else { %>
                       Teknisi: <%= row.technician_name %> (@<%= row.technician_username %>)
@@ -379,7 +390,7 @@
 
               <% if (requestStatus === 'pending') { %>
                 <div class="request-actions">
-                  <form method="POST" action="<%= isPackageChange ? `/admin/package-change-requests/${row.id}/approve` : `/admin/customer-requests/${row.id}/approve` %>" class="request-form">
+                  <form method="POST" action="<%= approveAction %>" class="request-form">
                     <input class="fc" name="review_note" placeholder="Catatan approve (opsional)">
                     <button class="btn btn-s request-action-btn" type="submit">
                       <i class="bi bi-check2-circle"></i>
@@ -387,7 +398,7 @@
                       <span class="request-action-label-short">Acc</span>
                     </button>
                   </form>
-                  <form method="POST" action="<%= isPackageChange ? `/admin/package-change-requests/${row.id}/reject` : `/admin/customer-requests/${row.id}/reject` %>" class="request-form">
+                  <form method="POST" action="<%= rejectAction %>" class="request-form">
                     <input class="fc" name="review_note" placeholder="Alasan reject">
                     <button class="btn btn-d request-action-btn" type="submit">
                       <i class="bi bi-x-circle"></i>
@@ -419,7 +430,9 @@
                     </form>
                   <% } %>
                 </div>
-              <% } else if (!isPackageChange && requestStatus === 'approved' && row.approved_customer_name) { %>
+              <% } else if (isProfileChange && requestStatus === 'approved') { %>
+                <div class="request-approved">Perubahan profil sudah diterapkan.</div>
+              <% } else if (!isPackageChange && !isProfileChange && requestStatus === 'approved' && row.approved_customer_name) { %>
                 <div class="request-approved">Sudah menjadi pelanggan aktif: <strong><%= row.approved_customer_name %></strong></div>
               <% } else if (isPackageChange && requestStatus === 'completed') { %>
                 <div class="request-approved">Perubahan paket sudah selesai diterapkan ke: <strong><%= row.target_package_name || 'paket baru' %></strong></div>
@@ -434,7 +447,9 @@
                   <div class="request-modal-title">
                     <strong><%= row.customer_name %></strong>
                     <div class="request-modal-subtitle">
-                      <% if (isPackageChange) { %>
+                      <% if (isProfileChange) { %>
+                        Pengajuan perubahan profil dari portal pelanggan
+                      <% } else if (isPackageChange) { %>
                         Pengajuan perubahan paket dari portal pelanggan
                       <% } else { %>
                         Pengajuan pelanggan baru dari teknisi <%= row.technician_name %> (@<%= row.technician_username %>)
@@ -447,7 +462,16 @@
                 </div>
 
                 <div class="request-detail-grid">
-                  <% if (isPackageChange) { %>
+                  <% if (isProfileChange) { %>
+                    <div class="request-cell"><span class="request-label">Nama Saat Ini</span><span class="request-value"><%= row.current_name || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Nama Baru</span><span class="request-value"><%= row.requested_name || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">No HP Saat Ini</span><span class="request-value"><%= row.current_phone || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">No HP Baru</span><span class="request-value"><%= row.requested_phone || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Alamat Saat Ini</span><span class="request-value"><%= row.current_address || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Alamat Baru</span><span class="request-value"><%= row.requested_address || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Diajukan</span><span class="request-value"><%= formatDateTime(row.requested_at || row.created_at) %></span></div>
+                    <div class="request-cell"><span class="request-label">Direview Oleh</span><span class="request-value"><%= row.reviewed_by_name || '-' %></span></div>
+                  <% } else if (isPackageChange) { %>
                     <div class="request-cell"><span class="request-label">Nomor Pelanggan</span><span class="request-value"><%= row.customer_phone || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Jenis Perubahan</span><span class="request-value"><%= packageChangeLabels[String(row.change_kind || '').toLowerCase()] || String(row.change_kind || '-').toUpperCase() %></span></div>
                     <div class="request-cell"><span class="request-label">Paket Saat Ini</span><span class="request-value"><%= row.current_package_name || '-' %></span></div>

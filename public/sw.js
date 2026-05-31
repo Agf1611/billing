@@ -1,4 +1,4 @@
-const CACHE_NAME = 'billing-pwa-v7';
+const CACHE_NAME = 'billing-pwa-v8';
 const PRECACHE_URLS = [
   '/css/style.css',
   '/css/admin.css',

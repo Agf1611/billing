@@ -3,6 +3,8 @@
 
 <head>
   <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <% const loginPushFeatureEnabled = Boolean(settings && settings.onesignal_enabled && settings.onesignal_app_id); %>
+  <% const loginOneSignalAppId = String((settings && settings.onesignal_app_id) || '').trim(); %>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title><%= t('customer.login_title', 'Login Pelanggan') %> | <%= settings.company_header || 'Portal ISP' %></title>
@@ -389,6 +391,147 @@
       text-decoration: none;
     }
 
+    body.pwa-login-gated {
+      overflow: hidden;
+    }
+
+    body.pwa-login-gated .login-shell {
+      filter: blur(8px);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .login-pwa-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background:
+        radial-gradient(circle at 18% 10%, rgba(44, 107, 255, 0.22), transparent 34%),
+        radial-gradient(circle at 88% 82%, rgba(14, 165, 164, 0.18), transparent 36%),
+        linear-gradient(145deg, #f8fbff 0%, #eaf2ff 100%);
+    }
+
+    .login-pwa-gate[hidden] {
+      display: none !important;
+    }
+
+    .login-pwa-card {
+      width: min(100%, 430px);
+      border-radius: 28px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(107, 142, 195, 0.2);
+      box-shadow: 0 28px 70px rgba(40, 79, 144, 0.2);
+    }
+
+    .login-pwa-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(44, 107, 255, 0.1);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .login-pwa-card h2 {
+      margin: 16px 0 8px;
+      font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
+      font-size: 28px;
+      line-height: 1.08;
+      font-weight: 900;
+      letter-spacing: 0;
+      color: var(--text-main);
+    }
+
+    .login-pwa-card p {
+      margin: 0 0 16px;
+      color: var(--text-soft);
+      font-size: 13px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+
+    .login-pwa-status {
+      display: grid;
+      gap: 9px;
+      margin: 14px 0;
+    }
+
+    .login-pwa-status-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: #f5f8ff;
+      border: 1px solid rgba(107, 142, 195, 0.16);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .login-pwa-status-item i {
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 12px;
+      background: rgba(245, 158, 11, 0.14);
+      color: #c47a00;
+    }
+
+    .login-pwa-status-item.is-ok i {
+      background: rgba(16, 185, 129, 0.14);
+      color: #059669;
+    }
+
+    .login-pwa-actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .login-pwa-actions button {
+      min-height: 48px;
+      border: 0;
+      border-radius: 16px;
+      padding: 0 14px;
+      font-weight: 900;
+    }
+
+    .login-pwa-actions .primary {
+      background: linear-gradient(135deg, #2c6bff, #0ea5a4);
+      color: #fff;
+    }
+
+    .login-pwa-actions .secondary {
+      background: #edf3ff;
+      color: var(--blue);
+    }
+
+    .login-pwa-actions button[hidden] {
+      display: none !important;
+    }
+
+    .login-pwa-help {
+      margin-top: 12px;
+      padding: 11px 12px;
+      border-radius: 15px;
+      background: rgba(245, 158, 11, 0.1);
+      color: #8a5a00;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 800;
+    }
+
     @media (max-width: 576px) {
       .login-main {
         padding-left: 14px;
@@ -459,6 +602,36 @@
 </head>
 
 <body class="pwa-login">
+  <div class="login-pwa-gate" id="loginPwaGate" role="dialog" aria-modal="true" hidden>
+    <section class="login-pwa-card">
+      <span class="login-pwa-pill"><i class="bi bi-phone"></i> Install Wajib</span>
+      <h2>Install aplikasi pelanggan</h2>
+      <p>Portal pelanggan dibuka dari aplikasi terinstall dan notifikasi aktif.</p>
+      <div class="login-pwa-status">
+        <div class="login-pwa-status-item" id="loginPwaInstallStatus">
+          <i class="bi bi-phone"></i>
+          <span>Belum terinstall</span>
+        </div>
+        <div class="login-pwa-status-item" id="loginPwaNotifyStatus">
+          <i class="bi bi-bell"></i>
+          <span>Notifikasi belum aktif</span>
+        </div>
+      </div>
+      <div class="login-pwa-actions">
+        <button type="button" class="primary" id="loginPwaInstallButton">
+          <i class="bi bi-download me-2"></i>Install Sekarang
+        </button>
+        <button type="button" class="primary" id="loginPwaNotifyButton">
+          <i class="bi bi-bell me-2"></i>Izinkan Notifikasi
+        </button>
+        <button type="button" class="secondary" id="loginPwaRetryButton">
+          <i class="bi bi-arrow-clockwise me-2"></i>Cek Lagi
+        </button>
+      </div>
+      <div class="login-pwa-help" id="loginPwaHelp">Jika tombol install belum muncul, buka menu browser lalu pilih Install app atau Tambahkan ke layar utama.</div>
+    </section>
+  </div>
+
   <div class="login-shell">
     <main class="login-main">
       <% const supportWhatsapp = settings.company_phone || ((settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers[0]) ? settings.whatsapp_admin_numbers[0] : ''); %>
@@ -540,6 +713,14 @@
   </div>
 
   <script>
+    const LOGIN_ONESIGNAL_ENABLED = <%- JSON.stringify(loginPushFeatureEnabled) %>;
+    const LOGIN_ONESIGNAL_APP_ID = <%- JSON.stringify(loginOneSignalAppId) %>;
+    const LOGIN_ONESIGNAL_SDK_URL = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+    const LOGIN_PWA_GATE_DELAY_MS = 1400;
+    const loginPwaGateStartedAt = Date.now();
+    let deferredLoginInstallPrompt = null;
+    let loginOneSignalPromise = null;
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js', {
@@ -555,6 +736,209 @@
     if (isAndroidShell) {
       document.body.classList.add('android-webview');
     }
+
+    function isLoginPwaInstalled() {
+      const modes = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'];
+      const displayModeInstalled = modes.some((mode) => {
+        try {
+          return window.matchMedia(`(display-mode: ${mode})`).matches;
+        } catch (_) {
+          return false;
+        }
+      });
+      const standalone = Boolean(displayModeInstalled || window.navigator.standalone === true || String(document.referrer || '').startsWith('android-app://'));
+      if (!standalone) return false;
+      try {
+        localStorage.setItem('pwa-installed-customer', '1');
+        localStorage.setItem('pwa-installed-scope-customer', '/customer/');
+      } catch (_) {
+      }
+      return true;
+    }
+
+    function loginNotificationPermission() {
+      if (!LOGIN_ONESIGNAL_ENABLED) return 'granted';
+      if (!('Notification' in window)) return 'unsupported';
+      return Notification.permission || 'default';
+    }
+
+    function loadLoginOneSignalSdk() {
+      if (!LOGIN_ONESIGNAL_ENABLED || !LOGIN_ONESIGNAL_APP_ID) return Promise.resolve(null);
+      if (window.OneSignal || document.querySelector('script[data-onesignal-login-sdk="true"],script[data-onesignal-web-sdk="true"]')) {
+        return Promise.resolve(window.OneSignal || null);
+      }
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = LOGIN_ONESIGNAL_SDK_URL;
+        script.async = true;
+        script.defer = true;
+        script.dataset.onesignalLoginSdk = 'true';
+        script.onload = () => resolve(window.OneSignal || null);
+        script.onerror = () => reject(new Error('Gagal memuat OneSignal'));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function ensureLoginOneSignal() {
+      if (!LOGIN_ONESIGNAL_ENABLED || !LOGIN_ONESIGNAL_APP_ID) return null;
+      if (loginOneSignalPromise) return loginOneSignalPromise;
+      loginOneSignalPromise = (async () => {
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        await loadLoginOneSignalSdk();
+        return await new Promise((resolve, reject) => {
+          window.OneSignalDeferred.push(async (OneSignal) => {
+            try {
+              if (!window.__CUSTOMER_LOGIN_ONESIGNAL_READY) {
+                await OneSignal.init({
+                  appId: LOGIN_ONESIGNAL_APP_ID,
+                  notifyButton: { enable: false },
+                  allowLocalhostAsSecureOrigin: true,
+                  serviceWorkerPath: '/OneSignalSDKWorker.js',
+                  serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+                  serviceWorkerParam: { scope: '/' },
+                  autoResubscribe: true
+                });
+                window.__CUSTOMER_LOGIN_ONESIGNAL_READY = true;
+              }
+              resolve(OneSignal);
+            } catch (error) {
+              reject(error);
+            }
+          });
+        });
+      })().catch((error) => {
+        console.warn('OneSignal login gate gagal:', error);
+        loginOneSignalPromise = null;
+        return null;
+      });
+      return loginOneSignalPromise;
+    }
+
+    async function isLoginNotificationAllowed() {
+      if (!LOGIN_ONESIGNAL_ENABLED) return true;
+      if (loginNotificationPermission() !== 'granted') return false;
+      const OneSignal = await ensureLoginOneSignal();
+      if (!OneSignal) return loginNotificationPermission() === 'granted';
+      try {
+        if (OneSignal?.User?.PushSubscription?.optIn) {
+          await OneSignal.User.PushSubscription.optIn();
+        }
+        return Boolean(
+          OneSignal?.User?.PushSubscription?.optedIn === true ||
+          OneSignal?.Notifications?.permission === true ||
+          OneSignal?.Notifications?.permission === 'granted' ||
+          loginNotificationPermission() === 'granted'
+        );
+      } catch (_) {
+        return loginNotificationPermission() === 'granted';
+      }
+    }
+
+    function setLoginGateStatus(id, ok, icon, text) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.classList.toggle('is-ok', Boolean(ok));
+      const iconNode = node.querySelector('i');
+      const label = node.querySelector('span');
+      if (iconNode) iconNode.className = icon;
+      if (label) label.textContent = text;
+    }
+
+    function getLoginInstallPrompt() {
+      return deferredLoginInstallPrompt || window.__deferredInstallPrompt || null;
+    }
+
+    async function updateLoginPwaGate() {
+      const gate = document.getElementById('loginPwaGate');
+      if (!gate) return;
+      const installed = isLoginPwaInstalled();
+      const permission = loginNotificationPermission();
+      const notifyAllowed = await isLoginNotificationAllowed();
+      const canInstallNow = Boolean(getLoginInstallPrompt());
+      const canFixNotification = installed && LOGIN_ONESIGNAL_ENABLED && permission !== 'denied' && permission !== 'unsupported';
+      const shouldBlock = (!installed && canInstallNow) || (!notifyAllowed && canFixNotification);
+      const canShowGateNow = Date.now() - loginPwaGateStartedAt >= LOGIN_PWA_GATE_DELAY_MS;
+      const showGate = shouldBlock && canShowGateNow;
+
+      setLoginGateStatus('loginPwaInstallStatus', installed, `bi ${installed ? 'bi-check-circle-fill' : 'bi-phone'}`, installed ? 'Aplikasi sudah terinstall' : 'Belum terinstall');
+      setLoginGateStatus('loginPwaNotifyStatus', notifyAllowed, `bi ${notifyAllowed ? 'bi-bell-fill' : 'bi-bell'}`, notifyAllowed ? 'Notifikasi aktif' : 'Notifikasi belum aktif');
+
+      const installButton = document.getElementById('loginPwaInstallButton');
+      const notifyButton = document.getElementById('loginPwaNotifyButton');
+      const retryButton = document.getElementById('loginPwaRetryButton');
+      const help = document.getElementById('loginPwaHelp');
+      if (installButton) installButton.hidden = installed || !canInstallNow;
+      if (notifyButton) notifyButton.hidden = !canFixNotification || notifyAllowed;
+      if (retryButton) retryButton.hidden = !shouldBlock;
+      if (help) {
+        if (!installed && canInstallNow) help.textContent = 'Tekan Install Sekarang, lalu buka aplikasi dari layar utama HP.';
+        else if (!installed && isAndroidShell) help.textContent = 'Buka halaman ini dari Chrome/browser biasa, lalu install aplikasi pelanggan.';
+        else if (!installed) help.textContent = 'Jika tombol install belum muncul, buka menu browser lalu pilih Install app atau Tambahkan ke layar utama.';
+        else if (permission === 'denied') help.textContent = 'Notifikasi diblokir. Aktifkan lagi dari pengaturan situs/aplikasi browser, lalu tekan Cek Lagi.';
+        else if (!notifyAllowed) help.textContent = 'Izinkan notifikasi sebelum masuk portal pelanggan.';
+        else help.textContent = 'Aplikasi siap dipakai.';
+      }
+
+      gate.hidden = !showGate;
+      document.body.classList.toggle('pwa-login-gated', showGate);
+    }
+
+    async function installLoginPwa() {
+      const promptEvent = getLoginInstallPrompt();
+      if (promptEvent) {
+        try {
+          promptEvent.prompt();
+          await promptEvent.userChoice;
+        } catch (_) {
+        } finally {
+          deferredLoginInstallPrompt = null;
+          window.__deferredInstallPrompt = null;
+        }
+      }
+      updateLoginPwaGate();
+    }
+
+    async function requestLoginNotification() {
+      const button = document.getElementById('loginPwaNotifyButton');
+      if (button) button.disabled = true;
+      try {
+        const OneSignal = await ensureLoginOneSignal();
+        if (OneSignal?.Notifications?.requestPermission) {
+          await OneSignal.Notifications.requestPermission();
+        } else if ('Notification' in window && Notification.permission === 'default') {
+          await Notification.requestPermission();
+        }
+        if (OneSignal?.User?.PushSubscription?.optIn) {
+          await OneSignal.User.PushSubscription.optIn();
+        }
+      } catch (error) {
+        console.warn('Izin notifikasi login gagal:', error);
+      } finally {
+        if (button) button.disabled = false;
+        updateLoginPwaGate();
+      }
+    }
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredLoginInstallPrompt = event;
+      updateLoginPwaGate();
+    });
+    window.addEventListener('pwa-install-ready', () => {
+      deferredLoginInstallPrompt = window.__deferredInstallPrompt || deferredLoginInstallPrompt;
+      updateLoginPwaGate();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredLoginInstallPrompt = null;
+      window.__deferredInstallPrompt = null;
+      updateLoginPwaGate();
+    });
+    document.getElementById('loginPwaInstallButton')?.addEventListener('click', installLoginPwa);
+    document.getElementById('loginPwaNotifyButton')?.addEventListener('click', requestLoginNotification);
+    document.getElementById('loginPwaRetryButton')?.addEventListener('click', updateLoginPwaGate);
+    updateLoginPwaGate();
+    window.setTimeout(updateLoginPwaGate, 900);
+    window.setTimeout(updateLoginPwaGate, 2200);
   </script>
 </body>
 

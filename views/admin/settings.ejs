@@ -261,11 +261,58 @@
                 <label class="fl">Minimal Persentase Offline (%)</label>
                 <input class="fc" type="number" min="1" max="100" step="1" name="mass_outage_threshold_percent" value="<%= settings.mass_outage_threshold_percent || 20 %>" placeholder="20">
               </div>
+              <div class="fg">
+                <label class="fl">Contoh Pelanggan di Pesan</label>
+                <input class="fc" type="number" min="1" max="20" step="1" name="mass_outage_sample_limit" value="<%= settings.mass_outage_sample_limit || 5 %>" placeholder="5">
+              </div>
+            </div>
+            <div class="form-row2">
+              <div class="fg">
+                <label class="fl">WA Admin & NOC</label>
+                <select class="fs" name="mass_outage_notify_whatsapp_admin_noc">
+                  <option value="true" <%= settings.mass_outage_notify_whatsapp_admin_noc !== false ? 'selected' : '' %>>Kirim</option>
+                  <option value="false" <%= settings.mass_outage_notify_whatsapp_admin_noc === false ? 'selected' : '' %>>Jangan kirim</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">WA Teknisi</label>
+                <select class="fs" name="mass_outage_notify_whatsapp_technician">
+                  <option value="true" <%= settings.mass_outage_notify_whatsapp_technician !== false ? 'selected' : '' %>>Kirim</option>
+                  <option value="false" <%= settings.mass_outage_notify_whatsapp_technician === false ? 'selected' : '' %>>Jangan kirim</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Push Admin</label>
+                <select class="fs" name="mass_outage_notify_push_admin">
+                  <option value="true" <%= settings.mass_outage_notify_push_admin !== false ? 'selected' : '' %>>Kirim</option>
+                  <option value="false" <%= settings.mass_outage_notify_push_admin === false ? 'selected' : '' %>>Jangan kirim</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Push Teknisi</label>
+                <select class="fs" name="mass_outage_notify_push_technician">
+                  <option value="true" <%= settings.mass_outage_notify_push_technician !== false ? 'selected' : '' %>>Kirim</option>
+                  <option value="false" <%= settings.mass_outage_notify_push_technician === false ? 'selected' : '' %>>Jangan kirim</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">Telegram Admin</label>
+                <select class="fs" name="mass_outage_notify_telegram">
+                  <option value="true" <%= settings.mass_outage_notify_telegram !== false ? 'selected' : '' %>>Kirim</option>
+                  <option value="false" <%= settings.mass_outage_notify_telegram === false ? 'selected' : '' %>>Jangan kirim</option>
+                </select>
+              </div>
             </div>
             <div class="fg">
               <label class="fl">Alias Area Alamat</label>
               <textarea class="fc" name="mass_outage_zone_aliases" rows="5" placeholder="warjeng=warung jengjeng&#10;kp cicadas=cicadas"><%= settings.mass_outage_zone_aliases || '' %></textarea>
               <div class="hint">Hanya pelanggan aktif dengan PPPoE username yang dihitung. Pelanggan isolir atau nonaktif otomatis dikecualikan.</div>
+            </div>
+            <div class="hint" style="margin-top:8px">
+              Nomor NOC diatur dari menu WhatsApp. Saat kosong, sistem memakai nomor admin.
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:16px">
+              <button type="submit" class="btn btn-p"><i class="bi bi-save"></i> Simpan Monitoring</button>
             </div>
           </div>
         </div>
@@ -681,6 +728,11 @@
           <div class="fg">
             <label class="fl">Nomor Admin WA (Pisahkan dengan koma)</label>
             <input class="fc" name="whatsapp_admin_numbers" value="<%= (settings.whatsapp_admin_numbers || []).join(', ') %>" placeholder="6281xxx, 6282xxx">
+          </div>
+          <div class="fg">
+            <label class="fl">Nomor NOC WA</label>
+            <input class="fc" name="whatsapp_noc_numbers" value="<%= Array.isArray(settings.whatsapp_noc_numbers) ? settings.whatsapp_noc_numbers.join(', ') : (settings.whatsapp_noc_numbers || '') %>" placeholder="6281xxx, 6282xxx">
+            <div style="font-size:10px; color:var(--muted); margin-top:4px">Dipakai saat teknisi/pelanggan meminta approval.</div>
           </div>
           <div class="fg">
             <label class="fl">Nomor Test WA</label>

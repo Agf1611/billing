@@ -151,6 +151,34 @@ function isEnabledSwitch(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
 }
 
+function isRememberMeChecked(value) {
+  return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+}
+
+function applyAdminLoginSession(req, rememberMe = false) {
+  const keepSignedIn = Boolean(rememberMe);
+  const maxAge = keepSignedIn ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
+  req.session.rememberMe = keepSignedIn;
+  req.session.adminRememberMe = keepSignedIn;
+  if (req.session.cookie) {
+    req.session.cookie.maxAge = maxAge;
+    req.session.cookie.expires = new Date(Date.now() + maxAge);
+  }
+}
+
+function clearConfiguredSessionCookies(res) {
+  const cookieName = String(getSetting('session_cookie_name', 'billing.sid') || 'billing.sid').trim() || 'billing.sid';
+  const cookieDomain = String(getSetting('session_cookie_domain', '') || '').trim();
+  const baseOptions = {
+    path: '/',
+    httpOnly: true,
+    sameSite: String(getSetting('session_cookie_same_site', 'lax') || 'lax').toLowerCase()
+  };
+  if (cookieDomain) baseOptions.domain = cookieDomain;
+  res.clearCookie(cookieName, baseOptions);
+  res.clearCookie('connect.sid', { path: '/' });
+}
+
 function sanitizePushBody(text, fallback = '') {
   const clean = String(text || '').replace(/\r/g, '').trim();
   return clean || fallback;
@@ -746,6 +774,88 @@ async function trySendTechnicianTaskPushNotification(task, technician, options =
     logger.warn(`[TechnicianPush] Gagal kirim push tugas #${task.id}: ${result?.reason || result?.error || 'unknown-error'}`);
   }
   return Boolean(result?.success);
+}
+
+function buildTechnicianCustomerApprovalMessage({ requestRow = {}, technician = {}, customer = {}, reviewNote = '', adminName = '', baseUrl = '' } = {}) {
+  const techName = String(technician.name || technician.username || 'Teknisi').trim() || 'Teknisi';
+  const customerName = String(customer.name || requestRow.customer_name || '-').trim() || '-';
+  const customerPhone = String(customer.phone || requestRow.customer_phone || '-').trim() || '-';
+  const pppoeUsername = String(customer.pppoe_username || requestRow.pppoe_username || '').trim();
+  const portalLink = `${String(baseUrl || resolveAppBaseUrl()).replace(/\/+$/, '')}/tech/customers/new`;
+  const lines = [
+    '*PENGAJUAN DISETUJUI*',
+    '',
+    `Halo ${techName},`,
+    `Pengajuan pelanggan sudah disetujui oleh ${String(adminName || 'Admin').trim() || 'Admin'}.`,
+    '',
+    `Pelanggan: ${customerName}`,
+    `No. HP: ${customerPhone}`
+  ];
+  if (pppoeUsername) lines.push(`PPPoE: ${pppoeUsername}`);
+  if (reviewNote) lines.push(`Catatan: ${reviewNote}`);
+  lines.push('', `Buka portal teknisi: ${portalLink}`);
+  return lines.join('\n');
+}
+
+async function notifyTechnicianCustomerApproval({ requestRow = {}, customer = {}, reviewNote = '', adminName = '', baseUrl = '' } = {}) {
+  const technician = techSvc.getTechById(requestRow.technician_id);
+  if (!technician) return { skipped: true, reason: 'technician-not-found' };
+  const message = buildTechnicianCustomerApprovalMessage({ requestRow, technician, customer, reviewNote, adminName, baseUrl });
+  const results = {};
+
+  if (technician.phone) {
+    results.whatsapp = await trySendWhatsappPayment(technician.phone, message);
+  }
+
+  const settings = getSettings();
+  if (isPushConfigured(settings)) {
+    const customerName = String(customer.name || requestRow.customer_name || 'Pelanggan').trim();
+    const pushResult = await sendPushToTechnician(technician, {
+      settings,
+      title: 'Pengajuan pelanggan disetujui',
+      message: `${customerName} sudah disetujui admin.`,
+      targetUrl: `${String(baseUrl || resolveAppBaseUrl()).replace(/\/+$/, '')}/tech/customers/new`,
+      data: {
+        kind: 'technician_customer_approved',
+        requestId: Number(requestRow.id || 0) || null,
+        customerId: Number(customer.id || 0) || null
+      },
+      timeoutMs: 7000
+    });
+    results.push = Boolean(pushResult?.success);
+  }
+
+  return results;
+}
+
+async function notifyCustomerWelcomeAfterApproval(customer, options = {}) {
+  if (!customer?.id) return { skipped: true, reason: 'customer-not-found' };
+  const baseUrl = String(options.baseUrl || resolveAppBaseUrl()).trim();
+  const results = {};
+  try {
+    customerSvc.addPortalNotification(customer.id, {
+      kind: 'welcome',
+      tab: 'home',
+      title: 'Selamat datang',
+      body: `Akun pelanggan ${customer.name || ''} sudah aktif. Anda bisa membuka portal pelanggan untuk cek layanan dan tagihan.`,
+      payload: {
+        source: 'technician-approval',
+        customerId: Number(customer.id || 0) || null
+      }
+    }, { push: true, dedupeWindowMs: 10 * 60 * 1000 });
+    results.portal = true;
+  } catch (error) {
+    logger.warn(`[CustomerApproval] Gagal membuat notifikasi welcome pelanggan ${customer.id}: ${error.message || String(error)}`);
+    results.portal = false;
+  }
+
+  if (customer.phone) {
+    const welcomeMessage = buildWelcomeWhatsappMessage(customer, { baseUrl });
+    if (welcomeMessage) {
+      results.whatsapp = await trySendWhatsappPayment(customer.phone, welcomeMessage);
+    }
+  }
+  return results;
 }
 
 function resolveWhatsappTestRecipient(whatsappStatus = null, requestedPhone = '') {
@@ -1414,19 +1524,22 @@ function buildCollectorMetadata(snapshot) {
 function getPendingCustomerRequestCount() {
   const technicianRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM technician_customer_requests WHERE status = 'pending'").get()?.c || 0);
   const packageChangeRequests = packageChangeSvc.countPendingRequests();
-  return technicianRequests + packageChangeRequests;
+  const profileChangeRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM customer_profile_change_requests WHERE status = 'pending'").get()?.c || 0);
+  return technicianRequests + packageChangeRequests + profileChangeRequests;
 }
 
 function getPendingApprovalBreakdown() {
   const technicianCustomerRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM technician_customer_requests WHERE status = 'pending'").get()?.c || 0);
   const packageChangeRequests = packageChangeSvc.countPendingRequests();
+  const profileChangeRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM customer_profile_change_requests WHERE status = 'pending'").get()?.c || 0);
   const collectorRequests = Number(db.prepare("SELECT COUNT(1) AS c FROM collector_payment_requests WHERE status = 'pending'").get()?.c || 0);
   return {
     technicianCustomerRequests,
     packageChangeRequests,
+    profileChangeRequests,
     collectorRequests,
-    customerRequests: technicianCustomerRequests + packageChangeRequests,
-    total: technicianCustomerRequests + packageChangeRequests + collectorRequests
+    customerRequests: technicianCustomerRequests + packageChangeRequests + profileChangeRequests,
+    total: technicianCustomerRequests + packageChangeRequests + profileChangeRequests + collectorRequests
   };
 }
 
@@ -2224,12 +2337,11 @@ router.get('/login', (req, res) => {
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
   const { username, password } = req.body;
-  const rememberMe = req.body.remember_me === 'on' || req.body.remember_me === '1' || req.body.remember_me === true || req.body.remember_me === 'true';
+  const rememberMe = isRememberMeChecked(req.body.remember_me);
   if (username === getSetting('admin_username', '') && password === getSetting('admin_password', '')) {
     req.session.isAdmin = true;
     req.session.adminUser = username;
-    req.session.rememberMe = rememberMe;
-    req.session.cookie.maxAge = rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
+    applyAdminLoginSession(req, rememberMe);
     return req.session.save(() => res.redirect('/admin'));
   }
   
@@ -2240,8 +2352,7 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
     req.session.cashierId = cashier.id;
     req.session.cashierName = cashier.name;
     req.session.cashierUsername = cashier.username;
-    req.session.rememberMe = rememberMe;
-    req.session.cookie.maxAge = rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS;
+    applyAdminLoginSession(req, rememberMe);
     return req.session.save(() => res.redirect('/admin'));
   }
 
@@ -2264,7 +2375,7 @@ router.get('/logout', (req, res) => {
     } catch (_error) {}
   }
   req.session.destroy(() => {
-    res.clearCookie('connect.sid');
+    clearConfiguredSessionCookies(res);
     res.redirect('/admin/login');
   });
 });
@@ -2976,8 +3087,33 @@ router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res
     payload_json: ''
   }));
 
-  const rows = [...technicianRows, ...packageChangeRows]
-    .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+  const profileChangeRows = db.prepare(`
+    SELECT r.*,
+           'profile_change' AS request_type,
+           c.name AS customer_name,
+           c.phone AS customer_phone,
+           c.address AS customer_address
+    FROM customer_profile_change_requests r
+    JOIN customers c ON c.id = r.customer_id
+    WHERE r.status = ?
+    ORDER BY r.id DESC
+    LIMIT 300
+  `).all(status).map((row) => ({
+    ...row,
+    technician_name: '',
+    technician_username: 'portal-pelanggan',
+    package_name: '',
+    router_name: '',
+    approved_customer_name: row.customer_name,
+    payload_json: ''
+  }));
+
+  const rows = [...technicianRows, ...packageChangeRows, ...profileChangeRows]
+    .sort((a, b) => {
+      const bt = new Date(b.requested_at || b.created_at || 0).getTime() || 0;
+      const at = new Date(a.requested_at || a.created_at || 0).getTime() || 0;
+      return (bt - at) || (Number(b.id || 0) - Number(a.id || 0));
+    })
     .slice(0, 300);
 
   res.render('admin/customer_requests', {
@@ -3031,6 +3167,92 @@ router.post('/package-change-requests/:id/reject', requireAdminSession, restrict
     req.session._msg = { type: 'success', text: 'Pengajuan pindah paket berhasil ditolak.' };
   } catch (e) {
     req.session._msg = { type: 'error', text: 'Gagal reject pindah paket: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
+});
+
+router.post('/profile-change-requests/:id/approve', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    const reviewNote = String(req.body.review_note || '').trim();
+    const row = db.prepare(`
+      SELECT r.*, c.name AS customer_name
+      FROM customer_profile_change_requests r
+      JOIN customers c ON c.id = r.customer_id
+      WHERE r.id = ?
+    `).get(id);
+    if (!row) throw new Error('Request perubahan profil tidak ditemukan');
+    if (String(row.status || '') !== 'pending') throw new Error('Request sudah diproses');
+
+    const requestedName = String(row.requested_name || row.current_name || '').trim();
+    const requestedPhone = normalizePhoneDigits(row.requested_phone || row.current_phone || '');
+    const requestedAddress = String(row.requested_address || row.current_address || '').trim();
+    if (!requestedName || !requestedPhone || !requestedAddress) throw new Error('Data request belum lengkap');
+
+    const existingPhone = db.prepare('SELECT id, name FROM customers WHERE phone = ? AND id != ? LIMIT 1').get(requestedPhone, row.customer_id);
+    if (existingPhone) throw new Error(`Nomor HP sudah dipakai pelanggan lain: ${existingPhone.name}`);
+
+    const approvedBy = resolvePaidByName(req, 'Admin');
+    const tx = db.transaction(() => {
+      db.prepare(`
+        UPDATE customers
+        SET name = ?, phone = ?, address = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(requestedName, requestedPhone, requestedAddress, row.customer_id);
+      db.prepare(`
+        UPDATE customer_profile_change_requests
+        SET status = 'approved',
+            review_note = ?,
+            reviewed_by_name = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            applied_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(reviewNote, approvedBy, id);
+    });
+    tx();
+
+    customerSvc.addPortalNotification(row.customer_id, {
+      kind: 'profile',
+      tab: 'profile',
+      title: 'Perubahan profil disetujui',
+      body: 'Data profil Anda sudah diperbarui.'
+    }, { dedupeWindowMs: 60 * 1000 });
+
+    req.session._msg = { type: 'success', text: `Perubahan profil ${row.customer_name || requestedName} disetujui.` };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal approve perubahan profil: ' + (e.message || String(e)) };
+  }
+  return redirectBack(res, '/admin/customer-requests');
+});
+
+router.post('/profile-change-requests/:id/reject', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!Number.isFinite(id) || id <= 0) throw new Error('ID request tidak valid');
+    const reviewNote = String(req.body.review_note || '').trim();
+    const row = db.prepare('SELECT id, customer_id, status FROM customer_profile_change_requests WHERE id = ?').get(id);
+    if (!row) throw new Error('Request perubahan profil tidak ditemukan');
+    if (String(row.status || '') !== 'pending') throw new Error('Request sudah diproses');
+    db.prepare(`
+      UPDATE customer_profile_change_requests
+      SET status = 'rejected',
+          review_note = ?,
+          reviewed_by_name = ?,
+          reviewed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(reviewNote, resolvePaidByName(req, 'Admin'), id);
+
+    customerSvc.addPortalNotification(row.customer_id, {
+      kind: 'profile',
+      tab: 'profile',
+      title: 'Perubahan profil ditolak',
+      body: reviewNote || 'Pengajuan perubahan profil belum disetujui admin.'
+    }, { dedupeWindowMs: 60 * 1000 });
+
+    req.session._msg = { type: 'success', text: 'Pengajuan perubahan profil ditolak.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal reject perubahan profil: ' + (e.message || String(e)) };
   }
   return redirectBack(res, '/admin/customer-requests');
 });
@@ -3121,6 +3343,9 @@ router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdm
 
     const createResult = customerSvc.createCustomer(payload);
     const customerId = Number(createResult.lastInsertRowid || 0) || null;
+    const createdCustomer = customerId ? customerSvc.getCustomerById(customerId) : null;
+    const approvedByName = resolvePaidByName(req, 'Admin');
+    const approvalBaseUrl = resolveRequestBaseUrl(req, resolveAppBaseUrl());
     db.prepare(`
       UPDATE technician_customer_requests
       SET status='approved',
@@ -3129,7 +3354,25 @@ router.post('/customer-requests/:id/approve', requireAdminSession, restrictToAdm
           approved_customer_id=?,
           reviewed_at=CURRENT_TIMESTAMP
       WHERE id=?
-    `).run(reviewNote, resolvePaidByName(req, 'Admin'), customerId, id);
+    `).run(reviewNote, approvedByName, customerId, id);
+
+    setImmediate(() => {
+      notifyTechnicianCustomerApproval({
+        requestRow: row,
+        customer: createdCustomer || { id: customerId, ...payload },
+        reviewNote,
+        adminName: approvedByName,
+        baseUrl: approvalBaseUrl
+      }).catch((error) => {
+        logger.warn(`[CustomerApproval] Gagal kirim notif approve ke teknisi request #${id}: ${error.message || String(error)}`);
+      });
+
+      notifyCustomerWelcomeAfterApproval(createdCustomer || { id: customerId, ...payload }, {
+        baseUrl: approvalBaseUrl
+      }).catch((error) => {
+        logger.warn(`[CustomerApproval] Gagal kirim welcome pelanggan request #${id}: ${error.message || String(error)}`);
+      });
+    });
 
     const warningText = syncWarnings.length ? ` Catatan: ${syncWarnings.join(' | ')}` : '';
     req.session._msg = { type: 'success', text: `Pengajuan pelanggan "${row.customer_name}" disetujui.${warningText}` };
@@ -3630,11 +3873,63 @@ router.get('/', requireAdminSession, async (req, res) => {
     const recentPayments = dashboardFinance.recentPayments;
     const topUnpaid = getDashboardPriorityCollections(6);
     const ticketStats = ticketSvc.getTicketStats();
-    const recentActiveTickets = ticketSvc
+    const allActiveTickets = ticketSvc
       .getAllTickets()
-      .filter((ticket) => ['open', 'in_progress'].includes(String(ticket?.status || '').toLowerCase()))
-      .slice(0, 5);
-    const openOutages = massOutageSvc.listOpenIncidents().slice(0, 6);
+      .filter((ticket) => ['open', 'in_progress'].includes(String(ticket?.status || '').toLowerCase()));
+    const recentActiveTickets = allActiveTickets.slice(0, 5);
+    const allOpenOutages = massOutageSvc.listOpenIncidents();
+    const openOutages = allOpenOutages.slice(0, 6);
+    const approvalBreakdown = getPendingApprovalBreakdown();
+    const technicianApprovalItems = db.prepare(`
+      SELECT r.id,
+             'Pelanggan Teknisi' AS type_label,
+             r.customer_name AS title,
+             r.customer_phone AS subtitle,
+             t.name AS actor_name,
+             r.created_at
+      FROM technician_customer_requests r
+      LEFT JOIN technicians t ON t.id = r.technician_id
+      WHERE r.status = 'pending'
+      ORDER BY datetime(r.created_at) DESC, r.id DESC
+      LIMIT 4
+    `).all();
+    const packageApprovalItems = packageChangeSvc.listRequestsByStatus('pending', 4).map((row) => ({
+      id: row.id,
+      type_label: 'Pindah Paket',
+      title: row.customer_name || 'Pelanggan',
+      subtitle: row.target_package_name || 'Paket baru',
+      actor_name: 'Portal Pelanggan',
+      created_at: row.created_at
+    }));
+    const profileApprovalItems = db.prepare(`
+      SELECT r.id,
+             'Perubahan Profil' AS type_label,
+             COALESCE(c.name, r.current_name, r.requested_name, 'Pelanggan') AS title,
+             COALESCE(r.requested_phone, c.phone, '') AS subtitle,
+             'Portal Pelanggan' AS actor_name,
+             r.created_at
+      FROM customer_profile_change_requests r
+      LEFT JOIN customers c ON c.id = r.customer_id
+      WHERE r.status = 'pending'
+      ORDER BY datetime(r.created_at) DESC, r.id DESC
+      LIMIT 4
+    `).all();
+    const dashboardApprovals = [...technicianApprovalItems, ...packageApprovalItems, ...profileApprovalItems]
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, 6);
+    const allTechTasks = techSvc.listAdminTechnicianTasks({}) || [];
+    const activeTechTasks = allTechTasks
+      .filter((task) => ['assigned', 'in_progress'].includes(String(task?.status || '').toLowerCase()))
+      .slice(0, 6);
+    const activeTechTaskCount = allTechTasks
+      .filter((task) => ['assigned', 'in_progress'].includes(String(task?.status || '').toLowerCase()))
+      .length;
+    const adminNotifications = db.prepare(`
+      SELECT id, kind, title, body, target_url, delivery_status, created_at
+      FROM admin_notifications
+      ORDER BY datetime(created_at) DESC, id DESC
+      LIMIT 6
+    `).all();
     const adminHomeShortcuts = buildAdminHomeShortcuts(req, opsSummary);
     res.render('admin/dashboard', {
       title: 'Dashboard', company: company(), version: '2.0.0',
@@ -3647,6 +3942,13 @@ router.get('/', requireAdminSession, async (req, res) => {
       ticketStats,
       recentActiveTickets,
       openOutages,
+      activeTicketCount: allActiveTickets.length,
+      openOutageCount: allOpenOutages.length,
+      approvalBreakdown,
+      dashboardApprovals,
+      activeTechTasks,
+      activeTechTaskCount,
+      adminNotifications,
       adminHomeShortcuts,
       dashboardFilterMonth: dashboardFinance.filterMonth,
       dashboardFilterYear: dashboardFinance.filterYear,
@@ -6438,6 +6740,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'whatsapp_mpwa_message_field',
       'whatsapp_mpwa_device',
       'whatsapp_admin_numbers',
+      'whatsapp_noc_numbers',
       'whatsapp_test_number',
       'onesignal_enabled',
       'onesignal_app_id',
@@ -6465,6 +6768,12 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'mass_outage_delay_minutes',
       'mass_outage_threshold_count',
       'mass_outage_threshold_percent',
+      'mass_outage_sample_limit',
+      'mass_outage_notify_whatsapp_admin_noc',
+      'mass_outage_notify_whatsapp_technician',
+      'mass_outage_notify_push_admin',
+      'mass_outage_notify_push_technician',
+      'mass_outage_notify_telegram',
       'mass_outage_zone_aliases',
       'ewallet_live_auto_start',
       'ewallet_log_service_default',
@@ -6509,6 +6818,16 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     else if (newSettings.duitku_enabled === 'false') newSettings.duitku_enabled = false;
     if (newSettings.mass_outage_detection_enabled === 'true') newSettings.mass_outage_detection_enabled = true;
     else if (newSettings.mass_outage_detection_enabled === 'false') newSettings.mass_outage_detection_enabled = false;
+    [
+      'mass_outage_notify_whatsapp_admin_noc',
+      'mass_outage_notify_whatsapp_technician',
+      'mass_outage_notify_push_admin',
+      'mass_outage_notify_push_technician',
+      'mass_outage_notify_telegram'
+    ].forEach((field) => {
+      if (newSettings[field] === 'true') newSettings[field] = true;
+      else if (newSettings[field] === 'false') newSettings[field] = false;
+    });
     if (newSettings.ewallet_live_auto_start === 'true') newSettings.ewallet_live_auto_start = true;
     else if (newSettings.ewallet_live_auto_start === 'false') newSettings.ewallet_live_auto_start = false;
 
@@ -6518,6 +6837,11 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       newSettings.whatsapp_admin_numbers = normalizePhoneList(newSettings.whatsapp_admin_numbers);
     } else if (Array.isArray(newSettings.whatsapp_admin_numbers)) {
       newSettings.whatsapp_admin_numbers = normalizePhoneList(newSettings.whatsapp_admin_numbers);
+    }
+    if (typeof newSettings.whatsapp_noc_numbers === 'string') {
+      newSettings.whatsapp_noc_numbers = normalizePhoneList(newSettings.whatsapp_noc_numbers);
+    } else if (Array.isArray(newSettings.whatsapp_noc_numbers)) {
+      newSettings.whatsapp_noc_numbers = normalizePhoneList(newSettings.whatsapp_noc_numbers);
     }
     if (newSettings.server_port !== undefined && newSettings.server_port !== '') newSettings.server_port = parseInt(newSettings.server_port);
     if (newSettings.mikrotik_port !== undefined && newSettings.mikrotik_port !== '') newSettings.mikrotik_port = parseInt(newSettings.mikrotik_port);
@@ -6531,7 +6855,10 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     }
     if (newSettings.mass_outage_threshold_percent !== undefined && newSettings.mass_outage_threshold_percent !== '') {
       const percent = parseFloat(newSettings.mass_outage_threshold_percent);
-      newSettings.mass_outage_threshold_percent = Number.isFinite(percent) && percent > 0 ? percent : 20;
+      newSettings.mass_outage_threshold_percent = Number.isFinite(percent) && percent > 0 ? Math.min(100, percent) : 20;
+    }
+    if (newSettings.mass_outage_sample_limit !== undefined && newSettings.mass_outage_sample_limit !== '') {
+      newSettings.mass_outage_sample_limit = Math.max(1, Math.min(20, parseInt(newSettings.mass_outage_sample_limit, 10) || 5));
     }
     if (newSettings.tr069_periodic_interval !== undefined && newSettings.tr069_periodic_interval !== '') {
       newSettings.tr069_periodic_interval = parseInt(newSettings.tr069_periodic_interval, 10) || 300;
@@ -6767,9 +7094,15 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
     newSettings.genieacs_password = String(newSettings.genieacs_password || currentSettings.genieacs_password || '').trim();
     newSettings.invoice_signer_title = String(newSettings.invoice_signer_title || currentSettings.invoice_signer_title || 'Finance').trim();
     
-    newSettings.login_otp_enabled = (newSettings.login_otp_enabled === 'true');
-    newSettings.telegram_enabled = (newSettings.telegram_enabled === 'true');
-    newSettings.auto_backup_enabled = (newSettings.auto_backup_enabled === 'true');
+    newSettings.login_otp_enabled = newSettings.login_otp_enabled === undefined
+      ? Boolean(currentSettings.login_otp_enabled)
+      : isEnabledSwitch(newSettings.login_otp_enabled);
+    newSettings.telegram_enabled = newSettings.telegram_enabled === undefined
+      ? Boolean(currentSettings.telegram_enabled)
+      : isEnabledSwitch(newSettings.telegram_enabled);
+    newSettings.auto_backup_enabled = newSettings.auto_backup_enabled === undefined
+      ? Boolean(currentSettings.auto_backup_enabled)
+      : isEnabledSwitch(newSettings.auto_backup_enabled);
     if (newSettings.ewallet_log_limit_default !== undefined && newSettings.ewallet_log_limit_default !== '') {
       const normalizedLogLimit = parseInt(newSettings.ewallet_log_limit_default, 10) || 200;
       newSettings.ewallet_log_limit_default = String([50, 100, 200, 500].includes(normalizedLogLimit) ? normalizedLogLimit : 200);
@@ -6790,6 +7123,22 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       newSettings.mass_outage_detection_enabled === 1 ||
       newSettings.mass_outage_detection_enabled === 'on'
     );
+    [
+      'mass_outage_notify_whatsapp_admin_noc',
+      'mass_outage_notify_whatsapp_technician',
+      'mass_outage_notify_push_admin',
+      'mass_outage_notify_push_technician',
+      'mass_outage_notify_telegram'
+    ].forEach((field) => {
+      if (newSettings[field] === undefined) return;
+      newSettings[field] = (
+        newSettings[field] === 'true' ||
+        newSettings[field] === true ||
+        newSettings[field] === '1' ||
+        newSettings[field] === 1 ||
+        newSettings[field] === 'on'
+      );
+    });
     newSettings.support_by_enabled = (
       newSettings.support_by_enabled === 'true' ||
       newSettings.support_by_enabled === true ||

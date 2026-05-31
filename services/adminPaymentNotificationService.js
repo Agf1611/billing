@@ -2,10 +2,12 @@ const db = require('../config/database');
 const { getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const { normalizePhoneDigits } = require('./phoneService');
+const { resolveAppBaseUrl } = require('./publicLinkService');
 const whatsappGateway = require('./whatsappGatewayService');
 const {
   isPushConfigured,
-  sendPushToAdmins
+  sendPushToAdmins,
+  sendPushToTechnicians
 } = require('./pushNotificationService');
 
 function normalizeText(value) {
@@ -124,10 +126,34 @@ function getAdminPushRecipients(settings = {}) {
   return recipients;
 }
 
-async function sendWhatsappToAdminNumbers(message, settings = {}) {
-  const numbers = Array.isArray(settings.whatsapp_admin_numbers)
-    ? settings.whatsapp_admin_numbers
-    : [];
+function toPhoneArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return value.split(/[\s,;]+/);
+  return [];
+}
+
+function resolveApprovalNocNumbers(settings = {}) {
+  const configured = toPhoneArray(settings.whatsapp_noc_numbers)
+    .map((phone) => normalizePhoneDigits(phone))
+    .filter(Boolean);
+  if (configured.length) return configured;
+  return toPhoneArray(settings.whatsapp_admin_numbers)
+    .map((phone) => normalizePhoneDigits(phone))
+    .filter(Boolean);
+}
+
+function resolveAbsoluteTargetUrl(targetUrl = '', baseUrl = '') {
+  const raw = normalizeText(targetUrl) || '/admin/customer-requests';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const root = normalizeText(baseUrl) || resolveAppBaseUrl();
+  return `${String(root || '').replace(/\/+$/, '')}/${raw.replace(/^\/+/, '')}`;
+}
+
+async function sendWhatsappToAdminNumbers(message, settings = {}, options = {}) {
+  const numbers = [
+    ...toPhoneArray(settings.whatsapp_admin_numbers),
+    ...toPhoneArray(options.extraNumbers)
+  ];
   const targets = [...new Set(numbers.map((phone) => normalizePhoneDigits(phone)).filter(Boolean))];
   if (!settings.whatsapp_enabled || !targets.length) {
     return { success: false, skipped: true, reason: 'no-admin-whatsapp' };
@@ -146,6 +172,33 @@ async function sendWhatsappToAdminNumbers(message, settings = {}) {
     } catch (error) {
       failed.push(phone);
       logger.warn(`[AdminPaymentNotification] Gagal kirim WA admin ${phone}: ${error.message || String(error)}`);
+    }
+  }
+
+  return { success: sent > 0, sent, failed };
+}
+
+async function sendWhatsappToTechnicianNumbers(technicians = [], message, settings = {}) {
+  const targets = [...new Set((Array.isArray(technicians) ? technicians : [])
+    .map((tech) => normalizePhoneDigits(tech && tech.phone))
+    .filter(Boolean))];
+  if (!settings.whatsapp_enabled || !targets.length) {
+    return { success: false, skipped: true, reason: 'no-technician-whatsapp' };
+  }
+
+  const ready = await whatsappGateway.ensureReady(12000);
+  if (!ready) return { success: false, skipped: true, reason: 'whatsapp-not-ready' };
+
+  let sent = 0;
+  const failed = [];
+  for (const phone of targets) {
+    try {
+      const ok = await whatsappGateway.sendText(phone, message);
+      if (ok) sent += 1;
+      else failed.push(phone);
+    } catch (error) {
+      failed.push(phone);
+      logger.warn(`[TicketNotification] Gagal kirim WA teknisi ${phone}: ${error.message || String(error)}`);
     }
   }
 
@@ -275,6 +328,7 @@ async function notifyApprovalRequired({
   const cleanSubject = normalizeText(subject) || '-';
   const cleanDetail = normalizeText(detail);
   const cleanTargetUrl = normalizeText(targetUrl) || '/admin/customer-requests';
+  const absoluteTargetUrl = resolveAbsoluteTargetUrl(cleanTargetUrl);
   const body = `${cleanSubject} menunggu persetujuan admin`;
   const whatsappMessage = [
     '*APPROVAL DIPERLUKAN*',
@@ -283,7 +337,7 @@ async function notifyApprovalRequired({
     `Pengaju: ${cleanRequester}`,
     `Data: ${cleanSubject}`,
     cleanDetail ? `Detail: ${cleanDetail}` : '',
-    `Buka: ${cleanTargetUrl}`
+    `Buka: ${absoluteTargetUrl}`
   ].filter(Boolean).join('\n');
 
   const results = {};
@@ -297,7 +351,7 @@ async function notifyApprovalRequired({
         data: {
           kind: 'approval_required',
           source: String(type || 'approval'),
-          targetUrl: cleanTargetUrl
+          targetUrl: absoluteTargetUrl
         }
       });
     }
@@ -307,7 +361,9 @@ async function notifyApprovalRequired({
   }
 
   try {
-    results.whatsapp = await sendWhatsappToAdminNumbers(whatsappMessage, settings);
+    results.whatsapp = await sendWhatsappToAdminNumbers(whatsappMessage, settings, {
+      extraNumbers: resolveApprovalNocNumbers(settings)
+    });
   } catch (error) {
     logger.warn(`[AdminApprovalNotification] Gagal kirim WhatsApp admin: ${error.message || String(error)}`);
     results.whatsapp = { success: false, error: error.message || String(error) };
@@ -319,10 +375,128 @@ async function notifyApprovalRequired({
   };
 }
 
+function getTicketNotificationContext(ticketId) {
+  const id = Number(ticketId || 0);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return db.prepare(`
+    SELECT t.*,
+           c.name AS customer_name,
+           c.phone AS customer_phone,
+           c.address AS customer_address,
+           p.name AS package_name,
+           tech.name AS technician_name
+    FROM tickets t
+    JOIN customers c ON c.id = t.customer_id
+    LEFT JOIN packages p ON p.id = c.package_id
+    LEFT JOIN technicians tech ON tech.id = t.technician_id
+    WHERE t.id = ?
+  `).get(id);
+}
+
+function buildTicketNotificationPayload(ticket, options = {}) {
+  if (!ticket) return null;
+  const adminTargetUrl = normalizeText(options.adminTargetUrl) || '/admin/tickets?status=open';
+  const techTargetUrl = normalizeText(options.techTargetUrl) || '/tech/pool';
+  const baseUrl = normalizeText(options.baseUrl);
+  const subject = normalizeText(ticket.subject) || 'Keluhan pelanggan';
+  const customerName = normalizeText(ticket.customer_name) || 'Pelanggan';
+  const createdAt = ticket.created_at
+    ? new Date(ticket.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+    : new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+  return {
+    title: 'Tiket keluhan baru',
+    body: `${subject} - ${customerName}`,
+    adminTargetUrl,
+    techTargetUrl,
+    absoluteAdminTargetUrl: resolveAbsoluteTargetUrl(adminTargetUrl, baseUrl),
+    absoluteTechTargetUrl: resolveAbsoluteTargetUrl(techTargetUrl, baseUrl),
+    whatsappMessage: [
+      '*TIKET KELUHAN BARU*',
+      '',
+      `Tiket: #${ticket.id}`,
+      `Pelanggan: ${customerName}`,
+      `WhatsApp: ${normalizeText(ticket.customer_phone) || '-'}`,
+      `Alamat: ${normalizeText(ticket.customer_address) || '-'}`,
+      `Paket: ${normalizeText(ticket.package_name) || '-'}`,
+      `Subjek: ${subject}`,
+      `Pesan: ${normalizeText(ticket.message) || '-'}`,
+      `Waktu: ${createdAt}`,
+      '',
+      `Buka admin: ${resolveAbsoluteTargetUrl(adminTargetUrl, baseUrl)}`,
+      `Buka teknisi: ${resolveAbsoluteTargetUrl(techTargetUrl, baseUrl)}`
+    ].join('\n')
+  };
+}
+
+async function notifyTicketCreated({ ticketId, baseUrl = '' } = {}) {
+  const ticket = getTicketNotificationContext(ticketId);
+  const payload = buildTicketNotificationPayload(ticket, { baseUrl });
+  if (!ticket || !payload) return { success: false, skipped: true, reason: 'ticket-not-found' };
+
+  const settings = getSettingsWithCache();
+  const results = {};
+
+  try {
+    const techSvc = require('./techService');
+    const technicians = (techSvc.getAllTechnicians() || []).filter((tech) => Number(tech.is_active || 0) === 1);
+
+    if (isPushConfigured(settings)) {
+      results.adminPush = await sendPushToAdmins(getAdminPushRecipients(settings), {
+        settings,
+        title: payload.title,
+        message: payload.body,
+        targetUrl: payload.adminTargetUrl,
+        data: {
+          kind: 'ticket',
+          source: 'customer_ticket',
+          ticketId: Number(ticket.id || 0) || null,
+          customerId: Number(ticket.customer_id || 0) || null,
+          targetUrl: payload.absoluteAdminTargetUrl
+        }
+      });
+
+      results.technicianPush = await sendPushToTechnicians(technicians, {
+        settings,
+        title: payload.title,
+        message: payload.body,
+        targetUrl: payload.techTargetUrl,
+        data: {
+          kind: 'ticket',
+          source: 'customer_ticket',
+          ticketId: Number(ticket.id || 0) || null,
+          customerId: Number(ticket.customer_id || 0) || null,
+          targetUrl: payload.absoluteTechTargetUrl
+        }
+      });
+    }
+
+    results.technicianWhatsapp = await sendWhatsappToTechnicianNumbers(technicians, payload.whatsappMessage, settings);
+  } catch (error) {
+    logger.warn(`[TicketNotification] Gagal kirim notifikasi teknisi: ${error.message || String(error)}`);
+    results.technician = { success: false, error: error.message || String(error) };
+  }
+
+  try {
+    results.whatsapp = await sendWhatsappToAdminNumbers(payload.whatsappMessage, settings, {
+      extraNumbers: resolveApprovalNocNumbers(settings)
+    });
+  } catch (error) {
+    logger.warn(`[TicketNotification] Gagal kirim WhatsApp tiket: ${error.message || String(error)}`);
+    results.whatsapp = { success: false, error: error.message || String(error) };
+  }
+
+  return {
+    success: Boolean(results.adminPush?.success || results.technicianPush?.success || results.technicianWhatsapp?.success || results.whatsapp?.success),
+    ...results
+  };
+}
+
 module.exports = {
   buildAdminPaymentNotificationPayload,
   buildAdminAgentVoucherNotificationPayload,
   notifyInvoicePaid,
   notifyAgentVoucherIncome,
-  notifyApprovalRequired
+  notifyApprovalRequired,
+  notifyTicketCreated
 };

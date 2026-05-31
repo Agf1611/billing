@@ -1,5 +1,5 @@
 {
-  "id": "/agent/",
+  "id": "/pwa/agent",
   "name": "Portal Agent",
   "short_name": "Agent",
   "description": "Portal Agent SICKAS WIFI",
@@ -7,6 +7,9 @@
   "scope": "/agent/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#1e293b",

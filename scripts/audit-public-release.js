@@ -7,6 +7,8 @@ const { spawnSync } = require('child_process');
 const repoRoot = path.resolve(__dirname, '..');
 const trackedFiles = loadTrackedFiles();
 const violations = [];
+const sudoStdinPattern = new RegExp(['sudo', '-S'].join('\\s+'));
+const puttyCredentialToolPattern = new RegExp(['pscp\\.exe', 'plink\\.exe'].join('|'), 'i');
 
 const blockedTrackedFiles = new Set([
   'deploy_pending_files.txt',
@@ -22,11 +24,31 @@ const blockedTrackedFiles = new Set([
   'settings.local.json'
 ]);
 
+const blockedTrackedPatterns = [
+  /^tmp[._-]/,
+  /^tmp\//,
+  /^workspace_archive\//,
+  /^backups\//,
+  /^logs\//,
+  /^database\//,
+  /^data\//,
+  /^outputs\//,
+  /^auth_info_baileys/,
+  /^billing-rtrw-alijayanet\//,
+  /(^|\/)\.env(\.|$)/,
+  /(^|\/)settings\.local\.json(\.|$)/,
+  /\.(db|sqlite|db-shm|db-wal|tar\.gz|tgz|zip|bak|session-|examSOBAT)$/i,
+  /^run-(out|err)\.log$/
+];
+
 for (const file of trackedFiles) {
   const fullPath = path.join(repoRoot, file);
   if (!fs.existsSync(fullPath)) continue;
   if (blockedTrackedFiles.has(file)) {
     violations.push(`${file}: file internal ini tidak boleh ikut rilis publik.`);
+  }
+  if (blockedTrackedPatterns.some((pattern) => pattern.test(file))) {
+    violations.push(`${file}: file runtime/sementara/privat tidak boleh ikut rilis publik.`);
   }
 }
 
@@ -50,11 +72,12 @@ if (!fs.existsSync(settingsTemplatePath)) {
 for (const relPath of trackedFiles) {
   const fullPath = path.join(repoRoot, relPath);
   if (!fs.existsSync(fullPath)) continue;
+  if (!isLikelyTextFile(relPath)) continue;
   const source = fs.readFileSync(fullPath, 'utf8');
-  if (/sudo -S/.test(source)) {
+  if (sudoStdinPattern.test(source)) {
     violations.push(`${relPath}: masih mengandung pola sudo non-interaktif yang sensitif.`);
   }
-  if (/pscp\.exe|plink\.exe/i.test(source)) {
+  if (puttyCredentialToolPattern.test(source)) {
     violations.push(`${relPath}: masih mengandung skrip deploy berbasis kredensial lokal.`);
   }
 }
@@ -89,4 +112,9 @@ function assertPlaceholder(settings, key) {
   if (!value) return;
   if (/^CHANGE_ME[_A-Z0-9-]*/.test(value)) return;
   throw new Error(`${key} masih berisi nilai nyata atau belum dipindahkan ke settings.local.json.`);
+}
+
+function isLikelyTextFile(relPath) {
+  return /\.(cjs|css|ejs|html|js|json|md|mjs|sh|svg|txt|webmanifest|yml|yaml)$/i.test(relPath)
+    || !path.extname(relPath);
 }

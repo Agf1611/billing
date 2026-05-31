@@ -1,5 +1,5 @@
 {
-  "id": "/customer/",
+  "id": "/pwa/customer",
   "name": "Portal Pelanggan",
   "short_name": "Pelanggan",
   "description": "Portal Pelanggan SICKAS WIFI",
@@ -7,6 +7,9 @@
   "scope": "/customer/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "orientation": "portrait",
   "background_color": "#f6faff",
   "theme_color": "#2f6bff",

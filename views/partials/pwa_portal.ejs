@@ -1,10 +1,18 @@
 <%
   const pwaPortalKey = typeof portalKey !== 'undefined' ? String(portalKey || '').trim() : 'customer';
   const pwaManifestBaseHref = typeof manifestPath !== 'undefined' && manifestPath ? String(manifestPath) : (pwaPortalKey === 'customer' ? '/manifest.webmanifest' : `/${pwaPortalKey}/manifest.webmanifest`);
-  const pwaAssetVersion = '20260519-pwa3';
+  const pwaAssetVersion = '20260528-pwa4';
   const pwaManifestHref = `${pwaManifestBaseHref}${pwaManifestBaseHref.includes('?') ? '&' : '?'}v=${pwaAssetVersion}`;
   const pwaScope = typeof scope !== 'undefined' && scope ? String(scope) : (pwaPortalKey === 'customer' ? '/customer/' : `/${pwaPortalKey}/`);
   const pwaThemeColor = typeof themeColor !== 'undefined' && themeColor ? String(themeColor) : '#0f172a';
+  const pwaStartUrlMap = {
+    customer: '/customer/login?source=pwa',
+    admin: '/admin?source=pwa',
+    tech: '/tech/login?source=pwa',
+    agent: '/agent/login?source=pwa',
+    collector: '/collector/login?source=pwa'
+  };
+  const pwaStartUrl = typeof startUrl !== 'undefined' && startUrl ? String(startUrl) : (pwaStartUrlMap[pwaPortalKey] || '/');
   const pwaLogo = (typeof settings !== 'undefined' && settings && String(settings.pwa_logo_url || '').trim())
     ? String(settings.pwa_logo_url || '').trim()
     : ((typeof settings !== 'undefined' && settings && String(settings.company_logo_url || '').trim())
@@ -21,6 +29,14 @@
   const pwaInstallLabel = typeof installLabel !== 'undefined' && installLabel
     ? String(installLabel)
     : (pwaInstallLabelMap[pwaPortalKey] || 'Install Aplikasi');
+  const pwaOpenLabelMap = {
+    customer: 'Buka Aplikasi',
+    admin: 'Buka Admin',
+    tech: 'Buka Teknisi',
+    agent: 'Buka Agent',
+    collector: 'Buka Kolektor'
+  };
+  const pwaOpenLabel = pwaOpenLabelMap[pwaPortalKey] || 'Buka Aplikasi';
 %>
 <link rel="manifest" href="<%= pwaManifestHref %>">
 <meta name="theme-color" content="<%= pwaThemeColor %>">
@@ -89,9 +105,40 @@
     if (!('serviceWorker' in navigator)) return;
     var portalKey = <%- JSON.stringify(pwaPortalKey) %>;
     var installLabel = <%- JSON.stringify(pwaInstallLabel) %>;
+    var openLabel = <%- JSON.stringify(pwaOpenLabel) %>;
     var installButton = null;
     function isStandaloneMode() {
       return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+    function markPortalInstalled() {
+      try {
+        localStorage.setItem('pwa-installed-' + portalKey, '1');
+        localStorage.setItem('pwa-installed-scope-' + portalKey, window.__pwaPortal.scope || '');
+      } catch (_) {}
+    }
+    function wasPortalInstalled() {
+      try {
+        return localStorage.getItem('pwa-installed-' + portalKey) === '1';
+      } catch (_) {
+        return false;
+      }
+    }
+    function setInstallButtonMode(mode) {
+      if (!installButton) return;
+      var isOpen = mode === 'open';
+      installButton.dataset.mode = isOpen ? 'open' : 'install';
+      installButton.setAttribute('aria-label', isOpen ? openLabel : installLabel);
+      installButton.innerHTML =
+        '<span class=\"pwa-install-launcher__icon\">' + (isOpen ? '↗' : '+') + '</span>' +
+        '<span class=\"pwa-install-launcher__text\">' + (isOpen ? openLabel : installLabel) + '</span>';
+    }
+    function openInstalledPortal() {
+      var target = (window.__pwaPortal && window.__pwaPortal.startUrl) ? window.__pwaPortal.startUrl : window.location.href;
+      try {
+        window.location.assign(target);
+      } catch (_) {
+        window.location.href = target;
+      }
     }
     function ensureInstallButton() {
       if (installButton || !document.body) return installButton;
@@ -104,7 +151,10 @@
         '<span class=\"pwa-install-launcher__text\">' + installLabel + '</span>';
       installButton.addEventListener('click', async function () {
         var promptEvent = window.__deferredInstallPrompt;
-        if (!promptEvent) return;
+        if (!promptEvent) {
+          openInstalledPortal();
+          return;
+        }
         try {
           promptEvent.prompt();
           var choice = await promptEvent.userChoice;
@@ -121,12 +171,17 @@
       if (!document.body) return;
       var button = ensureInstallButton();
       if (!button) return;
-      var canShow = Boolean(window.__deferredInstallPrompt) && !isStandaloneMode();
+      var isStandalone = isStandaloneMode();
+      var canInstall = Boolean(window.__deferredInstallPrompt) && !isStandalone;
+      var canOpenInstalled = !canInstall && !isStandalone && wasPortalInstalled();
+      setInstallButtonMode(canOpenInstalled ? 'open' : 'install');
+      var canShow = canInstall || canOpenInstalled;
       button.classList.toggle('is-visible', canShow);
     }
     window.__pwaPortal = {
       portal: <%- JSON.stringify(pwaPortalKey) %>,
       scope: <%- JSON.stringify(pwaScope) %>,
+      startUrl: <%- JSON.stringify(pwaStartUrl) %>,
       manifest: <%- JSON.stringify(pwaManifestHref) %>
     };
     window.__deferredInstallPrompt = null;
@@ -143,6 +198,7 @@
     });
     window.addEventListener('appinstalled', function () {
       window.__deferredInstallPrompt = null;
+      markPortalInstalled();
       updateInstallButton();
       window.dispatchEvent(new CustomEvent('pwa-installed', {
         detail: {
@@ -151,33 +207,30 @@
       }));
     });
     window.addEventListener('load', function () {
-      if (portalKey !== 'customer') {
-        navigator.serviceWorker.getRegistrations().then(function (registrations) {
-          registrations.forEach(function (registration) {
-            try {
-              var scope = String(registration.scope || '');
-              if (scope.indexOf(window.location.origin + '/admin/') === 0 ||
-                  scope.indexOf(window.location.origin + '/tech/') === 0 ||
-                  scope.indexOf(window.location.origin + '/agent/') === 0 ||
-                  scope.indexOf(window.location.origin + '/collector/') === 0 ||
-                  scope === (window.location.origin + '/')) {
-                registration.unregister().catch(function () {});
-              }
-            } catch (_) {}
+      try {
+        var launchSource = new URLSearchParams(window.location.search || '').get('source');
+        if (isStandaloneMode()) markPortalInstalled();
+      } catch (_) {}
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (registration) {
+          try {
+            var scope = String(registration.scope || '');
+            if (scope === (window.location.origin + '/')) {
+              registration.unregister().catch(function () {});
+            }
+          } catch (_) {}
+        });
+      }).catch(function () {});
+      if (window.caches && typeof window.caches.keys === 'function') {
+        window.caches.keys().then(function (keys) {
+          keys.forEach(function (key) {
+            if (String(key || '') === 'billing-pwa-v7') {
+              window.caches.delete(key).catch(function () {});
+            }
           });
         }).catch(function () {});
-        if (window.caches && typeof window.caches.keys === 'function') {
-          window.caches.keys().then(function (keys) {
-            keys.forEach(function (key) {
-              if (String(key || '').indexOf('billing-pwa-') === 0) {
-                window.caches.delete(key).catch(function () {});
-              }
-            });
-          }).catch(function () {});
-        }
-      } else {
-        navigator.serviceWorker.register('/sw.js?v=' + <%- JSON.stringify(pwaAssetVersion) %>, { scope: window.__pwaPortal.scope }).catch(function () {});
       }
+      navigator.serviceWorker.register('/sw.js?v=' + <%- JSON.stringify(pwaAssetVersion) %>, { scope: window.__pwaPortal.scope }).catch(function () {});
       ensureInstallButton();
       updateInstallButton();
     });

@@ -206,6 +206,25 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS customer_profile_change_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    current_name TEXT DEFAULT '',
+    current_phone TEXT DEFAULT '',
+    current_address TEXT DEFAULT '',
+    requested_name TEXT DEFAULT '',
+    requested_phone TEXT DEFAULT '',
+    requested_address TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    request_note TEXT DEFAULT '',
+    review_note TEXT DEFAULT '',
+    reviewed_by_name TEXT DEFAULT '',
+    requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME,
+    applied_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS pppoe_monitoring_state (
     router_key TEXT NOT NULL,
     router_id INTEGER REFERENCES routers(id) ON DELETE CASCADE,
@@ -267,6 +286,19 @@ db.exec(`
     body TEXT NOT NULL DEFAULT '',
     payload_json TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS admin_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    audience TEXT NOT NULL DEFAULT 'admin',
+    kind TEXT NOT NULL DEFAULT 'system',
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    target_url TEXT NOT NULL DEFAULT '/admin',
+    payload_json TEXT,
+    delivery_status TEXT NOT NULL DEFAULT 'queued',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    read_at DATETIME
   );
 
   CREATE TABLE IF NOT EXISTS routers (
@@ -489,6 +521,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_status ON package_change_requests(status);
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_created ON package_change_requests(created_at);
   CREATE INDEX IF NOT EXISTS idx_package_change_requests_effective ON package_change_requests(effective_at);
+  CREATE INDEX IF NOT EXISTS idx_customer_profile_change_customer ON customer_profile_change_requests(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_customer_profile_change_status ON customer_profile_change_requests(status);
+  CREATE INDEX IF NOT EXISTS idx_customer_profile_change_created ON customer_profile_change_requests(created_at);
   CREATE INDEX IF NOT EXISTS idx_mass_outage_router_status ON mass_outage_incidents(router_key, status);
   CREATE INDEX IF NOT EXISTS idx_mass_outage_detected ON mass_outage_incidents(detected_at);
   CREATE INDEX IF NOT EXISTS idx_mass_outage_zone_status ON mass_outage_incidents(zone_key, status);
@@ -742,6 +777,7 @@ try { db.exec("ALTER TABLE customers ADD COLUMN portal_notifications_seen_at DAT
 try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_session_id TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_uptime_seconds INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_customer_portal_notifications_customer_created ON customer_portal_notifications(customer_id, created_at DESC)"); } catch (e) {}
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_admin_notifications_created ON admin_notifications(created_at DESC)"); } catch (e) {}
 
 // Tabel untuk Tracking Pemakaian (Usage) Pelanggan
 db.exec(`

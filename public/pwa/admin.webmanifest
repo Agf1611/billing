@@ -1,5 +1,5 @@
 {
-  "id": "/admin/",
+  "id": "/pwa/admin",
   "name": "Admin",
   "short_name": "Admin",
   "description": "Admin SICKAS WIFI",
@@ -7,6 +7,9 @@
   "scope": "/admin/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",

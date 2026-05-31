@@ -1,5 +1,6 @@
 node_modules/
 
+# Local runtime data
 database/
 data/
 database.sqlite
@@ -12,6 +13,7 @@ auth_info_baileys*/
 logs/
 backups/
 uploads/tmp/
+outputs/
 
 .env
 .env.*
@@ -46,8 +48,14 @@ workspace_archive/
 billing-rtrw-alijayanet/
 *.tar.gz
 *.tgz
+*.zip
+*.examSOBAT
 
 billing-update-*.tar.gz
 
 *.bak
 *.session-*
+
+# Keep generated package artifacts out of the public repository.
+dist/
+release/

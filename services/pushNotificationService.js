@@ -1,4 +1,5 @@
 const axios = require('axios');
+const db = require('../config/database');
 const { getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const { resolveAppBaseUrl } = require('./publicLinkService');
@@ -61,6 +62,64 @@ function resolveTargetUrl(targetUrl = '', baseUrl = '') {
   return `${root.replace(/\/+$/, '')}/${trimmed.replace(/^\/+/, '')}`;
 }
 
+function resolveNotificationIcon(settings = {}, baseUrl = '') {
+  const icon = normalizeText(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png') || '/img/logo.png';
+  return resolveTargetUrl(icon, baseUrl);
+}
+
+function resolvePushPriority(options = {}) {
+  const explicit = Number(options.priority);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1, Math.min(10, explicit));
+  const importance = normalizeText(options.importance || options.urgency || '').toLowerCase();
+  if (['high', 'urgent', 'critical', 'penting'].includes(importance)) return 10;
+  return 10;
+}
+
+function buildWebButtons(targetUrl = '', options = {}) {
+  if (options.webButtons === false || options.buttons === false) return undefined;
+  if (Array.isArray(options.webButtons)) return options.webButtons;
+  if (!targetUrl) return undefined;
+  return [{
+    id: 'open',
+    text: normalizeText(options.openButtonText) || 'Buka',
+    url: targetUrl
+  }];
+}
+
+function logAdminNotification(options = {}, result = {}) {
+  try {
+    const title = normalizeText(options.title) || 'Notifikasi Admin';
+    const body = normalizeText(options.message);
+    if (!title) return;
+    const baseUrl = normalizeText(options.baseUrl) || resolveAppBaseUrl();
+    const targetUrl = resolveTargetUrl(options.targetUrl || '/admin', baseUrl) || '/admin';
+    const data = options.data && typeof options.data === 'object' ? options.data : {};
+    const kind = normalizeText(data.kind || options.kind || 'admin_push') || 'admin_push';
+    db.prepare(`
+      INSERT INTO admin_notifications (audience, kind, title, body, target_url, payload_json, delivery_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'admin',
+      kind,
+      title,
+      body,
+      targetUrl,
+      JSON.stringify({
+        ...data,
+        pushResult: {
+          success: Boolean(result?.success),
+          skipped: Boolean(result?.skipped),
+          reason: result?.reason || '',
+          status: result?.status || null
+        }
+      }),
+      result?.success ? 'sent' : (result?.skipped ? 'skipped' : 'failed')
+    );
+  } catch (error) {
+    logger.warn(`[PushNotification] Gagal menyimpan log notifikasi admin: ${error.message || String(error)}`);
+  }
+}
+
 async function sendPushToExternalIds(externalIds, options = {}) {
   const ids = uniqueExternalIds(externalIds);
   if (!ids.length) return { success: false, skipped: true, reason: 'no-external-ids' };
@@ -77,19 +136,31 @@ async function sendPushToExternalIds(externalIds, options = {}) {
   const targetUrl = resolveTargetUrl(options.targetUrl || '/customer/dashboard', baseUrl);
   const imageUrl = normalizeText(options.imageUrl || options.image_url || '');
   const resolvedImageUrl = imageUrl ? resolveTargetUrl(imageUrl, baseUrl) : '';
+  const iconUrl = resolveNotificationIcon(options.settings || {}, baseUrl);
+  const ttlSeconds = Number(options.ttl || options.timeToLive || 259200);
+  const priority = resolvePushPriority(options);
+  const webButtons = buildWebButtons(targetUrl, options);
   const payload = {
     app_id: config.appId,
     target_channel: 'push',
     include_aliases: { external_id: ids },
     headings: { en: title },
     contents: { en: message },
+    url: targetUrl,
+    priority,
+    chrome_web_icon: iconUrl,
+    chrome_web_badge: iconUrl,
     data: {
       ...(options.data && typeof options.data === 'object' ? options.data : {}),
       targetUrl,
+      priority,
+      requireInteraction: options.requireInteraction !== false,
       ...(resolvedImageUrl ? { imageUrl: resolvedImageUrl, image_url: resolvedImageUrl } : {})
     },
-    ttl: Number(options.ttl || 86400)
+    ttl: Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : 259200
   };
+
+  if (webButtons) payload.web_buttons = webButtons;
 
   if (resolvedImageUrl) {
     payload.chrome_web_image = resolvedImageUrl;
@@ -158,11 +229,13 @@ async function sendPushToTechnicians(technicians = [], options = {}) {
 
 async function sendPushToAdmins(admins = [], options = {}) {
   const externalIds = uniqueExternalIds((Array.isArray(admins) ? admins : []).map(buildAdminPushExternalId));
-  return sendPushToExternalIds(externalIds, {
+  const result = await sendPushToExternalIds(externalIds, {
     targetUrl: '/admin',
     title: 'Notifikasi Admin',
     ...options
   });
+  logAdminNotification({ targetUrl: '/admin', title: 'Notifikasi Admin', ...options }, result);
+  return result;
 }
 
 module.exports = {

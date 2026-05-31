@@ -37,10 +37,9 @@ const {
   hasStaticQrisEnabled: resolveStaticQrisEnabled
 } = require('../services/qrisService');
 const {
-  isPushConfigured,
-  sendPushToTechnicians
-} = require('../services/pushNotificationService');
-const { notifyApprovalRequired } = require('../services/adminPaymentNotificationService');
+  notifyApprovalRequired,
+  notifyTicketCreated
+} = require('../services/adminPaymentNotificationService');
 const { registerPublicPortalRoutes } = require('./customer/registerPublicPortalRoutes');
 const CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const LOGIN_GENIE_PREFETCH_MAX_WAIT_MS = 1200;
@@ -575,6 +574,35 @@ function buildPortalPackageChangeViewState(profile) {
       : '',
     canRequestNowByDate: !state.nextEligibleAt || state.nextEligibleAt.getTime() <= Date.now()
   };
+}
+
+function getCustomerProfileChangeState(customerId) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) {
+    return { activeRequest: null, latestRequest: null };
+  }
+  const activeRequest = db.prepare(`
+    SELECT *
+    FROM customer_profile_change_requests
+    WHERE customer_id = ? AND status = 'pending'
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT 1
+  `).get(cid) || null;
+  const latestRequest = db.prepare(`
+    SELECT *
+    FROM customer_profile_change_requests
+    WHERE customer_id = ?
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT 1
+  `).get(cid) || null;
+  return { activeRequest, latestRequest };
+}
+
+function normalizeCustomerProfileChangeInput(body = {}) {
+  const name = String(body.name || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  const phoneDigits = normalizePhoneDigits(body.phone || '');
+  const address = String(body.address || '').trim().replace(/\s+/g, ' ').slice(0, 260);
+  return { name, phone: phoneDigits, address };
 }
 
 async function getCustomerPaymentChannels(settings = {}) {
@@ -1620,11 +1648,17 @@ router.get('/dashboard', async (req, res) => {
   // Flash message
   let msgNotif = null;
   let settingsActionNotif = null;
+  let profileActionNotif = null;
   if (req.session._msg) {
     const target = String(req.session._msg.target || '').trim().toLowerCase();
     if (target === 'ssid' || target === 'password') {
       settingsActionNotif = {
         target,
+        text: req.session._msg.text,
+        type: req.session._msg.type || 'success'
+      };
+    } else if (target === 'profile') {
+      profileActionNotif = {
         text: req.session._msg.text,
         type: req.session._msg.type || 'success'
       };
@@ -1710,6 +1744,7 @@ router.get('/dashboard', async (req, res) => {
     ? customerSvc.getPortalPackages(refreshedProfile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(refreshedProfile.package_id || 0))
     : [];
   const packageChangeState = refreshedProfile ? buildPortalPackageChangeViewState(refreshedProfile) : buildPortalPackageChangeViewState(null);
+  const profileChangeState = refreshedProfile ? getCustomerProfileChangeState(refreshedProfile.id) : getCustomerProfileChangeState(null);
 
   res.render('dashboard', {
     customer: dashboardCustomer,
@@ -1724,10 +1759,12 @@ router.get('/dashboard', async (req, res) => {
     isLoggedIn: true,
     notif: baseNotif,
     settingsActionNotif,
+    profileActionNotif,
     notifications: notificationSummary.items,
     notificationUnreadCount: notificationSummary.unreadCount,
     portalPackages,
-    packageChangeState
+    packageChangeState,
+    profileChangeState
   });
 });
 
@@ -2021,7 +2058,8 @@ router.post('/change-tag', async (req, res) => {
       connectedUsers: Array.isArray(dashboardCustomer?.connectedUsers) ? dashboardCustomer.connectedUsers : [],
       notif: dashboardNotif('ID/Tag baru tidak boleh kosong atau sama dengan yang lama.', 'warning'),
       portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : [],
-      packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null)
+      packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null),
+      profileChangeState: profile ? getCustomerProfileChangeState(profile.id) : getCustomerProfileChangeState(null)
     });
   }
   const tagResult = await updateCustomerTag(oldTag, newTag);
@@ -2083,8 +2121,79 @@ router.post('/change-tag', async (req, res) => {
     connectedUsers: Array.isArray(dashboardCustomer?.connectedUsers) ? dashboardCustomer.connectedUsers : [],
     notif,
     portalPackages: profile ? customerSvc.getPortalPackages(profile.package_id).filter((pkg) => Number(pkg.id || 0) !== Number(profile.package_id || 0)) : [],
-    packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null)
+    packageChangeState: profile ? buildPortalPackageChangeViewState(profile) : buildPortalPackageChangeViewState(null),
+    profileChangeState: profile ? getCustomerProfileChangeState(profile.id) : getCustomerProfileChangeState(null)
   });
+});
+
+router.post('/profile/change', async (req, res) => {
+  try {
+    const profile = getSessionCustomer(req);
+    if (!profile || !profile.id) throw new Error('Sesi pelanggan tidak ditemukan');
+
+    const requested = normalizeCustomerProfileChangeInput(req.body || {});
+    if (!requested.name) throw new Error('Nama tidak boleh kosong');
+    if (!requested.phone) throw new Error('Nomor HP tidak valid');
+    if (!requested.address) throw new Error('Alamat tidak boleh kosong');
+
+    const current = {
+      name: String(profile.name || '').trim(),
+      phone: normalizePhoneDigits(profile.phone || ''),
+      address: String(profile.address || '').trim()
+    };
+    const changed = current.name !== requested.name || current.phone !== requested.phone || current.address !== requested.address;
+    if (!changed) throw new Error('Tidak ada data yang berubah');
+
+    const pending = db.prepare(`
+      SELECT id
+      FROM customer_profile_change_requests
+      WHERE customer_id = ? AND status = 'pending'
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(profile.id);
+    if (pending) throw new Error('Masih ada pengajuan profil yang menunggu approval admin');
+
+    const result = db.prepare(`
+      INSERT INTO customer_profile_change_requests (
+        customer_id, current_name, current_phone, current_address,
+        requested_name, requested_phone, requested_address,
+        status, request_note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(
+      profile.id,
+      current.name,
+      current.phone,
+      current.address,
+      requested.name,
+      requested.phone,
+      requested.address,
+      String(req.body.note || '').trim().slice(0, 240)
+    );
+
+    customerSvc.addPortalNotification(profile.id, {
+      kind: 'profile',
+      tab: 'profile',
+      title: 'Perubahan profil diajukan',
+      body: 'Data profil baru sudah dikirim dan menunggu approval admin.'
+    }, { dedupeWindowMs: 60 * 1000 });
+
+    const requestId = Number(result.lastInsertRowid || 0) || '-';
+    setImmediate(() => {
+      notifyApprovalRequired({
+        type: 'profile_change_request',
+        title: 'Approval Perubahan Profil',
+        requester: profile.name || profile.phone || `Pelanggan #${profile.id}`,
+        subject: `Perubahan profil ${profile.name || profile.phone || profile.id}`,
+        detail: `Request #${requestId} - nama/no HP/alamat`,
+        targetUrl: '/admin/customer-requests?status=pending'
+      }).catch((error) => logger.warn(`[ProfileApproval] Gagal kirim notif admin: ${error.message || String(error)}`));
+    });
+
+    req.session._msg = { type: 'success', text: 'Pengajuan perubahan profil dikirim.', target: 'profile' };
+  } catch (error) {
+    req.session._msg = { type: 'danger', text: error.message || 'Gagal mengajukan perubahan profil.', target: 'profile' };
+  }
+  return res.redirect('/customer/dashboard#profile');
 });
 
 router.post('/packages/change', async (req, res) => {
@@ -2409,29 +2518,17 @@ router.post('/tickets/create', async (req, res) => {
       body: 'Keluhan Anda sudah kami terima. Tim kami akan segera menindaklanjutinya.'
     }, { dedupeWindowMs: 60 * 1000 });
 
-    try {
-      const settings = getSettingsWithCache();
-      if (isPushConfigured(settings)) {
-        const customer = customerSvc.getCustomerById(customerId);
-        const technicians = (techSvc.getAllTechnicians() || []).filter((tech) => Number(tech.is_active || 0) === 1);
-        await sendPushToTechnicians(technicians, {
-          settings,
-          title: 'Tiket keluhan baru',
-          message: `${String(subject || 'Keluhan pelanggan').trim()} - ${customer?.name || profile.name || 'Pelanggan'}`,
-          targetUrl: `${resolveRequestBaseUrl(req)}/tech/pool`,
-          data: {
-            kind: 'ticket',
-            ticketId: Number(ticketId || 0) || 0,
-            source: 'customer_portal'
-          }
-        });
-      }
-    } catch (pushErr) {
-      logger.warn(`[Ticket] Push teknisi gagal: ${pushErr.message || pushErr}`);
-    }
+    notifyTicketCreated({
+      ticketId,
+      baseUrl: resolveRequestBaseUrl(req)
+    }).catch((notifyErr) => {
+      logger.warn(`[Ticket] Notifikasi tiket gagal: ${notifyErr.message || notifyErr}`);
+    });
     
     req.session._msg = { type: 'success', text: 'Keluhan berhasil dikirim. Tim teknisi akan segera mengeceknya.' };
 
+    /*
+    // Legacy ticket notification is handled by notifyTicketCreated().
     // --- WHATSAPP NOTIFICATION FOR NEW TICKET ---
     try {
       const settings = getSettingsWithCache();
@@ -2477,6 +2574,7 @@ router.post('/tickets/create', async (req, res) => {
       logger.error(`[Ticket] WA Notification Error: ${waErr.message}`);
     }
     // --------------------------------------------
+    */
 
   } catch (error) {
     req.session._msg = { type: 'danger', text: 'Gagal mengirim keluhan: ' + error.message };

@@ -64,6 +64,7 @@ function buildPortalManifest(portalKey = 'customer') {
   const logoSrc = String(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
   const portalMap = {
     customer: {
+      id: '/pwa/customer',
       name: 'Portal Pelanggan',
       shortName: 'Pelanggan',
       startUrl: '/customer/login?source=pwa',
@@ -72,6 +73,7 @@ function buildPortalManifest(portalKey = 'customer') {
       backgroundColor: '#f6faff'
     },
     admin: {
+      id: '/pwa/admin',
       name: 'Admin',
       shortName: 'Admin',
       startUrl: '/admin?source=pwa',
@@ -80,6 +82,7 @@ function buildPortalManifest(portalKey = 'customer') {
       backgroundColor: '#0f172a'
     },
     tech: {
+      id: '/pwa/tech',
       name: 'Portal Teknisi',
       shortName: 'Teknisi',
       startUrl: '/tech/login?source=pwa',
@@ -88,6 +91,7 @@ function buildPortalManifest(portalKey = 'customer') {
       backgroundColor: '#0f172a'
     },
     agent: {
+      id: '/pwa/agent',
       name: 'Portal Agent',
       shortName: 'Agent',
       startUrl: '/agent/login?source=pwa',
@@ -96,6 +100,7 @@ function buildPortalManifest(portalKey = 'customer') {
       backgroundColor: '#0f172a'
     },
     collector: {
+      id: '/pwa/collector',
       name: 'Portal Kolektor',
       shortName: 'Kolektor',
       startUrl: '/collector/login?source=pwa',
@@ -106,7 +111,7 @@ function buildPortalManifest(portalKey = 'customer') {
   };
   const portal = portalMap[portalKey] || portalMap.customer;
   return {
-    id: portal.scope,
+    id: portal.id,
     name: portal.name,
     short_name: portal.shortName,
     description: `${portal.name} ${companyName}`,
@@ -114,6 +119,9 @@ function buildPortalManifest(portalKey = 'customer') {
     scope: portal.scope,
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
+    launch_handler: {
+      client_mode: ['navigate-existing', 'auto']
+    },
     orientation: 'portrait',
     background_color: portal.backgroundColor,
     theme_color: portal.themeColor,
@@ -165,9 +173,10 @@ const sessionStore = createSqliteSessionStore({
 
 function applySessionLifetime(sessionState) {
   if (!sessionState || !sessionState.cookie) return;
+  const keepSignedIn = Boolean(sessionState.rememberMe || sessionState.adminRememberMe);
   const maxAge = sessionState.customerPersistentLogin
     ? CUSTOMER_PERSISTENT_SESSION_MAX_AGE_MS
-    : (sessionState.rememberMe ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS);
+    : (keepSignedIn ? REMEMBER_ME_SESSION_MAX_AGE_MS : DEFAULT_SESSION_MAX_AGE_MS);
   sessionState.cookie.maxAge = maxAge;
 }
 
@@ -498,8 +507,15 @@ app.post('/api/whatsapp/chatsmart-webhook', requireWhatsappApiKey, async (req, r
     const customer = customerSvc.findCustomerByAny(from);
     const reply = buildIncomingWhatsappReply({ customer, text, settings, req });
     if (reply) {
-      await whatsappGateway.sendText(from, reply);
-      return res.json({ success: true, processed: true, replied: true });
+      const sendDirect = ['1', 'true', 'yes'].includes(String(req.query?.send_direct || req.body?.send_direct || '').toLowerCase());
+      if (sendDirect) {
+        await whatsappGateway.sendText(from, reply);
+      }
+      const responseJson = ['1', 'true', 'yes'].includes(String(req.query?.response_json || req.body?.response_json || '').toLowerCase());
+      if (responseJson || sendDirect) {
+        return res.json({ success: true, processed: true, replied: true, text: reply, message: reply });
+      }
+      return res.type('text/plain').send(reply);
     }
     return res.json({ success: true, processed: true, replied: false });
   } catch (error) {

@@ -1,5 +1,5 @@
 {
-  "id": "/collector/",
+  "id": "/pwa/collector",
   "name": "Portal Kolektor",
   "short_name": "Kolektor",
   "description": "Portal Kolektor SICKAS WIFI",
@@ -7,6 +7,9 @@
   "scope": "/collector/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
   "orientation": "portrait",
   "background_color": "#08111f",
   "theme_color": "#0f172a",

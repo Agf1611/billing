@@ -86,12 +86,16 @@
   const supportUrl = supportPhone ? buildWhatsAppLink(supportPhone) : '/customer/contact';
   const appNotif = (typeof notif !== 'undefined' ? notif : null) || null;
   const settingsLocalNotif = (typeof settingsActionNotif !== 'undefined' && settingsActionNotif) ? settingsActionNotif : null;
+  const profileLocalNotif = (typeof profileActionNotif !== 'undefined' && profileActionNotif) ? profileActionNotif : null;
   const notificationItems = Array.isArray(typeof notifications !== 'undefined' ? notifications : []) ? (typeof notifications !== 'undefined' ? notifications : []) : [];
   const notificationUnread = Math.max(0, Number(typeof notificationUnreadCount !== 'undefined' ? notificationUnreadCount : 0) || 0);
   const pushFeatureEnabled = Boolean(settings?.onesignal_enabled && settings?.onesignal_app_id);
   const oneSignalAppId = String(settings?.onesignal_app_id || '').trim();
   const customerPushExternalId = profileData.id || customerData.id ? `customer-${profileData.id || customerData.id}` : '';
   const oneSignalDirectEmbedEnabled = Boolean(pushFeatureEnabled && oneSignalAppId && customerPushExternalId);
+  const profileChangeViewState = (typeof profileChangeState !== 'undefined' && profileChangeState) ? profileChangeState : {};
+  const activeProfileChangeRequest = profileChangeViewState.activeRequest || null;
+  const latestProfileChangeRequest = profileChangeViewState.latestRequest || null;
   const recentActivities = [];
 
   function formatCurrency(value) {
@@ -4857,6 +4861,7 @@
         box-shadow: 0 -18px 44px rgba(54, 86, 152, 0.18);
       }
     }
+
   </style>
   <% if (oneSignalDirectEmbedEnabled) { %>
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer data-onesignal-web-sdk="true"></script>
@@ -5199,30 +5204,44 @@
           <div class="settings-card" style="margin-top:16px;">
             <div class="billing-card-head">
               <div>
-                <h4>Notifikasi Aplikasi</h4>
-                <div class="soft-muted">Aktifkan agar pelanggan menerima push saat ada tagihan baru dan pengumuman.</div>
+                <h4>Ubah Data Profil</h4>
+                <div class="soft-muted">Perubahan diproses setelah admin approve.</div>
               </div>
             </div>
-            <% if (!pushFeatureEnabled) { %>
-              <div class="empty-card" style="margin:0;">
-                <i class="bi bi-bell-slash"></i>
-                <strong>Notifikasi belum diaktifkan admin</strong>
-                <div>Admin perlu mengisi App ID dan REST API Key OneSignal di pengaturan aplikasi.</div>
+            <% if (activeProfileChangeRequest) { %>
+              <div class="settings-form-alert warning" style="margin-bottom:12px;">
+                <i class="bi bi-hourglass-split"></i>
+                <span>Menunggu approval admin sejak <%= formatDateTime(activeProfileChangeRequest.requested_at || activeProfileChangeRequest.created_at) %>.</span>
               </div>
-            <% } else { %>
-              <div class="stack-actions">
-                <div class="detail-item" style="margin-bottom:0;">
-                  <i class="bi bi-app-indicator"></i>
-                  <div>
-                    <strong>Status Push</strong>
-                    <span id="pushStatusText" data-push-status-text>Belum dicek</span>
-                  </div>
-                </div>
-                <button class="settings-submit" type="button" onclick="enableCustomerPushNotifications()" data-push-subscribe-button>
-                  <i class="bi bi-bell"></i> <span data-push-subscribe-label>Aktifkan Notifikasi</span>
-                </button>
+            <% } else if (latestProfileChangeRequest && ['approved','rejected'].includes(String(latestProfileChangeRequest.status || '').toLowerCase())) { %>
+              <div class="settings-form-alert <%= String(latestProfileChangeRequest.status).toLowerCase() === 'approved' ? '' : 'danger' %>" style="margin-bottom:12px;">
+                <i class="bi <%= String(latestProfileChangeRequest.status).toLowerCase() === 'approved' ? 'bi-check-circle-fill' : 'bi-x-circle-fill' %>"></i>
+                <span><%= String(latestProfileChangeRequest.status).toLowerCase() === 'approved' ? 'Perubahan profil terakhir sudah disetujui.' : 'Perubahan profil terakhir ditolak.' %></span>
               </div>
             <% } %>
+            <form class="settings-form" method="POST" action="/customer/profile/change">
+              <div class="settings-field">
+                <label for="profileNameField">Nama</label>
+                <input id="profileNameField" type="text" name="name" value="<%= customerName %>" maxlength="120" required <%= activeProfileChangeRequest ? 'disabled' : '' %>>
+              </div>
+              <div class="settings-field">
+                <label for="profilePhoneField">No HP</label>
+                <input id="profilePhoneField" type="tel" name="phone" value="<%= customerPhone %>" maxlength="24" required <%= activeProfileChangeRequest ? 'disabled' : '' %>>
+              </div>
+              <div class="settings-field">
+                <label for="profileAddressField">Alamat</label>
+                <textarea id="profileAddressField" name="address" rows="3" maxlength="260" required <%= activeProfileChangeRequest ? 'disabled' : '' %>><%= customerAddress %></textarea>
+              </div>
+              <button class="settings-submit" type="submit" <%= activeProfileChangeRequest ? 'disabled' : '' %>>
+                <i class="bi bi-send-check"></i> Ajukan Perubahan
+              </button>
+              <% if (profileLocalNotif) { %>
+                <div class="settings-form-alert <%= profileLocalNotif.type === 'danger' ? 'danger' : profileLocalNotif.type === 'warning' ? 'warning' : '' %>">
+                  <i class="bi <%= profileLocalNotif.type === 'danger' ? 'bi-x-circle-fill' : profileLocalNotif.type === 'warning' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill' %>"></i>
+                  <span><%= profileLocalNotif.text %></span>
+                </div>
+              <% } %>
+            </form>
           </div>
 
         </div>
@@ -5878,11 +5897,12 @@
 
     function isOneSignalOptedIn(OneSignal) {
       const permission = OneSignal?.Notifications?.permission;
+      const browserPermission = ('Notification' in window) ? (Notification.permission || 'default') : 'unsupported';
       return Boolean(
         OneSignal?.User?.PushSubscription?.optedIn === true ||
         permission === true ||
         permission === 'granted' ||
-        Notification.permission === 'granted'
+        browserPermission === 'granted'
       );
     }
 

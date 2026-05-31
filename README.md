@@ -27,10 +27,12 @@ Sistem manajemen ISP berbasis Node.js untuk billing, portal pelanggan, MikroTik,
 ## Instalasi
 
 ```bash
-git clone https://github.com/sickas/billing-rtrw.git
-cd billing-rtrw
+git clone https://github.com/Agf1611/billing.git
+cd billing
 npm install
 ```
+
+Panduan instalasi server produksi yang lebih lengkap ada di [docs/INSTALL_FROM_GITHUB.md](docs/INSTALL_FROM_GITHUB.md).
 
 ## Konfigurasi
 
@@ -44,7 +46,7 @@ Repo ini memakai dua lapis konfigurasi:
 Langkah awal:
 
 ```bash
-copy settings.json settings.local.json
+cp settings.json settings.local.json
 ```
 
 Lalu isi `settings.local.json` dengan:
@@ -84,7 +86,16 @@ app-customer.js
 ```bash
 npm install pm2 -g
 pm2 start app-customer.js --name billing-rtrw
+pm2 save
 ```
+
+Untuk update dari GitHub di server:
+
+```bash
+sudo bash update.sh
+```
+
+Script update akan backup data runtime seperti `settings.local.json`, `database/`, `auth_info_baileys/`, `logs/`, dan `public/uploads/` sebelum menarik source terbaru.
 
 ## Akses portal
 
@@ -122,7 +133,9 @@ npm run audit:publish
 Audit ini memeriksa:
 
 - file deploy internal yang tidak boleh ikut repo
+- file sementara `tmp_*`, `tmp-*`, `tmp/`, dan `workspace_archive/`
 - file konfigurasi privat yang tidak boleh ter-track
+- database, log, backup, output import, zip, dan arsip deploy
 - `settings.json` yang masih berisi secret nyata
 
 Checklist lengkap ada di [PUBLIC_RELEASE_CHECKLIST.md](PUBLIC_RELEASE_CHECKLIST.md).

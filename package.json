@@ -1,7 +1,7 @@
 {
-  "name": "botlokal-customer-portal",
+  "name": "billing-rtrw",
   "version": "1.0.0",
-  "description": "Portal pelanggan GenieACS",
+  "description": "RTRWNET billing, customer portal, MikroTik, and GenieACS management system",
   "main": "app-customer.js",
   "scripts": {
     "start": "node app-customer.js",
@@ -45,6 +45,6 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "author": "",
+  "author": "Agf1611",
   "license": "ISC"
 }
