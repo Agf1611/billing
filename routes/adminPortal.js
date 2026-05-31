@@ -102,6 +102,40 @@ const {
   decodeQrisPayloadFromUrl
 } = require('../services/qrisService');
 
+const FIRST_INSTALL_ADMIN_USERNAME = 'admin';
+const FIRST_INSTALL_ADMIN_PASSWORD = 'admin123';
+const PLACEHOLDER_PATTERN = /^CHANGE_ME(?:_|$)/i;
+
+function isPlaceholderSetting(value) {
+  const normalized = String(value || '').trim();
+  return PLACEHOLDER_PATTERN.test(normalized);
+}
+
+function isFirstInstallAdminLoginEnabled(settings = getSettings()) {
+  return String(settings.admin_username || '').trim() === FIRST_INSTALL_ADMIN_USERNAME
+    && isPlaceholderSetting(settings.admin_password);
+}
+
+function authenticateAdminLogin(username, password) {
+  const settings = getSettings();
+  const normalizedUsername = String(username || '').trim();
+  const plainPassword = String(password || '');
+  const configuredUsername = String(settings.admin_username || '').trim();
+  const configuredPassword = String(settings.admin_password || '');
+
+  if (isFirstInstallAdminLoginEnabled(settings)) {
+    return normalizedUsername === FIRST_INSTALL_ADMIN_USERNAME && plainPassword === FIRST_INSTALL_ADMIN_PASSWORD
+      ? { ok: true, firstInstall: true, username: FIRST_INSTALL_ADMIN_USERNAME }
+      : { ok: false, firstInstall: true };
+  }
+
+  if (normalizedUsername === configuredUsername && verifyPassword(plainPassword, configuredPassword)) {
+    return { ok: true, firstInstall: false, username: configuredUsername };
+  }
+
+  return { ok: false, firstInstall: false };
+}
+
 router.get('/manifest.webmanifest', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
@@ -2332,17 +2366,27 @@ router.use((req, res, next) => {
 // ─── AUTH ROUTES ───────────────────────────────────────────────────────────
 router.get('/login', (req, res) => {
   if (req.session?.isAdmin || req.session?.isCashier) return res.redirect('/admin');
-  res.render('admin/login', { title: 'Admin Login', company: company(), logoUrl: companyLogo(), error: null, form: {} });
+  res.render('admin/login', {
+    title: 'Admin Login',
+    company: company(),
+    logoUrl: companyLogo(),
+    error: null,
+    form: {},
+    firstInstallLoginEnabled: isFirstInstallAdminLoginEnabled()
+  });
 });
 
 router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
   const { username, password } = req.body;
   const rememberMe = isRememberMeChecked(req.body.remember_me);
-  if (username === getSetting('admin_username', '') && password === getSetting('admin_password', '')) {
+  const adminAuth = authenticateAdminLogin(username, password);
+  if (adminAuth.ok) {
     req.session.isAdmin = true;
-    req.session.adminUser = username;
+    req.session.adminUser = adminAuth.username;
+    req.session.firstInstallAdminLogin = Boolean(adminAuth.firstInstall);
     applyAdminLoginSession(req, rememberMe);
-    return req.session.save(() => res.redirect('/admin'));
+    const nextUrl = adminAuth.firstInstall ? '/admin/settings#settings-akun' : '/admin';
+    return req.session.save(() => res.redirect(nextUrl));
   }
   
   // Check Cashier
@@ -2361,7 +2405,8 @@ router.post('/login', express.urlencoded({ extended: true }), (req, res) => {
     company: company(),
     logoUrl: companyLogo(),
     error: 'Username atau password salah',
-    form: { username, rememberMe }
+    form: { username, rememberMe },
+    firstInstallLoginEnabled: adminAuth.firstInstall || isFirstInstallAdminLoginEnabled()
   });
 });
 

@@ -14,6 +14,7 @@ function normalize(value) {
 function isDefaultLike(value) {
   const normalized = normalize(value);
   if (!normalized) return true;
+  if (/^CHANGE_ME(?:_|$)/i.test(normalized)) return true;
   return DEFAULT_STRINGS.has(normalized);
 }
 

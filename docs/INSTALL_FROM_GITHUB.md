@@ -35,11 +35,50 @@ cd billing-rtrw
 npm install --no-audit --no-fund
 ```
 
-## Konfigurasi
+## Login Awal
 
-Jangan isi secret asli di `settings.json`. File itu hanya template publik.
+Setelah `npm install`, aplikasi bisa langsung dijalankan tanpa mengedit file konfigurasi lewat SSH:
 
-Buat konfigurasi lokal:
+```bash
+npm start
+```
+
+Buka:
+
+```text
+http://IP-SERVER:3001/admin/login
+```
+
+Login awal instalasi:
+
+```text
+Username: admin
+Password: admin123
+```
+
+Login default ini hanya aktif selama `admin_password` di konfigurasi masih berupa placeholder `CHANGE_ME...`. Setelah password admin diganti dari halaman pengaturan, login default otomatis tidak berlaku lagi.
+
+## Konfigurasi Dari Web
+
+Masuk ke Admin, lalu buka:
+
+```text
+Pengaturan Sistem -> Akun Admin
+```
+
+Minimal ganti:
+
+- username admin
+- password admin
+- session secret
+
+Lanjutkan ke tab lain untuk mengisi identitas ISP, MikroTik, GenieACS, payment gateway, WhatsApp, Telegram, OLT, dan fitur lain sesuai kebutuhan.
+
+Perubahan dari halaman pengaturan akan disimpan ke `settings.local.json`, sehingga secret tidak masuk ke GitHub.
+
+## Konfigurasi Manual Opsional
+
+Jika ingin mengisi konfigurasi lewat SSH, buat file lokal:
 
 ```bash
 cp settings.json settings.local.json
@@ -58,7 +97,7 @@ Minimal yang perlu diganti:
 - `mikrotik_user`
 - `mikrotik_password`
 
-Jika memakai WhatsApp, payment gateway, Telegram, TR-069, atau OLT, isi kredensialnya hanya di `settings.local.json`.
+Jika memakai WhatsApp, payment gateway, Telegram, TR-069, atau OLT, isi kredensialnya hanya di `settings.local.json` atau dari halaman pengaturan admin.
 
 ## Menjalankan Aplikasi
 

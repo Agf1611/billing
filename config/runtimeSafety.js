@@ -1,4 +1,4 @@
-const { normalize, isStrongSessionSecret } = require('./security');
+const { normalize, isStrongAdminPassword, isStrongSessionSecret } = require('./security');
 const { isUsablePublicBaseUrl } = require('../services/publicLinkService');
 
 function toBoolean(value, defaultValue = false) {
@@ -73,6 +73,7 @@ function getRuntimeConfigurationWarnings(settings = {}, env = process.env) {
   const appUrl = String(settings?.app_url || '').trim();
   const paymentNotifSecret = String(settings?.payment_notif_secret || env?.MY_WEBHOOK_SECRET || '').trim();
   const sessionSecret = normalize(settings?.session_secret || '');
+  const adminPassword = normalize(settings?.admin_password || '');
 
   if (isProduction && !isUsablePublicBaseUrl(publicBaseUrl) && !isUsablePublicBaseUrl(appUrl)) {
     warnings.push({
@@ -87,6 +88,14 @@ function getRuntimeConfigurationWarnings(settings = {}, env = process.env) {
       code: 'session-secret',
       level: isProduction ? 'warning' : 'info',
       text: 'session_secret belum kuat atau masih default. Sesi login dan link bertanda tangan perlu diamankan.'
+    });
+  }
+
+  if (!isStrongAdminPassword(adminPassword)) {
+    warnings.push({
+      code: 'admin-password',
+      level: isProduction ? 'warning' : 'info',
+      text: 'Password admin masih default/placeholder atau terlalu pendek. Ganti dari menu Pengaturan Admin.'
     });
   }
 

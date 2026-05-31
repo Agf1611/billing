@@ -296,6 +296,30 @@
       gap: 9px;
     }
 
+    .first-install-note {
+      margin-bottom: 12px;
+      padding: 12px 13px;
+      border-radius: 16px;
+      background: rgba(111, 141, 255, 0.12);
+      color: #dbe5ff;
+      border: 1px solid rgba(111, 141, 255, 0.2);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .first-install-note strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .first-install-note code {
+      color: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-weight: 800;
+    }
+
     .support-note {
       margin-top: 12px;
       padding: 12px 13px;
@@ -385,6 +409,13 @@
             <div class="alert-d">
               <i class="bi bi-exclamation-octagon"></i>
               <%= error %>
+            </div>
+          <% } %>
+
+          <% if (typeof firstInstallLoginEnabled !== 'undefined' && firstInstallLoginEnabled) { %>
+            <div class="first-install-note">
+              <strong>Login awal instalasi</strong>
+              Gunakan <code>admin</code> / <code>admin123</code>, lalu segera ganti password dan session secret di Pengaturan Admin.
             </div>
           <% } %>
 

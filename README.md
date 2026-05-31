@@ -45,18 +45,26 @@ cd /opt/billing-rtrw
 npm install --no-audit --no-fund
 ```
 
-Buat konfigurasi lokal:
-
-```bash
-cp settings.json settings.local.json
-nano settings.local.json
-```
-
 Jalankan manual untuk tes:
 
 ```bash
 npm start
 ```
+
+Lalu buka:
+
+```text
+http://IP-SERVER:3001/admin/login
+```
+
+Login awal instalasi:
+
+```text
+Username: admin
+Password: admin123
+```
+
+Setelah login pertama, buka menu pengaturan dan segera ganti password admin, `session_secret`, identitas ISP, serta integrasi yang dibutuhkan. Perubahan dari halaman pengaturan akan disimpan ke `settings.local.json`.
 
 Jika sudah berjalan, jalankan dengan PM2:
 
@@ -74,6 +82,8 @@ Aplikasi memakai dua file konfigurasi:
 
 - `settings.json` adalah template publik yang aman ikut GitHub.
 - `settings.local.json` adalah konfigurasi privat server dan tidak boleh di-commit.
+
+Pada instalasi baru, aplikasi bisa langsung dijalankan memakai template publik. Login awal hanya aktif selama `admin_password` masih placeholder `CHANGE_ME...`. Setelah password admin diganti dari halaman pengaturan, login default `admin / admin123` otomatis tidak berlaku lagi.
 
 Nilai penting yang perlu diganti di `settings.local.json`:
 
