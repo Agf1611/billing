@@ -1336,7 +1336,7 @@
       const currentFilterPackage = currentFilterPackageId > 0 && Array.isArray(packages)
         ? packages.find((pkg) => Number(pkg.id || 0) === currentFilterPackageId)
         : null;
-      const connectionTypeLabels = { pppoe: 'PPPoE', static: 'Static IP', hotspot_binding: 'Hotspot Binding' };
+      const connectionTypeLabels = { billing_only: 'Billing saja', pppoe: 'PPPoE', static: 'Static IP', hotspot_binding: 'Hotspot Binding' };
       const currentStatusLabel = currentFilterSegment === 'new'
         ? `Pelanggan Baru ${reportMonthLabel} ${reportYearLabel}`
         : currentFilterStatus === 'active'
@@ -1587,6 +1587,7 @@
                   <span>Layanan</span>
                   <select class="fs mobile-filter-field" name="connection_type" style="width:150px">
                     <option value="" <%= !currentFilterConnectionType ? 'selected' : '' %>>Semua Layanan</option>
+                    <option value="billing_only" <%= currentFilterConnectionType === 'billing_only' ? 'selected' : '' %>>Billing saja</option>
                     <option value="pppoe" <%= currentFilterConnectionType === 'pppoe' ? 'selected' : '' %>>PPPoE</option>
                     <option value="hotspot_binding" <%= currentFilterConnectionType === 'hotspot_binding' ? 'selected' : '' %>>Hotspot Binding</option>
                     <option value="static" <%= currentFilterConnectionType === 'static' ? 'selected' : '' %>>Static IP</option>
@@ -1660,6 +1661,7 @@
           <a href="<%= buildCustomerFilterHref({ status: 'all', segment: 'new', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterSegment === 'new' ? 'is-active' : '' %>" title="Pelanggan Baru" aria-label="Pelanggan Baru"><i class="bi bi-stars"></i><span class="filter-chip-label">Baru</span><span class="filter-chip-count"><%= Number(currentCustomerOverview.newCustomers || 0) %></span></a>
           <a href="<%= buildCustomerFilterHref({ status: 'all', segment: '', connection_type: '', page: 1 }) %>" class="btn btn-g btn-sm <%= !currentFilterStatus && !currentFilterSegment && !currentFilterConnectionType ? 'is-active' : '' %>" title="Semua Pelanggan" aria-label="Semua Pelanggan"><i class="bi bi-arrow-repeat"></i><span class="filter-chip-label">Semua</span><span class="filter-chip-count"><%= Number(stats.total || 0) %></span></a>
           <a href="<%= buildCustomerFilterHref({ status: 'all', connection_type: 'pppoe', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterConnectionType === 'pppoe' ? 'is-active' : '' %>" title="PPPoE" aria-label="PPPoE"><i class="bi bi-diagram-3"></i><span class="filter-chip-label">PPPoE</span><span class="filter-chip-count"><%= Number((typeof serviceCounts !== 'undefined' && serviceCounts.pppoe) || 0) %></span></a>
+          <a href="<%= buildCustomerFilterHref({ status: 'all', connection_type: 'billing_only', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterConnectionType === 'billing_only' ? 'is-active' : '' %>" title="Billing saja" aria-label="Billing saja"><i class="bi bi-receipt"></i><span class="filter-chip-label">Billing</span><span class="filter-chip-count"><%= Number((typeof serviceCounts !== 'undefined' && serviceCounts.billing_only) || 0) %></span></a>
           <a href="<%= buildCustomerFilterHref({ status: 'all', connection_type: 'hotspot_binding', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterConnectionType === 'hotspot_binding' ? 'is-active' : '' %>" title="Hotspot Binding" aria-label="Hotspot Binding"><i class="bi bi-wifi"></i><span class="filter-chip-label">Hotspot</span><span class="filter-chip-count"><%= Number((typeof serviceCounts !== 'undefined' && serviceCounts.hotspot_binding) || 0) %></span></a>
         </div>
       </div>
@@ -1730,6 +1732,8 @@
                 ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' • ')
                 : rowConnectionType === 'static'
                   ? [c.static_ip, c.mac_address].filter(Boolean).join(' • ')
+                  : rowConnectionType === 'billing_only'
+                    ? 'Tanpa sinkron MikroTik'
                   : String(c.pppoe_username || '').trim();
             %>
             <tr>
@@ -1740,7 +1744,7 @@
               <td>
                 <div class="customer-table-primary customer-table-phone"><%= c.customer_code || (((settings && settings.customer_id_prefix) || 'SCK') + c.id) %></div>
                 <div class="customer-table-secondary"><i class="bi bi-phone"></i> <%= c.phone || '-' %></div>
-                <div class="customer-table-secondary customer-table-tag"><i class="bi <%= rowConnectionType === 'hotspot_binding' ? 'bi-wifi' : rowConnectionType === 'static' ? 'bi-hdd-network' : 'bi-diagram-3' %>"></i> <%= rowConnectionLabel %><% if (rowConnectionInfo) { %>: <%= rowConnectionInfo %><% } %></div>
+                <div class="customer-table-secondary customer-table-tag"><i class="bi <%= rowConnectionType === 'hotspot_binding' ? 'bi-wifi' : rowConnectionType === 'static' ? 'bi-hdd-network' : rowConnectionType === 'billing_only' ? 'bi-receipt' : 'bi-diagram-3' %>"></i> <%= rowConnectionLabel %><% if (rowConnectionInfo) { %>: <%= rowConnectionInfo %><% } %></div>
                 <% if (c.genieacs_tag) { %><div class="customer-table-secondary customer-table-tag"><i class="bi bi-wifi"></i> <%= c.genieacs_tag %></div><% } %>
               </td>
               <td>
@@ -1761,7 +1765,7 @@
                       <span>Paket: <strong><%= rowPackageProfile || '-' %></strong></span>
                       <span>Pelanggan: <strong><%= rowCustomerProfile || '-' %></strong></span>
                     <% } else { %>
-                      <span><%= rowConnectionType === 'hotspot_binding' ? 'Hotspot' : 'Profil' %>: <strong><%= rowConnectionType === 'hotspot_binding' ? (c.hotspot_profile || rowCustomerProfile || '-') : (rowCustomerProfile || '-') %></strong></span>
+                      <span><%= rowConnectionType === 'hotspot_binding' ? 'Layanan' : rowConnectionType === 'billing_only' ? 'Layanan' : 'Profil' %>: <strong><%= rowConnectionType === 'hotspot_binding' ? 'Hotspot Binding' : rowConnectionType === 'billing_only' ? 'Billing saja' : (rowCustomerProfile || '-') %></strong></span>
                     <% } %>
                     <div class="customer-profile-tags">
                       <% if (rowProfileMismatch) { %><span class="profile-tag warn"><i class="bi bi-exclamation-triangle"></i> Profil khusus</span><% } %>
@@ -1865,9 +1869,11 @@
             const cardConnectionLabel = connectionTypeLabels[cardConnectionType] || 'PPPoE';
             const cardConnectionInfo = cardConnectionType === 'hotspot_binding'
               ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' • ')
-              : cardConnectionType === 'static'
-                ? [c.static_ip, c.mac_address].filter(Boolean).join(' • ')
-                : String(c.pppoe_username || '').trim();
+                : cardConnectionType === 'static'
+                  ? [c.static_ip, c.mac_address].filter(Boolean).join(' • ')
+                  : cardConnectionType === 'billing_only'
+                    ? 'Tanpa sinkron MikroTik'
+                  : String(c.pppoe_username || '').trim();
             const cardProfileMismatch = cardConnectionType === 'pppoe' && cardPackageProfile && cardCustomerProfile && cardPackageProfile !== cardCustomerProfile;
             const cardBoostProfile = String(c.speed_boost_profile || '').trim();
             const cardBoostUntil = String(c.speed_boost_until || '').trim();
@@ -1921,7 +1927,7 @@
                   <% } else { %>
                     <span>Rp <%= cardPackagePrice ? cardPackagePrice.toLocaleString('id-ID') : '-' %></span>
                   <% } %>
-                  <span><%= cardConnectionType === 'hotspot_binding' ? 'Hotspot' : 'Profil' %>: <%= cardConnectionType === 'hotspot_binding' ? (c.hotspot_profile || cardCustomerProfile || '-') : (cardCustomerProfile || '-') %></span>
+                  <span><%= cardConnectionType === 'hotspot_binding' ? 'Layanan' : cardConnectionType === 'billing_only' ? 'Layanan' : 'Profil' %>: <%= cardConnectionType === 'hotspot_binding' ? 'Hotspot Binding' : cardConnectionType === 'billing_only' ? 'Billing saja' : (cardCustomerProfile || '-') %></span>
                 <% } else { %><span>-</span><% } %>
               </div>
               <div class="customer-inline-box">
@@ -1933,9 +1939,9 @@
 
             <div class="customer-meta-grid">
               <div class="customer-meta">
-                <small><%= cardConnectionType === 'hotspot_binding' ? 'Hotspot Binding' : cardConnectionType === 'static' ? 'Static IP' : 'Profil PPPoE' %></small>
-                <strong><%= cardConnectionType === 'hotspot_binding' ? (c.hotspot_username || '-') : cardConnectionType === 'static' ? (c.static_ip || '-') : (cardCustomerProfile || '-') %></strong>
-                <span><%= cardConnectionType === 'hotspot_binding' ? (c.mac_address || c.static_ip || '-') : cardConnectionType === 'static' ? (c.mac_address || '-') : ('Paket: ' + (cardPackageProfile || '-')) %></span>
+                <small><%= cardConnectionType === 'hotspot_binding' ? 'Hotspot Binding' : cardConnectionType === 'static' ? 'Static IP' : cardConnectionType === 'billing_only' ? 'Billing saja' : 'Profil PPPoE' %></small>
+                <strong><%= cardConnectionType === 'hotspot_binding' ? (c.hotspot_username || '-') : cardConnectionType === 'static' ? (c.static_ip || '-') : cardConnectionType === 'billing_only' ? 'Manual' : (cardCustomerProfile || '-') %></strong>
+                <span><%= cardConnectionType === 'hotspot_binding' ? (c.mac_address || c.static_ip || '-') : cardConnectionType === 'static' ? (c.mac_address || '-') : cardConnectionType === 'billing_only' ? 'Tidak konek router' : ('Paket: ' + (cardPackageProfile || '-')) %></span>
                 <% if (cardBoostActive) { %><span>Boost: <%= cardBoostProfile %> s/d <%= cardBoostLabel %></span><% } %>
               </div>
               <div class="customer-meta">
@@ -2077,6 +2083,7 @@
             <label class="fl">Metode Koneksi</label>
             <select class="fs" name="connection_type" id="add_connection_type" onchange="toggleConnectionFields('add')">
               <option value="pppoe">PPPoE (MikroTik)</option>
+              <option value="billing_only">Billing saja</option>
               <option value="hotspot_binding">Hotspot Binding</option>
               <option value="static">Static IP (MikroTik)</option>
             </select>
@@ -2101,19 +2108,16 @@
         </div>
         <div class="form-row" id="add_hotspot_binding_fields" style="display:none">
           <div class="fg">
-            <label class="fl">Hotspot User</label>
-            <input class="fc" name="hotspot_username" placeholder="Username voucher / user binding">
-          </div>
-          <div class="fg">
-            <label class="fl">Profil Hotspot</label>
-            <input class="fc" name="hotspot_profile" placeholder="Contoh: paket-voucher">
+            <label class="fl">User Hotspot / Member (Opsional)</label>
+            <input class="fc" name="hotspot_username" placeholder="Isi hanya untuk member/voucher">
+            <div class="hint">Untuk binding IP/MAC, cukup isi IP Address atau MAC Address.</div>
           </div>
           <div class="fg">
             <label class="fl">ID Binding MikroTik</label>
             <input class="fc" name="hotspot_binding_id" placeholder="Opsional dari MikroTik">
           </div>
         </div>
-        <div class="speed-boost-card">
+        <div class="speed-boost-card" id="add_speed_boost_card">
           <div class="speed-boost-head"><i class="bi bi-lightning-charge"></i> Boost Paket Sementara</div>
           <div class="form-row">
             <div class="fg">
@@ -2346,6 +2350,7 @@
             <label class="fl">Metode Koneksi</label>
             <select class="fs" name="connection_type" id="e_connection_type" onchange="toggleConnectionFields('edit')">
               <option value="pppoe">PPPoE (MikroTik)</option>
+              <option value="billing_only">Billing saja</option>
               <option value="hotspot_binding">Hotspot Binding</option>
               <option value="static">Static IP (MikroTik)</option>
             </select>
@@ -2356,7 +2361,7 @@
             <datalist id="e_pppoe_list"></datalist>
             <div class="hint" id="e_pppoe_hint"></div>
           </div>
-          <div class="fg">
+          <div class="fg" id="e_normal_pppoe_profile_field">
             <label class="fl">Profil PPPoE Normal</label>
             <input class="fc" name="normal_pppoe_profile" id="e_normal_pppoe_profile" placeholder="Contoh: paket-5mb">
             <div class="hint">Kosong = ikuti profil default dari paket.</div>
@@ -2368,19 +2373,16 @@
         </div>
         <div class="form-row" id="e_hotspot_binding_fields" style="display:none">
           <div class="fg">
-            <label class="fl">Hotspot User</label>
-            <input class="fc" name="hotspot_username" id="e_hotspot_username" placeholder="Username voucher / user binding">
-          </div>
-          <div class="fg">
-            <label class="fl">Profil Hotspot</label>
-            <input class="fc" name="hotspot_profile" id="e_hotspot_profile" placeholder="Contoh: paket-voucher">
+            <label class="fl">User Hotspot / Member (Opsional)</label>
+            <input class="fc" name="hotspot_username" id="e_hotspot_username" placeholder="Isi hanya untuk member/voucher">
+            <div class="hint">Untuk binding IP/MAC, cukup isi IP Address atau MAC Address.</div>
           </div>
           <div class="fg">
             <label class="fl">ID Binding MikroTik</label>
             <input class="fc" name="hotspot_binding_id" id="e_hotspot_binding_id" placeholder="Opsional dari MikroTik">
           </div>
         </div>
-        <div class="speed-boost-card">
+        <div class="speed-boost-card" id="e_speed_boost_card">
           <div class="speed-boost-head"><i class="bi bi-lightning-charge"></i> Boost Paket Sementara</div>
           <div class="form-row">
             <div class="fg">
@@ -2813,16 +2815,29 @@ function toggleConnectionFields(type) {
   const staticField = document.getElementById(type === 'add' ? 'add_static_field' : 'e_static_field');
   const macField = document.getElementById(type === 'add' ? 'add_mac_field' : 'e_mac_field');
   const hotspotFields = document.getElementById(type === 'add' ? 'add_hotspot_binding_fields' : 'e_hotspot_binding_fields');
+  const speedBoostCard = document.getElementById(type === 'add' ? 'add_speed_boost_card' : 'e_speed_boost_card');
   const pppoeSecretRow = type === 'add' ? document.getElementById('add_pppoe_secret_row') : null;
   const isPppoe = connType === 'pppoe';
+  const isStatic = connType === 'static';
   const isHotspot = connType === 'hotspot_binding';
 
   if (pppoeField) pppoeField.style.display = isPppoe ? 'block' : 'none';
   if (normalProfileField) normalProfileField.style.display = isPppoe ? 'block' : 'none';
   if (pppoeSecretRow) pppoeSecretRow.style.display = isPppoe ? 'grid' : 'none';
-  if (staticField) staticField.style.display = isPppoe ? 'none' : 'block';
-  if (macField) macField.style.display = isPppoe ? 'none' : 'block';
+  if (staticField) staticField.style.display = (isStatic || isHotspot) ? 'block' : 'none';
+  if (macField) macField.style.display = (isStatic || isHotspot) ? 'block' : 'none';
   if (hotspotFields) hotspotFields.style.display = isHotspot ? 'grid' : 'none';
+  if (speedBoostCard) speedBoostCard.style.display = isPppoe ? 'grid' : 'none';
+
+  if (!isPppoe) {
+    const ids = type === 'add'
+      ? ['add_speed_boost_profile', 'add_speed_boost_days', 'add_speed_boost_until', 'add_speed_boost_note']
+      : ['e_speed_boost_profile', 'e_speed_boost_days', 'e_speed_boost_until', 'e_speed_boost_note'];
+    ids.forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = '';
+    });
+  }
 }
 
 function syncAddPppoeSecretUi() {
@@ -3076,7 +3091,6 @@ function editCust(idx) {
   document.getElementById('e_static_ip').value=c.static_ip||'';
   document.getElementById('e_mac_address').value=c.mac_address||'';
   document.getElementById('e_hotspot_username').value=c.hotspot_username||'';
-  document.getElementById('e_hotspot_profile').value=c.hotspot_profile||'';
   document.getElementById('e_hotspot_binding_id').value=c.hotspot_binding_id||'';
   document.getElementById('e_tag').value=c.genieacs_tag||'';
   document.getElementById('e_olt_id').value=c.olt_id||'';

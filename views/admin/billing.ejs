@@ -1024,6 +1024,8 @@
                 ? [inv.hotspot_username, inv.mac_address, inv.static_ip].filter(Boolean).join(' - ')
                 : invConnectionType === 'static'
                   ? [inv.static_ip, inv.mac_address].filter(Boolean).join(' - ')
+                  : invConnectionType === 'billing_only'
+                    ? [inv.customer_phone, 'Billing saja'].filter(Boolean).join(' - ')
                   : [inv.customer_phone, inv.pppoe_username, inv.genieacs_tag].filter(Boolean).join(' - ');
             %>
             <tr class="<%= inv.status==='paid'?'paid-row':'' %>">
@@ -1156,6 +1158,8 @@
                ? [inv.hotspot_username, inv.mac_address, inv.static_ip].filter(Boolean).join(' - ')
                : mobileInvConnectionType === 'static'
                  ? [inv.static_ip, inv.mac_address].filter(Boolean).join(' - ')
+                 : mobileInvConnectionType === 'billing_only'
+                   ? [inv.customer_phone, 'Billing saja'].filter(Boolean).join(' - ')
                  : [inv.customer_phone, inv.pppoe_username, inv.genieacs_tag].filter(Boolean).join(' - '); %>
           <div class="invoice-card">
             <div class="invoice-head">

@@ -217,7 +217,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       ? (String(rawFilterStatus || '').trim().toLowerCase() === 'all' ? '' : String(rawFilterStatus || '').trim().toLowerCase())
       : 'active';
     const normalizedFilterSegment = String(rawFilterSegment || '').trim().toLowerCase() === 'new' ? 'new' : '';
-    const allowedConnectionTypes = new Set(['pppoe', 'static', 'hotspot_binding']);
+    const allowedConnectionTypes = new Set(['billing_only', 'pppoe', 'static', 'hotspot_binding']);
     const normalizedConnectionType = allowedConnectionTypes.has(String(rawConnectionType || '').trim())
       ? String(rawConnectionType || '').trim()
       : '';
@@ -360,7 +360,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         : 'pppoe';
       acc[key] = Number(acc[key] || 0) + 1;
       return acc;
-    }, { pppoe: 0, static: 0, hotspot_binding: 0 });
+    }, { billing_only: 0, pppoe: 0, static: 0, hotspot_binding: 0 });
 
     const totalCustomersCount = filteredCustomers.length;
     const totalPages = Math.max(1, Math.ceil(totalCustomersCount / pageSize));
@@ -413,9 +413,23 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
   });
 
   function normalizeCustomerConnectionPayload(body = {}) {
-    const allowed = new Set(['pppoe', 'static', 'hotspot_binding']);
-    const type = allowed.has(String(body.connection_type || '').trim())
-      ? String(body.connection_type || '').trim()
+    const allowed = new Set(['billing_only', 'pppoe', 'static', 'hotspot_binding']);
+    const rawType = String(body.connection_type || '').trim();
+    const normalizedRawType = rawType.toLowerCase().replace(/[\s-]+/g, '_');
+    const aliases = {
+      billing: 'billing_only',
+      billing_only: 'billing_only',
+      billing_saja: 'billing_only',
+      manual: 'billing_only',
+      pppoe: 'pppoe',
+      static: 'static',
+      static_ip: 'static',
+      hotspot: 'hotspot_binding',
+      hotspot_binding: 'hotspot_binding'
+    };
+    const candidate = aliases[normalizedRawType] || normalizedRawType;
+    const type = allowed.has(candidate)
+      ? candidate
       : 'pppoe';
     body.connection_type = type;
 
@@ -426,8 +440,12 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     if (type !== 'pppoe') {
       body.pppoe_username = '';
       body.normal_pppoe_profile = '';
+      body.speed_boost_profile = '';
+      body.speed_boost_until = '';
+      body.speed_boost_days = '';
+      body.speed_boost_note = '';
     }
-    if (type === 'pppoe') {
+    if (type !== 'static' && type !== 'hotspot_binding') {
       body.static_ip = '';
       body.mac_address = '';
     }
@@ -448,7 +466,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     const staticIp = String(body.static_ip || '').trim();
 
     if (!hotspotUsername && !macAddress && !staticIp) {
-      throw new Error('Hotspot Binding perlu diisi minimal Hotspot User, MAC Address, atau IP Address.');
+      throw new Error('Hotspot Binding perlu diisi minimal IP Address, MAC Address, atau User Hotspot/member.');
     }
 
     if (hotspotUsername) {
@@ -702,8 +720,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       'Alamat',
       'Paket',
       'Tag ONU',
+      'Metode Koneksi',
       'PPPoE Username',
       'PPPoE Profile',
+      'Static IP',
+      'MAC Address',
+      'Hotspot User',
+      'Hotspot Profile',
+      'Hotspot Binding ID',
       'Isolir Profile',
       'Status',
       'Tanggal Pasang',
@@ -717,7 +741,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
     const wsTemplate = XLSX.utils.aoa_to_sheet([
       templateHeaders,
-      ['', '', '', '', '', '', '', '', '', 'BEATISOLIR', 'active', '', 'YA', '10', '', '', '', '']
+      ['', '', '', '', '', '', '', 'billing_only', '', '', '', '', '', '', '', 'BEATISOLIR', 'active', '', 'YA', '10', '', '', '', '']
     ]);
     wsTemplate['!cols'] = templateHeaders.map((header) => ({
       wch: Math.max(String(header).length + 4, 14)
@@ -733,7 +757,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       ['6. Auto Isolir isi YA atau TIDAK.'],
       ['7. Format tanggal pasang disarankan YYYY-MM-DD.'],
       ['8. Isolir Profile default yang dipakai sistem saat ini: BEATISOLIR.'],
-      ['9. Hapus contoh kosong pada baris ke-2 jika tidak dipakai.']
+      ['9. Metode Koneksi: billing_only, pppoe, static, atau hotspot_binding.'],
+      ['10. Hapus contoh kosong pada baris ke-2 jika tidak dipakai.']
     ]);
     wsGuide['!cols'] = [{ wch: 88 }];
 
@@ -768,8 +793,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         'Alamat',
         'Paket',
         'Tag ONU',
+        'Metode Koneksi',
         'PPPoE Username',
         'PPPoE Profile',
+        'Static IP',
+        'MAC Address',
+        'Hotspot User',
+        'Hotspot Profile',
+        'Hotspot Binding ID',
         'Isolir Profile',
         'Status',
         'Tanggal Pasang',
@@ -789,8 +820,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         customer.address,
         customer.package_name || '-',
         customer.genieacs_tag,
+        customer.connection_type || 'pppoe',
         customer.pppoe_username,
         customer.normal_pppoe_profile || customer.package_pppoe_profile || customer.package_name || '',
+        customer.static_ip || '',
+        customer.mac_address || '',
+        customer.hotspot_username || '',
+        customer.hotspot_profile || '',
+        customer.hotspot_binding_id || '',
         customer.isolir_profile,
         customer.status,
         customer.install_date,
@@ -865,8 +902,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
           lat: cleanRow.Latitude || cleanRow.latitude || cleanRow.Lat || '',
           lng: cleanRow.Longitude || cleanRow.longitude || cleanRow.Lng || '',
           genieacs_tag: cleanRow['Tag ONU'] || cleanRow.genieacs_tag,
+          connection_type: cleanRow['Metode Koneksi'] || cleanRow.connection_type || cleanRow.koneksi || cleanRow.layanan || 'pppoe',
           pppoe_username: cleanRow['PPPoE Username'] || cleanRow.pppoe_username,
           normal_pppoe_profile: cleanRow['PPPoE Profile'] || cleanRow.pppoe_profile || '',
+          static_ip: cleanRow['Static IP'] || cleanRow.static_ip || cleanRow.ip || '',
+          mac_address: cleanRow['MAC Address'] || cleanRow.mac_address || cleanRow.mac || '',
+          hotspot_username: cleanRow['Hotspot User'] || cleanRow.hotspot_username || cleanRow.hotspot_user || '',
+          hotspot_profile: cleanRow['Hotspot Profile'] || cleanRow.hotspot_profile || '',
+          hotspot_binding_id: cleanRow['Hotspot Binding ID'] || cleanRow.hotspot_binding_id || '',
           isolir_profile: cleanRow['Isolir Profile'] || cleanRow.isolir_profile || 'BEATISOLIR',
           status: (cleanRow.Status || cleanRow.status || 'active').toLowerCase(),
           install_date: cleanRow['Tanggal Pasang'] || cleanRow.install_date,
@@ -874,6 +917,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
           isolate_day: parseInt(cleanRow['Tgl Isolir'] || cleanRow.isolate_day, 10) || 10,
           notes: cleanRow.Catatan || cleanRow.notes
         };
+        normalizeCustomerConnectionPayload(data);
 
         const id = cleanRow['ID Sistem'] || cleanRow.ID || cleanRow.id;
         if (id && !Number.isNaN(Number(id)) && id !== '') {

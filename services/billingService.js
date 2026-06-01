@@ -296,22 +296,6 @@ function generateInvoicesDueInDays(leadDays = 7, fromDate = new Date()) {
   const periodMonth = dueDate.getMonth() + 1;
   const periodYear = dueDate.getFullYear();
   const targetDueDay = dueDate.getDate();
-  const baseMonth = baseDate.getMonth() + 1;
-  const baseYear = baseDate.getFullYear();
-
-  if (periodMonth !== baseMonth || periodYear !== baseYear) {
-    return {
-      count: 0,
-      eligible: 0,
-      createdInvoiceIds: [],
-      leadDays: safeLeadDays,
-      periodMonth,
-      periodYear,
-      dueDay: targetDueDay,
-      skipped: true,
-      reason: 'cross-month-period'
-    };
-  }
 
   const customers = db.prepare("SELECT * FROM customers WHERE status IN ('active','suspended') AND package_id IS NOT NULL").all();
   const existing = db.prepare('SELECT customer_id FROM invoices WHERE period_month=? AND period_year=?').all(periodMonth, periodYear);

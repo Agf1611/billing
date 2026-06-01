@@ -252,17 +252,10 @@ function startCronJobs() {
     logger.info(`[CRON] Menjalankan generate tagihan otomatis H-${leadDays} sebelum jatuh tempo.`);
     try {
       const result = billingSvc.generateInvoicesDueInDays(leadDays);
-      if (result.skipped && result.reason === 'cross-month-period') {
-        logger.info(
-          `[CRON] Generate tagihan H-${leadDays} dilewati: target jatuh tempo ${result.dueDay}/${result.periodMonth}/${result.periodYear} ` +
-          'berbeda bulan dari hari ini, supaya invoice bulan depan tidak ditagih di bulan berjalan.'
-        );
-      } else {
-        logger.info(
-          `[CRON] Generate tagihan H-${leadDays} selesai: periode=${result.periodMonth}/${result.periodYear}, ` +
-          `jatuh_tempo_tgl=${result.dueDay}, eligible=${result.eligible}, dibuat=${result.count}.`
-        );
-      }
+      logger.info(
+        `[CRON] Generate tagihan H-${leadDays} selesai: periode=${result.periodMonth}/${result.periodYear}, ` +
+        `jatuh_tempo_tgl=${result.dueDay}, eligible=${result.eligible}, dibuat=${result.count}.`
+      );
     } catch (error) {
       logger.error(`[CRON] Gagal generate tagihan otomatis: ${error.message}`);
     }
