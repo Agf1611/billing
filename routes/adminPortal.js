@@ -5096,6 +5096,8 @@ router.get('/api/customers/suggest', requireAdmin, (req, res) => {
       name: String(row.name || '').trim(),
       phone: String(row.phone || '').trim(),
       pppoe_username: String(row.pppoe_username || '').trim(),
+      hotspot_username: String(row.hotspot_username || '').trim(),
+      mac_address: String(row.mac_address || '').trim(),
       genieacs_tag: String(row.genieacs_tag || '').trim(),
       address: String(row.address || '').trim()
     }));

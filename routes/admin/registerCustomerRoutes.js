@@ -197,7 +197,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       page: rawPage = '1',
       sortBy: rawSortBy = 'name',
       sortDir: rawSortDir = 'asc',
-      package_id: rawPackageId = ''
+      package_id: rawPackageId = '',
+      connection_type: rawConnectionType = ''
     } = req.query;
     const now = new Date();
     const selectedMonth = Math.min(12, Math.max(1, parseInt(rawMonth, 10) || (now.getMonth() + 1)));
@@ -216,6 +217,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       ? (String(rawFilterStatus || '').trim().toLowerCase() === 'all' ? '' : String(rawFilterStatus || '').trim().toLowerCase())
       : 'active';
     const normalizedFilterSegment = String(rawFilterSegment || '').trim().toLowerCase() === 'new' ? 'new' : '';
+    const allowedConnectionTypes = new Set(['pppoe', 'static', 'hotspot_binding']);
+    const normalizedConnectionType = allowedConnectionTypes.has(String(rawConnectionType || '').trim())
+      ? String(rawConnectionType || '').trim()
+      : '';
     const customers = customerSvc.getAllCustomers(search);
     const stats = customerSvc.getCustomerStats();
     const packages = customerSvc.getAllPackages();
@@ -229,6 +234,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
     if (filterPackageId > 0) {
       filteredCustomers = filteredCustomers.filter((customer) => Number(customer.package_id || 0) === filterPackageId);
+    }
+
+    if (normalizedConnectionType) {
+      filteredCustomers = filteredCustomers.filter((customer) => String(customer.connection_type || 'pppoe') === normalizedConnectionType);
     }
 
     if (normalizedBillingDayStart || normalizedBillingDayEnd) {
@@ -345,6 +354,14 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       inactiveCustomers: Number(stats.inactive || 0)
     };
 
+    const serviceCounts = customers.reduce((acc, customer) => {
+      const key = allowedConnectionTypes.has(String(customer.connection_type || 'pppoe'))
+        ? String(customer.connection_type || 'pppoe')
+        : 'pppoe';
+      acc[key] = Number(acc[key] || 0) + 1;
+      return acc;
+    }, { pppoe: 0, static: 0, hotspot_binding: 0 });
+
     const totalCustomersCount = filteredCustomers.length;
     const totalPages = Math.max(1, Math.ceil(totalCustomersCount / pageSize));
     const safePage = Math.min(currentPage, totalPages);
@@ -363,6 +380,8 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       search,
       filterStatus: normalizedFilterStatus,
       filterSegment: normalizedFilterSegment,
+      filterConnectionType: normalizedConnectionType,
+      serviceCounts,
       statusQueryProvided,
       selectedMonth,
       selectedYear,
@@ -393,6 +412,73 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
     }
   });
 
+  function normalizeCustomerConnectionPayload(body = {}) {
+    const allowed = new Set(['pppoe', 'static', 'hotspot_binding']);
+    const type = allowed.has(String(body.connection_type || '').trim())
+      ? String(body.connection_type || '').trim()
+      : 'pppoe';
+    body.connection_type = type;
+
+    ['pppoe_username', 'normal_pppoe_profile', 'static_ip', 'mac_address', 'hotspot_username', 'hotspot_profile', 'hotspot_binding_id'].forEach((key) => {
+      body[key] = String(body[key] || '').trim();
+    });
+
+    if (type !== 'pppoe') {
+      body.pppoe_username = '';
+      body.normal_pppoe_profile = '';
+    }
+    if (type === 'pppoe') {
+      body.static_ip = '';
+      body.mac_address = '';
+    }
+    if (type !== 'hotspot_binding') {
+      body.hotspot_username = '';
+      body.hotspot_profile = '';
+      body.hotspot_binding_id = '';
+    }
+    return body;
+  }
+
+  function assertHotspotBindingAvailable(body = {}, excludeCustomerId = 0) {
+    if (String(body.connection_type || '') !== 'hotspot_binding') return;
+    const routerId = body.router_id ? Number(body.router_id) : null;
+    const customerId = Number(excludeCustomerId || 0) || 0;
+    const hotspotUsername = String(body.hotspot_username || '').trim();
+    const macAddress = String(body.mac_address || '').trim();
+    const staticIp = String(body.static_ip || '').trim();
+
+    if (!hotspotUsername && !macAddress && !staticIp) {
+      throw new Error('Hotspot Binding perlu diisi minimal Hotspot User, MAC Address, atau IP Address.');
+    }
+
+    if (hotspotUsername) {
+      const existing = db.prepare(`
+        SELECT id, name FROM customers
+        WHERE router_id IS ? AND hotspot_username = ? AND id != ?
+        LIMIT 1
+      `).get(routerId, hotspotUsername, customerId);
+      if (existing) throw new Error(`Hotspot User sudah dipakai pelanggan lain: ${existing.name}`);
+    }
+
+    if (macAddress) {
+      const existing = db.prepare(`
+        SELECT id, name FROM customers
+        WHERE router_id IS ? AND lower(mac_address) = lower(?) AND id != ?
+        LIMIT 1
+      `).get(routerId, macAddress, customerId);
+      if (existing) throw new Error(`MAC Address sudah dipakai pelanggan lain: ${existing.name}`);
+    }
+
+    if (staticIp) {
+      const existing = db.prepare(`
+        SELECT id, name FROM customers
+        WHERE router_id IS ? AND static_ip = ? AND id != ?
+        LIMIT 1
+      `).get(routerId, staticIp, customerId);
+      if (existing) throw new Error(`IP Address sudah dipakai pelanggan lain: ${existing.name}`);
+    }
+  }
+
   router.post('/customers', requireAdminSession, upload.fields(CUSTOMER_IMAGE_FIELDS), async (req, res) => {
     try {
       req.body = req.body || {};
@@ -410,8 +496,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       req.body.npwp = String(req.body.npwp || '').trim();
       req.body.house_photo_url = housePhotoUrl;
       req.body.ktp_photo_url = ktpPhotoUrl;
+      normalizeCustomerConnectionPayload(req.body);
+      assertHotspotBindingAvailable(req.body, 0);
       const syncWarnings = [];
-      if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
+      if (req.body.connection_type === 'pppoe' && req.body.pppoe_username) {
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;
         const username = String(req.body.pppoe_username || '').trim();
         const shouldCreateSecret = isTruthyFormValue(req.body.create_pppoe_secret);
@@ -463,7 +551,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       const createResult = customerSvc.createCustomer(req.body);
       const createdCustomer = customerSvc.getCustomerById(createResult.lastInsertRowid);
 
-      if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
+      if (req.body.connection_type === 'pppoe' && req.body.pppoe_username) {
         const desiredProfile = resolveCustomerPppoeProfile(
           req.body.package_id,
           req.body.status,
@@ -527,8 +615,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         const ktpPhotoResult = await persistCompressedImageUpload(ktpPhotoFile, 'admin-ktp-photo', { maxBytes: DEFAULT_MAX_BYTES });
         req.body.ktp_photo_url = ktpPhotoResult.publicUrl;
       }
+      normalizeCustomerConnectionPayload(req.body);
+      assertHotspotBindingAvailable(req.body, Number(req.params.id));
       const syncWarnings = [];
-      if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
+      if (req.body.connection_type === 'pppoe' && req.body.pppoe_username) {
         const customerId = Number(req.params.id);
         const routerId = req.body.router_id ? Number(req.body.router_id) : null;
         const username = String(req.body.pppoe_username || '').trim();
@@ -553,7 +643,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       customerSvc.updateCustomer(req.params.id, req.body);
       const updatedCustomer = customerSvc.getCustomerById(req.params.id);
 
-      if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
+      if (req.body.connection_type === 'pppoe' && req.body.pppoe_username) {
         const desiredProfile = resolveCustomerPppoeProfile(
           req.body.package_id,
           req.body.status,

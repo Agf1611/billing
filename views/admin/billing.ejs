@@ -1018,11 +1018,19 @@
               </tr>
             <% } %>
             <% group.invoices.forEach((inv)=>{ invoiceIndexCounter++; %>
+            <%
+              const invConnectionType = String(inv.connection_type || 'pppoe');
+              const invServiceInfo = invConnectionType === 'hotspot_binding'
+                ? [inv.hotspot_username, inv.mac_address, inv.static_ip].filter(Boolean).join(' - ')
+                : invConnectionType === 'static'
+                  ? [inv.static_ip, inv.mac_address].filter(Boolean).join(' - ')
+                  : [inv.customer_phone, inv.pppoe_username, inv.genieacs_tag].filter(Boolean).join(' - ');
+            %>
             <tr class="<%= inv.status==='paid'?'paid-row':'' %>">
               <td class="text-muted billing-index"><%= invoiceIndexCounter %></td>
               <td>
                 <div class="billing-customer-primary"><%= inv.customer_name %></div>
-                <div class="billing-customer-secondary"><%= inv.customer_phone||inv.pppoe_username||inv.genieacs_tag||'' %></div>
+                <div class="billing-customer-secondary"><%= invServiceInfo || inv.customer_phone || '' %></div>
               </td>
               <td>
                 <% const mns = (lang === 'en')
@@ -1143,11 +1151,17 @@
             <% } %>
             <% group.invoices.forEach((inv)=>{ %>
           <% const mns = (lang === 'en') ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] : ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']; %>
+          <% const mobileInvConnectionType = String(inv.connection_type || 'pppoe');
+             const mobileInvServiceInfo = mobileInvConnectionType === 'hotspot_binding'
+               ? [inv.hotspot_username, inv.mac_address, inv.static_ip].filter(Boolean).join(' - ')
+               : mobileInvConnectionType === 'static'
+                 ? [inv.static_ip, inv.mac_address].filter(Boolean).join(' - ')
+                 : [inv.customer_phone, inv.pppoe_username, inv.genieacs_tag].filter(Boolean).join(' - '); %>
           <div class="invoice-card">
             <div class="invoice-head">
               <div>
                 <strong><%= inv.customer_name %></strong>
-                <div class="invoice-sub"><%= inv.customer_phone||inv.pppoe_username||inv.genieacs_tag||'' %> &bull; <%= mns[inv.period_month-1] %> <%= inv.period_year %> &bull; Tgl <%= inv.due_day_snapshot || 10 %></div>
+                <div class="invoice-sub"><%= mobileInvServiceInfo || inv.customer_phone || '' %> &bull; <%= mns[inv.period_month-1] %> <%= inv.period_year %> &bull; Tgl <%= inv.due_day_snapshot || 10 %></div>
               </div>
               <div class="invoice-side">
                 <% if(inv.status==='paid'){%><span class="badge bs"><i class="bi bi-check-circle-fill" style="font-size:9px"></i> Lunas</span>
@@ -1700,9 +1714,12 @@ async function syncBillingSearchSuggestions(query) {
       const name = String(row.name || '').trim();
       const phone = String(row.phone || '').trim();
       const pppoe = String(row.pppoe_username || '').trim();
+      const hotspot = String(row.hotspot_username || '').trim();
+      const mac = String(row.mac_address || '').trim();
       const tag = String(row.genieacs_tag || '').trim();
-      option.value = name || phone || pppoe || tag;
+      option.value = name || phone || pppoe || hotspot || mac || tag;
       option.label = [phone, pppoe, tag].filter(Boolean).join(' • ');
+      option.label = [phone, pppoe, hotspot, mac, tag].filter(Boolean).join(' - ');
       list.appendChild(option);
     });
   } catch (error) {

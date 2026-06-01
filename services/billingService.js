@@ -853,7 +853,9 @@ function sortInvoiceRows(rows = [], sort = 'smart', today = new Date(), statusSc
 
 function getAllInvoices({ month, year, status, search, limit = 300, sort = 'smart', payChannel = 'all', today = new Date() } = {}) {
   let q = `
-    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, c.pppoe_username, c.status as customer_status, p.name as package_name
+    SELECT i.*, c.name as customer_name, c.phone as customer_phone, c.genieacs_tag, c.pppoe_username,
+           c.connection_type, c.static_ip, c.mac_address, c.hotspot_username, c.hotspot_profile,
+           c.status as customer_status, p.name as package_name
     FROM invoices i
     JOIN customers c ON i.customer_id = c.id
     LEFT JOIN packages p ON c.package_id = p.id
@@ -869,9 +871,9 @@ function getAllInvoices({ month, year, status, search, limit = 300, sort = 'smar
       const invMatch = raw.match(/^inv[\s-]*(\d+)$/i) || raw.match(/^#?(\d+)$/);
       return invMatch ? Number(invMatch[1] || 0) : 0;
     })();
-    q += ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR (? > 0 AND i.id = ?))';
+    q += ' AND (c.name LIKE ? OR c.customer_code LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.hotspot_username LIKE ? OR c.mac_address LIKE ? OR c.static_ip LIKE ? OR (? > 0 AND i.id = ?))';
     const s = `%${search}%`;
-    params.push(s, s, s, s, invoiceSearchId, invoiceSearchId);
+    params.push(s, s, s, s, s, s, s, s, invoiceSearchId, invoiceSearchId);
   }
   q += ` ORDER BY i.period_year DESC, i.period_month DESC, c.name ASC`;
   let rows = db.prepare(q).all(...params).map((row) => {
