@@ -1803,6 +1803,112 @@ async function deleteHotspotUser(id, routerId = null) {
   }
 }
 
+function normalizeHotspotBindingRow(row = {}) {
+  const r = augmentRow(row && typeof row === 'object' ? row : {});
+  return {
+    id: String(r.id || r['.id'] || '').trim(),
+    macAddress: String(r.macAddress || r['mac-address'] || '').trim(),
+    address: String(r.address || '').trim(),
+    toAddress: String(r.toAddress || r['to-address'] || '').trim(),
+    server: String(r.server || '').trim(),
+    type: String(r.type || '').trim(),
+    comment: String(r.comment || '').trim(),
+    disabled: toBooleanLike(r.disabled),
+    dynamic: toBooleanLike(r.dynamic)
+  };
+}
+
+async function getHotspotIpBindings(routerId = null, options = {}) {
+  const bypassCache = Boolean(options && options.bypassCache);
+  const ck = cacheKey(routerId, 'hotspotIpBindings');
+  const cached = bypassCache ? null : getCachedList(ck, 15000);
+  if (cached) return cached;
+  try {
+    const rows = await getMenuRowsViaStableConnection(routerId, '/ip/hotspot/ip-binding', [], { timeoutMs: 15000, label: 'getHotspotIpBindings' });
+    const mapped = (Array.isArray(rows) ? rows : []).map(normalizeHotspotBindingRow);
+    setCachedList(ck, mapped);
+    return mapped;
+  } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getHotspotIpBindings', routerId);
+      return [];
+    }
+    logThrottledWarn(
+      `hotspot-ip-binding:${ck}`,
+      `[MikroTik] Hotspot IP binding tidak terbaca: ${e.message || String(e)}`,
+      180000
+    );
+    return [];
+  }
+}
+
+async function updateHotspotIpBinding(id, data, routerId = null) {
+  let conn = null;
+  try {
+    conn = await getConnection(routerId);
+    const res = await conn.client.menu('/ip/hotspot/ip-binding').set(data, id);
+    invalidateListCaches(routerId, ['hotspotIpBindings', 'hotspotActive']);
+    return res;
+  } finally {
+    if (conn && conn.api) conn.api.close();
+  }
+}
+
+function normalizeMacText(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-f0-9]/g, '');
+}
+
+function normalizeIpText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeHotspotUserRow(row = {}) {
+  const r = augmentRow(row && typeof row === 'object' ? row : {});
+  return {
+    id: String(r.id || r['.id'] || '').trim(),
+    name: String(r.name || '').trim(),
+    profile: String(r.profile || '').trim(),
+    comment: String(r.comment || '').trim(),
+    disabled: toBooleanLike(r.disabled)
+  };
+}
+
+async function setHotspotBindingCustomerAccess(customer = {}, enabled = true) {
+  const routerId = customer.router_id || null;
+  const username = String(customer.hotspot_username || '').trim();
+  const bindingId = String(customer.hotspot_binding_id || '').trim();
+  const targetMac = normalizeMacText(customer.mac_address);
+  const targetIp = normalizeIpText(customer.static_ip);
+  const desiredDisabled = enabled ? 'false' : 'true';
+  const touched = { users: 0, bindings: 0 };
+
+  if (username) {
+    const users = await getHotspotUsers(routerId, { bypassCache: true });
+    const hit = (Array.isArray(users) ? users : [])
+      .map(normalizeHotspotUserRow)
+      .find((row) => String(row.name || '').trim().toLowerCase() === username.toLowerCase());
+    if (hit?.id) {
+      await updateHotspotUser(hit.id, { disabled: desiredDisabled }, routerId);
+      touched.users += 1;
+    }
+  }
+
+  const bindings = await getHotspotIpBindings(routerId, { bypassCache: true });
+  const match = (Array.isArray(bindings) ? bindings : []).find((row) => {
+    if (bindingId && String(row.id || '') === bindingId) return true;
+    if (targetMac && normalizeMacText(row.macAddress) === targetMac) return true;
+    if (targetIp && (row.address === targetIp || row.toAddress === targetIp)) return true;
+    if (username && String(row.comment || '').toLowerCase().includes(username.toLowerCase())) return true;
+    return false;
+  });
+  if (match?.id) {
+    await updateHotspotIpBinding(match.id, { disabled: desiredDisabled }, routerId);
+    touched.bindings += 1;
+  }
+
+  return touched;
+}
+
 async function getBackup(routerId = null) {
   let conn = null;
   try {
@@ -2307,6 +2413,9 @@ module.exports = {
   addHotspotUser,
   updateHotspotUser,
   deleteHotspotUser,
+  getHotspotIpBindings,
+  updateHotspotIpBinding,
+  setHotspotBindingCustomerAccess,
     getHotspotProfiles,
     getPppoeActive,
     getHotspotActive,

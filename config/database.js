@@ -625,6 +625,21 @@ try {
   db.exec("ALTER TABLE customers ADD COLUMN mac_address TEXT");
 } catch (e) { /* ignore if already exists */ }
 try {
+  db.exec("ALTER TABLE customers ADD COLUMN hotspot_username TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN hotspot_profile TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("ALTER TABLE customers ADD COLUMN hotspot_binding_id TEXT DEFAULT ''");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_customers_hotspot_username ON customers(router_id, hotspot_username)");
+} catch (e) { /* ignore if already exists */ }
+try {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_customers_hotspot_mac ON customers(router_id, mac_address)");
+} catch (e) { /* ignore if already exists */ }
+try {
   db.exec("ALTER TABLE customers ADD COLUMN nik TEXT DEFAULT ''");
 } catch (e) { /* ignore if already exists */ }
 try {

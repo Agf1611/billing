@@ -16,6 +16,17 @@ const {
 let portalNotificationsSchemaReady = false;
 let customerCodeSchemaReady = false;
 let customerCodeBackfillDone = false;
+let hotspotBindingSchemaReady = false;
+
+function ensureHotspotBindingSchema() {
+  if (hotspotBindingSchemaReady) return;
+  try { db.exec("ALTER TABLE customers ADD COLUMN hotspot_username TEXT DEFAULT ''"); } catch (_) {}
+  try { db.exec("ALTER TABLE customers ADD COLUMN hotspot_profile TEXT DEFAULT ''"); } catch (_) {}
+  try { db.exec("ALTER TABLE customers ADD COLUMN hotspot_binding_id TEXT DEFAULT ''"); } catch (_) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_customers_hotspot_username ON customers(router_id, hotspot_username)"); } catch (_) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_customers_hotspot_mac ON customers(router_id, mac_address)"); } catch (_) {}
+  hotspotBindingSchemaReady = true;
+}
 
 function ensurePortalNotificationsSchema() {
   if (portalNotificationsSchemaReady) return;
@@ -68,6 +79,7 @@ async function trySendLifecycleWhatsapp(phone, message) {
 // ─── CUSTOMERS ───────────────────────────────────────────────
 function getAllCustomers(search = '') {
   ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -98,13 +110,14 @@ function getAllCustomers(search = '') {
   `;
   if (search) {
     const s = `%${search}%`;
-    return db.prepare(base + ` WHERE c.name LIKE ? OR c.customer_code LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s, s, s);
+    return db.prepare(base + ` WHERE c.name LIKE ? OR c.customer_code LIKE ? OR c.phone LIKE ? OR c.genieacs_tag LIKE ? OR c.pppoe_username LIKE ? OR c.hotspot_username LIKE ? OR c.mac_address LIKE ? OR c.static_ip LIKE ? OR c.address LIKE ? ORDER BY c.name ASC`).all(s, s, s, s, s, s, s, s, s);
   }
   return db.prepare(base + ` ORDER BY c.name ASC`).all();
 }
 
 function getCustomerSearchSuggestions(search = '', limit = 8) {
   ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
   const keyword = String(search || '').trim();
   if (!keyword) return [];
   const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 8, 20));
@@ -116,6 +129,8 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
       c.name,
       c.phone,
       c.pppoe_username,
+      c.hotspot_username,
+      c.mac_address,
       c.genieacs_tag,
       c.address
     FROM customers c
@@ -123,6 +138,8 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
        OR c.customer_code LIKE ?
        OR c.phone LIKE ?
        OR c.pppoe_username LIKE ?
+       OR c.hotspot_username LIKE ?
+       OR c.mac_address LIKE ?
        OR c.genieacs_tag LIKE ?
        OR c.address LIKE ?
     ORDER BY
@@ -131,14 +148,16 @@ function getCustomerSearchSuggestions(search = '', limit = 8) {
         WHEN c.customer_code LIKE ? THEN 1
         WHEN c.phone LIKE ? THEN 2
         WHEN c.pppoe_username LIKE ? THEN 3
-        WHEN c.genieacs_tag LIKE ? THEN 4
-        ELSE 4
+        WHEN c.hotspot_username LIKE ? THEN 4
+        WHEN c.mac_address LIKE ? THEN 5
+        WHEN c.genieacs_tag LIKE ? THEN 6
+        ELSE 6
       END,
       c.name ASC
     LIMIT ${safeLimit}
   `).all(
-    like, like, like, like, like, like,
-    `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`
+    like, like, like, like, like, like, like, like,
+    `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`, `${keyword}%`
   );
 }
 
@@ -318,6 +337,7 @@ function ensureMissingCustomerCodes() {
 
 function getCustomerById(id) {
   ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
@@ -341,13 +361,14 @@ function getCustomerById(id) {
 
 function createCustomer(data) {
   ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
   const discount = normalizeCustomerDiscount(data);
   const speedBoost = normalizeSpeedBoost(data, {});
   const customerCode = normalizeCustomerCodeValue(data.customer_code) || getNextCustomerCode();
   return db.prepare(`
-    INSERT INTO customers (customer_code, name, phone, email, address, nik, npwp, house_photo_url, ktp_photo_url, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO customers (customer_code, name, phone, email, address, nik, npwp, house_photo_url, ktp_photo_url, package_id, router_id, olt_id, odp_id, pon_port, lat, lng, genieacs_tag, pppoe_username, normal_pppoe_profile, isolir_profile, status, install_date, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note, notes, auto_isolate, isolate_day, connection_type, static_ip, mac_address, hotspot_username, hotspot_profile, hotspot_binding_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     customerCode,
     data.name, normalizedPhone || '', data.email || '', data.address || '',
@@ -375,12 +396,16 @@ function createCustomer(data) {
     data.isolate_day !== undefined ? parseInt(data.isolate_day) : 10,
     data.connection_type || 'pppoe',
     data.static_ip || '',
-    data.mac_address || ''
+    data.mac_address || '',
+    data.hotspot_username || '',
+    data.hotspot_profile || '',
+    data.hotspot_binding_id || ''
   );
 }
 
 function updateCustomer(id, data) {
   ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
   const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note FROM customers WHERE id=?').get(id) || {};
   const prev = db.prepare('SELECT package_id, discount_enabled, discount_amount FROM customers WHERE id=?').get(id);
   const newPkgId = data.package_id ? parseInt(data.package_id, 10) : null;
@@ -396,7 +421,7 @@ function updateCustomer(id, data) {
   const speedBoost = normalizeSpeedBoost(data, current);
 
   const result = db.prepare(`
-    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, discount_enabled=?, discount_amount=?, speed_boost_profile=?, speed_boost_until=?, speed_boost_started_at=?, speed_boost_note=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?
+    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, discount_enabled=?, discount_amount=?, speed_boost_profile=?, speed_boost_until=?, speed_boost_started_at=?, speed_boost_note=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?, hotspot_username=?, hotspot_profile=?, hotspot_binding_id=?
     WHERE id=?
   `).run(
     data.name, normalizedPhone || '', data.email || '', data.address || '',
@@ -429,6 +454,9 @@ function updateCustomer(id, data) {
     data.connection_type || 'pppoe',
     data.static_ip || '',
     data.mac_address || '',
+    data.hotspot_username || '',
+    data.hotspot_profile || '',
+    data.hotspot_binding_id || '',
     id
   );
 
@@ -941,7 +969,9 @@ async function suspendCustomer(id) {
   updateCustomer(id, { ...customer, status: 'suspended' });
   const mikrotikSvc = require('./mikrotikService');
 
-  if (customer.connection_type === 'static' && customer.static_ip) {
+  if (customer.connection_type === 'hotspot_binding') {
+    await mikrotikSvc.setHotspotBindingCustomerAccess(customer, false);
+  } else if (customer.connection_type === 'static' && customer.static_ip) {
     const pkg = getPackageById(customer.package_id);
     const limit = pkg ? `${Math.round(pkg.speed_up/1000)}M/${Math.round(pkg.speed_down/1000)}M` : '5M/5M';
     await mikrotikSvc.manageStaticIp({
@@ -977,7 +1007,9 @@ async function activateCustomer(id) {
   updateCustomer(id, { ...customer, status: 'active' });
   const mikrotikSvc = require('./mikrotikService');
 
-  if (customer.connection_type === 'static' && customer.static_ip) {
+  if (customer.connection_type === 'hotspot_binding') {
+    await mikrotikSvc.setHotspotBindingCustomerAccess(customer, true);
+  } else if (customer.connection_type === 'static' && customer.static_ip) {
     const pkg = getPackageById(customer.package_id);
     const limit = pkg ? `${Math.round(pkg.speed_up/1000)}M/${Math.round(pkg.speed_down/1000)}M` : '5M/5M';
     await mikrotikSvc.manageStaticIp({
