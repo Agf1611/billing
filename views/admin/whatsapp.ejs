@@ -227,6 +227,16 @@
         qrSection.style.display = 'block';
         
         qrContainer.replaceChildren();
+        if (status.qrDataUrl) {
+          const img = document.createElement('img');
+          img.src = status.qrDataUrl;
+          img.alt = 'QR Code WhatsApp';
+          img.style.width = '256px';
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          qrContainer.appendChild(img);
+          return;
+        }
         if (typeof QRCode === 'undefined') {
           console.error('QRCode library still not loaded!');
           qrContainer.innerText = I18N.waitQrLib;

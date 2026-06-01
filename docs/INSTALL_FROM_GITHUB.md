@@ -58,6 +58,8 @@ Password: admin123
 
 Login default ini hanya aktif selama `admin_password` di konfigurasi masih berupa placeholder `CHANGE_ME...`. Setelah password admin diganti dari halaman pengaturan, login default otomatis tidak berlaku lagi.
 
+Saat boot pertama, aplikasi otomatis membuat `settings.local.json` berisi secret internal dasar seperti `session_secret`, `admin_api_key`, dan `payment_notif_secret`. Jadi instalasi baru tidak perlu mengisi secret lewat SSH hanya untuk menjalankan aplikasi.
+
 ## Konfigurasi Dari Web
 
 Masuk ke Admin, lalu buka:
@@ -73,6 +75,14 @@ Minimal ganti:
 - session secret
 
 Lanjutkan ke tab lain untuk mengisi identitas ISP, MikroTik, GenieACS, payment gateway, WhatsApp, Telegram, OLT, dan fitur lain sesuai kebutuhan.
+
+WhatsApp lokal aktif secara default pada template publik. Untuk menampilkan QR, buka:
+
+```text
+WA & Pengumuman -> Status
+```
+
+Jika QR belum muncul, tekan refresh status atau reset sesi WhatsApp dari halaman yang sama. Jika tidak memakai WhatsApp lokal, nonaktifkan dari tab Pengaturan WhatsApp.
 
 Perubahan dari halaman pengaturan akan disimpan ke `settings.local.json`, sehingga secret tidak masuk ke GitHub.
 

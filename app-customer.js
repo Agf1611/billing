@@ -11,7 +11,7 @@ const whatsappGateway = require('./services/whatsappGatewayService');
 const { normalizePhoneDigits, formatPhoneDisplay, buildWhatsAppLink } = require('./services/phoneService');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { scheduleAutoBackup } = require('./services/backupService');
-const { assertCriticalSecuritySettings, isStrongAdminApiKey } = require('./config/security');
+const { getCriticalSecurityIssues, isStrongAdminApiKey } = require('./config/security');
 const {
   installSafeRedirectMiddleware,
   getRuntimeConfigurationWarnings,
@@ -152,7 +152,10 @@ app.use((req, res, next) => {
 });
 
 const bootSettings = getSettingsWithCache();
-assertCriticalSecuritySettings(bootSettings);
+const bootSecurityIssues = getCriticalSecurityIssues(bootSettings);
+if (bootSecurityIssues.length) {
+  logger.warn(`[security] Instalasi belum aman penuh: ${bootSecurityIssues.join('; ')}. Aplikasi tetap dijalankan supaya konfigurasi awal bisa diselesaikan dari Admin.`);
+}
 
 const isProduction = process.env.NODE_ENV === 'production';
 const cookieSecure = getSetting('cookie_secure', isProduction);
@@ -217,8 +220,11 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   const settings = getSettingsWithCache();
+  res.locals.settings = settings;
   res.locals.runtimeWarnings = getRuntimeConfigurationWarnings(settings, process.env);
   res.locals.selfUpdateEnabled = isSelfUpdateEnabled(settings, process.env);
+  res.locals.companyLogoUrl = String(settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
+  res.locals.pwaLogoUrl = String(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
   res.locals.normalizePhoneDigits = normalizePhoneDigits;
   res.locals.formatPhoneDisplay = formatPhoneDisplay;
   res.locals.buildWhatsAppLink = buildWhatsAppLink;

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { logger } = require('./logger');
 
 let settingsCache = null;
@@ -11,6 +12,35 @@ const publicSettingsPath = path.join(projectRoot, 'settings.json');
 const privateSettingsPath = path.join(projectRoot, 'settings.local.json');
 const watchedFiles = new Set(['settings.json', 'settings.local.json']);
 let watcher = null;
+
+function randomSecret(bytes = 32) {
+  return crypto.randomBytes(bytes).toString('hex');
+}
+
+function ensureFirstRunLocalSettings() {
+  try {
+    if (fs.existsSync(privateSettingsPath)) return;
+    const publicSettings = readSettingsFile(publicSettingsPath, { silent: true });
+    const firstRunSettings = {};
+
+    if (!String(publicSettings.session_secret || '').trim() || /^CHANGE_ME(?:_|$)/i.test(String(publicSettings.session_secret || '').trim())) {
+      firstRunSettings.session_secret = randomSecret(32);
+    }
+    if (!String(publicSettings.admin_api_key || '').trim() || /^CHANGE_ME(?:_|$)/i.test(String(publicSettings.admin_api_key || '').trim())) {
+      firstRunSettings.admin_api_key = randomSecret(24);
+    }
+    if (!String(publicSettings.payment_notif_secret || '').trim()) {
+      firstRunSettings.payment_notif_secret = randomSecret(16);
+    }
+
+    if (Object.keys(firstRunSettings).length > 0) {
+      fs.writeFileSync(privateSettingsPath, JSON.stringify(firstRunSettings, null, 2), 'utf-8');
+      logger.info('[settings] settings.local.json dibuat otomatis untuk instalasi awal. Login default admin/admin123 tetap aktif sampai password admin diganti.');
+    }
+  } catch (error) {
+    logger.warn(`[settings] Gagal membuat settings.local.json otomatis: ${error.message}`);
+  }
+}
 
 function readSettingsFile(filePath, { silent = false } = {}) {
   try {
@@ -118,6 +148,7 @@ function saveSettings(newSettings) {
   }
 }
 
+ensureFirstRunLocalSettings();
 startSettingsWatcher();
 
 module.exports = {
@@ -127,6 +158,7 @@ module.exports = {
   getSettingsByKeys,
   saveSettings,
   startSettingsWatcher,
+  ensureFirstRunLocalSettings,
   getPublicSettingsPath: () => publicSettingsPath,
   getPrivateSettingsPath: () => privateSettingsPath,
   getOperationalSettingsPath

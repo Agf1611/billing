@@ -1,4 +1,5 @@
 const axios = require('axios');
+const QRCode = require('qrcode');
 const { getSetting } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const { normalizePhoneDigits } = require('./phoneService');
@@ -100,6 +101,17 @@ async function getLocalModule() {
   return import('./whatsappBot.mjs');
 }
 
+async function startLocalBotIfNeeded(mod) {
+  if (!mod || typeof mod.startWhatsAppBot !== 'function') return;
+  const state = String(mod.whatsappStatus?.connection || '').trim().toLowerCase();
+  if (['open', 'qr', 'connecting'].includes(state)) return;
+  try {
+    await mod.startWhatsAppBot();
+  } catch (error) {
+    logger.warn(`[WA] Gagal memulai bot lokal otomatis: ${error.message || error}`);
+  }
+}
+
 async function ensureReady(maxWaitMs = 15000) {
   if (!getSetting('whatsapp_enabled', false)) return false;
   if (getProvider() === 'mpwa') {
@@ -107,6 +119,7 @@ async function ensureReady(maxWaitMs = 15000) {
     return Boolean(config.baseUrl);
   }
   const mod = await getLocalModule();
+  await startLocalBotIfNeeded(mod);
   return typeof mod.ensureWhatsAppReady === 'function'
     ? Boolean(await mod.ensureWhatsAppReady(maxWaitMs))
     : true;
@@ -128,10 +141,21 @@ async function getStatus() {
     };
   }
   const mod = await getLocalModule();
+  await startLocalBotIfNeeded(mod);
+  const status = mod.whatsappStatus || { connection: 'unknown' };
+  let qrDataUrl = '';
+  if (status.qr) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(status.qr, { width: 320, margin: 2 });
+    } catch (error) {
+      logger.warn(`[WA] Gagal membuat QR data URL: ${error.message || error}`);
+    }
+  }
   return {
     provider: 'local',
     enabled: true,
-    ...(mod.whatsappStatus || { connection: 'unknown' })
+    ...status,
+    qrDataUrl
   };
 }
 

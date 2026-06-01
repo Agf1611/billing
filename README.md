@@ -66,6 +66,8 @@ Password: admin123
 
 Setelah login pertama, buka menu pengaturan dan segera ganti password admin, `session_secret`, identitas ISP, serta integrasi yang dibutuhkan. Perubahan dari halaman pengaturan akan disimpan ke `settings.local.json`.
 
+Pada boot pertama, aplikasi akan membuat `settings.local.json` otomatis untuk secret internal dasar. Jadi pengguna baru tidak perlu mengisi secret lewat SSH hanya agar aplikasi bisa start.
+
 Jika sudah berjalan, jalankan dengan PM2:
 
 ```bash
@@ -99,7 +101,7 @@ Nilai penting yang perlu diganti di `settings.local.json`:
 
 Konfigurasi opsional:
 
-- WhatsApp gateway
+- WhatsApp gateway. Mode lokal aktif secara default agar QR bisa langsung muncul di menu WhatsApp; nonaktifkan dari Pengaturan bila tidak dipakai.
 - Telegram bot
 - Tripay, Midtrans, Xendit, Duitku, atau QRIS statis
 - OLT/SNMP
