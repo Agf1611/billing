@@ -570,15 +570,22 @@
       #billingSearchForm{display:block !important;width:100%}
       .billing-filter-form{display:block !important;width:100%}
       .mobile-filter-toggle{
-        display:none !important;
+        display:inline-flex;
+        flex:0 0 52px;
+        min-width:52px;
+        height:52px;
+        padding:0;
+        justify-content:center;
+        align-items:center;
+        border-radius:16px;
       }
       .billing-search-row{
         display:grid;
-        grid-template-columns:minmax(0,1fr);
+        grid-template-columns:minmax(0,1fr) 52px;
         align-items:center;
-        gap:8px;
+        gap:10px;
         width:100%;
-        margin-bottom:8px;
+        margin-bottom:10px;
       }
       .billing-search-row .sinput{
         min-width:0;
@@ -590,65 +597,44 @@
       .billing-filter-form .billing-search-row{max-width:none}
       .billing-search-row .mobile-filter-toggle{align-self:center}
       .billing-filter-panel{
-        display:flex !important;
+        display:none;
         position:static !important;
         float:none !important;
         width:100%;
         min-width:0;
-        gap:6px;
-        margin-top:0;
-        padding:8px;
+        gap:8px;
+        margin-top:10px;
+        padding:10px;
         border:1px solid var(--border);
         border-radius:16px;
         background:rgba(255,255,255,.03);
-        align-items:center;
-        flex-wrap:nowrap;
-        overflow-x:auto;
-        overflow-y:hidden;
-        scrollbar-width:none;
+        overflow:visible;
       }
-      .billing-filter-panel::-webkit-scrollbar{display:none}
-      .billing-filter-panel.show{display:flex !important}
+      .billing-filter-panel.show{display:grid !important;grid-template-columns:1fr}
       .billing-filter-main-row{
-        display:flex;
-        align-items:center;
-        flex-wrap:nowrap;
-        gap:6px;
-        width:auto;
-        flex:0 0 auto;
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px;
+        width:100%;
       }
-      .billing-filter-panel .mobile-filter-field{width:auto}
+      .billing-filter-panel .mobile-filter-field{width:100%}
       .billing-filter-panel .mobile-date-row{
-        display:flex;
-        align-items:center;
-        flex-wrap:nowrap;
-        gap:6px;
-        margin-top:0;
-        width:auto;
-        flex:0 0 auto;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
       }
       .billing-filter-panel .mobile-filter-actions{
-        display:flex;
-        align-items:center;
-        flex-wrap:nowrap;
-        gap:6px;
-        margin-top:0;
-        width:auto;
-        flex:0 0 auto;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:8px;
+        width:100%;
       }
       .billing-filter-panel .fs,
       .billing-filter-panel .fc,
-      .billing-filter-panel .btn{
-        width:auto !important;
-        max-width:none !important;
-        min-height:40px;
-        height:40px;
-      }
-      .billing-filter-panel select[name="status"]{min-width:124px}
-      .billing-filter-panel select[name="month"]{min-width:112px}
-      .billing-filter-panel select[name="year"]{min-width:86px}
-      .billing-filter-panel input[name="billingDayStart"],
-      .billing-filter-panel input[name="billingDayEnd"]{width:94px !important}
+      .billing-filter-panel .btn{width:100% !important;max-width:none !important}
       .billing-filter-panel .btn{justify-content:center}
       .billing-period-summary{align-items:flex-start}
       .billing-filter-quick{width:100%}
@@ -689,7 +675,7 @@
       .pay-quick-grid .btn{font-size:10px}
     }
     @media(max-width:576px){
-      .billing-filter-main-row{display:flex;grid-template-columns:none}
+      .billing-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr))}
       .billing-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
       .billing-summary-grid .sc{padding:10px 11px;border-radius:14px}
       .billing-summary-grid .sc:nth-child(3){order:-4}
@@ -744,10 +730,9 @@
         text-overflow:ellipsis;
       }
       .billing-filter-panel{gap:6px;padding:8px}
-      .billing-filter-main-row{display:flex;grid-template-columns:none;gap:6px}
+      .billing-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
       .billing-filter-panel .mobile-date-row{
-        display:flex;
-        grid-template-columns:none;
+        grid-template-columns:1fr 1fr;
         gap:6px;
       }
       .billing-filter-quick{gap:5px}
@@ -775,8 +760,7 @@
         padding-right:28px;
       }
       .billing-filter-panel .mobile-filter-actions{
-        display:flex;
-        grid-template-columns:none;
+        grid-template-columns:1fr 1fr;
       }
     }
   </style>
