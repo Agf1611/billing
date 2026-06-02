@@ -148,7 +148,7 @@ function listManagedCashHolders({ includeInactive = true } = {}) {
   return holders;
 }
 
-function buildBalanceMap() {
+function buildBalanceMap({ month = '', year = '' } = {}) {
   const holderSeed = new Map();
   for (const holder of listManagedCashHolders({ includeInactive: true })) {
     const key = `${holder.role}:${holder.entityId == null ? 'null' : holder.entityId}`;
@@ -205,13 +205,16 @@ function buildBalanceMap() {
     return holderSeed.get(key);
   };
 
+  const entryParams = [];
+  const entryWhere = buildPeriodWhere('entry_date', month, year, entryParams);
   const entries = db.prepare(`
     SELECT
       id, type, amount, entry_date, source_type,
       holder_role, holder_entity_id, holder_label
     FROM bookkeeping_entries
-    WHERE COALESCE(holder_role, '') != ''
-  `).all();
+    ${entryWhere}
+      AND COALESCE(holder_role, '') != ''
+  `).all(...entryParams);
 
   for (const entry of entries) {
     const bucket = ensureBucket(entry.holder_role, entry.holder_entity_id, entry.holder_label);
@@ -230,10 +233,13 @@ function buildBalanceMap() {
     }
   }
 
+  const settlementParams = [];
+  const settlementWhere = buildPeriodWhere('settlement_date', month, year, settlementParams);
   const settlements = db.prepare(`
     SELECT id, from_role, from_entity_id, from_label, to_role, to_entity_id, to_label, amount
     FROM cash_settlements
-  `).all();
+    ${settlementWhere}
+  `).all(...settlementParams);
 
   for (const row of settlements) {
     const amount = Number(row.amount || 0);
@@ -248,8 +254,8 @@ function buildBalanceMap() {
   return holderSeed;
 }
 
-function getCashBalances() {
-  const balanceMap = buildBalanceMap();
+function getCashBalances({ month = '', year = '' } = {}) {
+  const balanceMap = buildBalanceMap({ month, year });
   const rows = [];
   for (const bucket of balanceMap.values()) {
     const incomeTotal = Number(bucket.invoiceIncome || 0) + Number(bucket.manualIncome || 0);
@@ -600,7 +606,7 @@ function backfillBookkeepingHolders() {
 
 function getBookkeepingDashboard({ month = '', year = '' } = {}) {
   const periodPayments = getPeriodPaymentBreakdown({ month, year });
-  const balances = getCashBalances();
+  const balances = getCashBalances({ month, year });
   const adminBalance = balances.find((item) => item.role === 'admin') || null;
   const settlementSummary = getSettlementSummary({ month, year });
   const settlements = listSettlements({ month, year, limit: 40 });
