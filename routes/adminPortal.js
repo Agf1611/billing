@@ -1985,6 +1985,243 @@ function replaceDirSync(srcDir, destDir) {
   copyDirSync(srcDir, destDir);
 }
 
+function getUpdateBackupTimestamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate())
+  ].join('') + '-' + [
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds())
+  ].join('');
+}
+
+function copyFileIfExists(src, dest) {
+  if (!src || !fs.existsSync(src)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  return true;
+}
+
+function summarizeSqliteDatabase(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return { exists: false, integrity: 'missing' };
+  }
+
+  let probe = null;
+  try {
+    const Database = require('better-sqlite3');
+    probe = new Database(filePath, { readonly: true, fileMustExist: true });
+    const count = (table) => {
+      try {
+        return probe.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get().c;
+      } catch (_error) {
+        return null;
+      }
+    };
+    return {
+      exists: true,
+      integrity: probe.prepare('PRAGMA integrity_check').get().integrity_check,
+      customers: count('customers'),
+      invoices: count('invoices'),
+      bookkeeping_entries: count('bookkeeping_entries'),
+      packages: count('packages'),
+      routers: count('routers')
+    };
+  } catch (error) {
+    return { exists: true, integrity: 'error', error: error.message };
+  } finally {
+    try {
+      if (probe) probe.close();
+    } catch (_error) {}
+  }
+}
+
+function copyRuntimeDirectory(srcDir, destDir, options = {}) {
+  if (!srcDir || !fs.existsSync(srcDir)) return false;
+  const exclude = options.exclude || null;
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    if (exclude && exclude(entry.name, path.join(srcDir, entry.name))) continue;
+    const src = path.join(srcDir, entry.name);
+    const dest = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      copyRuntimeDirectory(src, dest, options);
+    } else if (entry.isFile()) {
+      fs.copyFileSync(src, dest);
+    }
+  }
+  return true;
+}
+
+function restoreRuntimeDirectory(srcDir, destDir) {
+  if (!srcDir || !fs.existsSync(srcDir)) return false;
+  replaceDirSync(srcDir, destDir);
+  return true;
+}
+
+function listAuthRuntimeDirectories(repoRoot, configuredAuthPath) {
+  const dirs = new Set();
+  if (configuredAuthPath && fs.existsSync(configuredAuthPath) && fs.statSync(configuredAuthPath).isDirectory()) {
+    dirs.add(path.resolve(configuredAuthPath));
+  }
+  try {
+    for (const entry of fs.readdirSync(repoRoot, { withFileTypes: true })) {
+      if (entry.isDirectory() && /^auth_info_baileys/i.test(entry.name)) {
+        dirs.add(path.join(repoRoot, entry.name));
+      }
+    }
+  } catch (_error) {}
+  return Array.from(dirs);
+}
+
+async function createUpdateRuntimeBackup({
+  repoRoot,
+  settingsPath,
+  privateSettingsPath,
+  dbDir,
+  authPath,
+  uploadsPath
+}) {
+  const backupRoot = path.join(repoRoot, 'backups', 'update-runtime', getUpdateBackupTimestamp());
+  const backupDbDir = path.join(backupRoot, 'database');
+  const manifest = {
+    createdAt: new Date().toISOString(),
+    repoRoot,
+    backupRoot,
+    settings: {},
+    database: {},
+    authDirectories: [],
+    uploads: false
+  };
+
+  fs.mkdirSync(backupRoot, { recursive: true });
+
+  if (copyFileIfExists(settingsPath, path.join(backupRoot, 'settings.operational.json'))) {
+    manifest.settings.operational = settingsPath;
+  }
+  if (copyFileIfExists(privateSettingsPath, path.join(backupRoot, 'settings.local.json'))) {
+    manifest.settings.private = privateSettingsPath;
+  }
+
+  const activeDbPath = path.join(dbDir, 'billing.db');
+  if (fs.existsSync(activeDbPath)) {
+    fs.mkdirSync(backupDbDir, { recursive: true });
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+      manifest.database.checkpoint = true;
+    } catch (error) {
+      manifest.database.checkpoint = false;
+      manifest.database.checkpointError = error.message;
+    }
+    await db.backup(path.join(backupDbDir, 'billing.db'));
+    copyRuntimeDirectory(dbDir, backupDbDir, {
+      exclude: (name) => ['billing.db', 'billing.db-wal', 'billing.db-shm'].includes(name)
+    });
+    manifest.database.source = activeDbPath;
+    manifest.database.summary = summarizeSqliteDatabase(path.join(backupDbDir, 'billing.db'));
+  } else if (fs.existsSync(dbDir)) {
+    copyRuntimeDirectory(dbDir, backupDbDir);
+    manifest.database.source = dbDir;
+    manifest.database.summary = summarizeSqliteDatabase(path.join(backupDbDir, 'billing.db'));
+  }
+
+  for (const sourceDir of listAuthRuntimeDirectories(repoRoot, authPath)) {
+    const dest = path.join(backupRoot, 'auth', path.basename(sourceDir));
+    copyRuntimeDirectory(sourceDir, dest);
+    manifest.authDirectories.push({ source: sourceDir, backup: dest });
+  }
+
+  if (uploadsPath && fs.existsSync(uploadsPath)) {
+    manifest.uploads = copyRuntimeDirectory(uploadsPath, path.join(backupRoot, 'public_uploads'));
+  }
+
+  fs.writeFileSync(path.join(backupRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  return manifest;
+}
+
+function restoreUpdateRuntimeBackup(manifest, {
+  privateSettingsPath,
+  dbDir,
+  authPath,
+  uploadsPath
+}) {
+  if (!manifest || !manifest.backupRoot) return { restored: false, reason: 'manifest kosong' };
+  const backupRoot = manifest.backupRoot;
+  const backupPrivateSettings = path.join(backupRoot, 'settings.local.json');
+  const backupOperationalSettings = path.join(backupRoot, 'settings.operational.json');
+  if (fs.existsSync(backupPrivateSettings)) {
+    copyFileIfExists(backupPrivateSettings, privateSettingsPath);
+  } else if (fs.existsSync(backupOperationalSettings)) {
+    copyFileIfExists(backupOperationalSettings, privateSettingsPath);
+  }
+
+  const backupDbDir = path.join(backupRoot, 'database');
+  if (fs.existsSync(backupDbDir)) {
+    restoreRuntimeDirectory(backupDbDir, dbDir);
+  }
+
+  const authRoot = path.join(backupRoot, 'auth');
+  if (fs.existsSync(authRoot)) {
+    for (const entry of fs.readdirSync(authRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const defaultDest = path.join(path.dirname(authPath), entry.name);
+      const dest = entry.name === path.basename(authPath) ? authPath : defaultDest;
+      restoreRuntimeDirectory(path.join(authRoot, entry.name), dest);
+    }
+  }
+
+  const backupUploads = path.join(backupRoot, 'public_uploads');
+  if (fs.existsSync(backupUploads)) {
+    restoreRuntimeDirectory(backupUploads, uploadsPath);
+  }
+
+  return {
+    restored: true,
+    backupRoot,
+    database: summarizeSqliteDatabase(path.join(dbDir, 'billing.db'))
+  };
+}
+
+function assertRestoredRuntimeIsSafe(manifest, restored) {
+  const before = manifest?.database?.summary || {};
+  const after = restored?.database || {};
+  if (!before.exists) return;
+  if (!after.exists || after.integrity !== 'ok') {
+    throw new Error(`Restore database runtime gagal atau tidak valid. Backup aman tersimpan di ${manifest.backupRoot}`);
+  }
+  const beforeCustomers = Number(before.customers || 0);
+  const afterCustomers = Number(after.customers || 0);
+  const beforeInvoices = Number(before.invoices || 0);
+  const afterInvoices = Number(after.invoices || 0);
+  if (beforeCustomers > 0 && afterCustomers < beforeCustomers) {
+    throw new Error(`Restore database runtime mencurigakan: pelanggan ${beforeCustomers} menjadi ${afterCustomers}. Backup aman tersimpan di ${manifest.backupRoot}`);
+  }
+  if (beforeInvoices > 0 && afterInvoices < beforeInvoices) {
+    throw new Error(`Restore database runtime mencurigakan: tagihan ${beforeInvoices} menjadi ${afterInvoices}. Backup aman tersimpan di ${manifest.backupRoot}`);
+  }
+}
+
+function cleanupOldUpdateRuntimeBackups(repoRoot, keep = 20) {
+  const root = path.join(repoRoot, 'backups', 'update-runtime');
+  if (!fs.existsSync(root)) return;
+  const entries = fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const fullPath = path.join(root, entry.name);
+      const stats = fs.statSync(fullPath);
+      return { fullPath, mtime: stats.mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+
+  for (const entry of entries.slice(Math.max(0, keep))) {
+    fs.rmSync(entry.fullPath, { recursive: true, force: true });
+  }
+}
+
 function getGitDefaultBranch(repoRoot) {
   const r = runCmd('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], repoRoot);
   if (r.ok) {
@@ -6519,7 +6756,7 @@ router.get('/update', requireAdminSession, restrictToAdmin, (req, res) => {
   });
 });
 
-router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
+router.post('/update/run', requireAdminSession, restrictToAdmin, async (req, res) => {
   const settings = getSettings();
   if (!isSelfUpdateEnabled(settings, process.env)) {
     req.session._msg = { type: 'error', text: 'Fitur update internal dinonaktifkan pada mode produksi demi keamanan.' };
@@ -6539,12 +6776,6 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   const branch = getGitDefaultBranch(repoRoot);
   const pm2Process = detectPm2Process(repoRoot);
   const restartProcessName = pm2Process?.name || getDefaultPm2ProcessName(repoRoot);
-  const backupRoot = path.join(os.tmpdir(), `billing-update-backup-${Date.now()}`);
-  const backupSettings = path.join(backupRoot, 'settings.runtime.json');
-  const backupDb = path.join(backupRoot, 'database');
-  const backupAuth = path.join(backupRoot, 'auth_info_baileys');
-  const backupLogs = path.join(backupRoot, 'logs');
-  const backupUploads = path.join(backupRoot, 'uploads');
   const settingsPath = getOperationalSettingsPath();
   const restoreSettingsPath = getPrivateSettingsPath();
   const dbDir = path.join(repoRoot, 'database');
@@ -6555,13 +6786,22 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
   let pulledNewCode = false;
   let safetyStashRef = '';
   let safetyStashLabel = '';
+  let runtimeBackup = null;
 
   const restorePreservedData = () => {
-    if (fs.existsSync(backupSettings)) fs.copyFileSync(backupSettings, restoreSettingsPath);
-    if (fs.existsSync(backupDb)) replaceDirSync(backupDb, dbDir);
-    if (fs.existsSync(backupAuth)) replaceDirSync(backupAuth, authPath);
-    if (fs.existsSync(backupLogs)) replaceDirSync(backupLogs, logsPath);
-    if (fs.existsSync(backupUploads)) replaceDirSync(backupUploads, uploadsPath);
+    const restored = restoreUpdateRuntimeBackup(runtimeBackup, {
+      privateSettingsPath: restoreSettingsPath,
+      dbDir,
+      authPath,
+      uploadsPath
+    });
+    assertRestoredRuntimeIsSafe(runtimeBackup, restored);
+    if (restored.restored) {
+      log.push(`Runtime data dipulihkan dari ${restored.backupRoot}`);
+      if (restored.database?.exists) {
+        log.push(`Database runtime OK: pelanggan=${restored.database.customers ?? '-'}, tagihan=${restored.database.invoices ?? '-'}, integrity=${restored.database.integrity}`);
+      }
+    }
   };
 
   try {
@@ -6591,12 +6831,18 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
       return res.redirect('/admin/update');
     }
 
-    fs.mkdirSync(backupRoot, { recursive: true });
-    if (fs.existsSync(settingsPath)) fs.copyFileSync(settingsPath, backupSettings);
-    if (fs.existsSync(dbDir)) copyDirSync(dbDir, backupDb);
-    if (fs.existsSync(authPath)) copyDirSync(authPath, backupAuth);
-    if (fs.existsSync(logsPath)) copyDirSync(logsPath, backupLogs);
-    if (fs.existsSync(uploadsPath)) copyDirSync(uploadsPath, backupUploads);
+    runtimeBackup = await createUpdateRuntimeBackup({
+      repoRoot,
+      settingsPath,
+      privateSettingsPath: restoreSettingsPath,
+      dbDir,
+      authPath,
+      uploadsPath
+    });
+    log.push(`Runtime data diamankan permanen di ${runtimeBackup.backupRoot}`);
+    if (runtimeBackup.database?.summary?.exists) {
+      log.push(`Backup database runtime OK: pelanggan=${runtimeBackup.database.summary.customers ?? '-'}, tagihan=${runtimeBackup.database.summary.invoices ?? '-'}, integrity=${runtimeBackup.database.summary.integrity}`);
+    }
 
     const safetyStash = createUpdateSafetyStash(repoRoot);
     safetyStashLabel = safetyStash.label || '';
@@ -6608,6 +6854,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     if (safetyStash.created) {
       pushCmd(`git stash push --include-untracked -m ${safetyStash.label}`, safetyStash.result);
       if (safetyStashRef) log.push(`Local source diamankan di ${safetyStashRef}`);
+      restorePreservedData();
     } else if (!safetyStash.result.ok) {
       pushCmd(`git stash push --include-untracked -m ${safetyStash.label}`, safetyStash.result);
       throw new Error('Gagal mengamankan perubahan source lokal sebelum update.');
@@ -6648,6 +6895,7 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
         throw new Error(`Validasi update gagal pada langkah: ${validation.label}`);
       }
     }
+    cleanupOldUpdateRuntimeBackups(repoRoot, 20);
 
     const localAfter = readTextFileSafe(versionPath) || '-';
     const localCommitAfter = getGitCommit(repoRoot, 'HEAD', true) || '-';
@@ -6687,10 +6935,6 @@ router.post('/update/run', requireAdminSession, restrictToAdmin, (req, res) => {
     }
     req.session._msg = { type: 'error', text: 'Gagal update: ' + (e?.message || e) + rollbackNote };
     req.session._updateLog = log.join('\n');
-  } finally {
-    try {
-      if (fs.existsSync(backupRoot)) fs.rmSync(backupRoot, { recursive: true, force: true });
-    } catch (e) {}
   }
 
   return res.redirect('/admin/update');
