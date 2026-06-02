@@ -613,6 +613,7 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
     createdMonths: [],
     voidedMonths: 0,
     voidedInvoiceIds: [],
+    paidInvoices: [],
     totalAmount: 0,
     totalMonths: 0
   };
@@ -671,6 +672,10 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
     bookkeepingSvc.upsertInvoiceIncomeEntry(invoiceId, paidByName || 'Admin', paymentDate.toISOString());
     queueAdminPaidNotification(invoiceId, paidByName || 'Admin', notes || '', null, paymentDate);
   }
+
+  summary.paidInvoices = paidInvoiceIds
+    .map((invoiceId) => getInvoiceById(invoiceId))
+    .filter(Boolean);
 
   return summary;
 }

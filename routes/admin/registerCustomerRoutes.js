@@ -1108,14 +1108,7 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
         req.session._msg = { type: 'success', text: `Pembayaran berhasil untuk "${sum.customerName}" tahun ${sum.year}. Total: Rp ${total.toLocaleString('id-ID')} (${sum.totalMonths || 0} bulan). Dibayar: ${done} bulan, dibuat: ${created}, sudah lunas: ${already}, hangus prabayar: ${voided}.` };
 
         if (customer && customer.phone && done > 0) {
-          const paidInvoices = (Array.isArray(sum.paidMonths) ? sum.paidMonths : [])
-            .map((paidMonth) => {
-              const allInvoices = billingSvc.getInvoicesByAny(String(req.params.id)) || [];
-              return (Array.isArray(allInvoices) ? allInvoices : []).find(
-                (item) => Number(item?.period_month) === Number(paidMonth) && Number(item?.period_year) === Number(sum.year)
-              ) || null;
-            })
-            .filter(Boolean);
+          const paidInvoices = Array.isArray(sum.paidInvoices) ? sum.paidInvoices.filter(Boolean) : [];
           await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
             baseUrl: resolveRequestBaseUrl(req),
             paidBy,

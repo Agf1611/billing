@@ -1077,8 +1077,14 @@ function buildManualPaymentMessage(settings = getSettings()) {
 }
 
 function formatInvoicePeriods(invoices = []) {
+  const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   const periods = (Array.isArray(invoices) ? invoices : [])
-    .map((inv) => `${inv.period_month}/${inv.period_year}`)
+    .map((inv) => {
+      const month = Number(inv?.period_month || 0);
+      const year = Number(inv?.period_year || 0);
+      if (!month || !year) return '';
+      return `${monthNames[month - 1] || String(month).padStart(2, '0')} ${year}`;
+    })
     .filter(Boolean);
   return periods.length ? periods.join(', ') : '-';
 }
@@ -1214,6 +1220,9 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
   const groupLink = String(getSetting('whatsapp_group_invite_link', '') || '').trim();
   const invoiceLink = primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer, 48 * 60 * 60 * 1000, options) : '';
   const receiptLink = primaryInvoice ? buildPublicInvoiceReceiptLink(primaryInvoice, customer, 48 * 60 * 60 * 1000, options) : '';
+  const invoiceNumbers = (invoiceList.length ? invoiceList : (primaryInvoice ? [primaryInvoice] : []))
+    .map((invoice) => Number(invoice?.id || 0) > 0 ? `INV-${invoice.id}` : '')
+    .filter(Boolean);
   return {
     nama: customer?.name || 'Pelanggan',
     paket: packageLabel,
@@ -1236,7 +1245,7 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
     portal_link: portalLink,
     invoice_link: invoiceLink || checkBillingLink,
     receipt_link: receiptLink || invoiceLink || checkBillingLink,
-    invoice_no: primaryInvoice?.id ? `INV-${primaryInvoice.id}` : '-',
+    invoice_no: invoiceNumbers.length ? invoiceNumbers.join(', ') : '-',
     login_id: String(customer?.pppoe_username || customer?.genieacs_tag || customer?.phone || customer?.id || '').trim(),
     group_link: groupLink,
     group_line: groupLink ? `Grup pelanggan: ${groupLink}` : ''
@@ -4836,7 +4845,7 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
           `💰 *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
           `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
           `Terima kasih.`;
-        const paidInvoices = (Array.isArray(sum.paidMonths) ? sum.paidMonths : [])
+        const paidInvoicesLegacy = (Array.isArray(sum.paidMonths) ? sum.paidMonths : [])
           .map((paidMonth) => {
             const allInvoices = billingSvc.getInvoicesByAny(String(req.params.id)) || [];
             return (Array.isArray(allInvoices) ? allInvoices : []).find(
@@ -4844,6 +4853,9 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
             ) || null;
           })
           .filter(Boolean);
+        const paidInvoices = Array.isArray(sum.paidInvoices) && sum.paidInvoices.length
+          ? sum.paidInvoices.filter(Boolean)
+          : paidInvoicesLegacy;
         try {
           await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
             baseUrl: resolveRequestBaseUrl(req),
