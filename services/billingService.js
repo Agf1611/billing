@@ -64,6 +64,36 @@ function isInvoiceLateForCustomer(invoice, customer, paymentDate = new Date()) {
   return paymentDate.getTime() > dueAt.getTime();
 }
 
+function isRecoveryBillingStatus(status) {
+  return ['suspended', 'inactive', 'isolir', 'isolated', 'nonaktif', 'nonactive'].includes(String(status || '').trim().toLowerCase());
+}
+
+function getPaymentDayInJakarta(paymentDate = new Date()) {
+  const date = paymentDate instanceof Date && !Number.isNaN(paymentDate.getTime()) ? paymentDate : new Date();
+  const day = Number(new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric'
+  }).format(date));
+  return Number.isFinite(day) && day >= 1 && day <= 31 ? day : date.getDate();
+}
+
+function shiftCustomerBillingAnchorToPaymentDay(customerId, paymentDate = new Date()) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) return { shifted: false };
+
+  const customer = db.prepare('SELECT id, isolate_day FROM customers WHERE id=?').get(cid);
+  if (!customer) return { shifted: false };
+
+  const previousDay = normalizeBillingAnchorDay(customer.isolate_day, 10);
+  const paymentDay = normalizeBillingAnchorDay(getPaymentDayInJakarta(paymentDate), previousDay);
+  if (paymentDay === previousDay) {
+    return { shifted: false, previousDay, newDay: paymentDay };
+  }
+
+  db.prepare('UPDATE customers SET isolate_day=? WHERE id=?').run(paymentDay, cid);
+  return { shifted: true, previousDay, newDay: paymentDay };
+}
+
 function invoicePeriodKey(year, month) {
   return (Number(year || 0) * 100) + Number(month || 0);
 }
@@ -81,14 +111,7 @@ function shiftCustomerBillingAnchorAfterLatePayment(customerId, invoiceLike, pay
     };
   }
 
-  const paymentDay = normalizeBillingAnchorDay(paymentDate.getDate(), 10);
-  const previousDay = normalizeBillingAnchorDay(customer.isolate_day, 10);
-  if (paymentDay === previousDay) {
-    return { shifted: false, previousDay, newDay: paymentDay };
-  }
-
-  db.prepare('UPDATE customers SET isolate_day=? WHERE id=?').run(paymentDay, cid);
-  return { shifted: true, previousDay, newDay: paymentDay };
+  return shiftCustomerBillingAnchorToPaymentDay(cid, paymentDate);
 }
 
 function countInvoicesForCustomer(customerId) {
@@ -548,8 +571,7 @@ function voidPreviousUnpaidForPrepaidRestart(customerId, year, month, paidByName
   }
 
   const customer = db.prepare('SELECT id, status FROM customers WHERE id=?').get(cid);
-  const customerStatus = String(customer?.status || '').trim().toLowerCase();
-  if (!['suspended', 'inactive'].includes(customerStatus)) return { voided: 0, invoiceIds: [] };
+  if (!isRecoveryBillingStatus(customer?.status)) return { voided: 0, invoiceIds: [] };
 
   const cutoff = invoicePeriodKey(y, m);
   const rows = db.prepare(`
@@ -618,7 +640,7 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
     totalMonths: 0
   };
   const paymentDate = new Date();
-  let latePaymentDetected = false;
+  const shouldShiftRecoveryAnchor = isRecoveryBillingStatus(customer.status);
   const paidInvoiceIds = [];
   let earliestPaidPeriod = null;
   const run = db.transaction(() => {
@@ -640,9 +662,6 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
       }
       payInv.run(paidByName || 'Admin', notes || '', invoiceId);
       paidInvoiceIds.push(invoiceId);
-      if (isInvoiceLateForCustomer({ period_month: m, period_year: y }, customer, paymentDate)) {
-        latePaymentDetected = true;
-      }
       summary.paidMonths.push(m);
       summary.totalAmount += (Number.isFinite(amount) ? amount : 0);
       summary.totalMonths += 1;
@@ -660,11 +679,10 @@ function payInvoicesForCustomerMonths(customerId, year, months, paidByName, note
     summary.voidedInvoiceIds = voided.invoiceIds;
   }
 
-  if (latePaymentDetected && summary.totalMonths > 0) {
-    const currentAnchor = normalizeBillingAnchorDay(customer.isolate_day, 10);
-    const paymentDay = normalizeBillingAnchorDay(paymentDate.getDate(), 10);
-    if (paymentDay !== currentAnchor) {
-      db.prepare('UPDATE customers SET isolate_day=? WHERE id=?').run(paymentDay, cid);
+  if (shouldShiftRecoveryAnchor && summary.totalMonths > 0) {
+    const anchorShift = shiftCustomerBillingAnchorToPaymentDay(cid, paymentDate);
+    if (anchorShift.shifted) {
+      summary.billingAnchorShifted = anchorShift;
     }
   }
 
@@ -903,6 +921,7 @@ function markAsPaid(invoiceId, paidByName, notes, actor = null) {
 
   const invoiceBefore = db.prepare('SELECT id, customer_id, period_month, period_year, amount, status, due_day_snapshot FROM invoices WHERE id=?').get(invId);
   if (!invoiceBefore) throw new Error('Tagihan tidak ditemukan');
+  const customerBeforePayment = db.prepare('SELECT id, status FROM customers WHERE id=?').get(invoiceBefore.customer_id);
 
   const paymentDate = new Date();
   const result = db.prepare(`
@@ -923,7 +942,9 @@ function markAsPaid(invoiceId, paidByName, notes, actor = null) {
       paidByName || 'Admin',
       paymentDate
     );
-    shiftCustomerBillingAnchorAfterLatePayment(invoiceBefore.customer_id, invoiceBefore, paymentDate);
+    if (isRecoveryBillingStatus(customerBeforePayment?.status)) {
+      shiftCustomerBillingAnchorToPaymentDay(invoiceBefore.customer_id, paymentDate);
+    }
     bookkeepingSvc.upsertInvoiceIncomeEntry(invId, paidByName || 'Admin', paymentDate.toISOString());
     queueAdminPaidNotification(invId, paidByName || 'Admin', notes || '', actor, paymentDate);
     queueCustomerPaidNotification(invId, paidByName || 'Admin');
