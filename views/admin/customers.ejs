@@ -875,9 +875,9 @@
     @media(min-width:1101px){
       .customer-filter-form{
         display:grid !important;
-        grid-template-columns:220px minmax(0,1fr);
+        grid-template-columns:270px minmax(0,1fr);
         align-items:center;
-        gap:7px;
+        gap:8px;
       }
       .customer-filter-form .customer-search-row{
         width:auto !important;
@@ -900,24 +900,25 @@
       }
       .customer-filter-panel{
         display:grid;
-        grid-template-columns:minmax(0,1fr) auto auto;
+        grid-template-columns:minmax(0,auto) auto auto;
         align-items:center;
         gap:6px;
         overflow:visible;
         min-width:0;
+        justify-content:space-between;
       }
       .customer-filter-main-row{
         display:grid;
-        grid-template-columns:96px 120px 100px 74px 64px;
+        grid-template-columns:104px 130px 112px 88px 104px 72px;
         gap:6px;
         align-items:center;
         justify-content:start;
         min-width:0;
-        width:100%;
+        width:auto;
       }
       .customer-filter-panel .mobile-date-row{
         display:grid;
-        grid-template-columns:62px 62px;
+        grid-template-columns:74px 74px;
         gap:6px;
         align-items:center;
         width:auto;
@@ -937,23 +938,23 @@
       .customer-filter-panel .desktop-filter-field .fc{
         width:100% !important;
         min-width:0 !important;
-        min-height:38px;
-        height:38px;
+        min-height:36px;
+        height:36px;
         padding-left:9px;
-        padding-right:24px;
-        font-size:11.5px;
+        padding-right:22px;
+        font-size:11px;
       }
       .customer-filter-panel .mobile-date-row .fc{
         text-align:center;
-        padding-left:6px;
-        padding-right:6px;
+        padding-left:7px;
+        padding-right:7px;
       }
       .customer-filter-panel .btn{
-        min-height:38px;
-        height:38px;
-        padding:0 10px;
+        min-height:36px;
+        height:36px;
+        padding:0 9px;
         border-radius:11px;
-        font-size:11.5px;
+        font-size:11px;
         gap:5px;
       }
       .customer-filter-summary{
