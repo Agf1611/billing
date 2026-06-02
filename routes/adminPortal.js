@@ -8480,6 +8480,10 @@ router.get('/api/mikrotik/summary', requireAdmin, async (req, res) => {
       totalSecretsActive: Number(summary.totalSecretsActive || 0),
       totalHotspot: Number(summary.totalHotspot || 0),
       totalHotspotActive: Number(summary.totalHotspotActive || 0),
+      pppoeSecretRaw: Number(summary.pppoeSecretRaw || 0),
+      pppoeSecretIgnored: Number(summary.pppoeSecretIgnored || 0),
+      pppoeActiveRaw: Number(summary.pppoeActiveRaw || 0),
+      pppoeActiveIgnored: Number(summary.pppoeActiveIgnored || 0),
       source: metadata.source
     };
     res.set('X-Mikrotik-Cache', metadata.source);

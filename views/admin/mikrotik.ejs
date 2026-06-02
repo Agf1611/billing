@@ -330,7 +330,7 @@
           <div class="monitor-sync-time" id="monitor-last-update">Belum dimuat</div>
           <div class="monitor-sync-status idle" id="monitor-sync-status"><i class="bi bi-pause-circle"></i><span>Menunggu</span></div>
         </div>
-        <div class="monitor-sync-detail" id="monitor-sync-detail">Data cache tampil lebih dulu. Gunakan refresh manual untuk ambil data router terbaru.</div>
+        <div class="monitor-sync-detail" id="monitor-sync-detail">Saat halaman dibuka, data langsung diperbarui dari router. Jika router gagal dibaca, status akan menampilkan peringatan.</div>
       </div>
       <button class="btn btn-p btn-sm" id="monitor-refresh-btn" onclick="refreshNow()"><i class="bi bi-arrow-clockwise"></i> Refresh Manual</button>
     </div>
@@ -910,6 +910,12 @@
     hotspotOnline: 0,
     totalSecrets: 0,
     totalHotspot: 0,
+    diagnostics: {
+      pppoeSecretRaw: 0,
+      pppoeSecretIgnored: 0,
+      pppoeActiveRaw: 0,
+      pppoeActiveIgnored: 0
+    },
     metadata: {
       snapshotAt: null,
       ageMs: null,
@@ -1199,14 +1205,24 @@
     }
     if (options.skipStatusUpdate) return metadata;
 
-    const ageText = metadata.ageMs == null ? '' : ` Umur snapshot ${formatDurationCompact(Math.floor(metadata.ageMs / 1000))}.`;
-    const sourceText = metadata.source ? ` Sumber: ${metadata.source}.` : '';
+    const sourceLabel = metadata.source === 'collector-live'
+      ? 'Router realtime'
+      : (metadata.source === 'collector-partial'
+        ? 'Router sebagian'
+        : (metadata.source === 'collector-stale' ? 'Snapshot lama' : metadata.source));
+    const ageText = metadata.ageMs == null ? '' : ` Umur data ${formatDurationCompact(Math.floor(metadata.ageMs / 1000))}.`;
+    const sourceText = sourceLabel ? ` Sumber: ${sourceLabel}.` : '';
+    const ignoredSecrets = Number(data.pppoeSecretIgnored || summaryState.diagnostics?.pppoeSecretIgnored || 0);
+    const ignoredActive = Number(data.pppoeActiveIgnored || summaryState.diagnostics?.pppoeActiveIgnored || 0);
+    const ignoredText = ignoredSecrets || ignoredActive
+      ? ` Diabaikan dari statistik PPPoE: ${ignoredSecrets} secret non-PPPoE, ${ignoredActive} sesi aktif non-PPPoE.`
+      : '';
     if (metadata.collectorStatus === 'ready') {
-      setMonitoringSyncStatus('success', `Snapshot collector siap dipakai.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      setMonitoringSyncStatus('success', `Data router realtime siap dipakai.${sourceText}${ageText}${ignoredText}`, monitoringSync.lastSuccessAt);
       return metadata;
     }
     if (metadata.collectorStatus === 'partial') {
-      setMonitoringSyncStatus('error', `Sebagian data MikroTik gagal diperbarui. Menampilkan snapshot terakhir yang masih aman.${sourceText}${ageText}`, monitoringSync.lastSuccessAt);
+      setMonitoringSyncStatus('error', `Sebagian data MikroTik gagal diperbarui. Menampilkan snapshot terakhir yang masih aman.${sourceText}${ageText}${ignoredText}`, monitoringSync.lastSuccessAt);
       return metadata;
     }
     if (metadata.collectorStatus === 'stale') {
@@ -1231,6 +1247,12 @@
     summaryState.hotspotOnline = Number(data.hotspotOnline || 0);
     summaryState.totalSecrets = Number(data.totalSecrets || 0);
     summaryState.totalHotspot = Number(data.totalHotspot || 0);
+    summaryState.diagnostics = {
+      pppoeSecretRaw: Number(data.pppoeSecretRaw || 0),
+      pppoeSecretIgnored: Number(data.pppoeSecretIgnored || 0),
+      pppoeActiveRaw: Number(data.pppoeActiveRaw || 0),
+      pppoeActiveIgnored: Number(data.pppoeActiveIgnored || 0)
+    };
     document.getElementById('pppoe-online-count').innerText = summaryState.pppoeOnline;
     document.getElementById('pppoe-offline-count').innerText = summaryState.pppoeOffline;
     document.getElementById('hotspot-online-count').innerText = summaryState.hotspotOnline;
@@ -1930,10 +1952,6 @@
     return qs ? `${path}?${qs}` : path;
   }
 
-  function waitMs(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   function resetMonitoringView(message = 'Data router sedang disiapkan...') {
     document.getElementById('pppoe-online-count').innerText = '0';
     document.getElementById('pppoe-offline-count').innerText = '0';
@@ -2218,10 +2236,13 @@
     try {
       const data = await fetchJsonWithTimeout(buildMonitoringUrl('/admin/api/mikrotik/summary', {
         routerId: getRouterId() || ''
-      }, force), 25000);
+      }, force), 60000);
       applySummaryData(data);
+      return data;
     } catch (e) {
       console.error('Error loadMonitoringSummary:', e);
+      setMonitoringSyncStatus('error', `Data realtime MikroTik gagal dimuat: ${e.message || e}`);
+      throw e;
     } finally {
       loadState.summary = false;
     }
@@ -2328,34 +2349,31 @@
     if (hasOpenModal()) return;
     const isManual = reason === 'manual';
     const waitingMessage = isManual
-      ? 'Refresh manual dimulai. Tunggu sekitar 5 detik sebelum semua data diperbarui...'
+      ? 'Refresh manual dimulai. Mengambil data terbaru dari router...'
       : 'Sedang mengambil data terbaru dari router...';
     const loadingMessage = isManual
       ? 'Sedang memperbarui semua data MikroTik dari router...'
       : 'Sedang memperbarui data MikroTik otomatis...';
 
     setMonitoringSyncStatus('syncing', waitingMessage);
-    if (isManual) {
-      await waitMs(5000);
-      }
-      setMonitoringSyncStatus('syncing', loadingMessage);
-      const snapshotForce = Boolean(force);
-      await loadMonitoringSummary(snapshotForce);
-      const loadFullSuite = !isCompactMobileMonitoring() || force || reason === 'manual';
-      if (snapshotForce) {
-        setMonitoringSyncStatus('syncing', 'Snapshot terbaru sudah diambil. Menyelaraskan tabel monitoring...');
-      }
-      await loadSecrets(false);
-      if (loadFullSuite || tabLoadState.hotspot) await loadHotspotUsers(false);
-      if (loadFullSuite || tabLoadState.traffic) {
-        await loadInterfaces(false);
-        if (tabLoadState.traffic) await loadInterfaceTraffic(false);
-      }
-      if (loadFullSuite || tabLoadState.pppoeSync) await loadPppoeSync(false);
-      if (loadFullSuite || tabLoadState.pppoeProfiles) await loadPppoeProfiles(false);
-      if (loadFullSuite || tabLoadState.hotspotProfiles) await loadHotspotUserProfiles(false);
-      const now = new Date();
-      if (!summaryState.metadata || !summaryState.metadata.collectorStatus) {
+    setMonitoringSyncStatus('syncing', loadingMessage);
+    const snapshotForce = Boolean(force);
+    await loadMonitoringSummary(snapshotForce);
+    const loadFullSuite = !isCompactMobileMonitoring() || force || reason === 'manual';
+    if (snapshotForce) {
+      setMonitoringSyncStatus('syncing', 'Snapshot terbaru sudah diambil. Menyelaraskan tabel monitoring...');
+    }
+    await loadSecrets(false);
+    if (loadFullSuite || tabLoadState.hotspot) await loadHotspotUsers(false);
+    if (loadFullSuite || tabLoadState.traffic) {
+      await loadInterfaces(false);
+      if (tabLoadState.traffic) await loadInterfaceTraffic(false);
+    }
+    if (loadFullSuite || tabLoadState.pppoeSync) await loadPppoeSync(false);
+    if (loadFullSuite || tabLoadState.pppoeProfiles) await loadPppoeProfiles(false);
+    if (loadFullSuite || tabLoadState.hotspotProfiles) await loadHotspotUserProfiles(false);
+    const now = new Date();
+    if (!summaryState.metadata || !summaryState.metadata.collectorStatus) {
       const successMessage = loadFullSuite
         ? (isManual ? 'Refresh manual selesai. Data MikroTik sudah diperbarui.' : 'Data MikroTik terbaru sudah diperbarui otomatis.')
         : 'Data inti MikroTik berhasil dimuat. Tab lain akan dimuat saat dibuka agar handphone tetap ringan.';
@@ -2403,7 +2421,7 @@
     monitoringAutoTimer = setInterval(() => {
       if (document.hidden || hasOpenModal()) return;
       if (monitoringRefreshPromise) return;
-      queueMonitoringRefresh(false, 'interval').catch((error) => {
+      queueMonitoringRefresh(true, 'interval').catch((error) => {
         console.error('Auto monitoring refresh failed:', error);
       });
     }, 60000);
@@ -2688,14 +2706,14 @@
     else {
       syncTrafficLiveState();
       if (!monitoringRefreshPromise) {
-        queueMonitoringRefresh(false, 'visible').catch((error) => console.error('Visible monitoring refresh failed:', error));
+        queueMonitoringRefresh(true, 'visible').catch((error) => console.error('Visible monitoring refresh failed:', error));
       }
     }
   });
   setTimeout(() => {
     if (monitoringSync.status !== 'idle') return;
     setMonitoringSyncStatus('syncing', 'Memulai ulang pemuatan data MikroTik...');
-    queueMonitoringRefresh(false, 'fallback').catch((error) => {
+    queueMonitoringRefresh(true, 'fallback').catch((error) => {
       console.error('Fallback monitoring load failed:', error);
       setMonitoringSyncStatus('error', `Muat data fallback gagal: ${error.message || error}`);
     });

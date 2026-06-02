@@ -43,6 +43,24 @@ function countUnique(rows = [], keyBuilder) {
   return seen.size;
 }
 
+function isPppoeSecretRow(row = {}) {
+  const service = String(row?.service || '').trim().toLowerCase();
+  return !service || service === 'pppoe' || service === 'any';
+}
+
+function isPppoeActiveSession(row = {}) {
+  const service = String(row?.service || '').trim().toLowerCase();
+  if (service === 'pppoe') return true;
+  const iface = String(row?.interface || row?.['interface-name'] || row?.name || '').trim().toLowerCase();
+  return iface.startsWith('<pppoe-') || iface.includes('pppoe');
+}
+
+function toBooleanLike(value) {
+  if (value === true || value === 1) return true;
+  const raw = String(value ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === 'yes' || raw === '1';
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -278,8 +296,10 @@ function syncHotspotMonitoringState(routerId = null, users = [], activeSessions 
 }
 
 function buildDerivedPppoe(routerId = null, secrets = [], activeSessions = []) {
-  const normalizedSecrets = Array.isArray(secrets) ? secrets : [];
-  const normalizedActive = Array.isArray(activeSessions) ? activeSessions : [];
+  const rawSecrets = Array.isArray(secrets) ? secrets : [];
+  const rawActive = Array.isArray(activeSessions) ? activeSessions : [];
+  const normalizedSecrets = rawSecrets.filter(isPppoeSecretRow);
+  const normalizedActive = rawActive.filter(isPppoeActiveSession);
   const activeByName = new Map(normalizedActive.map((session) => [normalizeIdentity(session?.name, session?.user), session]).filter(([key]) => key));
   const trackedState = mikrotikService.syncPppoeMonitoringState(routerId, normalizedSecrets, normalizedActive);
   const existingState = getPppoeMonitoringState(routerId, normalizedSecrets.map((row) => normalizeIdentity(row?.name)));
@@ -289,7 +309,7 @@ function buildDerivedPppoe(routerId = null, secrets = [], activeSessions = []) {
     const username = normalizeIdentity(secret?.name);
     const active = activeByName.get(username) || null;
     const persisted = trackedState.get(username) || existingState.get(username) || null;
-    const isDisabled = secret?.disabled === true || secret?.disabled === 'true';
+    const isDisabled = toBooleanLike(secret?.disabled);
     const displayStatus = active ? 'online' : (isDisabled ? 'disabled' : 'offline');
     let offlineSeconds = null;
     if (displayStatus === 'offline' && persisted?.offline_since) {
@@ -343,9 +363,13 @@ function buildDerivedPppoe(routerId = null, secrets = [], activeSessions = []) {
       pppoeDisabled: countUnique(rows.filter((row) => row.displayStatus === 'disabled'), (row) => normalizeIdentity(row?.name)),
       totalSecrets: countUnique(normalizedSecrets, (row) => normalizeIdentity(row?.name)),
       totalSecretsActive: countUnique(
-        normalizedSecrets.filter((row) => !(row?.disabled === true || row?.disabled === 'true')),
+        normalizedSecrets.filter((row) => !toBooleanLike(row?.disabled)),
         (row) => normalizeIdentity(row?.name)
-      )
+      ),
+      pppoeSecretRaw: countUnique(rawSecrets, (row) => normalizeIdentity(row?.name)),
+      pppoeSecretIgnored: countUnique(rawSecrets.filter((row) => !isPppoeSecretRow(row)), (row) => normalizeIdentity(row?.name)),
+      pppoeActiveRaw: countUnique(rawActive, (row) => normalizeIdentity(row?.name, row?.user)),
+      pppoeActiveIgnored: countUnique(rawActive.filter((row) => !isPppoeActiveSession(row)), (row) => normalizeIdentity(row?.name, row?.user))
     }
   };
 }
@@ -361,7 +385,7 @@ function buildDerivedHotspot(routerId = null, users = [], activeSessions = []) {
     const username = normalizeIdentity(user?.name, user?.user);
     const active = activeByName.get(username) || null;
     const persisted = trackedState.get(username) || null;
-    const isDisabled = user?.disabled === true || user?.disabled === 'true';
+    const isDisabled = toBooleanLike(user?.disabled);
     const displayStatus = active ? 'online' : (isDisabled ? 'disabled' : 'offline');
     let offlineSeconds = null;
     if (displayStatus === 'offline' && persisted?.offline_since) {
@@ -413,7 +437,7 @@ function buildDerivedHotspot(routerId = null, users = [], activeSessions = []) {
       hotspotDisabled: countUnique(rows.filter((row) => row.displayStatus === 'disabled'), (row) => normalizeIdentity(row?.name, row?.user)),
       totalHotspot: countUnique(normalizedUsers, (row) => normalizeIdentity(row?.name, row?.user)),
       totalHotspotActive: countUnique(
-        normalizedUsers.filter((row) => !(row?.disabled === true || row?.disabled === 'true')),
+        normalizedUsers.filter((row) => !toBooleanLike(row?.disabled)),
         (row) => normalizeIdentity(row?.name, row?.user)
       )
     }
@@ -449,25 +473,36 @@ function mergeSection(previous, label, result, fallbackValue) {
 async function runCollectorRefresh(entry, mode = 'full', refreshId = 0) {
   const routerId = entry.routerId;
   const previous = entry.snapshot || buildInitialSnapshot(routerId);
-  const fetchers = {
-    pppoeSecretsRaw: mode === 'live'
-      ? () => Promise.resolve(previous.raw.pppoeSecretsRaw)
-      : () => mikrotikService.getPppoeSecrets(routerId, { bypassCache: true }),
-    pppoeActiveRaw: () => mikrotikService.getPppoeActive(routerId, { bypassCache: true }),
-    hotspotUsersRaw: mode === 'live'
-      ? () => Promise.resolve(previous.raw.hotspotUsersRaw)
-      : () => mikrotikService.getHotspotUsers(routerId, { bypassCache: true }),
-    hotspotActiveRaw: () => mikrotikService.getHotspotActive(routerId, { bypassCache: true })
-  };
+  const fullSnapshotPromise = mode === 'full'
+    ? mikrotikService.getMonitoringSnapshot(routerId, { bypassCache: true, strict: true })
+    : null;
+  const fetchers = mode === 'full'
+    ? {
+        pppoeSecretsRaw: () => fullSnapshotPromise.then((snapshot) => {
+          if (snapshot.sectionErrors?.pppoeSecretsRaw) throw snapshot.sectionErrors.pppoeSecretsRaw;
+          return snapshot.secrets;
+        }),
+        pppoeActiveRaw: () => fullSnapshotPromise.then((snapshot) => {
+          if (snapshot.sectionErrors?.pppoeActiveRaw) throw snapshot.sectionErrors.pppoeActiveRaw;
+          return snapshot.activePppoe;
+        }),
+        hotspotUsersRaw: () => fullSnapshotPromise.then((snapshot) => {
+          if (snapshot.sectionErrors?.hotspotUsersRaw) throw snapshot.sectionErrors.hotspotUsersRaw;
+          return snapshot.hotspotUsers;
+        }),
+        hotspotActiveRaw: () => fullSnapshotPromise.then((snapshot) => {
+          if (snapshot.sectionErrors?.hotspotActiveRaw) throw snapshot.sectionErrors.hotspotActiveRaw;
+          return snapshot.hotspotActive;
+        })
+      }
+    : {
+        pppoeSecretsRaw: () => Promise.resolve(previous.raw.pppoeSecretsRaw),
+        pppoeActiveRaw: () => mikrotikService.getPppoeActive(routerId, { bypassCache: true, strict: true }),
+        hotspotUsersRaw: () => Promise.resolve(previous.raw.hotspotUsersRaw),
+        hotspotActiveRaw: () => mikrotikService.getHotspotActive(routerId, { bypassCache: true, strict: true })
+      };
   const labels = Object.keys(fetchers);
-  const settled = [];
-  for (const label of labels) {
-    try {
-      settled.push({ status: 'fulfilled', value: await fetchers[label]() });
-    } catch (reason) {
-      settled.push({ status: 'rejected', reason });
-    }
-  }
+  const settled = await Promise.allSettled(labels.map((label) => fetchers[label]()));
   const merged = {};
   const sections = {};
   let successCount = 0;

@@ -637,20 +637,24 @@ async function getMenuRowsViaStableConnection(routerId = null, menuPath, proplis
   let conn = null;
   try {
     conn = await getConnection(routerId);
-    const options = Array.isArray(proplist) && proplist.length
-      ? { proplist: proplist.map((item) => String(item || '').trim()).filter(Boolean) }
-      : {};
-    const request = conn.client.menu(menuPath).get(options);
-    const timeoutMs = Number(optionsOverride?.timeoutMs || 0) || 0;
-    const results = timeoutMs > 0
-      ? await withTimeout(request, timeoutMs, optionsOverride?.label || menuPath)
-      : await request;
-    return Array.isArray(results) ? results.map(augmentRow) : [];
+    return await getMenuRowsFromOpenConnection(conn, menuPath, proplist, optionsOverride);
   } finally {
     try {
       if (conn && conn.api) await conn.api.close();
     } catch {}
   }
+}
+
+async function getMenuRowsFromOpenConnection(conn, menuPath, proplist = [], optionsOverride = {}) {
+  const options = Array.isArray(proplist) && proplist.length
+    ? { proplist: proplist.map((item) => String(item || '').trim()).filter(Boolean) }
+    : {};
+  const request = conn.client.menu(menuPath).get(options);
+  const timeoutMs = Number(optionsOverride?.timeoutMs || 0) || 0;
+  const results = timeoutMs > 0
+    ? await withTimeout(request, timeoutMs, optionsOverride?.label || menuPath)
+    : await request;
+  return Array.isArray(results) ? results.map(augmentRow) : [];
 }
 
 async function checkConnection(routerId = null) {
@@ -845,6 +849,7 @@ async function kickHotspotUser(username, routerId = null) {
 
 async function getPppoeSecrets(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
+  const strict = Boolean(options && options.strict);
   const ck = cacheKey(routerId, 'pppoeSecrets');
   const cached = bypassCache ? null : getCachedList(ck, 8000);
   if (cached) return cached;
@@ -858,6 +863,7 @@ async function getPppoeSecrets(routerId = null, options = {}) {
       return [];
     }
     logger.error('Error getting PPPoE secrets:', e);
+    if (strict) throw e;
     return [];
   }
 }
@@ -900,6 +906,7 @@ async function deletePppoeSecret(id, routerId = null) {
 
 async function getPppoeActive(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
+  const strict = Boolean(options && options.strict);
   const ck = cacheKey(routerId, 'pppoeActive');
   const cached = bypassCache ? null : getCachedList(ck, 10000);
   if (cached) return cached;
@@ -961,12 +968,21 @@ async function getPppoeActive(routerId = null, options = {}) {
       return sessions;
     }
 
-    const interfaceRows = await getMenuRowsViaStableConnection(
-      routerId,
-      '/interface',
-      ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time'],
-      { timeoutMs: 12000, label: 'getPppoeInterfaceFallback' }
-    );
+    let interfaceRows = [];
+    try {
+      interfaceRows = await getMenuRowsViaStableConnection(
+        routerId,
+        '/interface',
+        ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time'],
+        { timeoutMs: 12000, label: 'getPppoeInterfaceFallback' }
+      );
+    } catch (ifaceErr) {
+      logThrottledWarn(
+        `pppoe-interface-fallback:${cacheKey(routerId, 'pppoeActive')}`,
+        `[MikroTik] Fallback interface PPPoE tidak terbaca setelah /ppp/active kosong: ${ifaceErr.message || String(ifaceErr)}`,
+        120000
+      );
+    }
     const fallbackSessions = [];
     for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
       const row = augmentRow(rawRow);
@@ -1001,6 +1017,7 @@ async function getPppoeActive(routerId = null, options = {}) {
       return [];
     }
     logger.error('Error getting active PPPoE sessions:', e);
+    if (strict) throw e;
     return [];
   }
 }
@@ -1566,6 +1583,7 @@ async function getPppoeCustomerSnapshot(username, routerId = null, reuseConn = n
 
 async function getHotspotActive(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
+  const strict = Boolean(options && options.strict);
   const ck = cacheKey(routerId, 'hotspotActive');
   const cached = bypassCache ? null : getCachedList(ck, 10000);
   if (cached) return cached;
@@ -1588,22 +1606,128 @@ async function getHotspotActive(routerId = null, options = {}) {
       `[MikroTik] Active Hotspot sessions tidak terbaca: ${e.message || String(e)}`,
       180000
     );
+    if (strict) throw e;
     return [];
   }
 }
 
-async function getMonitoringSnapshot(routerId = null) {
-  const secrets = await withMikrotikTimeout(getPppoeSecrets(routerId), 10000, []);
-  const activePppoe = await withMikrotikTimeout(getPppoeActive(routerId), 12000, []);
-  const hotspotUsers = await withMikrotikTimeout(getHotspotUsers(routerId), 10000, []);
-  const hotspotActive = await withMikrotikTimeout(getHotspotActive(routerId), 12000, []);
-  return {
-    secrets: Array.isArray(secrets) ? secrets : [],
-    activePppoe: Array.isArray(activePppoe) ? activePppoe : [],
-    hotspotUsers: Array.isArray(hotspotUsers) ? hotspotUsers : [],
-    hotspotActive: Array.isArray(hotspotActive) ? hotspotActive : [],
-    source: 'snapshot-stable-loaders'
-  };
+async function getMonitoringSnapshot(routerId = null, options = {}) {
+  const strict = Boolean(options?.strict);
+  let conn = null;
+  try {
+    conn = await getConnection(routerId);
+    const sectionErrors = {};
+    const readSection = async (section, menuPath, proplist, readOptions) => {
+      try {
+        return await getMenuRowsFromOpenConnection(conn, menuPath, proplist, readOptions);
+      } catch (sectionError) {
+        sectionErrors[section] = sectionError;
+        logThrottledWarn(
+          `monitoring-snapshot-section:${cacheKey(routerId, section)}`,
+          `[MikroTik] Snapshot section ${section} gagal dibaca: ${sectionError.message || String(sectionError)}`,
+          120000
+        );
+        return [];
+      }
+    };
+
+    const secrets = await readSection(
+      'pppoeSecretsRaw',
+      '/ppp/secret',
+      ['.id', 'name', 'service', 'disabled', 'profile', 'local-address', 'remote-address', 'comment'],
+      { timeoutMs: 15000, label: 'monitoringSnapshotSecrets' }
+    );
+    const activeRows = await readSection(
+      'pppoeActiveRaw',
+      '/ppp/active',
+      ['.id', 'session-id', 'name', 'service', 'address', 'uptime', 'caller-id', 'interface', 'bytes-in', 'bytes-out'],
+      { timeoutMs: 15000, label: 'monitoringSnapshotPppoeActive' }
+    );
+    let activePppoe = Array.isArray(activeRows) ? activeRows.map(augmentRow) : [];
+
+    if (!activePppoe.length) {
+      try {
+        const interfaceRows = await getMenuRowsFromOpenConnection(
+          conn,
+          '/interface',
+          ['.id', 'name', 'type', 'running', 'dynamic', 'rx-byte', 'tx-byte', 'uptime', 'last-link-up-time', 'last-link-down-time'],
+          { timeoutMs: 12000, label: 'monitoringSnapshotPppoeInterfaceFallback' }
+        );
+        const fallbackSessions = [];
+        for (const rawRow of Array.isArray(interfaceRows) ? interfaceRows : []) {
+          const row = augmentRow(rawRow);
+          if (String(row?.type || '').trim() !== 'pppoe-in') continue;
+          if (String(row?.running || '').trim() !== 'true' && row?.running !== true) continue;
+          const interfaceName = String(row?.name || '').trim();
+          const match = interfaceName.match(/^<pppoe-(.+)>$/i);
+          const username = String(match?.[1] || '').trim();
+          if (!username) continue;
+          const bytesIn = row['rx-byte'] ?? row.rxByte ?? '0';
+          const bytesOut = row['tx-byte'] ?? row.txByte ?? '0';
+          fallbackSessions.push(augmentRow({
+            '.id': row['.id'] || row.id || interfaceName,
+            name: username,
+            service: 'pppoe',
+            interface: interfaceName,
+            uptime: row.uptime || row['uptime'] || row['last-link-up-time'] || '',
+            'bytes-in': bytesIn,
+            bytesIn,
+            'bytes-out': bytesOut,
+            bytesOut,
+            address: row.address || row['address'] || '',
+            callerId: row.callerId || row['caller-id'] || ''
+          }));
+        }
+        activePppoe = fallbackSessions;
+        delete sectionErrors.pppoeActiveRaw;
+      } catch (ifaceErr) {
+        logThrottledWarn(
+          `monitoring-snapshot-pppoe-interface:${cacheKey(routerId, 'pppoeActive')}`,
+          `[MikroTik] Snapshot fallback interface PPPoE tidak terbaca setelah /ppp/active kosong: ${ifaceErr.message || String(ifaceErr)}`,
+          120000
+        );
+      }
+    }
+
+    const hotspotUsers = await readSection(
+      'hotspotUsersRaw',
+      '/ip/hotspot/user',
+      [],
+      { timeoutMs: 15000, label: 'monitoringSnapshotHotspotUsers' }
+    );
+    const hotspotActive = await readSection(
+      'hotspotActiveRaw',
+      '/ip/hotspot/active',
+      ['.id', 'user', 'address', 'mac-address', 'uptime', 'login-by', 'server'],
+      { timeoutMs: 10000, label: 'monitoringSnapshotHotspotActive' }
+    );
+
+    if (!sectionErrors.pppoeSecretsRaw) setCachedList(cacheKey(routerId, 'pppoeSecrets'), secrets);
+    if (!sectionErrors.pppoeActiveRaw) setCachedList(cacheKey(routerId, 'pppoeActive'), activePppoe);
+    if (!sectionErrors.hotspotUsersRaw) setCachedList(cacheKey(routerId, 'hotspotUsers'), hotspotUsers);
+    if (!sectionErrors.hotspotActiveRaw) setCachedList(cacheKey(routerId, 'hotspotActive'), hotspotActive);
+
+    return {
+      secrets: Array.isArray(secrets) ? secrets : [],
+      activePppoe: Array.isArray(activePppoe) ? activePppoe : [],
+      hotspotUsers: Array.isArray(hotspotUsers) ? hotspotUsers : [],
+      hotspotActive: Array.isArray(hotspotActive) ? hotspotActive : [],
+      sectionErrors,
+      source: 'single-connection-live'
+    };
+  } catch (e) {
+    if (isRouterNotFoundError(e)) {
+      logMissingRouterNotice('getMonitoringSnapshot', routerId);
+      return { secrets: [], activePppoe: [], hotspotUsers: [], hotspotActive: [], source: 'router-missing' };
+    }
+    logger.error('Error getting MikroTik monitoring snapshot:', e);
+    if (strict) throw e;
+    return { secrets: [], activePppoe: [], hotspotUsers: [], hotspotActive: [], source: 'snapshot-failed' };
+  } finally {
+    try {
+      if (conn && conn.api) await conn.api.close();
+    } catch {}
+  }
 }
 
 async function getMonitoringSummary(routerId = null) {
@@ -1746,6 +1870,7 @@ async function deleteHotspotUserProfile(id, routerId = null) {
 
 async function getHotspotUsers(routerId = null, options = {}) {
   const bypassCache = Boolean(options && options.bypassCache);
+  const strict = Boolean(options && options.strict);
   const ck = cacheKey(routerId, 'hotspotUsers');
   const cached = bypassCache ? null : getCachedList(ck, 15000);
   if (cached) return cached;
@@ -1763,6 +1888,7 @@ async function getHotspotUsers(routerId = null, options = {}) {
       `[MikroTik] Hotspot users tidak terbaca: ${e.message || String(e)}`,
       180000
     );
+    if (strict) throw e;
     return [];
   }
 }
