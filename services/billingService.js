@@ -77,6 +77,28 @@ function getPaymentDayInJakarta(paymentDate = new Date()) {
   return Number.isFinite(day) && day >= 1 && day <= 31 ? day : date.getDate();
 }
 
+function syncUnpaidInvoiceDueDaySnapshots(customerId, dueDay) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) return 0;
+  const normalizedDueDay = normalizeBillingAnchorDay(dueDay, 10);
+  const invoices = db.prepare(`
+    SELECT id, period_month, period_year
+    FROM invoices
+    WHERE customer_id = ? AND status = 'unpaid'
+  `).all(cid);
+  if (!invoices.length) return 0;
+
+  const update = db.prepare('UPDATE invoices SET due_day_snapshot = ? WHERE id = ?');
+  let changed = 0;
+  for (const invoice of invoices) {
+    changed += update.run(
+      getEffectiveBillingDay(normalizedDueDay, invoice.period_month, invoice.period_year),
+      invoice.id
+    ).changes || 0;
+  }
+  return changed;
+}
+
 function shiftCustomerBillingAnchorToPaymentDay(customerId, paymentDate = new Date()) {
   const cid = Number(customerId || 0);
   if (!Number.isFinite(cid) || cid <= 0) return { shifted: false };
@@ -91,7 +113,8 @@ function shiftCustomerBillingAnchorToPaymentDay(customerId, paymentDate = new Da
   }
 
   db.prepare('UPDATE customers SET isolate_day=? WHERE id=?').run(paymentDay, cid);
-  return { shifted: true, previousDay, newDay: paymentDay };
+  const invoiceDueDatesUpdated = syncUnpaidInvoiceDueDaySnapshots(cid, paymentDay);
+  return { shifted: true, previousDay, newDay: paymentDay, invoiceDueDatesUpdated };
 }
 
 function invoicePeriodKey(year, month) {
@@ -130,7 +153,7 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
   `).get(invId);
   if (!current) throw new Error('Tagihan tidak ditemukan');
   if (String(current.status || '').toLowerCase() !== 'unpaid') {
-    throw new Error('Hanya tagihan belum bayar yang bisa dibuat QRIS unik.');
+    throw new Error('Hanya tagihan belum bayar yang bisa dibuat kode pembayaran otomatis.');
   }
 
   if (!force && Number(current.qris_amount_unique || 0) > 0 && Number(current.qris_unique_code || 0) > 0) {
@@ -175,7 +198,7 @@ function assignUniqueQrisForInvoice(invoiceId, { force = false } = {}) {
     }
   }
 
-  if (!chosenAmount) throw new Error('Gagal membuat nominal unik QRIS untuk tagihan ini.');
+  if (!chosenAmount) throw new Error('Gagal membuat nominal pembayaran otomatis untuk tagihan ini.');
   update.run(chosenCode, chosenAmount, invId);
   return getInvoiceById(invId);
 }
@@ -412,20 +435,11 @@ function ensurePortalReactivationInvoice(customerId, atDate = new Date()) {
     return { created: false, skipped: true, reason: 'missing-package' };
   }
 
-  const existingUnpaid = db.prepare(`
-    SELECT id, period_month, period_year
-    FROM invoices
-    WHERE customer_id=? AND lower(trim(status))='unpaid'
-    ORDER BY period_year ASC, period_month ASC, id ASC
-    LIMIT 1
-  `).get(cid);
-  if (existingUnpaid) {
-    return { created: false, invoiceId: existingUnpaid.id, reason: 'unpaid-exists' };
-  }
-
   const date = atDate instanceof Date && !Number.isNaN(atDate.getTime()) ? atDate : new Date();
   const periodMonth = date.getMonth() + 1;
   const periodYear = date.getFullYear();
+  const voided = voidPreviousUnpaidForPrepaidRestart(cid, periodYear, periodMonth, 'Portal', date);
+
   const existingCurrent = db.prepare(`
     SELECT id, status
     FROM invoices
@@ -438,7 +452,9 @@ function ensurePortalReactivationInvoice(customerId, atDate = new Date()) {
     return {
       created: false,
       invoiceId: existingCurrent.id,
-      reason: existingStatus === 'paid' ? 'current-period-paid' : 'current-period-unpaid'
+      reason: existingStatus === 'paid' ? 'current-period-paid' : 'current-period-unpaid',
+      voidedMonths: voided.invoiceIds.length,
+      voidedInvoiceIds: voided.invoiceIds
     };
   }
 
@@ -469,7 +485,9 @@ function ensurePortalReactivationInvoice(customerId, atDate = new Date()) {
     customerName: customer.name,
     periodMonth,
     periodYear,
-    amount
+    amount,
+    voidedMonths: voided.invoiceIds.length,
+    voidedInvoiceIds: voided.invoiceIds
   };
 }
 
@@ -765,7 +783,7 @@ function normalizeInvoicePaymentChannel(invoice = {}) {
   if (status !== 'paid') return { channel: 'unpaid', label: 'Belum Bayar' };
   if (lowerPaidBy.startsWith('agent ')) return { channel: 'agent', label: 'Agent' };
   if (gateway || ONLINE_INVOICE_ACTORS.has(lowerPaidBy) || notes.includes('webhook')) {
-    return { channel: 'online', label: gateway || paidBy || 'Online / QRIS' };
+    return { channel: 'online', label: gateway || paidBy || 'Online / Payment Gateway' };
   }
   if (lowerPaidBy.startsWith('admin')) return { channel: 'admin', label: paidBy || 'Admin' };
   if (lowerPaidBy.startsWith('kasir')) return { channel: 'cashier', label: paidBy || 'Kasir' };
@@ -991,7 +1009,7 @@ function markAsUnpaid(invoiceId, actor = null) {
     throw new Error('Hanya tagihan yang sudah lunas yang bisa dibatalkan.');
   }
   if (!canCancelPaidInvoice(invoice)) {
-    throw new Error('Pembayaran online/QRIS otomatis tidak bisa dibatalkan dari menu ini.');
+    throw new Error('Pembayaran online otomatis tidak bisa dibatalkan dari menu ini.');
   }
 
   const result = db.prepare(`UPDATE invoices SET status='unpaid', paid_at=NULL, paid_by_name='', notes='' WHERE id=?`).run(invId);
@@ -1257,6 +1275,10 @@ function getInvoicesByAny(val) {
   
   if (cleanVal.length >= 8) {
     customer = db.prepare(`SELECT id FROM customers WHERE phone LIKE ?`).get(`%${cleanVal}%`);
+  }
+
+  if (!customer && /^\d+$/.test(raw)) {
+    customer = db.prepare(`SELECT id FROM customers WHERE id = ?`).get(Number(raw));
   }
   
   if (!customer) {

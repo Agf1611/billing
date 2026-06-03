@@ -517,3 +517,148 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
   .voucher-menu-link span{font-size:12px}
   .voucher-menu-link small{font-size:9px}
 }
+
+.agent-vouchers-page .hero{
+  padding:15px 16px;
+  border-radius:20px;
+}
+.agent-vouchers-page .hero h1{font-size:21px;margin-bottom:4px}
+.agent-vouchers-page .cardx .bd{padding:12px}
+.agent-vouchers-page .voucher-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+.agent-vouchers-page .vcard{
+  min-height:112px;
+  border-radius:17px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+}
+.agent-vouchers-page .vcard .badgey{
+  width:max-content;
+  padding:4px 7px;
+  font-size:10px;
+}
+.agent-vouchers-page .vcard .name{
+  margin-top:6px;
+  font-size:13px;
+  line-height:1.2;
+}
+.agent-vouchers-page .vcard .price{
+  font-size:18px;
+  line-height:1.12;
+  margin-top:2px;
+}
+.agent-vouchers-page .vcard .meta{
+  font-size:10px;
+  line-height:1.3;
+}
+.agent-vouchers-page .single-sale-panel,
+.agent-vouchers-page .mode-note{
+  padding:10px 11px;
+  border-radius:16px;
+}
+.agent-vouchers-page #agentVoucherSubmit{
+  width:100%;
+  min-height:46px;
+  border-radius:15px;
+}
+
+@media(max-width:640px){
+  .agent-vouchers-page .wrap{padding:10px 10px 76px}
+  .agent-vouchers-page .hero{padding:13px 14px;border-radius:18px}
+  .agent-vouchers-page .hero h1{font-size:19px}
+  .agent-vouchers-page .hero p{font-size:11px}
+  .agent-vouchers-page .voucher-menu{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+  .agent-vouchers-page .voucher-menu-link{
+    min-height:58px;
+    padding:8px 7px;
+    border-radius:16px;
+    grid-template-columns:auto 1fr;
+    grid-template-areas:"icon title" "icon sub";
+    justify-items:start;
+    text-align:left;
+    column-gap:7px;
+  }
+  .agent-vouchers-page .voucher-menu-link i{
+    width:32px;
+    height:32px;
+    border-radius:12px;
+    font-size:16px;
+  }
+  .agent-vouchers-page .voucher-menu-link span{font-size:11px}
+  .agent-vouchers-page .voucher-menu-link small{font-size:8px}
+  .agent-vouchers-page .cardx{border-radius:17px;margin-top:10px}
+  .agent-vouchers-page .cardx .hd{padding:10px 11px}
+  .agent-vouchers-page .cardx h2{font-size:13px}
+  .agent-vouchers-page .cardx .bd{padding:10px}
+  .agent-vouchers-page .voucher-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+  .agent-vouchers-page .vcard{
+    min-height:96px;
+    padding:8px;
+    border-radius:15px;
+  }
+  .agent-vouchers-page .vcard .badgey{
+    font-size:9px;
+    padding:3px 6px;
+  }
+  .agent-vouchers-page .vcard .name{
+    font-size:12px;
+    margin-top:5px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .agent-vouchers-page .vcard .price{font-size:16px}
+  .agent-vouchers-page .vcard .meta{
+    font-size:9px;
+    margin-top:2px;
+  }
+  .agent-vouchers-page .vcard .meta:last-child{
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .agent-vouchers-page .single-sale-panel{
+    padding:9px;
+    border-radius:14px;
+  }
+  .agent-vouchers-page .single-sale-panel .item-head{
+    align-items:center;
+  }
+  .agent-vouchers-page .single-sale-panel .t2{
+    display:none;
+  }
+  .agent-vouchers-page .batch-options{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+  .agent-vouchers-page .batch-options .mode-note{
+    padding:9px;
+    border-radius:14px;
+  }
+  .agent-vouchers-page :is(.form-control,.form-select){
+    min-height:42px;
+    border-radius:13px;
+    padding:9px 10px;
+    font-size:12px;
+  }
+  .agent-vouchers-page #agentVoucherSubmit{
+    min-height:44px;
+    font-size:12px;
+    padding:10px 12px;
+  }
+  .agent-vouchers-page .itemx{
+    border-radius:15px;
+    padding:10px;
+  }
+}

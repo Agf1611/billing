@@ -18,6 +18,39 @@ let customerCodeSchemaReady = false;
 let customerCodeBackfillDone = false;
 let hotspotBindingSchemaReady = false;
 
+function normalizeBillingAnchorDay(day, fallback = 10) {
+  const n = parseInt(day, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(31, n));
+}
+
+function getEffectiveBillingDay(day, month1to12, year) {
+  const month = Math.max(1, Math.min(12, parseInt(month1to12, 10) || 1));
+  const y = Math.max(2000, parseInt(year, 10) || new Date().getFullYear());
+  const normalized = normalizeBillingAnchorDay(day, 10);
+  return Math.min(normalized, new Date(y, month, 0).getDate());
+}
+
+function syncUnpaidInvoiceDueDaySnapshots(customerId, dueDay) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) return 0;
+  const normalizedDueDay = normalizeBillingAnchorDay(dueDay, 10);
+  const invoices = db.prepare(`
+    SELECT id, period_month, period_year
+    FROM invoices
+    WHERE customer_id = ? AND status = 'unpaid'
+  `).all(cid);
+  if (!invoices.length) return 0;
+
+  const update = db.prepare('UPDATE invoices SET due_day_snapshot = ? WHERE id = ?');
+  let changed = 0;
+  for (const invoice of invoices) {
+    const effectiveDueDay = getEffectiveBillingDay(normalizedDueDay, invoice.period_month, invoice.period_year);
+    changed += update.run(effectiveDueDay, invoice.id).changes || 0;
+  }
+  return changed;
+}
+
 function ensureHotspotBindingSchema() {
   if (hotspotBindingSchemaReady) return;
   try { db.exec("ALTER TABLE customers ADD COLUMN hotspot_username TEXT DEFAULT ''"); } catch (_) {}
@@ -406,7 +439,7 @@ function createCustomer(data) {
 function updateCustomer(id, data) {
   ensureMissingCustomerCodes();
   ensureHotspotBindingSchema();
-  const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note FROM customers WHERE id=?').get(id) || {};
+  const current = db.prepare('SELECT nik, npwp, house_photo_url, ktp_photo_url, discount_enabled, discount_amount, speed_boost_profile, speed_boost_until, speed_boost_started_at, speed_boost_note, isolate_day FROM customers WHERE id=?').get(id) || {};
   const prev = db.prepare('SELECT package_id, discount_enabled, discount_amount FROM customers WHERE id=?').get(id);
   const newPkgId = data.package_id ? parseInt(data.package_id, 10) : null;
   const pkgChanged = prev && Number(prev.package_id || 0) !== Number(newPkgId || 0);
@@ -419,52 +452,64 @@ function updateCustomer(id, data) {
       };
   const normalizedPhone = normalizePhoneDigits(data.phone || '');
   const speedBoost = normalizeSpeedBoost(data, current);
+  const previousDueDay = normalizeBillingAnchorDay(current.isolate_day, 10);
+  const nextDueDay = data.isolate_day !== undefined
+    ? normalizeBillingAnchorDay(data.isolate_day, 10)
+    : previousDueDay;
 
-  const result = db.prepare(`
-    UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, discount_enabled=?, discount_amount=?, speed_boost_profile=?, speed_boost_until=?, speed_boost_started_at=?, speed_boost_note=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?, hotspot_username=?, hotspot_profile=?, hotspot_binding_id=?
-    WHERE id=?
-  `).run(
-    data.name, normalizedPhone || '', data.email || '', data.address || '',
-    data.nik !== undefined ? (data.nik || '') : (current.nik || ''),
-    data.npwp !== undefined ? (data.npwp || '') : (current.npwp || ''),
-    data.house_photo_url !== undefined ? (data.house_photo_url || '') : (current.house_photo_url || ''),
-    data.ktp_photo_url !== undefined ? (data.ktp_photo_url || '') : (current.ktp_photo_url || ''),
-    data.package_id ? parseInt(data.package_id) : null,
-    data.router_id ? parseInt(data.router_id) : null,
-    data.olt_id ? parseInt(data.olt_id) : null,
-    data.odp_id ? parseInt(data.odp_id) : null,
-    data.pon_port || '',
-    data.lat || '',
-    data.lng || '',
-    data.genieacs_tag || '', data.pppoe_username || '',
-    data.normal_pppoe_profile || '',
-    data.isolir_profile || 'BEATISOLIR',
-    data.status || 'active',
-    data.install_date || null,
-    discount.discountEnabled,
-    discount.discountAmount,
-    speedBoost.profile,
-    speedBoost.until || null,
-    speedBoost.startedAt || null,
-    speedBoost.note,
-    data.notes || '',
-    data.auto_isolate !== undefined ? parseInt(data.auto_isolate) : 1,
-    data.isolate_day !== undefined ? parseInt(data.isolate_day) : 10,
-    data.cable_path || null,
-    data.connection_type || 'pppoe',
-    data.static_ip || '',
-    data.mac_address || '',
-    data.hotspot_username || '',
-    data.hotspot_profile || '',
-    data.hotspot_binding_id || '',
-    id
-  );
+  const persistCustomer = db.transaction(() => {
+    const result = db.prepare(`
+      UPDATE customers SET name=?, phone=?, email=?, address=?, nik=?, npwp=?, house_photo_url=?, ktp_photo_url=?, package_id=?, router_id=?, olt_id=?, odp_id=?, pon_port=?, lat=?, lng=?, genieacs_tag=?, pppoe_username=?, normal_pppoe_profile=?, isolir_profile=?, status=?, install_date=?, discount_enabled=?, discount_amount=?, speed_boost_profile=?, speed_boost_until=?, speed_boost_started_at=?, speed_boost_note=?, notes=?, auto_isolate=?, isolate_day=?, cable_path=?, connection_type=?, static_ip=?, mac_address=?, hotspot_username=?, hotspot_profile=?, hotspot_binding_id=?
+      WHERE id=?
+    `).run(
+      data.name, normalizedPhone || '', data.email || '', data.address || '',
+      data.nik !== undefined ? (data.nik || '') : (current.nik || ''),
+      data.npwp !== undefined ? (data.npwp || '') : (current.npwp || ''),
+      data.house_photo_url !== undefined ? (data.house_photo_url || '') : (current.house_photo_url || ''),
+      data.ktp_photo_url !== undefined ? (data.ktp_photo_url || '') : (current.ktp_photo_url || ''),
+      data.package_id ? parseInt(data.package_id) : null,
+      data.router_id ? parseInt(data.router_id) : null,
+      data.olt_id ? parseInt(data.olt_id) : null,
+      data.odp_id ? parseInt(data.odp_id) : null,
+      data.pon_port || '',
+      data.lat || '',
+      data.lng || '',
+      data.genieacs_tag || '', data.pppoe_username || '',
+      data.normal_pppoe_profile || '',
+      data.isolir_profile || 'BEATISOLIR',
+      data.status || 'active',
+      data.install_date || null,
+      discount.discountEnabled,
+      discount.discountAmount,
+      speedBoost.profile,
+      speedBoost.until || null,
+      speedBoost.startedAt || null,
+      speedBoost.note,
+      data.notes || '',
+      data.auto_isolate !== undefined ? parseInt(data.auto_isolate) : 1,
+      nextDueDay,
+      data.cable_path || null,
+      data.connection_type || 'pppoe',
+      data.static_ip || '',
+      data.mac_address || '',
+      data.hotspot_username || '',
+      data.hotspot_profile || '',
+      data.hotspot_binding_id || '',
+      id
+    );
 
-  if (pkgChanged) {
-    db.prepare('UPDATE customers SET promo_cycles_used = 0 WHERE id=?').run(id);
-  }
+    if (pkgChanged) {
+      db.prepare('UPDATE customers SET promo_cycles_used = 0 WHERE id=?').run(id);
+    }
 
-  return result;
+    result.dueDayChanged = nextDueDay !== previousDueDay;
+    result.invoiceDueDatesUpdated = result.dueDayChanged
+      ? syncUnpaidInvoiceDueDaySnapshots(id, nextDueDay)
+      : 0;
+    return result;
+  });
+
+  return persistCustomer();
 }
 
 function updateCustomerCablePath(id, path) {

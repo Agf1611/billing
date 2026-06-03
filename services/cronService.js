@@ -9,6 +9,7 @@ const customerSvc = require('./customerService');
 const packageChangeSvc = require('./packageChangeService');
 const mikrotikService = require('./mikrotikService');
 const usageSvc = require('./usageService');
+const databaseMaintenanceSvc = require('./databaseMaintenanceService');
 const whatsappGateway = require('./whatsappGatewayService');
 const { getSetting } = require('../config/settingsManager');
 const { hasStaticQrisEnabled } = require('./qrisService');
@@ -136,6 +137,16 @@ function buildPaymentGuideMessage(customer, invoices = []) {
     );
   }
 
+  if (invoiceList.length > 1) {
+    lines.push(
+      '',
+      `Total semua tagihan aktif: Rp ${formatRupiahValue(totalTagihan)} (${invoiceList.length} bulan/tagihan)`,
+      'Bayar Online bisa sekaligus semua tagihan atau pilih 1 bulan saja.',
+      'Jika transfer manual, bayar sesuai total bulan yang dipilih lalu kirim bukti ke admin.'
+    );
+    return lines.join('\n').trim();
+  }
+
   const baseAmount = Number(primaryInvoice?.amount || 0) || 0;
   const uniqueAmount = Number(primaryInvoice?.qris_amount_unique || 0) || 0;
   const uniqueCode = Number(primaryInvoice?.qris_unique_code || 0) || 0;
@@ -143,9 +154,9 @@ function buildPaymentGuideMessage(customer, invoices = []) {
   if (baseAmount > 0 && uniqueAmount > 0 && uniqueDelta > 0) {
     lines.push(
       '',
-      `Bayar otomatis: Rp ${formatRupiahValue(uniqueAmount)}`,
-      `Kode unik: ${String(uniqueCode || uniqueDelta).padStart(3, '0')}`,
-      'Bayar sesuai nominal agar otomatis terbaca lunas.'
+      `Nominal Bayar Online: Rp ${formatRupiahValue(uniqueAmount)}`,
+      `Kode pembayaran: ${String(uniqueCode || uniqueDelta).padStart(3, '0')}`,
+      'Pilih Bayar Online dan ikuti nominal tersebut agar otomatis terbaca lunas.'
     );
   }
 
@@ -163,9 +174,7 @@ function buildWhatsappMessageContext(customer, invoices = []) {
     tagihan: Number(totalTagihan || 0).toLocaleString('id-ID'),
     rincian: buildInvoicePeriods(invoiceList),
     jatuh_tempo: primaryInvoice ? formatInvoiceDueDate(primaryInvoice, customer) : '-',
-    link: primaryInvoice
-      ? buildCustomerInvoiceCheckBillingLink(primaryInvoice, customer)
-      : buildCustomerCheckBillingLink(customer),
+    link: buildCustomerCheckBillingLink(customer),
     portal_link: buildCustomerPortalLoginLink(),
     invoice_link: primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer) : buildCustomerCheckBillingLink(customer),
     invoice_no: primaryInvoice?.id ? `INV-${primaryInvoice.id}` : '-',
@@ -243,6 +252,17 @@ function startCronJobs() {
       }
     } catch (error) {
       logger.warn(`[CRON] Gagal membersihkan inbox pelanggan lama: ${error.message}`);
+    }
+  });
+
+  cron.schedule('35 3 * * *', () => {
+    try {
+      const result = databaseMaintenanceSvc.runDatabaseLogRetention();
+      if (Number(result?.deleted || 0) > 0) {
+        logger.info(`[CRON] Retensi log database menghapus ${result.deleted} baris lama.`);
+      }
+    } catch (error) {
+      logger.warn(`[CRON] Gagal menjalankan retensi log database: ${error.message}`);
     }
   });
 

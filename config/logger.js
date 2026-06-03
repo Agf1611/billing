@@ -14,6 +14,24 @@ const logFormat = winston.format.printf(({ level, message, timestamp }) => {
     return `${timestamp} ${level}: ${message}`;
 });
 
+function parsePositiveInt(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const fileMaxSize = parsePositiveInt(process.env.LOG_MAX_SIZE_BYTES, 10 * 1024 * 1024);
+const fileMaxFiles = parsePositiveInt(process.env.LOG_MAX_FILES, 10);
+
+function rotatingFileTransport(filename, options = {}) {
+    return new winston.transports.File({
+        filename: path.join(logsDir, filename),
+        maxsize: fileMaxSize,
+        maxFiles: fileMaxFiles,
+        tailable: true,
+        ...options
+    });
+}
+
 // Konfigurasi logger
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
@@ -25,13 +43,8 @@ const logger = winston.createLogger({
     ),
     transports: [
         // Log ke file
-        new winston.transports.File({ 
-            filename: path.join(logsDir, 'error.log'), 
-            level: 'error' 
-        }),
-        new winston.transports.File({ 
-            filename: path.join(logsDir, 'combined.log') 
-        }),
+        rotatingFileTransport('error.log', { level: 'error' }),
+        rotatingFileTransport('combined.log'),
         // Log ke console
         new winston.transports.Console({
             format: winston.format.combine(
@@ -44,9 +57,7 @@ const logger = winston.createLogger({
         })
     ],
     exceptionHandlers: [
-        new winston.transports.File({ 
-            filename: path.join(logsDir, 'exceptions.log') 
-        }),
+        rotatingFileTransport('exceptions.log'),
         new winston.transports.Console({
             format: winston.format.combine(
                 winston.format.colorize(),

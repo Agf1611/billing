@@ -107,6 +107,7 @@
   const incomeCards = [
     { label: 'Transaksi Cash', amount: Number(incomeBreakdown.cash?.amount || 0), count: Number(incomeBreakdown.cash?.count || 0), icon: 'bi-cash-stack', tone: 'cash', bucket: 'cash' },
     { label: 'Transaksi Online', amount: Number(incomeBreakdown.online?.amount || 0), count: Number(incomeBreakdown.online?.count || 0), icon: 'bi-qr-code-scan', tone: 'online', bucket: 'online' },
+    { label: 'Transfer / Bank', amount: Number(incomeBreakdown.transfer?.amount || 0), count: Number(incomeBreakdown.transfer?.count || 0), icon: 'bi-bank2', tone: 'bank', bucket: 'transfer' },
     { label: 'Pemasukan Lain', amount: Number(incomeBreakdown.other?.amount || 0), count: Number(incomeBreakdown.other?.count || 0), icon: 'bi-piggy-bank', tone: 'other', bucket: 'other' },
     { label: 'Mitra Bayar Bulan Ini', amount: Number(incomeBreakdown.partner?.amount || 0), count: Number(incomeBreakdown.partner?.count || 0), icon: 'bi-people-fill', tone: 'partner', bucket: 'partner' }
   ];

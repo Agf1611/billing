@@ -193,6 +193,47 @@
       margin-bottom:8px;
     }
     .payment-summary{font-size:12px;color:var(--text-main);font-weight:800}
+    .pay-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+    .pay-mode-radio{position:absolute;opacity:0;pointer-events:none}
+    .pay-mode-card{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-height:62px;
+      padding:11px 12px;
+      border-radius:18px;
+      border:1px solid var(--table-border);
+      background:var(--method-bg);
+      box-shadow:var(--method-shadow);
+      cursor:pointer;
+      transition:all .18s ease;
+    }
+    .pay-mode-card i{font-size:20px;color:var(--brand)}
+    .pay-mode-card strong{display:block;font-size:13px;line-height:1.25;color:var(--text-main)}
+    .pay-mode-card span{display:block;font-size:11px;line-height:1.35;color:var(--text-soft)}
+    .pay-mode-radio:checked + .pay-mode-card{
+      border-color:rgba(99, 102, 241, .82);
+      background:var(--method-selected);
+      box-shadow:0 14px 28px rgba(99,102,241,.14);
+    }
+    .billing-row-single.is-disabled{opacity:.48}
+    .invoice-flags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+    .invoice-flag{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      padding:3px 7px;
+      border-radius:999px;
+      font-size:10px;
+      line-height:1.2;
+      font-weight:800;
+      border:1px solid rgba(148,163,184,.18);
+      white-space:nowrap;
+    }
+    .invoice-flag.late{background:rgba(245,158,11,.12);color:#b45309;border-color:rgba(245,158,11,.24)}
+    .invoice-flag.isolated{background:rgba(239,68,68,.12);color:#be123c;border-color:rgba(239,68,68,.22)}
+    html[data-theme="dark"] .invoice-flag.late{background:rgba(245,158,11,.18);color:#fde68a;border-color:rgba(245,158,11,.30)}
+    html[data-theme="dark"] .invoice-flag.isolated{background:rgba(244,63,94,.18);color:#fecdd3;border-color:rgba(244,63,94,.34)}
     .payment-methods-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     @media (min-width: 768px){.payment-methods-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
     .pay-scroll{max-height:320px;overflow:auto;padding-right:4px}
@@ -304,6 +345,7 @@
       .brand-hero-copy h1{font-size:20px}
       .head,.body{padding:16px 14px}
       .manual-grid{grid-template-columns:1fr}
+      .pay-mode-grid{grid-template-columns:1fr}
       .p-name{font-size:13px}
       .p-icon{width:44px;height:44px;font-size:20px}
       .btnx{border-radius:12px}
@@ -434,7 +476,31 @@
               <i class="bi bi-check-circle me-2"></i>Semua tagihan sudah lunas.
             </div>
           <% } else { %>
+            <%
+              const unpaidTotalAmount = (unpaidInvoices || []).reduce((sum, inv) => sum + (Number(inv.amount || 0) || 0), 0);
+              const canBulkPay = unpaidInvoices.length > 1 && !!(typeof bulkToken !== 'undefined' && bulkToken);
+            %>
             <div class="mb-2 fw-bold">Tagihan Belum Dibayar</div>
+            <% if (canBulkPay) { %>
+              <div class="pay-mode-grid" aria-label="Pilihan cara bayar">
+                <input class="pay-mode-radio" type="radio" id="mode_bulk" name="pay_mode" value="bulk" checked>
+                <label class="pay-mode-card" for="mode_bulk">
+                  <i class="bi bi-credit-card-2-front-fill"></i>
+                  <span>
+                    <strong>Bayar Semua</strong>
+                    <span><%= unpaidInvoices.length %> tagihan - Rp <%= Number(unpaidTotalAmount || 0).toLocaleString('id-ID') %></span>
+                  </span>
+                </label>
+                <input class="pay-mode-radio" type="radio" id="mode_single" name="pay_mode" value="single">
+                <label class="pay-mode-card" for="mode_single">
+                  <i class="bi bi-list-check"></i>
+                  <span>
+                    <strong>Bayar 1 Tagihan</strong>
+                    <span>Pilih periode tertentu saja</span>
+                  </span>
+                </label>
+              </div>
+            <% } %>
             <div class="table-responsive">
               <table class="tbl">
                 <thead>
@@ -446,10 +512,23 @@
                 </thead>
                 <tbody>
                   <% unpaidInvoices.forEach((inv, idx) => { %>
-                    <tr>
+                    <% const flags = inv.public_flags || {}; %>
+                    <tr class="billing-row-single <%= canBulkPay ? 'is-disabled' : '' %>">
                       <td>
                         <div class="fw-semibold"><%= monthNames[Number(inv.period_month)] %> <%= inv.period_year %></div>
                         <div class="muted small">INV-<%= inv.id %></div>
+                        <% if (flags.pastPeriod || flags.duePassed || flags.isolated) { %>
+                          <div class="invoice-flags">
+                            <% if (flags.pastPeriod) { %>
+                              <span class="invoice-flag late"><i class="bi bi-clock-history"></i> Invoice terlewat</span>
+                            <% } else if (flags.duePassed) { %>
+                              <span class="invoice-flag late"><i class="bi bi-exclamation-circle"></i> Lewat jatuh tempo</span>
+                            <% } %>
+                            <% if (flags.isolated) { %>
+                              <span class="invoice-flag isolated"><i class="bi bi-wifi-off"></i> Isolir/Suspend</span>
+                            <% } %>
+                          </div>
+                        <% } %>
                       </td>
                       <td class="text-end fw-semibold">Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %></td>
                       <td class="text-end">
@@ -482,6 +561,9 @@
 
               <form id="payForm" method="POST" action="/customer/public/payment/create/0" class="d-grid gap-2">
                 <input type="hidden" name="token" id="pay_token" value="">
+                <input type="hidden" id="bulk_token" value="<%= bulkToken || '' %>">
+                <input type="hidden" id="bulk_amount" value="<%= Number(unpaidTotalAmount || 0) %>">
+                <input type="hidden" id="bulk_count" value="<%= Number(unpaidInvoices.length || 0) %>">
 
                 <% if (paymentChannels && paymentChannels.length > 0) { %>
                   <div class="payment-methods-grid pay-scroll">
@@ -518,14 +600,14 @@
                         for (const k of Object.keys(brandMap)) { if (code.includes(k)) { brand = brandMap[k]; break; } }
                         const bankMap = { BCAVA: 'BCA', BNIVA: 'BNI', BRIVA: 'BRI', MANDIRIVA: 'Mandiri', PERMATAVA: 'Permata', CIMBVA: 'CIMB', DANAMONVA: 'Danamon' };
                         if (!brand && bankMap[code]) brand = { label: bankMap[code], cls: 'pb-bank' };
-                        const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'QRIS Tripay', QRIS2: 'QRIS Tripay' };
+                        const nameMap = { BCAVA: 'BCA VA', BNIVA: 'BNI VA', BRIVA: 'BRI VA', MANDIRIVA: 'Mandiri VA', PERMATAVA: 'Permata VA', CIMBVA: 'CIMB VA', DANAMONVA: 'Danamon VA', QRIS: 'Bayar Online Tripay', QRIS2: 'Bayar Online Tripay' };
                         let shortName = nameMap[code] || String(channel.name || '').trim();
-                        shortName = shortName.replace(/virtual account/ig, 'VA').replace(/^bank\s+/ig, '').replace(/\s+/g, ' ').trim();
-                        if (!nameMap[code] && code.includes('QRIS') && brand) shortName = `QRIS ${brand.label}`;
+                        shortName = shortName.replace(/virtual account/ig, 'VA').replace(/QRIS/ig, 'Bayar Online').replace(/^bank\s+/ig, '').replace(/\s+/g, ' ').trim();
+                        if (!nameMap[code] && code.includes('QRIS') && brand) shortName = `Bayar Online ${brand.label}`;
                         const group = String(channel.group || '');
                         const isQrisTripay = code.startsWith('QRIS');
-                        const groupIcon = isQrisTripay ? 'bi-qr-code-scan' : group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-qr-code-scan';
-                        const shortGroup = isQrisTripay ? 'QRIS' : group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'QRIS' : group;
+                        const groupIcon = isQrisTripay ? 'bi-credit-card-2-front' : group === 'Virtual Account' ? 'bi-bank2' : group === 'E-Wallet' ? 'bi-wallet2' : group === 'Convenience Store' ? 'bi-shop' : 'bi-credit-card-2-front';
+                        const shortGroup = isQrisTripay ? 'Online' : group === 'Virtual Account' ? 'VA' : group === 'E-Wallet' ? 'E-Wallet' : group === 'Convenience Store' ? 'CS' : group === 'QRIS' ? 'Online' : String(group || '').replace(/QRIS/ig, 'Online');
                         const radioId = `pm_${idx}_${code}`;
                     %>
                       <input class="pm-radio" type="radio" id="<%= radioId %>" name="method" value="<%= channel.code %>" <%= idx === 0 ? 'checked required' : '' %>>
@@ -541,7 +623,7 @@
                         </div>
                         <div class="p-info">
                           <span class="p-name"><%= shortName %></span>
-                          <span class="p-sub"><%= isQrisTripay ? 'Scan QRIS Tripay' : group === 'Virtual Account' ? 'Transfer bank otomatis' : group === 'E-Wallet' ? 'Bayar langsung dari e-wallet' : group === 'QRIS' ? 'Scan kode QRIS' : 'Pembayaran digital' %></span>
+                          <span class="p-sub"><%= isQrisTripay ? 'Payment gateway otomatis' : group === 'Virtual Account' ? 'Transfer bank otomatis' : group === 'E-Wallet' ? 'Bayar langsung dari e-wallet' : group === 'QRIS' ? 'Pembayaran online otomatis' : 'Pembayaran digital' %></span>
                         </div>
                         <span class="p-chip"><%= shortGroup %></span>
                       </label>
@@ -552,12 +634,12 @@
                   <input type="hidden" name="method" value="<%= staticQrisEnabled ? 'STATICQRIS' : 'QRIS' %>">
                   <div class="payment-methods-grid">
                     <div class="pay-method-item" style="cursor: default">
-                      <div class="p-icon"><i class="bi bi-qr-code-scan"></i></div>
+                      <div class="p-icon"><i class="bi bi-credit-card-2-front"></i></div>
                       <div class="p-info">
-                        <span class="p-name"><%= staticQrisEnabled ? 'QRIS Instan' : 'QRIS / E-Wallet' %></span>
-                        <span class="p-sub">Scan QR untuk bayar otomatis.</span>
+                        <span class="p-name"><%= staticQrisEnabled ? 'Bayar Online Cadangan' : 'Bayar Online / E-Wallet' %></span>
+                        <span class="p-sub">Ikuti instruksi pembayaran agar otomatis terbaca.</span>
                       </div>
-                      <span class="p-chip">QRIS</span>
+                      <span class="p-chip">Online</span>
                     </div>
                   </div>
                 <% } %>
@@ -611,6 +693,35 @@
                 const payBtn = document.getElementById('payBtn');
                 const invText = document.getElementById('pay_inv_text');
                 const amtText = document.getElementById('pay_amount_text');
+                const modeRadios = Array.from(document.querySelectorAll('.pay-mode-radio'));
+                const bulkToken = document.getElementById('bulk_token');
+                const bulkAmount = document.getElementById('bulk_amount');
+                const bulkCount = document.getElementById('bulk_count');
+                const singleRows = Array.from(document.querySelectorAll('.billing-row-single'));
+
+                function currentMode() {
+                  const checked = modeRadios.find(r => r.checked);
+                  return checked ? String(checked.value || 'single') : 'single';
+                }
+
+                function setRowsEnabled(enabled) {
+                  singleRows.forEach(row => row.classList.toggle('is-disabled', !enabled));
+                  radios.forEach(r => { r.disabled = !enabled; });
+                }
+
+                function setBulkSelected() {
+                  if (!payForm || !payToken || !payBtn || !bulkToken) return;
+                  const token = String(bulkToken.value || '').trim();
+                  const amount = Number(bulkAmount?.value || 0) || 0;
+                  const count = Number(bulkCount?.value || 0) || 0;
+                  payForm.action = '/customer/public/payment/create/bulk';
+                  payToken.value = token;
+                  if (invText) invText.textContent = count ? `${count} tagihan - ` : 'Semua tagihan - ';
+                  if (amtText) amtText.textContent = amount ? `Rp ${amount.toLocaleString('id-ID')}` : '';
+                  payBtn.disabled = !token || !amount;
+                  payBtn.innerHTML = '<i class="bi bi-credit-card me-1"></i> Bayar Semua';
+                  setRowsEnabled(false);
+                }
 
                 function setSelected(r) {
                   if (!r || !payForm || !payToken || !payBtn) return;
@@ -623,11 +734,27 @@
                   if (invText) invText.textContent = invId ? `INV-${invId} - ` : '';
                   if (amtText) amtText.textContent = amount ? `Rp ${amount.toLocaleString('id-ID')}` : '';
                   payBtn.disabled = !invId || !token;
+                  payBtn.innerHTML = '<i class="bi bi-credit-card me-1"></i> Bayar Tagihan Ini';
+                  setRowsEnabled(true);
                 }
 
-                radios.forEach(r => r.addEventListener('change', () => setSelected(r)));
+                function refreshPaymentTarget() {
+                  if (currentMode() === 'bulk') {
+                    setBulkSelected();
+                    return;
+                  }
+                  const selected = radios.find(r => r.checked) || radios[0];
+                  if (selected) setSelected(selected);
+                }
+
+                modeRadios.forEach(r => r.addEventListener('change', refreshPaymentTarget));
+                radios.forEach(r => r.addEventListener('change', () => {
+                  const singleMode = document.getElementById('mode_single');
+                  if (singleMode) singleMode.checked = true;
+                  refreshPaymentTarget();
+                }));
                 const first = radios.find(r => r.checked) || radios[0];
-                if (first) setSelected(first);
+                if (first) refreshPaymentTarget();
               })();
             </script>
           <% } %>

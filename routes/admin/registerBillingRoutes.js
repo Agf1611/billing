@@ -101,11 +101,6 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
           ? 'due_latest'
           : 'smart';
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const summaryInvoices = billingSvc.getAllInvoices({ limit: 0 });
-    const summary = buildInvoiceSummaryFromList(summaryInvoices, {
-      todayStart,
-      getDueDate: getInvoiceDueDateLocal
-    });
     const applyBillingDayFilter = (rows) => {
       const normalizedBillingDayStart = Math.max(0, parseInt(billingDayStart, 10) || 0);
       const normalizedBillingDayEnd = Math.max(0, parseInt(billingDayEnd, 10) || 0);
@@ -128,6 +123,10 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       today: now,
       limit: 0
     }));
+    const summary = buildInvoiceSummaryFromList(baseInvoices, {
+      todayStart,
+      getDueDate: getInvoiceDueDateLocal
+    });
     let invoices = applyBillingDayFilter(billingSvc.getAllInvoices({
       month: filterMonth,
       year: filterYear,
@@ -435,10 +434,10 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
       const assigned = billingSvc.assignUniqueQrisForInvoice(invId, { force });
       req.session._msg = {
         type: 'success',
-        text: `Kode QRIS dibuat: Rp ${Number(assigned?.qris_amount_unique || 0).toLocaleString('id-ID')} (kode ${String(assigned?.qris_unique_code || '').padStart(3, '0')}).`
+        text: `Kode pembayaran dibuat: Rp ${Number(assigned?.qris_amount_unique || 0).toLocaleString('id-ID')} (kode ${String(assigned?.qris_unique_code || '').padStart(3, '0')}).`
       };
     } catch (e) {
-      req.session._msg = { type: 'error', text: 'Gagal membuat kode QRIS: ' + e.message };
+      req.session._msg = { type: 'error', text: 'Gagal membuat kode pembayaran: ' + e.message };
     }
     return redirectBack(res, '/admin/billing');
   });
@@ -452,9 +451,9 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
         SET qris_unique_code=NULL, qris_amount_unique=NULL, qris_assigned_at=NULL
         WHERE id=?
       `).run(invId);
-      req.session._msg = { type: 'success', text: 'Kode QRIS dihapus dari tagihan.' };
+      req.session._msg = { type: 'success', text: 'Kode pembayaran dihapus dari tagihan.' };
     } catch (e) {
-      req.session._msg = { type: 'error', text: 'Gagal menghapus kode QRIS: ' + e.message };
+      req.session._msg = { type: 'error', text: 'Gagal menghapus kode pembayaran: ' + e.message };
     }
     return redirectBack(res, '/admin/billing');
   });
@@ -491,9 +490,6 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
           const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
           const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
-          if (qrisImageBuffer.length) {
-            finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
-          }
           const sent = qrisImageBuffer.length
             ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
             : await whatsappGateway.sendText(queuedCustomer.phone, finalMessage);

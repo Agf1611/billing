@@ -547,6 +547,33 @@ function checkBackupCapacity(maxSizeMB = 500) {
   }
 }
 
+function normalizeBackupRetentionDays(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 30;
+  return Math.max(1, Math.min(365, Math.floor(parsed)));
+}
+
+function normalizeBackupCapacityMB(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 500;
+  return Math.max(100, Math.min(10240, Math.floor(parsed)));
+}
+
+function runScheduledBackupMaintenance() {
+  const retentionDays = normalizeBackupRetentionDays(getSetting('auto_backup_retention_days', 30));
+  const maxSizeMB = normalizeBackupCapacityMB(getSetting('auto_backup_max_size_mb', 500));
+
+  const retention = cleanupOldBackups(retentionDays);
+  if (retention.success && Number(retention.deletedCount || 0) > 0) {
+    logger.info(`[Backup] Scheduled cleanup removed ${retention.deletedCount} old backup(s), retention=${retentionDays} days`);
+  }
+
+  const capacity = checkBackupCapacity(maxSizeMB);
+  if (capacity.success && capacity.action === 'cleanup') {
+    logger.info(`[Backup] Scheduled capacity cleanup removed ${capacity.deletedCount} backup(s), total=${capacity.totalSizeMB}MB, max=${maxSizeMB}MB`);
+  }
+}
+
 function scheduleAutoBackup() {
   const nodeCron = require('node-cron');
   const enabled = getSetting('auto_backup_enabled', true);
@@ -562,6 +589,7 @@ function scheduleAutoBackup() {
     const result = await backupAll();
     if (result.success) {
       logger.info('[Backup] Scheduled backup completed successfully');
+      runScheduledBackupMaintenance();
     } else {
       logger.error('[Backup] Scheduled backup failed');
     }

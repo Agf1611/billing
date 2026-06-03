@@ -20,6 +20,71 @@ function registerPublicPortalRoutes(router, deps) {
     return customerSvc.findCustomerByAny(loginId) || null;
   }
 
+  function resolveCustomerLookup(customer, fallback = '') {
+    return String(
+      customer?.id ||
+      customer?.pppoe_username ||
+      customer?.genieacs_tag ||
+      customer?.phone ||
+      fallback ||
+      ''
+    ).trim();
+  }
+
+  function isUnpaidInvoice(invoice) {
+    return String(invoice?.status || '').trim().toLowerCase() === 'unpaid';
+  }
+
+  function buildPublicInvoiceFlags(invoice, customer, now = new Date()) {
+    const periodMonth = Number(invoice?.period_month || 0);
+    const periodYear = Number(invoice?.period_year || 0);
+    const periodKey = (periodYear * 100) + periodMonth;
+    const currentKey = (now.getFullYear() * 100) + (now.getMonth() + 1);
+    const status = String(invoice?.customer_status || customer?.status || '').trim().toLowerCase();
+    const isCustomerIsolated = ['suspended', 'inactive', 'isolir', 'isolated', 'nonaktif', 'nonactive'].includes(status);
+    const autoIsolate = Number(customer?.auto_isolate ?? invoice?.auto_isolate ?? 0) !== 0;
+    const dueAt = typeof billingSvc.getInvoiceDueDate === 'function'
+      ? billingSvc.getInvoiceDueDate(invoice, invoice?.due_day_snapshot || invoice?.isolate_day || customer?.isolate_day || 10)
+      : null;
+    const duePassed = dueAt instanceof Date && !Number.isNaN(dueAt.getTime()) && now.getTime() > dueAt.getTime();
+    const pastPeriod = periodMonth > 0 && periodYear > 0 && periodKey < currentKey;
+    const unpaid = isUnpaidInvoice(invoice);
+    const isolated = unpaid && (isCustomerIsolated || (autoIsolate && duePassed));
+
+    return {
+      pastPeriod,
+      duePassed: unpaid && duePassed,
+      isolated,
+      status
+    };
+  }
+
+  function decorateInvoicesForPublic(invoices = [], customer = null) {
+    const now = new Date();
+    return (Array.isArray(invoices) ? invoices : []).map((invoice) => ({
+      ...invoice,
+      public_flags: buildPublicInvoiceFlags(invoice, customer, now)
+    }));
+  }
+
+  function buildInvoicePaymentTokens(unpaidInvoices, customer, lookup, secret) {
+    const exp = Date.now() + 15 * 60 * 1000;
+    const invoiceTokens = (Array.isArray(unpaidInvoices) ? unpaidInvoices : []).reduce((acc, inv) => {
+      acc[String(inv.id)] = signPublicToken(
+        { invoiceId: Number(inv.id), customerId: Number(inv.customer_id), lookup, exp },
+        secret
+      );
+      return acc;
+    }, {});
+    const invoiceIds = (Array.isArray(unpaidInvoices) ? unpaidInvoices : [])
+      .map((inv) => Number(inv.id))
+      .filter(Boolean);
+    const bulkToken = invoiceIds.length > 1
+      ? signPublicToken({ customerId: Number(customer?.id || 0), invoiceIds, lookup, exp }, secret)
+      : '';
+    return { invoiceTokens, bulkToken };
+  }
+
   router.get('/tos', (req, res) => {
     const settings = getSettingsWithCache();
     res.render('tos', {
@@ -75,6 +140,7 @@ function registerPublicPortalRoutes(router, deps) {
     let invoices = [];
     let unpaidInvoices = [];
     let invoiceTokens = {};
+    let bulkToken = '';
     let matches = [];
     let tokenError = '';
     const paymentChannels = await getCustomerPaymentChannels(settings);
@@ -90,16 +156,16 @@ function registerPublicPortalRoutes(router, deps) {
         if (invoice && invoiceCustomerId === customerId) {
           customer = customerSvc.getCustomerById(customerId);
           if (customer) {
-            const lookup = payload.lookup || customer.pppoe_username || customer.genieacs_tag || customer.phone || String(customer.id);
-            invoices = [invoice];
-            unpaidInvoices = String(invoice.status || '').toLowerCase() === 'unpaid' ? [invoice] : [];
-            if (unpaidInvoices.length > 0) {
-              const exp = Date.now() + 15 * 60 * 1000;
-              invoiceTokens[String(invoice.id)] = signPublicToken(
-                { invoiceId: Number(invoice.id), customerId: Number(invoice.customer_id), lookup, exp },
-                secret
-              );
+            const lookup = resolveCustomerLookup(customer, payload.lookup);
+            invoices = billingSvc.getInvoicesByAny(lookup) || [];
+            if (!invoices.some((item) => Number(item?.id || 0) === Number(invoice.id))) {
+              invoices = [invoice, ...invoices];
             }
+            invoices = decorateInvoicesForPublic(invoices, customer);
+            unpaidInvoices = invoices.filter(isUnpaidInvoice);
+            const paymentTokens = buildInvoicePaymentTokens(unpaidInvoices, customer, lookup, secret);
+            invoiceTokens = paymentTokens.invoiceTokens;
+            bulkToken = paymentTokens.bulkToken;
           }
         }
       }
@@ -112,18 +178,12 @@ function registerPublicPortalRoutes(router, deps) {
     if (!customer && query) {
       customer = customerSvc.findCustomerByAny(query);
       if (customer) {
-        const lookup = customer.pppoe_username || customer.genieacs_tag || customer.phone || String(customer.id);
-        invoices = billingSvc.getInvoicesByAny(lookup) || [];
-        unpaidInvoices = invoices.filter((item) => item.status === 'unpaid');
-
-        const exp = Date.now() + 15 * 60 * 1000;
-        invoiceTokens = unpaidInvoices.reduce((acc, inv) => {
-          acc[String(inv.id)] = signPublicToken(
-            { invoiceId: Number(inv.id), customerId: Number(inv.customer_id), lookup, exp },
-            secret
-          );
-          return acc;
-        }, {});
+        const lookup = resolveCustomerLookup(customer, query);
+        invoices = decorateInvoicesForPublic(billingSvc.getInvoicesByAny(lookup) || [], customer);
+        unpaidInvoices = invoices.filter(isUnpaidInvoice);
+        const paymentTokens = buildInvoicePaymentTokens(unpaidInvoices, customer, lookup, secret);
+        invoiceTokens = paymentTokens.invoiceTokens;
+        bulkToken = paymentTokens.bulkToken;
       } else {
         const invs = billingSvc.getInvoicesByAny(query) || [];
         const unpaid = (Array.isArray(invs) ? invs : []).filter((item) => item && item.status === 'unpaid');
@@ -158,6 +218,7 @@ function registerPublicPortalRoutes(router, deps) {
       invoices,
       unpaidInvoices,
       invoiceTokens,
+      bulkToken,
       matches,
       paymentChannels,
       error: error || tokenError || null,

@@ -103,7 +103,7 @@ function resolveRequestBaseUrl(req, fallbackBaseUrl = '') {
 }
 
 function resolveCustomerLookup(customer = {}) {
-  return String(customer.pppoe_username || customer.genieacs_tag || customer.phone || customer.id || '').trim();
+  return String(customer.id || customer.customer_id || customer.pppoe_username || customer.genieacs_tag || customer.phone || '').trim();
 }
 
 function buildCustomerCheckBillingLink(customer = {}, options = {}) {
@@ -222,7 +222,7 @@ function defaultBillingWhatsappTemplate(companyName = getSetting('company_header
     '{{payment_guide}}',
     '',
     'Invoice: {{invoice_link}}',
-    'Cek tagihan: {{link}}',
+    'Bayar Online: {{link}}',
     '',
     `Terima kasih, ${companyName}`
   ].join('\n');

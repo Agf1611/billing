@@ -579,6 +579,7 @@ let whatsappLockFd = null;
 let whatsappLockPath = null;
 let whatsappLockOwned = false;
 let whatsappOutboxTimer = null;
+let lastWhatsappOutboxCleanupAt = 0;
 
 function getWhatsappSharedDir() {
   const configured = String(getSetting('whatsapp_shared_dir', '') || '').trim();
@@ -857,8 +858,51 @@ function makeOutboxResultPath(id) {
   return path.join(getWhatsappOutboxDir(), `${id}.result.json`);
 }
 
+function getWhatsappOutboxRetentionMs() {
+  const configured = Number(getSetting('whatsapp_outbox_retention_ms', 6 * 60 * 60 * 1000));
+  if (!Number.isFinite(configured) || configured <= 0) return 6 * 60 * 60 * 1000;
+  return Math.max(5 * 60 * 1000, Math.min(configured, 7 * 24 * 60 * 60 * 1000));
+}
+
+function cleanupStaleWhatsappOutbox(force = false) {
+  const now = Date.now();
+  if (!force && now - lastWhatsappOutboxCleanupAt < 60 * 1000) return;
+  lastWhatsappOutboxCleanupAt = now;
+
+  let outboxDir = '';
+  try {
+    outboxDir = getWhatsappOutboxDir();
+    if (!fs.existsSync(outboxDir)) return;
+  } catch {
+    return;
+  }
+
+  const retentionMs = getWhatsappOutboxRetentionMs();
+  let removed = 0;
+  try {
+    for (const name of fs.readdirSync(outboxDir)) {
+      if (!name.endsWith('.json')) continue;
+      const filePath = path.join(outboxDir, name);
+      const stats = fs.statSync(filePath);
+      const ageMs = now - Number(stats.mtimeMs || 0);
+      if (ageMs > retentionMs) {
+        fs.unlinkSync(filePath);
+        removed += 1;
+      }
+    }
+  } catch (error) {
+    logger.warn(`[WA] Gagal membersihkan outbox stale: ${error.message || error}`);
+    return;
+  }
+
+  if (removed > 0) {
+    logger.info(`[WA] Membersihkan ${removed} file outbox stale lebih dari ${Math.round(retentionMs / 60000)} menit.`);
+  }
+}
+
 async function enqueueWhatsappOutbox(payload, waitMs = 15000) {
   const { outboxDir } = ensureWhatsappSharedPaths();
+  cleanupStaleWhatsappOutbox();
   const id = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
   const jobPath = makeOutboxFilePath(id);
   const resultPath = makeOutboxResultPath(id);
@@ -927,6 +971,7 @@ async function processWhatsappOutboxJob(jobPath) {
 async function flushWhatsappOutbox() {
   if (!whatsappLockOwned || !currentSock || whatsappStatus.connection !== 'open') return;
   const { outboxDir } = ensureWhatsappSharedPaths();
+  cleanupStaleWhatsappOutbox();
   let files = [];
   try {
     files = fs.readdirSync(outboxDir)

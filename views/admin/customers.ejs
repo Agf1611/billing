@@ -205,6 +205,8 @@
     }
     .quick-filter-row .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
     .quick-filter-row .btn.is-active .filter-chip-count{background:rgba(255,255,255,.18);color:#fff}
+    .pay-invoice-method-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+    .pay-invoice-method-grid .btn{justify-content:center;min-height:36px;padding:0 8px;font-size:11px}
     .mobile-filter-toggle{display:none;position:relative;align-items:center;gap:8px}
     .mobile-filter-toggle .mobile-filter-toggle-label{display:none;font-weight:800}
     .mobile-filter-badge{
@@ -875,9 +877,9 @@
     @media(min-width:1101px){
       .customer-filter-form{
         display:grid !important;
-        grid-template-columns:220px minmax(0,1fr);
+        grid-template-columns:minmax(170px,190px) minmax(0,1fr);
         align-items:center;
-        gap:6px;
+        gap:5px;
       }
       .customer-filter-form .customer-search-row{
         width:auto !important;
@@ -896,38 +898,39 @@
         height:36px;
         font-size:11.5px;
         padding-left:34px;
-        padding-right:8px;
+        padding-right:7px;
       }
       .customer-filter-panel{
-        display:grid;
-        grid-template-columns:576px 128px max-content;
+        display:grid !important;
+        grid-template-columns:minmax(0,552px) 112px max-content;
         align-items:center;
-        gap:5px;
-        overflow:visible;
+        gap:4px;
+        overflow:visible !important;
         min-width:0;
         justify-content:start;
       }
       .customer-filter-main-row{
-        display:grid;
-        grid-template-columns:92px 112px 102px 78px 92px 64px;
-        gap:5px;
+        display:grid !important;
+        grid-template-columns:82px 104px 94px 72px 88px 66px;
+        gap:4px;
         align-items:center;
         justify-content:start;
         min-width:0;
         width:auto;
       }
       .customer-filter-panel .mobile-date-row{
-        display:grid;
-        grid-template-columns:61px 62px;
-        gap:5px;
+        display:grid !important;
+        grid-template-columns:54px 54px;
+        gap:4px;
         align-items:center;
         width:auto;
+        min-width:0;
       }
       .customer-filter-panel .mobile-filter-actions{
         display:flex;
         align-items:center;
         justify-content:flex-end;
-        gap:6px;
+        gap:4px;
         min-width:0;
       }
       .customer-filter-panel .desktop-filter-field{
@@ -941,21 +944,22 @@
         min-height:34px;
         height:34px;
         padding-left:9px;
-        padding-right:20px;
-        font-size:10.5px;
+        padding-right:18px;
+        font-size:10px;
       }
       .customer-filter-panel .mobile-date-row .fc{
         text-align:center;
-        padding-left:6px;
-        padding-right:6px;
+        min-width:0 !important;
+        padding-left:4px;
+        padding-right:4px;
       }
       .customer-filter-panel .btn{
         min-height:34px;
         height:34px;
-        padding:0 8px;
+        padding:0 7px;
         border-radius:10px;
-        font-size:10.5px;
-        gap:5px;
+        font-size:10px;
+        gap:4px;
       }
       .customer-filter-summary{
         margin-top:8px;
@@ -1166,6 +1170,7 @@
         font-weight:700;
         letter-spacing:0;
       }
+      .pay-invoice-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media(max-width:576px){
       .customer-filter-main-row{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -2573,14 +2578,26 @@
           <div class="fg">
             <label class="fl"><%= t('admin.billing.received_by', 'Diterima Oleh') %></label>
             <% const payByDefault = (typeof session !== 'undefined' && session.isCashier)
-              ? (`Kasir ${(session.cashierName || '').trim()}` + ((session.cashierUsername || '').trim() ? ` (@${String(session.cashierUsername).trim()})` : '')).trim()
+              ? (`Admin ${(session.cashierName || session.cashierUsername || '').trim()}`).trim()
               : 'Admin'; %>
-            <input class="fc" name="paid_by_name" value="<%= payByDefault || 'Admin' %>" placeholder="<%= t('admin.billing.received_by_placeholder', 'Nama petugas / teknisi') %>">
+            <div style="display:grid;gap:8px">
+              <div class="alert alert-i" style="margin:0">
+                <i class="bi bi-info-circle"></i>
+                Jika pelanggan bisa diarahkan, sarankan Bayar Online agar lunas otomatis. Manual tetap bisa dicatat untuk BRI, transfer, atau tunai.
+              </div>
+              <div class="pay-invoice-method-grid" aria-label="Metode pembayaran manual">
+                <button type="button" class="btn btn-p btn-sm" data-customer-pay-by="Online / Payment Gateway" data-customer-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
+                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Transfer BRI" data-customer-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
+                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Transfer Manual" data-customer-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
+                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Tunai / Cash" data-customer-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
+              </div>
+              <input class="fc" id="payInvoicePaidByInput" name="paid_by_name" value="<%= payByDefault || 'Admin' %>" placeholder="<%= t('admin.billing.received_by_placeholder', 'Nama petugas / teknisi') %>">
+            </div>
           </div>
         </div>
         <div class="fg">
           <label class="fl"><%= t('admin.billing.notes_optional', 'Catatan (opsional)') %></label>
-          <textarea class="fc" name="notes" placeholder="<%= t('admin.customers.pay_invoice_notes_placeholder', 'Contoh: Bayar di muka') %>"></textarea>
+          <textarea class="fc" id="payInvoiceNotesInput" name="notes" placeholder="<%= t('admin.customers.pay_invoice_notes_placeholder', 'Contoh: Transfer BRI / bayar di muka') %>"></textarea>
         </div>
       </div>
       <div class="mf">
@@ -2637,6 +2654,15 @@ let payBillingMeta = null;
 
 const PAY_MNS = JSON.parse(document.getElementById('pay-months-data').textContent);
 const PAY_I18N = JSON.parse(document.getElementById('pay-i18n-data').textContent);
+
+document.querySelectorAll('[data-customer-pay-by]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const payByInput = document.getElementById('payInvoicePaidByInput');
+    const notesInput = document.getElementById('payInvoiceNotesInput');
+    if (payByInput) payByInput.value = String(button.dataset.customerPayBy || '').trim();
+    if (notesInput) notesInput.value = String(button.dataset.customerPayNote || '').trim();
+  });
+});
 
 const officeCoords = {
   lat: parseFloat(appSettings.office_lat) || -7.140868012256965,

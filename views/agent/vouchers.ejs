@@ -3,7 +3,7 @@
 <head>
   <%- include('partials/head', { title, company }) %>
 </head>
-<body>
+<body class="agent-vouchers-page agent-vouchers-<%= (typeof pageMode !== 'undefined' && pageMode === 'batch') ? 'batch' : 'single' %>">
   <%- include('partials/topbar', { agent, company }) %>
   <main class="wrap">
     <%

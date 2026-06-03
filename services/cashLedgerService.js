@@ -7,9 +7,33 @@ const ROLE_META = {
   cashier: { label: 'Kasir', prefix: 'Kasir', table: 'cashiers' },
   collector: { label: 'Kolektor', prefix: 'Kolektor', table: 'collectors' },
   technician: { label: 'Teknisi', prefix: 'Teknisi', table: 'technicians' },
+  bank: { label: 'Rekening Perusahaan', prefix: '', table: null },
   other: { label: 'Lainnya', prefix: '', table: null },
   agent: { label: 'Agent', prefix: 'Agent', table: null }
 };
+
+function isCompanyAccountPaymentName(value = '') {
+  const lower = String(value || '').trim().toLowerCase();
+  if (!lower) return false;
+  return [
+    'transfer',
+    'bri',
+    'bank',
+    'brimo',
+    'online',
+    'payment gateway',
+    'tripay',
+    'midtrans',
+    'xendit',
+    'duitku',
+    'qris',
+    'dana',
+    'shopeepay',
+    'gopay',
+    'ovo',
+    'linkaja'
+  ].some((keyword) => lower.includes(keyword));
+}
 
 function normalizeDateInput(dateInput) {
   const raw = String(dateInput || '').trim();
@@ -71,6 +95,9 @@ function normalizeHolderFromPaidByName(name = '') {
   if (!raw) {
     return { role: 'other', entityId: null, label: 'Lainnya', known: false };
   }
+  if (isCompanyAccountPaymentName(raw)) {
+    return { role: 'bank', entityId: null, label: 'Rekening Perusahaan', known: true };
+  }
   if (lower === 'admin' || lower.startsWith('admin')) {
     return { role: 'admin', entityId: 0, label: raw || 'Admin', known: true };
   }
@@ -88,6 +115,9 @@ function normalizeHolderFromPaidByName(name = '') {
   }
   if (lower.startsWith('agent')) {
     return { role: 'agent', entityId: null, label: raw, known: false };
+  }
+  if (lower.includes('cash') || lower.includes('tunai')) {
+    return { role: 'admin', entityId: 0, label: 'Admin', known: true };
   }
   return { role: 'other', entityId: null, label: raw, known: false };
 }

@@ -414,7 +414,7 @@
         color:var(--success);
         line-height:1.3;
       }
-      .billing-qris-note{
+      .billing-online-note{
         font-size:11px;
         line-height:1.3;
         color:var(--muted);
@@ -496,7 +496,7 @@
     .action-mini .action-label{display:none}
     .pay-quick-grid{
       display:grid;
-      grid-template-columns:repeat(5,minmax(0,1fr));
+      grid-template-columns:repeat(4,minmax(0,1fr));
       gap:6px;
       margin-bottom:12px;
     }
@@ -968,7 +968,7 @@
             <a href="<%= buildBillingFilterHref({ status: 'isolated', sort: 'smart', pay_channel: 'all', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'isolated' ? 'is-active' : '' %>"><i class="bi bi-wifi-off"></i> Isolir <%= isolatedCount > 0 ? `(${isolatedCount})` : '' %></a>
             <a href="<%= buildBillingFilterHref({ status: 'paid', sort: 'paid_latest', pay_channel: 'all', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' && currentPayChannel === 'all' ? 'is-active' : '' %>"><i class="bi bi-check-circle"></i> Lunas <%= currentChipCounts.paid ? `(${currentChipCounts.paid})` : '' %></a>
             <a href="<%= buildBillingFilterHref({ status: 'paid', sort: 'paid_latest', pay_channel: 'cash', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' && currentPayChannel === 'cash' ? 'is-active' : '' %>"><i class="bi bi-cash-stack"></i> Cash <%= currentChipCounts.cash ? `(${currentChipCounts.cash})` : '' %></a>
-            <a href="<%= buildBillingFilterHref({ status: 'paid', sort: 'paid_latest', pay_channel: 'online', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' && currentPayChannel === 'online' ? 'is-active' : '' %>"><i class="bi bi-qr-code-scan"></i> Online <%= currentChipCounts.online ? `(${currentChipCounts.online})` : '' %></a>
+            <a href="<%= buildBillingFilterHref({ status: 'paid', sort: 'paid_latest', pay_channel: 'online', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' && currentPayChannel === 'online' ? 'is-active' : '' %>"><i class="bi bi-credit-card-2-front"></i> Online <%= currentChipCounts.online ? `(${currentChipCounts.online})` : '' %></a>
             <a href="<%= buildBillingFilterHref({ status: 'paid', sort: 'paid_latest', pay_channel: 'staff', page: 1 }) %>" class="btn btn-g btn-sm <%= currentFilterStatus === 'paid' && currentPayChannel === 'staff' ? 'is-active' : '' %>"><i class="bi bi-person-check"></i> Petugas <%= currentChipCounts.staff ? `(${currentChipCounts.staff})` : '' %></a>
           </div>
         </div>
@@ -1048,8 +1048,8 @@
                 <div class="billing-amount-stack">
                 <div class="billing-amount-main">Rp <%= inv.amount.toLocaleString('id-ID') %></div>
                 <% if (inv.status === 'unpaid' && inv.qris_amount_unique) { %>
-                  <div class="billing-qris-note">
-                    QRIS: <span class="mono">Rp <%= Number(inv.qris_amount_unique).toLocaleString('id-ID') %></span>
+                  <div class="billing-online-note">
+                    Online: <span class="mono">Rp <%= Number(inv.qris_amount_unique).toLocaleString('id-ID') %></span>
                     <% if (inv.qris_unique_code) { %>
                       <span class="badge bm" style="margin-left:6px">Kode <%= String(inv.qris_unique_code).padStart(3, "0") %></span>
                     <% } %>
@@ -1088,14 +1088,14 @@
                     <i class="bi bi-check-lg"></i>
                   </button>
                   <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
-                  <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign" style="display:inline" title="Buat nominal unik QRIS (semi-otomatis)" onsubmit="return true">
-                    <button class="btn btn-g btn-icon btn-sm"><i class="bi bi-qr-code"></i></button>
+                  <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign" style="display:inline" title="Buat nominal Bayar Online otomatis" onsubmit="return true">
+                    <button class="btn btn-g btn-icon btn-sm" aria-label="Siapkan Bayar Online"><i class="bi bi-credit-card-2-front"></i></button>
                   </form>
                   <% if (inv.qris_amount_unique) { %>
-                    <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign?force=1" style="display:inline" title="Regenerate kode QRIS" onsubmit="return confirm('Ganti kode QRIS untuk tagihan ini?')">
+                    <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign?force=1" style="display:inline" title="Regenerate kode Bayar Online" onsubmit="return confirm('Ganti kode pembayaran online untuk tagihan ini?')">
                       <button class="btn btn-w btn-icon btn-sm"><i class="bi bi-arrow-repeat"></i></button>
                     </form>
-                    <form method="POST" action="/admin/billing/<%= inv.id %>/qris-clear" style="display:inline" title="Hapus kode QRIS" onsubmit="return confirm('Hapus kode QRIS dari tagihan ini?')">
+                    <form method="POST" action="/admin/billing/<%= inv.id %>/qris-clear" style="display:inline" title="Hapus kode Bayar Online" onsubmit="return confirm('Hapus kode pembayaran online dari tagihan ini?')">
                       <button class="btn btn-d btn-icon btn-sm"><i class="bi bi-x-lg"></i></button>
                     </form>
                   <% } %>
@@ -1209,7 +1209,7 @@
                 </div>
                 <% if (inv.qris_amount_unique) { %>
                   <div class="invoice-meta">
-                    <small>QRIS</small>
+                    <small>Online</small>
                     <strong>Rp <%= Number(inv.qris_amount_unique).toLocaleString('id-ID') %></strong>
                   </div>
                 <% } else { %>
@@ -1233,7 +1233,7 @@
                 <% if (!(typeof session !== 'undefined' && session.isCashier && !session.isAdmin)) { %>
                 <form method="POST" action="/admin/billing/<%= inv.id %>/qris-assign">
                   <button class="btn btn-g btn-sm" type="submit">
-                    <span class="action-mini"><i class="bi bi-qr-code is-strong"></i><span class="action-label">QRIS</span></span>
+                    <span class="action-mini"><i class="bi bi-credit-card-2-front is-strong"></i><span class="action-label">Online</span></span>
                   </button>
                 </form>
                 <form method="POST" action="/admin/customers/<%= inv.customer_id %>/unisolate" class="needs-confirm" data-confirm-key="confirmUnisolate">
@@ -1355,14 +1355,21 @@
         </div>
 
         <% const payByDefault = (typeof session !== 'undefined' && session.isCashier)
-          ? (`Kasir ${(session.cashierName || '').trim()}` + ((session.cashierUsername || '').trim() ? ` (@${String(session.cashierUsername).trim()})` : '')).trim()
+          ? (`Admin ${(session.cashierName || session.cashierUsername || '').trim()}`).trim()
           : 'Admin'; %>
+        <div class="alert alert-i" style="margin-bottom:12px">
+          <i class="bi bi-info-circle"></i>
+          Utamakan payment gateway / Bayar Online agar pelanggan terbaca lunas otomatis. Gunakan opsi manual hanya jika pembayaran diterima di luar sistem.
+        </div>
         <div class="pay-quick-grid" aria-label="Pilihan cepat penerima pembayaran">
+          <button type="button" class="btn btn-p" data-pay-by="Online / Payment Gateway" data-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
+          <button type="button" class="btn btn-g" data-pay-by="Transfer BRI" data-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
+          <button type="button" class="btn btn-g" data-pay-by="Transfer Manual" data-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
+          <button type="button" class="btn btn-g" data-pay-by="Tunai / Cash" data-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
           <button type="button" class="btn btn-g" data-pay-by="Admin Cash" data-pay-note="Tunai admin"><i class="bi bi-person-badge"></i> Admin</button>
           <button type="button" class="btn btn-g" data-pay-by="Kasir" data-pay-note="Tunai kasir"><i class="bi bi-person-vcard"></i> Kasir</button>
           <button type="button" class="btn btn-g" data-pay-by="Kolektor" data-pay-note="Tunai kolektor"><i class="bi bi-person-lines-fill"></i> Kolektor</button>
           <button type="button" class="btn btn-g" data-pay-by="Teknisi" data-pay-note="Tunai teknisi"><i class="bi bi-tools"></i> Teknisi</button>
-          <button type="button" class="btn btn-g" data-pay-by="QRIS" data-pay-note="Pembayaran online/QRIS"><i class="bi bi-qr-code-scan"></i> Online</button>
         </div>
         <div class="fg"><label class="fl"><%= t('admin.billing.received_by', 'Diterima Oleh') %></label><input class="fc" id="payByNameInput" name="paid_by_name" placeholder="<%= t('admin.billing.received_by_placeholder', 'Nama petugas / teknisi') %>" value="<%= payByDefault || 'Admin' %>"></div>
         <div class="fg"><label class="fl"><%= t('admin.billing.notes_optional', 'Catatan (opsional)') %></label><textarea class="fc" id="payNotesInput" name="notes" placeholder="<%= t('admin.billing.notes_placeholder', 'Transfer BRI, tunai, dll...') %>"></textarea></div>

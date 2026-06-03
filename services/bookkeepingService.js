@@ -29,10 +29,13 @@ const DEFAULT_INCOME_CATEGORIES = [
 ];
 
 const ONLINE_PAYMENT_ACTORS = ['tripay', 'midtrans', 'xendit', 'duitku', 'qris static', 'qris', 'online'];
+const BANK_TRANSFER_KEYWORDS = ['transfer', 'bri', 'bank', 'brimo'];
 const ONLINE_PAYMENT_NAME_SQL = `LOWER(TRIM(COALESCE(i.paid_by_name, ''))) IN (${ONLINE_PAYMENT_ACTORS.map((item) => `'${item}'`).join(', ')})`;
-const ONLINE_PAYMENT_SQL = `(${ONLINE_PAYMENT_NAME_SQL} OR LOWER(COALESCE(i.notes, '')) LIKE '%webhook%')`;
+const BANK_TRANSFER_PAYMENT_SQL = `(${BANK_TRANSFER_KEYWORDS.map((item) => `LOWER(COALESCE(i.paid_by_name, '')) LIKE '%${item}%'`).join(' OR ')})`;
+const ONLINE_PAYMENT_SQL = `(${ONLINE_PAYMENT_NAME_SQL} OR LOWER(COALESCE(i.paid_by_name, '')) LIKE '%payment gateway%' OR LOWER(COALESCE(i.notes, '')) LIKE '%webhook%')`;
+const COMPANY_ACCOUNT_PAYMENT_SQL = `(${ONLINE_PAYMENT_SQL} OR ${BANK_TRANSFER_PAYMENT_SQL})`;
 const PARTNER_PAYMENT_SQL = `(COALESCE(i.paid_by_name, '') LIKE 'Agent %')`;
-const CASH_PAYMENT_SQL = `(NOT ${ONLINE_PAYMENT_SQL} AND NOT ${PARTNER_PAYMENT_SQL})`;
+const CASH_PAYMENT_SQL = `(NOT ${COMPANY_ACCOUNT_PAYMENT_SQL} AND NOT ${PARTNER_PAYMENT_SQL})`;
 
 function buildPeriodWhere(dateExpr, month = '', year = '', params = []) {
   const monthNum = parseInt(month, 10);
@@ -266,7 +269,18 @@ function normalizePaymentActor(name = '') {
 function isInvoiceOnlinePayment(row = {}) {
   const paidBy = String(row.paid_by_name || row.paidByName || '').trim().toLowerCase();
   const notes = String(row.notes || '').trim().toLowerCase();
-  return ONLINE_PAYMENT_ACTORS.includes(paidBy) || notes.includes('webhook');
+  return ONLINE_PAYMENT_ACTORS.includes(paidBy) || paidBy.includes('payment gateway') || notes.includes('webhook');
+}
+
+function isInvoiceBankTransferPayment(row = {}) {
+  const paidBy = String(row.paid_by_name || row.paidByName || '').trim().toLowerCase();
+  return BANK_TRANSFER_KEYWORDS.some((keyword) => paidBy.includes(keyword));
+}
+
+function resolveInvoiceBookkeepingPaymentMethod(row = {}) {
+  if (isInvoiceBankTransferPayment(row)) return 'transfer';
+  if (isInvoiceOnlinePayment(row)) return 'qris';
+  return 'cash';
 }
 
 function isInvoicePartnerPayment(row = {}) {
@@ -275,9 +289,10 @@ function isInvoicePartnerPayment(row = {}) {
 
 function resolveInvoicePaymentChannelLabel(row = {}) {
   if (isInvoicePartnerPayment(row)) return 'Mitra / Agent';
+  if (isInvoiceBankTransferPayment(row)) return 'Transfer / Bank Perusahaan';
   if (isInvoiceOnlinePayment(row)) {
     const gateway = String(row.payment_gateway || row.gateway || '').trim();
-    return gateway || String(row.paid_by_name || row.paidByName || '').trim() || 'Online / QRIS';
+    return gateway || String(row.paid_by_name || row.paidByName || '').trim() || 'Online / Payment Gateway';
   }
   return 'Cash / Manual';
 }
@@ -301,6 +316,12 @@ function getDashboardDetails({ month = '', year = '' } = {}) {
       COUNT(CASE
         WHEN ${ONLINE_PAYMENT_SQL}
         THEN 1 END) AS online_count,
+      SUM(CASE
+        WHEN ${BANK_TRANSFER_PAYMENT_SQL}
+        THEN i.amount ELSE 0 END) AS transfer_amount,
+      COUNT(CASE
+        WHEN ${BANK_TRANSFER_PAYMENT_SQL}
+        THEN 1 END) AS transfer_count,
       SUM(CASE
         WHEN ${PARTNER_PAYMENT_SQL}
         THEN i.amount ELSE 0 END) AS partner_amount,
@@ -333,6 +354,10 @@ function getDashboardDetails({ month = '', year = '' } = {}) {
     online: {
       amount: Number(invoiceChannelSummary.online_amount || 0),
       count: Number(invoiceChannelSummary.online_count || 0)
+    },
+    transfer: {
+      amount: Number(invoiceChannelSummary.transfer_amount || 0),
+      count: Number(invoiceChannelSummary.transfer_count || 0)
     },
     other: {
       amount: Number(otherIncomeSummary.total_amount || 0),
@@ -490,6 +515,11 @@ const INCOME_DETAIL_META = {
     title: 'Transaksi Online',
     subtitle: 'Pembayaran dari QRIS, Tripay, webhook, atau kanal online lain.',
     icon: 'bi-qr-code-scan'
+  },
+  transfer: {
+    title: 'Transfer / Bank Perusahaan',
+    subtitle: 'Pembayaran manual via rekening perusahaan seperti BRI/BRImo.',
+    icon: 'bi-bank2'
   },
   other: {
     title: 'Pemasukan Lain',
@@ -720,6 +750,7 @@ function listDashboardCategoryDetails({ section = '', bucket = '', month = '', y
     meta = INCOME_DETAIL_META[normalizedBucket] || null;
     if (normalizedBucket === 'cash') rows = getInvoiceDetailRows({ month, year, channelSql: CASH_PAYMENT_SQL, limit });
     if (normalizedBucket === 'online') rows = getInvoiceDetailRows({ month, year, channelSql: ONLINE_PAYMENT_SQL, limit });
+    if (normalizedBucket === 'transfer') rows = getInvoiceDetailRows({ month, year, channelSql: BANK_TRANSFER_PAYMENT_SQL, limit });
     if (normalizedBucket === 'partner') rows = getInvoiceDetailRows({ month, year, channelSql: PARTNER_PAYMENT_SQL, limit });
     if (normalizedBucket === 'other') rows = getManualEntryDetailRows({ type: 'income', month, year, sourceNot: 'invoice', limit });
   } else if (normalizedSection === 'expense') {
@@ -769,8 +800,9 @@ function upsertInvoiceIncomeEntry(invoiceId, paidByName = '', paidAt = null) {
 
   const entryDate = normalizeDateInput((paidAt || invoice.paid_at || new Date().toISOString()).slice(0, 10));
   const holder = normalizeHolderFromPaidByName(String(paidByName || invoice.paid_by_name || '').trim());
-  const paidByLower = String(paidByName || invoice.paid_by_name || '').trim().toLowerCase();
-  const paymentMethod = ONLINE_PAYMENT_ACTORS.includes(paidByLower) ? 'qris' : 'cash';
+  const paymentMethod = resolveInvoiceBookkeepingPaymentMethod({
+    paid_by_name: paidByName || invoice.paid_by_name || ''
+  });
   const description = [
     `Pembayaran tagihan ${invoice.customer_name || 'Pelanggan'}`,
     `periode ${invoice.period_month}/${invoice.period_year}`,

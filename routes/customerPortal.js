@@ -298,6 +298,73 @@ function verifyPublicToken(token, secret) {
   }
 }
 
+function normalizeInvoiceIdList(value) {
+  const rawList = Array.isArray(value) ? value : String(value || '').split(',');
+  const seen = new Set();
+  const ids = [];
+  for (const item of rawList) {
+    const id = Number(item || 0);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function sortInvoicesForBulkPayment(invoices = []) {
+  return [...(Array.isArray(invoices) ? invoices : [])].sort((a, b) => {
+    const ay = Number(a?.period_year || 0);
+    const by = Number(b?.period_year || 0);
+    if (ay !== by) return ay - by;
+    const am = Number(a?.period_month || 0);
+    const bm = Number(b?.period_month || 0);
+    if (am !== bm) return am - bm;
+    return Number(a?.id || 0) - Number(b?.id || 0);
+  });
+}
+
+function formatBulkInvoicePeriods(invoices = []) {
+  return sortInvoicesForBulkPayment(invoices)
+    .map((inv) => `${String(inv.period_month || '').padStart(2, '0')}/${inv.period_year}`)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function buildBulkPaymentMetadata(customer, invoices = [], totalAmount = 0) {
+  const sortedInvoices = sortInvoicesForBulkPayment(invoices);
+  return {
+    billing_bulk: true,
+    billing_customer_id: Number(customer?.id || sortedInvoices[0]?.customer_id || 0) || 0,
+    billing_invoice_ids: sortedInvoices.map((inv) => Number(inv.id)).filter(Boolean),
+    billing_total_amount: Number(totalAmount || 0) || 0,
+    billing_periods: formatBulkInvoicePeriods(sortedInvoices),
+    billing_created_at: new Date().toISOString()
+  };
+}
+
+function extractBulkPaymentMetadata(payload) {
+  if (!payload) return null;
+  let parsed = payload;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const source = parsed.billing_bulk ? parsed : (parsed.billing_meta && typeof parsed.billing_meta === 'object' ? parsed.billing_meta : null);
+  if (!source || !source.billing_bulk) return null;
+  const invoiceIds = normalizeInvoiceIdList(source.billing_invoice_ids);
+  if (!invoiceIds.length) return null;
+  return {
+    customerId: Number(source.billing_customer_id || 0) || 0,
+    invoiceIds,
+    totalAmount: Number(source.billing_total_amount || 0) || 0,
+    periods: String(source.billing_periods || '').trim()
+  };
+}
+
 function parseMikhmonOnLogin(script) {
   if (!script) return null;
   const m = String(script).match(/\",rem,.*?,(.*?),(.*?),.*?\"/);
@@ -344,12 +411,12 @@ function resolveTripayFallbackQrisCode(settings = {}) {
 function buildTripayQrisFallbackChannel(settings = {}, note = '') {
   return {
     code: resolveTripayFallbackQrisCode(settings),
-    name: 'QRIS Tripay',
+    name: 'Bayar Online Tripay',
     group: 'QRIS',
     active: true,
     source: 'tripay',
     fallback: true,
-    note: note || 'QRIS dinamis dari Tripay'
+    note: note || 'Bayar online dari Tripay'
   };
 }
 
@@ -486,9 +553,9 @@ function normalizePaymentMethodLabel(channel = {}) {
   const code = String(channel.code || '').toUpperCase();
   const rawName = String(channel.name || '').trim();
   const map = {
-    STATICQRIS: 'QRIS Instan',
-    QRIS: 'QRIS Tripay',
-    QRIS2: 'QRIS Tripay',
+    STATICQRIS: 'Bayar Online Cadangan',
+    QRIS: 'Bayar Online Tripay',
+    QRIS2: 'Bayar Online Tripay',
     BCAVA: 'BCA Virtual Account',
     BNIVA: 'BNI Virtual Account',
     BRIVA: 'BRI Virtual Account',
@@ -632,8 +699,8 @@ async function getCustomerPaymentChannels(settings = {}) {
     if (!tripayActiveChannels.length || !hasTripayQris) {
       channels.push(buildTripayQrisFallbackChannel(settings,
         tripayActiveChannels.length
-          ? 'QRIS Tripay dijadikan default pembayaran'
-          : 'Daftar channel Tripay belum terbaca, QRIS Tripay tetap disiapkan'
+          ? 'Bayar Online Tripay dijadikan default pembayaran'
+          : 'Daftar channel Tripay belum terbaca, Bayar Online tetap disiapkan'
       ));
     }
   }
@@ -641,11 +708,11 @@ async function getCustomerPaymentChannels(settings = {}) {
   if (hasStaticQrisEnabled(settings)) {
     channels.push({
       code: 'STATICQRIS',
-      name: 'QRIS Instan',
+      name: 'Bayar Online Cadangan',
       group: 'QRIS',
       active: true,
       source: 'internal',
-      note: 'Cadangan QRIS internal dengan nominal otomatis'
+      note: 'Cadangan bayar online internal dengan nominal otomatis'
     });
   }
 
@@ -2293,8 +2360,13 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
     return redirectBack('', 'Link pembayaran tidak valid atau sudah kadaluarsa.', '', '');
   }
 
-  if (String(req.params.invoiceId) !== String(payload.invoiceId)) {
+  const requestedPaymentId = String(req.params.invoiceId || '').trim().toLowerCase();
+  const isBulkPayment = requestedPaymentId === 'bulk' || requestedPaymentId === 'all' || requestedPaymentId === 'semua';
+  if (!isBulkPayment && String(req.params.invoiceId) !== String(payload.invoiceId)) {
     return redirectBack(payload.lookup, 'Link pembayaran tidak valid.');
+  }
+  if (isBulkPayment && !normalizeInvoiceIdList(payload.invoiceIds).length) {
+    return redirectBack(payload.lookup, 'Link pembayaran gabungan tidak valid.');
   }
 
   const tosChecked = req.body.tos === 'on' || req.body.tos === '1' || req.body.tos === true || req.body.tos === 'true';
@@ -2303,17 +2375,38 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
   }
 
   try {
-    const inv = billingSvc.getInvoiceById(req.params.invoiceId);
-    if (!inv) throw new Error('Tagihan tidak ditemukan');
-    if (Number(inv.customer_id) !== Number(payload.customerId)) throw new Error('Tagihan tidak valid');
-    if (inv.status === 'paid') {
-      return redirectBack(payload.lookup, '', 'Tagihan ini sudah lunas.');
+    const payloadCustomerId = Number(payload.customerId || 0);
+    const payloadInvoiceIds = normalizeInvoiceIdList(payload.invoiceIds);
+    let invoicesToPay = [];
+    if (isBulkPayment) {
+      invoicesToPay = sortInvoicesForBulkPayment(payloadInvoiceIds
+        .map((id) => billingSvc.getInvoiceById(id))
+        .filter(Boolean)
+        .filter((invoice) => Number(invoice.customer_id || 0) === payloadCustomerId)
+        .filter((invoice) => String(invoice.status || '').toLowerCase() === 'unpaid'));
+      if (!invoicesToPay.length) return redirectBack(payload.lookup, '', 'Tagihan ini sudah lunas.');
+      if (invoicesToPay.length !== payloadInvoiceIds.length) {
+        return redirectBack(payload.lookup, 'Sebagian tagihan sudah berubah. Silakan cek ulang tagihan.');
+      }
+    } else {
+      const inv = billingSvc.getInvoiceById(req.params.invoiceId);
+      if (!inv) throw new Error('Tagihan tidak ditemukan');
+      if (Number(inv.customer_id) !== payloadCustomerId) throw new Error('Tagihan tidak valid');
+      if (inv.status === 'paid') {
+        return redirectBack(payload.lookup, '', 'Tagihan ini sudah lunas.');
+      }
+      invoicesToPay = [inv];
     }
+    const inv = invoicesToPay[0];
+    const paymentTotalAmount = invoicesToPay.reduce((sum, invoice) => sum + (Number(invoice.amount || 0) || 0), 0);
 
     const paymentChannels = await getCustomerPaymentChannels(settings);
     const rawMethod = String(req.body.method || choosePreferredCustomerPaymentMethod(paymentChannels, settings)).trim().toUpperCase().slice(0, 40);
     let method = rawMethod || choosePreferredCustomerPaymentMethod(paymentChannels, settings);
     let gateway = await resolveCustomerPaymentGateway(settings, method);
+    if (isBulkPayment && method === 'STATICQRIS') {
+      return redirectBack(payload.lookup, 'Bayar semua hanya mendukung payment gateway otomatis. Pilih e-wallet atau virtual account.');
+    }
     if (method === 'STATICQRIS' && hasStaticQrisEnabled(settings)) {
       return res.redirect(`/customer/public/payment/static/${encodeURIComponent(String(inv.id))}?t=${encodeURIComponent(String(req.body.token || ''))}`);
     }
@@ -2328,7 +2421,7 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
     }
 
     const force = String(req.query.force || '').toLowerCase() === '1' || String(req.query.force || '').toLowerCase() === 'true';
-    if (!force && canReuseInvoicePaymentLink(inv, gateway, method)) {
+    if (!isBulkPayment && !force && canReuseInvoicePaymentLink(inv, gateway, method)) {
       let expiresAtMs = inv.payment_expires_at ? new Date(inv.payment_expires_at).getTime() : 0;
       let payloadExpiresAt = null;
       if (inv.payment_payload) {
@@ -2363,6 +2456,16 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
     const cust = customerSvc.getCustomerById(inv.customer_id);
 
     const appUrl = resolveRequestBaseUrl(req);
+    const bulkMetadata = isBulkPayment ? buildBulkPaymentMetadata(cust, invoicesToPay, paymentTotalAmount) : null;
+    const invoiceForGateway = isBulkPayment
+      ? {
+          ...inv,
+          amount: paymentTotalAmount,
+          item_name: `Tagihan Internet ${invoicesToPay.length} bulan (${bulkMetadata.periods})`,
+          description: `Pembayaran gabungan tagihan ${bulkMetadata.periods}`,
+          sku: `BULK-${Number(cust?.id || inv.customer_id || 0)}-${invoicesToPay.map((invoice) => invoice.id).join('_')}`
+        }
+      : inv;
 
     if (gateway === 'tripay' && settings.tripay_enabled) {
       try {
@@ -2376,17 +2479,45 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
 
     let result;
     if (gateway === 'midtrans') {
-      result = await paymentSvc.createMidtransTransaction(inv, cust, method, appUrl);
+      result = await paymentSvc.createMidtransTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
+        orderPrefix: 'BULK',
+        itemName: invoiceForGateway.item_name,
+        description: invoiceForGateway.description,
+        sku: invoiceForGateway.sku,
+        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
+      } : {});
     } else if (gateway === 'xendit') {
-      result = await paymentSvc.createXenditTransaction(inv, cust, method, appUrl);
+      result = await paymentSvc.createXenditTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
+        orderPrefix: 'BULK',
+        itemName: invoiceForGateway.item_name,
+        description: invoiceForGateway.description,
+        sku: invoiceForGateway.sku,
+        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
+      } : {});
     } else if (gateway === 'duitku') {
-      result = await paymentSvc.createDuitkuTransaction(inv, cust, method, appUrl);
+      result = await paymentSvc.createDuitkuTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
+        orderPrefix: 'BULK',
+        itemName: invoiceForGateway.item_name,
+        description: invoiceForGateway.description,
+        sku: invoiceForGateway.sku,
+        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
+      } : {});
     } else {
       try {
-        result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
+        result = await paymentSvc.createTripayTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
+          orderPrefix: 'BULK',
+          itemName: invoiceForGateway.item_name,
+          description: invoiceForGateway.description,
+          sku: invoiceForGateway.sku,
+          returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
+        } : {});
       } catch (error) {
         if (canFallbackToStaticQris(gateway, method, settings)) {
-          logger.warn(`[Payment] Tripay QRIS gagal untuk INV-${inv.id} (public), fallback ke QRIS statik: ${error.message}`);
+          if (isBulkPayment) {
+            logger.warn(`[Payment] Tripay bulk gagal untuk ${invoicesToPay.map((invoice) => `INV-${invoice.id}`).join(', ')}: ${error.message}`);
+            return redirectBack(payload.lookup, 'Payment gateway sedang gangguan. Untuk sementara bayar 1 tagihan atau coba lagi beberapa saat.');
+          }
+          logger.warn(`[Payment] Tripay scan online gagal untuk INV-${inv.id} (public), fallback ke pembayaran cadangan: ${error.message}`);
           return res.redirect(`/customer/public/payment/static/${encodeURIComponent(String(inv.id))}?t=${encodeURIComponent(String(req.body.token || ''))}`);
         }
         throw error;
@@ -2397,17 +2528,26 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
       const resolvedExpiresAt =
         resolvePaymentExpiresAt(gateway, result) ||
         gatewayDefaultExpiresAtIso(gateway);
-      billingSvc.updatePaymentInfo(inv.id, {
-        gateway: gateway,
-        method,
-        order_id: result.order_id,
-        link: result.link,
-        reference: result.reference,
-        payload: result.payload,
-        expires_at: resolvedExpiresAt
+      const storedPayload = isBulkPayment
+        ? {
+            gateway_payload: result.payload || null,
+            billing_meta: bulkMetadata
+          }
+        : result.payload;
+      const paidInvoiceIds = isBulkPayment ? invoicesToPay.map((invoice) => Number(invoice.id)).filter(Boolean) : [Number(inv.id)];
+      paidInvoiceIds.forEach((invoiceId) => {
+        billingSvc.updatePaymentInfo(invoiceId, {
+          gateway: gateway,
+          method,
+          order_id: result.order_id,
+          link: result.link,
+          reference: result.reference,
+          payload: storedPayload,
+          expires_at: resolvedExpiresAt
+        });
       });
 
-      logger.info(`[Payment] New link created for INV-${inv.id} via ${gateway}/${method} (public)`);
+      logger.info(`[Payment] New link created for ${isBulkPayment ? `BULK ${paidInvoiceIds.join(',')}` : `INV-${inv.id}`} via ${gateway}/${method} (public)`);
       return res.redirect(result.link);
     }
 
@@ -2432,9 +2572,9 @@ router.get('/public/payment/static/:invoiceId', async (req, res) => {
     return res.redirect(`/customer/check-billing${qs ? `?${qs}` : ''}`);
   };
 
-  if (!payload) return redirectBack('', 'Link QRIS statik tidak valid atau sudah kadaluarsa.', '', '');
-  if (String(req.params.invoiceId) !== String(payload.invoiceId)) return redirectBack(payload.lookup, 'Tagihan QRIS statik tidak valid.');
-  if (!hasStaticQrisEnabled(settings)) return redirectBack(payload.lookup, 'QRIS statik belum dikonfigurasi admin.');
+  if (!payload) return redirectBack('', 'Link pembayaran cadangan tidak valid atau sudah kadaluarsa.', '', '');
+  if (String(req.params.invoiceId) !== String(payload.invoiceId)) return redirectBack(payload.lookup, 'Tagihan pembayaran cadangan tidak valid.');
+  if (!hasStaticQrisEnabled(settings)) return redirectBack(payload.lookup, 'Pembayaran online cadangan belum dikonfigurasi admin.');
 
   try {
     let invoice = ensureStaticQrisInvoice(req.params.invoiceId);
@@ -2459,11 +2599,11 @@ router.get('/public/payment/static/:invoiceId', async (req, res) => {
       statusUrl: `/customer/public/payment/static/${encodeURIComponent(String(invoice.id))}/status?t=${encodeURIComponent(String(req.query.t || ''))}`,
       isLoggedIn: false,
       backUrl: `/customer/check-billing?t=${encodeURIComponent(String(req.query.t || ''))}`,
-      pageTitle: 'Pembayaran QRIS Statis'
+      pageTitle: 'Bayar Online Cadangan'
     });
   } catch (error) {
     logger.error(`[QRIS Static][Public] ${error.message}`);
-    return redirectBack(payload.lookup, error.message || 'Gagal membuka QRIS statik.');
+    return redirectBack(payload.lookup, error.message || 'Gagal membuka pembayaran online cadangan.');
   }
 });
 
@@ -2670,8 +2810,8 @@ router.get('/payment/create/:invoiceId', async (req, res) => {
         result = await paymentSvc.createTripayTransaction(inv, cust, method, appUrl);
       } catch (error) {
         if (canFallbackToStaticQris(gateway, method, settings)) {
-          logger.warn(`[Payment] Tripay QRIS gagal untuk INV-${inv.id}, fallback ke QRIS statik: ${error.message}`);
-          req.session._msg = { type: 'warning', text: 'Tripay sedang gangguan. Sistem mengalihkan ke QRIS cadangan agar pembayaran tetap bisa dilakukan.' };
+          logger.warn(`[Payment] Tripay scan online gagal untuk INV-${inv.id}, fallback ke pembayaran cadangan: ${error.message}`);
+          req.session._msg = { type: 'warning', text: 'Tripay sedang gangguan. Sistem mengalihkan ke pembayaran online cadangan agar pembayaran tetap bisa dilakukan.' };
           return res.redirect(`/customer/payment/static/${encodeURIComponent(String(inv.id))}`);
         }
         throw error;
@@ -2743,7 +2883,7 @@ router.get('/payment/static/:invoiceId', async (req, res) => {
 
   const settings = getSettingsWithCache();
   if (!hasStaticQrisEnabled(settings)) {
-    req.session._msg = { type: 'warning', text: 'QRIS statik belum dikonfigurasi admin.' };
+    req.session._msg = { type: 'warning', text: 'Pembayaran online cadangan belum dikonfigurasi admin.' };
     return res.redirect('/customer/dashboard');
   }
 
@@ -2769,10 +2909,10 @@ router.get('/payment/static/:invoiceId', async (req, res) => {
       statusUrl: `/customer/payment/static/${encodeURIComponent(String(invoice.id))}/status`,
       isLoggedIn: true,
       backUrl: '/customer/dashboard#billing-section',
-      pageTitle: 'Pembayaran QRIS Statis'
+      pageTitle: 'Bayar Online Cadangan'
     });
   } catch (error) {
-    req.session._msg = { type: 'danger', text: error.message || 'Gagal membuka QRIS statik.' };
+    req.session._msg = { type: 'danger', text: error.message || 'Gagal membuka pembayaran online cadangan.' };
     return res.redirect('/customer/dashboard#billing-section');
   }
 });
@@ -2971,6 +3111,62 @@ router.post('/payment/callback', express.json(), async (req, res) => {
         }
       } catch (e) {
         logger.error(`[Webhook] Voucher fulfill gagal (order=${orderId}): ${e.message}`);
+      }
+
+      return res.json({ success: true });
+    }
+
+    const paymentInfoInvoice = db.prepare(`
+      SELECT *
+      FROM invoices
+      WHERE payment_order_id = ? OR payment_reference = ?
+      ORDER BY id ASC
+      LIMIT 1
+    `).get(gatewayOrderId, gatewayOrderId);
+    const bulkMeta = extractBulkPaymentMetadata(paymentInfoInvoice?.payment_payload);
+    if (bulkMeta && bulkMeta.invoiceIds.length > 1) {
+      const bulkInvoices = sortInvoicesForBulkPayment(bulkMeta.invoiceIds
+        .map((invoiceId) => billingSvc.getInvoiceById(invoiceId))
+        .filter(Boolean)
+        .filter((invoice) => Number(invoice.customer_id || 0) === Number(bulkMeta.customerId || invoice.customer_id || 0)));
+      if (!bulkInvoices.length) return res.json({ success: true });
+
+      logger.info(`[Webhook] Pembayaran gabungan diterima via ${gateway}: ${bulkInvoices.map((invoice) => `INV-${invoice.id}`).join(', ')}`);
+      const paidNow = [];
+      for (const invoice of bulkInvoices) {
+        if (String(invoice.status || '').toLowerCase() === 'paid') continue;
+        billingSvc.markAsPaid(invoice.id, gateway, `Otomatis via Webhook ${gateway} - bayar gabungan ${bulkInvoices.length} tagihan`, {
+          type: 'system',
+          id: null,
+          name: `Webhook ${gateway}`,
+          ip: req.ip,
+          userAgent: req.headers['user-agent'] || ''
+        });
+        paidNow.push(invoice);
+      }
+
+      const firstInvoice = bulkInvoices[0];
+      const customer = customerSvc.getCustomerById(firstInvoice.customer_id);
+      if (customer && ['suspended', 'inactive'].includes(String(customer.status || '').toLowerCase())) {
+        const unpaidCount = billingSvc.getUnpaidInvoicesByCustomerId(customer.id).length;
+        if (unpaidCount === 0) {
+          logger.info(`[Webhook] Mengaktifkan kembali pelanggan ${customer.name} secara otomatis setelah bayar gabungan.`);
+          await customerSvc.activateCustomer(customer.id);
+        }
+      }
+
+      try {
+        if (customer && paidNow.length > 0) {
+          const ready = await whatsappGateway.ensureReady(15000);
+          if (!ready) throw new Error('WhatsApp belum siap');
+          if (!customer.phone) throw new Error('Nomor WhatsApp pelanggan kosong');
+          const totalPaid = bulkInvoices.reduce((sum, invoice) => sum + (Number(invoice.amount || 0) || 0), 0);
+          const periods = formatBulkInvoicePeriods(bulkInvoices);
+          const msg = `✅ *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran gabungan tagihan internet periode *${periods}* telah kami terima via *${gateway}*.\n\n💰 *Total:* Rp ${totalPaid.toLocaleString('id-ID')}\n🕒 *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus tagihan yang dibayar sudah lunas.`;
+          await whatsappGateway.sendText(customer.phone, msg);
+        }
+      } catch (waErr) {
+        logger.error(`[Webhook] Gagal kirim notif WA gabungan: ${waErr.message}`);
       }
 
       return res.json({ success: true });

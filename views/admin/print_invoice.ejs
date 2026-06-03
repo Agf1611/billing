@@ -81,7 +81,16 @@
   const amountLabel = isPaid ? 'Total Dibayar' : 'Total Tagihan';
   const paymentInfoTitle = isPaid ? 'Informasi Pembayaran' : 'Cara Pembayaran';
   const footerDocText = isPaid ? 'Dokumen bukti pembayaran pelanggan yang sah.' : 'Dokumen tagihan pelanggan yang sah.';
-  const paidByDisplay = String(invoice?.paid_by_name || '').trim() || 'Admin';
+  function publicPaidByName(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 'Admin';
+    const cashierMatch = raw.match(/^Kasir(?:\s+(.+?))?(?:\s+\(@[^)]*\))?(\s*-\s*.+)?$/i);
+    if (!cashierMatch) return raw;
+    const name = String(cashierMatch[1] || '').trim();
+    const suffix = String(cashierMatch[2] || '').trim();
+    return `Admin${name ? ` ${name}` : ''}${suffix ? ` ${suffix}` : ''}`.trim();
+  }
+  const paidByDisplay = publicPaidByName(invoice?.paid_by_name);
   const packageName = customer?.package_name || 'Internet Service';
   const invoiceCustomerPrefix = String(settings?.customer_id_prefix || 'SCK').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'SCK';
   const customerCode = customer?.customer_code || (customer?.id ? `${invoiceCustomerPrefix}${customer.id}` : '-');

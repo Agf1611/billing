@@ -5,7 +5,7 @@
   <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title><%= pageTitle || 'Pembayaran QRIS Statis' %> | <%= settings.company_header || 'Portal ISP' %></title>
+  <title><%= pageTitle || 'Bayar Online Cadangan' %> | <%= settings.company_header || 'Portal ISP' %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -392,7 +392,7 @@
           <span><%= settings.company_header || 'Portal ISP' %></span>
         </div>
         <div style="margin-left:auto">
-          <div class="eyebrow"><i class="bi bi-qr-code-scan"></i> QRIS</div>
+          <div class="eyebrow"><i class="bi bi-credit-card-2-front"></i> Bayar Online</div>
         </div>
       </div>
     </section>
@@ -402,11 +402,11 @@
         <div class="panel">
           <div class="qr-box">
             <% if (qrisDataUrl) { %>
-              <img src="<%= qrisDataUrl %>" alt="QRIS dinamis <%= settings.company_header || 'Portal ISP' %>">
+              <img src="<%= qrisDataUrl %>" alt="Kode bayar online <%= settings.company_header || 'Portal ISP' %>">
             <% } else if (qrisPayload) { %>
-              <canvas id="dynamicQrisCanvas" aria-label="QRIS dinamis <%= settings.company_header || 'Portal ISP' %>"></canvas>
+              <canvas id="dynamicQrisCanvas" aria-label="Kode bayar online <%= settings.company_header || 'Portal ISP' %>"></canvas>
             <% } else { %>
-              <img src="<%= qrisUrl %>" alt="QRIS statik <%= settings.company_header || 'Portal ISP' %>">
+              <img src="<%= qrisUrl %>" alt="Kode bayar online <%= settings.company_header || 'Portal ISP' %>">
             <% } %>
           </div>
 
@@ -416,7 +416,7 @@
             <% if (qrisCode) { %>
               <div class="code-badge">
                 <i class="bi bi-hash"></i>
-                <span>Kode unik <%= String(qrisCode).padStart(3, '0') %></span>
+                <span>Kode pembayaran <%= String(qrisCode).padStart(3, '0') %></span>
               </div>
             <% } %>
           </div>
@@ -446,7 +446,7 @@
             <% } %>
             <% if (qrisUniqueDelta > 0) { %>
               <div class="meta-card">
-                <strong>Kode unik otomatis</strong>
+                <strong>Kode pembayaran otomatis</strong>
                 <span>Rp <%= qrisBaseAmount.toLocaleString('id-ID') %> + <%= qrisUniqueDelta.toLocaleString('id-ID') %> = Rp <%= qrisExactAmount.toLocaleString('id-ID') %></span>
               </div>
             <% } %>
@@ -485,7 +485,7 @@
     </section>
 
     <div class="footer">
-      &copy; <%= new Date().getFullYear() %> <%= settings.company_header || 'Portal ISP' %> • Pembayaran QRIS statik internal
+      &copy; <%= new Date().getFullYear() %> <%= settings.company_header || 'Portal ISP' %> - Bayar online cadangan
     </div>
   </div>
 

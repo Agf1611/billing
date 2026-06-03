@@ -54,6 +54,9 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { normalizePhoneDigits, formatPhoneDisplay, normalizePhoneList } = require('../services/phoneService');
 const {
+  persistCompressedImageUpload
+} = require('../services/imageUploadService');
+const {
   buildCustomerCheckBillingLink,
   buildCustomerInvoiceCheckBillingLink,
   buildCustomerPortalLoginLink,
@@ -364,21 +367,13 @@ const CUSTOMER_IMAGE_UPLOAD_FIELDS = [
   { name: 'ktp_photo_file', maxCount: 1 }
 ];
 
-function resolveCustomerUploadExt(file) {
-  const extFromMime = String(file?.mimetype || '').split('/').pop().toLowerCase();
-  const extFromName = path.extname(String(file?.originalname || '')).toLowerCase().replace('.', '');
-  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromName)) return extFromName;
-  if (['png', 'jpg', 'jpeg', 'webp'].includes(extFromMime)) return extFromMime;
-  return 'jpg';
-}
-
-function persistCustomerUpload(file, prefix) {
+async function persistCustomerUpload(file, prefix) {
   if (!file?.buffer || Number(file.size || 0) <= 0) return '';
-  const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
-  fs.mkdirSync(uploadDir, { recursive: true });
-  const filename = `${prefix}-${Date.now()}.${resolveCustomerUploadExt(file)}`;
-  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
-  return `/uploads/${filename}`;
+  const saved = await persistCompressedImageUpload(file, prefix, {
+    maxBytes: 500 * 1024,
+    maxDimension: 1600
+  });
+  return saved.publicUrl;
 }
 
 async function inspectQrisPayloadInput({ payload = '', qrUrl = '', uploadedFile = null } = {}) {
@@ -610,12 +605,33 @@ function resolvePaidByName(req, fallback) {
   if (req.session?.isCashier) {
     const nm = String(req.session.cashierName || '').trim();
     const un = String(req.session.cashierUsername || '').trim();
-    if (nm && un) return `Kasir ${nm} (@${un})`;
-    if (nm) return `Kasir ${nm}`;
-    return 'Kasir';
+    const base = nm && un ? `Kasir ${nm} (@${un})` : nm ? `Kasir ${nm}` : 'Kasir';
+    const method = normalizeCashierPaymentMethod(fb);
+    return method ? `${base} - ${method}` : base;
   }
   if (req.session?.isAdmin) return fb || 'Admin';
   return fb || 'Admin';
+}
+
+function normalizeCashierPaymentMethod(value) {
+  const raw = String(value || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw || lower === 'kasir' || lower.startsWith('kasir ') || lower === 'admin' || lower.startsWith('admin ')) return '';
+  if (lower.includes('online') || lower.includes('payment gateway')) return 'Online / Payment Gateway';
+  if (lower.includes('bri')) return 'Transfer BRI';
+  if (lower.includes('transfer')) return 'Transfer Manual';
+  if (lower.includes('cash') || lower.includes('tunai')) return 'Tunai / Cash';
+  return raw;
+}
+
+function formatPublicPaidByName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 'Admin';
+  const cashierMatch = raw.match(/^Kasir(?:\s+(.+?))?(?:\s+\(@[^)]*\))?(\s*-\s*.+)?$/i);
+  if (!cashierMatch) return raw;
+  const name = String(cashierMatch[1] || '').trim();
+  const suffix = String(cashierMatch[2] || '').trim();
+  return `Admin${name ? ` ${name}` : ''}${suffix ? ` ${suffix}` : ''}`.trim();
 }
 
 function resolvePaymentActor(req, fallbackName = 'Admin') {
@@ -1124,7 +1140,7 @@ function computeWhatsappTaxBreakdown(amount, taxSource = {}) {
   return { saleAmount, ppnAmount, nominalInvoice, ppnPercent };
 }
 
-function buildPaymentGuideMessage(customer, invoices = [], fallbackInvoice = null) {
+function buildPaymentGuideMessage(customer, invoices = [], fallbackInvoice = null, options = {}) {
   const invoiceList = Array.isArray(invoices) ? invoices.filter(Boolean) : [];
   const primaryInvoice = fallbackInvoice || invoiceList[0] || null;
   const effectiveInvoices = invoiceList.length ? invoiceList : (primaryInvoice ? [primaryInvoice] : []);
@@ -1144,12 +1160,22 @@ function buildPaymentGuideMessage(customer, invoices = [], fallbackInvoice = nul
     );
   }
 
+  if (effectiveInvoices.length > 1) {
+    lines.push(
+      '',
+      `Total semua tagihan aktif: Rp ${formatRupiahValue(totalTagihan)} (${effectiveInvoices.length} bulan/tagihan)`,
+      'Bayar Online bisa sekaligus semua tagihan atau pilih 1 bulan saja.',
+      'Jika transfer manual, bayar sesuai total bulan yang dipilih lalu kirim bukti ke admin.'
+    );
+    return lines.join('\n').trim();
+  }
+
   if (baseInvoiceAmount > 0 && qrisAmountUnique > 0 && uniqueDelta > 0) {
     lines.push(
       '',
-      `Bayar otomatis: Rp ${formatRupiahValue(qrisAmountUnique)}`,
-      `Kode unik: ${String(qrisCode || uniqueDelta).padStart(3, '0')}`,
-      'Bayar sesuai nominal agar otomatis terbaca lunas.'
+      `Nominal otomatis: Rp ${formatRupiahValue(qrisAmountUnique)}`,
+      `Kode pembayaran: ${String(qrisCode || uniqueDelta).padStart(3, '0')}`,
+      'Pilih Bayar Online dan ikuti nominal tersebut agar otomatis terbaca lunas.'
     );
   }
 
@@ -1206,16 +1232,14 @@ function buildWhatsappCustomerPayload(customer, invoices = [], fallbackInvoice =
   const qrisAmountUnique = Number(primaryInvoice?.qris_amount_unique || 0) || 0;
   const qrisUniqueCode = Number(primaryInvoice?.qris_unique_code || 0) || 0;
   const uniqueDelta = qrisAmountUnique > primaryAmount ? (qrisAmountUnique - primaryAmount) : qrisUniqueCode;
-  const paymentGuide = buildPaymentGuideMessage(customer, invoiceList, primaryInvoice);
+  const paymentGuide = buildPaymentGuideMessage(customer, invoiceList, primaryInvoice, options);
   const packageLabel = String(
     primaryInvoice?.package_name ||
     customer?.package_name ||
     customer?.packageName ||
     '-'
   ).trim() || '-';
-  const checkBillingLink = primaryInvoice
-    ? buildCustomerInvoiceCheckBillingLink(primaryInvoice, customer, 7 * 24 * 60 * 60 * 1000, options)
-    : buildCustomerCheckBillingLink(customer, options);
+  const checkBillingLink = buildCustomerCheckBillingLink(customer, options);
   const portalLink = buildCustomerPortalLoginLink(options);
   const groupLink = String(getSetting('whatsapp_group_invite_link', '') || '').trim();
   const invoiceLink = primaryInvoice ? buildPublicInvoicePrintLink(primaryInvoice, customer, 48 * 60 * 60 * 1000, options) : '';
@@ -1342,7 +1366,7 @@ function buildPaidWhatsappMessage(customer, invoices = [], fallbackInvoice = nul
     link: paymentProofLink || payload.link,
     billing_link: billingLink,
     company: getSetting('company_header', 'ISP'),
-    paid_by: String(options.paidBy || '-').trim() || '-',
+    paid_by: formatPublicPaidByName(options.paidBy || '-'),
     paid_at: String(options.paidAt || new Date().toLocaleString('id-ID')).trim()
   }), payload.jatuh_tempo);
 }
@@ -1371,7 +1395,7 @@ function buildWhatsappTemplatePreview(templateKey = 'billing', options = {}) {
   if (templateKey === 'due_reminder') return buildDueReminderWhatsappMessage(sampleCustomer, sampleInvoices, options);
   if (templateKey === 'isolation') return buildIsolationWhatsappMessage(sampleCustomer, sampleInvoices, 'Masih ada tagihan yang belum lunas.', options);
   if (templateKey === 'reactivation') return buildReactivationWhatsappMessage(sampleCustomer, options);
-  if (templateKey === 'paid') return buildPaidWhatsappMessage(sampleCustomer, sampleInvoices, sampleInvoices[0], { ...options, paidBy: 'TRIPAY - QRIS', paidAt: '10 Mei 2026 12:00' });
+  if (templateKey === 'paid') return buildPaidWhatsappMessage(sampleCustomer, sampleInvoices, sampleInvoices[0], { ...options, paidBy: 'TRIPAY - BAYAR ONLINE', paidAt: '10 Mei 2026 12:00' });
   return buildBillingWhatsappMessage(sampleCustomer, sampleInvoices, sampleInvoices[0], options);
 }
 
@@ -4506,9 +4530,13 @@ router.get('/customers', requireAdminSession, (req, res) => {
 });
 
 router.post('/customers', requireAdminSession, restrictToAdmin, upload.fields(CUSTOMER_IMAGE_UPLOAD_FIELDS), async (req, res) => {
+  const createdUploadUrls = [];
+  let customerCreated = false;
   try {
-    const housePhotoUrl = persistCustomerUpload(getUploadedSingleFile(req, 'house_photo_file'), 'admin-house-photo');
-    const ktpPhotoUrl = persistCustomerUpload(getUploadedSingleFile(req, 'ktp_photo_file'), 'admin-ktp-photo');
+    const housePhotoUrl = await persistCustomerUpload(getUploadedSingleFile(req, 'house_photo_file'), 'admin-house-photo');
+    const ktpPhotoUrl = await persistCustomerUpload(getUploadedSingleFile(req, 'ktp_photo_file'), 'admin-ktp-photo');
+    if (housePhotoUrl) createdUploadUrls.push(housePhotoUrl);
+    if (ktpPhotoUrl) createdUploadUrls.push(ktpPhotoUrl);
     req.body = req.body || {};
     req.body.nik = String(req.body.nik || '').trim();
     req.body.npwp = String(req.body.npwp || '').trim();
@@ -4565,6 +4593,7 @@ router.post('/customers', requireAdminSession, restrictToAdmin, upload.fields(CU
     }
 
     const createResult = customerSvc.createCustomer(req.body);
+    customerCreated = true;
     const createdCustomer = customerSvc.getCustomerById(createResult.lastInsertRowid);
     
     // Sync to MikroTik if username provided
@@ -4603,6 +4632,11 @@ router.post('/customers', requireAdminSession, restrictToAdmin, upload.fields(CU
     const warningText = syncWarnings.length ? ` Catatan: ${syncWarnings.join(' | ')}` : '';
     req.session._msg = { type: 'success', text: `Pelanggan "${req.body.name}" berhasil ditambahkan.${warningText}` };
   } catch (e) {
+    if (!customerCreated) {
+      for (const uploadedUrl of createdUploadUrls) {
+        safeRemoveUploadAsset(uploadedUrl, /^\/uploads\/admin-(?:house|ktp)-photo-\d+\.webp$/i);
+      }
+    }
     logger.error(`[AdminCustomers] Gagal menambahkan pelanggan: ${e.stack || e.message || e}`);
     req.session._msg = { type: 'error', text: 'Gagal menambahkan pelanggan: ' + e.message };
   }
@@ -4610,14 +4644,23 @@ router.post('/customers', requireAdminSession, restrictToAdmin, upload.fields(CU
 });
 
 router.post('/customers/:id/update', requireAdminSession, restrictToAdmin, upload.fields(CUSTOMER_IMAGE_UPLOAD_FIELDS), async (req, res) => {
+  const createdUploadUrls = [];
+  let customerUpdated = false;
   try {
+    const previousCustomer = customerSvc.getCustomerById(req.params.id) || {};
     const housePhotoFile = getUploadedSingleFile(req, 'house_photo_file');
     const ktpPhotoFile = getUploadedSingleFile(req, 'ktp_photo_file');
     req.body = req.body || {};
     req.body.nik = String(req.body.nik || '').trim();
     req.body.npwp = String(req.body.npwp || '').trim();
-    if (housePhotoFile) req.body.house_photo_url = persistCustomerUpload(housePhotoFile, 'admin-house-photo');
-    if (ktpPhotoFile) req.body.ktp_photo_url = persistCustomerUpload(ktpPhotoFile, 'admin-ktp-photo');
+    if (housePhotoFile) {
+      req.body.house_photo_url = await persistCustomerUpload(housePhotoFile, 'admin-house-photo');
+      if (req.body.house_photo_url) createdUploadUrls.push(req.body.house_photo_url);
+    }
+    if (ktpPhotoFile) {
+      req.body.ktp_photo_url = await persistCustomerUpload(ktpPhotoFile, 'admin-ktp-photo');
+      if (req.body.ktp_photo_url) createdUploadUrls.push(req.body.ktp_photo_url);
+    }
     if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
       const customerId = Number(req.params.id);
       const routerId = req.body.router_id ? Number(req.body.router_id) : null;
@@ -4641,6 +4684,13 @@ router.post('/customers/:id/update', requireAdminSession, restrictToAdmin, uploa
     }
 
     customerSvc.updateCustomer(req.params.id, req.body);
+    customerUpdated = true;
+    if (req.body.house_photo_url && req.body.house_photo_url !== previousCustomer.house_photo_url) {
+      safeRemoveUploadAsset(previousCustomer.house_photo_url, /^\/uploads\/admin-house-photo-\d+\.(png|jpg|jpeg|webp)$/i);
+    }
+    if (req.body.ktp_photo_url && req.body.ktp_photo_url !== previousCustomer.ktp_photo_url) {
+      safeRemoveUploadAsset(previousCustomer.ktp_photo_url, /^\/uploads\/admin-ktp-photo-\d+\.(png|jpg|jpeg|webp)$/i);
+    }
     
     // Sync to MikroTik if username provided
     if (req.body.connection_type !== 'static' && req.body.pppoe_username) {
@@ -4666,6 +4716,11 @@ router.post('/customers/:id/update', requireAdminSession, restrictToAdmin, uploa
 
     req.session._msg = { type: 'success', text: 'Data pelanggan berhasil diperbarui.' };
   } catch (e) {
+    if (!customerUpdated) {
+      for (const uploadedUrl of createdUploadUrls) {
+        safeRemoveUploadAsset(uploadedUrl, /^\/uploads\/admin-(?:house|ktp)-photo-\d+\.webp$/i);
+      }
+    }
     logger.error(`[AdminCustomers] Gagal memperbarui pelanggan ${req.params.id}: ${e.stack || e.message || e}`);
     req.session._msg = { type: 'error', text: 'Gagal memperbarui: ' + e.message };
   }
@@ -5494,10 +5549,10 @@ router.post('/billing/:id/qris-assign', requireAdminSession, restrictToAdmin, (r
     const assigned = billingSvc.assignUniqueQrisForInvoice(invId, { force });
     req.session._msg = {
       type: 'success',
-      text: `Kode QRIS dibuat: Rp ${Number(assigned?.qris_amount_unique || 0).toLocaleString('id-ID')} (kode ${String(assigned?.qris_unique_code || '').padStart(3, '0')}).`
+      text: `Kode pembayaran dibuat: Rp ${Number(assigned?.qris_amount_unique || 0).toLocaleString('id-ID')} (kode ${String(assigned?.qris_unique_code || '').padStart(3, '0')}).`
     };
   } catch (e) {
-    req.session._msg = { type: 'error', text: 'Gagal membuat kode QRIS: ' + e.message };
+    req.session._msg = { type: 'error', text: 'Gagal membuat kode pembayaran: ' + e.message };
   }
   return redirectBack(res, '/admin/billing');
 });
@@ -5511,9 +5566,9 @@ router.post('/billing/:id/qris-clear', requireAdminSession, restrictToAdmin, (re
       SET qris_unique_code=NULL, qris_amount_unique=NULL, qris_assigned_at=NULL
       WHERE id=?
     `).run(invId);
-    req.session._msg = { type: 'success', text: 'Kode QRIS dihapus dari tagihan.' };
+    req.session._msg = { type: 'success', text: 'Kode pembayaran dihapus dari tagihan.' };
   } catch (e) {
-    req.session._msg = { type: 'error', text: 'Gagal menghapus kode QRIS: ' + e.message };
+    req.session._msg = { type: 'error', text: 'Gagal menghapus kode pembayaran: ' + e.message };
   }
   return redirectBack(res, '/admin/billing');
 });
@@ -5550,9 +5605,6 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
 
         const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
         const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
-        if (qrisImageBuffer.length) {
-          finalMessage += '\n\n*QRIS*\nScan gambar ini dan bayar sesuai total.';
-        }
 
         const sent = qrisImageBuffer.length
           ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
@@ -5672,7 +5724,7 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
     // Generate Link Login
     const loginLink = `${requestBaseUrl}/customer/login`;
 
-    const templateQris = `Yth. *{{nama}}*,\n\nTagihan internet Anda untuk periode *{{periode}}*.\n\n📦 *Paket:* {{paket}}\n💳 *Pembayaran QRIS (Semua E-Wallet)*\n💰 *Nominal (WAJIB tepat):* Rp {{qris_nominal}}\n🏷️ *Kode:* {{qris_kode}}\n{{qris_qr}}\n\nCatatan: nominal harus sama persis agar sistem dapat mendeteksi pembayaran.\n\nTerima kasih.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
+    const templateQris = `Yth. *{{nama}}*,\n\nTagihan internet Anda untuk periode *{{periode}}*.\n\n📦 *Paket:* {{paket}}\n💳 *Bayar Online / Payment Gateway*\n💰 *Nominal (WAJIB tepat):* Rp {{qris_nominal}}\n🏷️ *Kode pembayaran:* {{qris_kode}}\n{{qris_qr}}\n\nCatatan: nominal harus sama persis agar sistem dapat mendeteksi pembayaran.\n\nTerima kasih.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
 
     // Pesan Template (Sama dengan Broadcast Unpaid)
     const template = `Yth. *{{nama}}*,\n\nBerdasarkan data sistem kami, Anda memiliki tagihan internet yang *BELUM LUNAS*.\n\n📦 *Paket:* {{paket}}\n💰 *Total Tagihan:* Rp {{tagihan}}\n📅 *Periode:* {{rincian}}\n\nMohon segera melakukan pembayaran melalui portal pelanggan: {{link}}\n\nTerima kasih atas kerja samanya.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
@@ -5685,7 +5737,7 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
           .replace(/{{paket}}/gi, inv.package_name || '-')
           .replace(/{{qris_nominal}}/gi, Number(qrisAmountUnique).toLocaleString('id-ID'))
           .replace(/{{qris_kode}}/gi, String(qrisCode).padStart(3, '0'))
-          .replace(/{{qris_qr}}/gi, qrisQrUrl ? `🔗 QRIS: ${qrisQrUrl}` : '')
+          .replace(/{{qris_qr}}/gi, qrisQrUrl ? `🔗 Link bayar: ${qrisQrUrl}` : '')
       : template
           .replace(/{{nama}}/gi, customer.name || 'Pelanggan')
           .replace(/{{tagihan}}/gi, totalTagihan.toLocaleString('id-ID'))
@@ -5696,11 +5748,11 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
     if (qrisAmountUnique > 0 && qrisCode > 0) {
       const qrisLines = [
         '',
-        'Pembayaran QRIS',
+        'Bayar Online / Payment Gateway',
         `Nominal tepat: Rp ${Number(qrisAmountUnique).toLocaleString('id-ID')}`,
-        `Kode unik: ${String(qrisCode).padStart(3, '0')}`
+        `Kode pembayaran: ${String(qrisCode).padStart(3, '0')}`
       ];
-      if (qrisQrUrl) qrisLines.push(`QRIS: ${qrisQrUrl}`);
+      if (qrisQrUrl) qrisLines.push(`Link bayar: ${qrisQrUrl}`);
       finalMessage += `\n${qrisLines.join('\n')}`;
     }
     if (manualPaymentInfo) finalMessage += `\n${manualPaymentInfo}`;
