@@ -380,6 +380,7 @@ function startCronJobs() {
     const targetCustomers = [];
     const seenPhones = new Set();
     for (const c of customers) {
+      if (String(c.status || 'active').toLowerCase() !== 'active') continue;
       const phone = c.phone ? String(c.phone).trim() : '';
       if (!phone || phone.length < 9) continue;
       let digits = phone.replace(/\D/g, '');

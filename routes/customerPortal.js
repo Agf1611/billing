@@ -1586,7 +1586,18 @@ router.get('/public/invoices/:id/print', (req, res) => {
 
   const customer = customerSvc.getCustomerById(invoice.customer_id);
   if (!customer) return res.status(404).send('Data pelanggan tidak ditemukan');
-  if (String(payload.lookup || '').trim() !== resolveCustomerLookup(customer)) {
+  const payloadLookup = String(payload.lookup || '').trim();
+  const allowedLookups = new Set([
+    resolveCustomerLookup(customer),
+    customer.customer_code,
+    customer.pppoe_username,
+    customer.genieacs_tag,
+    customer.hotspot_username,
+    customer.phone,
+    customer.id,
+    customer.customer_id
+  ].map((item) => String(item || '').trim()).filter(Boolean));
+  if (payloadLookup && !allowedLookups.has(payloadLookup)) {
     return res.status(403).send('Data invoice tidak cocok');
   }
 
@@ -2457,6 +2468,31 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
 
     const appUrl = resolveRequestBaseUrl(req);
     const bulkMetadata = isBulkPayment ? buildBulkPaymentMetadata(cust, invoicesToPay, paymentTotalAmount) : null;
+    const returnLookup = resolveCustomerLookup(cust || {});
+    const paymentReturnPayload = isBulkPayment
+      ? {
+          customerId: Number(cust?.id || inv.customer_id || 0),
+          invoiceIds: invoicesToPay.map((invoice) => Number(invoice.id)).filter(Boolean),
+          lookup: returnLookup,
+          exp: Date.now() + 24 * 60 * 60 * 1000
+        }
+      : {
+          invoiceId: Number(inv.id),
+          customerId: Number(cust?.id || inv.customer_id || 0),
+          lookup: returnLookup,
+          exp: Date.now() + 24 * 60 * 60 * 1000
+        };
+    const paymentReturnToken = signPublicToken(paymentReturnPayload, secret);
+    const paymentReturnPath = `/customer/check-billing?t=${encodeURIComponent(paymentReturnToken)}`;
+    const gatewayReturnOptions = isBulkPayment ? {
+      orderPrefix: 'BULK',
+      itemName: null,
+      description: null,
+      sku: null,
+      returnPath: paymentReturnPath
+    } : {
+      returnPath: paymentReturnPath
+    };
     const invoiceForGateway = isBulkPayment
       ? {
           ...inv,
@@ -2466,6 +2502,11 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
           sku: `BULK-${Number(cust?.id || inv.customer_id || 0)}-${invoicesToPay.map((invoice) => invoice.id).join('_')}`
         }
       : inv;
+    if (isBulkPayment) {
+      gatewayReturnOptions.itemName = invoiceForGateway.item_name;
+      gatewayReturnOptions.description = invoiceForGateway.description;
+      gatewayReturnOptions.sku = invoiceForGateway.sku;
+    }
 
     if (gateway === 'tripay' && settings.tripay_enabled) {
       try {
@@ -2479,38 +2520,14 @@ router.post('/public/payment/create/:invoiceId', async (req, res) => {
 
     let result;
     if (gateway === 'midtrans') {
-      result = await paymentSvc.createMidtransTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
-        orderPrefix: 'BULK',
-        itemName: invoiceForGateway.item_name,
-        description: invoiceForGateway.description,
-        sku: invoiceForGateway.sku,
-        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
-      } : {});
+      result = await paymentSvc.createMidtransTransaction(invoiceForGateway, cust, method, appUrl, gatewayReturnOptions);
     } else if (gateway === 'xendit') {
-      result = await paymentSvc.createXenditTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
-        orderPrefix: 'BULK',
-        itemName: invoiceForGateway.item_name,
-        description: invoiceForGateway.description,
-        sku: invoiceForGateway.sku,
-        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
-      } : {});
+      result = await paymentSvc.createXenditTransaction(invoiceForGateway, cust, method, appUrl, gatewayReturnOptions);
     } else if (gateway === 'duitku') {
-      result = await paymentSvc.createDuitkuTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
-        orderPrefix: 'BULK',
-        itemName: invoiceForGateway.item_name,
-        description: invoiceForGateway.description,
-        sku: invoiceForGateway.sku,
-        returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
-      } : {});
+      result = await paymentSvc.createDuitkuTransaction(invoiceForGateway, cust, method, appUrl, gatewayReturnOptions);
     } else {
       try {
-        result = await paymentSvc.createTripayTransaction(invoiceForGateway, cust, method, appUrl, isBulkPayment ? {
-          orderPrefix: 'BULK',
-          itemName: invoiceForGateway.item_name,
-          description: invoiceForGateway.description,
-          sku: invoiceForGateway.sku,
-          returnPath: `/customer/check-billing?q=${encodeURIComponent(String(cust?.id || inv.customer_id || ''))}`
-        } : {});
+        result = await paymentSvc.createTripayTransaction(invoiceForGateway, cust, method, appUrl, gatewayReturnOptions);
       } catch (error) {
         if (canFallbackToStaticQris(gateway, method, settings)) {
           if (isBulkPayment) {

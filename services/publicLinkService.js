@@ -103,7 +103,15 @@ function resolveRequestBaseUrl(req, fallbackBaseUrl = '') {
 }
 
 function resolveCustomerLookup(customer = {}) {
-  return String(customer.id || customer.customer_id || customer.pppoe_username || customer.genieacs_tag || customer.phone || '').trim();
+  return String(
+    customer.customer_code ||
+    customer.pppoe_username ||
+    customer.genieacs_tag ||
+    customer.phone ||
+    customer.id ||
+    customer.customer_id ||
+    ''
+  ).trim();
 }
 
 function buildCustomerCheckBillingLink(customer = {}, options = {}) {

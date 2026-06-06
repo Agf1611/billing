@@ -22,13 +22,23 @@ function registerPublicPortalRoutes(router, deps) {
 
   function resolveCustomerLookup(customer, fallback = '') {
     return String(
-      customer?.id ||
+      customer?.customer_code ||
       customer?.pppoe_username ||
       customer?.genieacs_tag ||
       customer?.phone ||
+      customer?.id ||
       fallback ||
       ''
     ).trim();
+  }
+
+  function findCustomerForPublicBilling(query = '') {
+    const raw = String(query || '').trim();
+    if (!raw) return null;
+    if (typeof customerSvc.findCustomerByPublicBillingLookup === 'function') {
+      return customerSvc.findCustomerByPublicBillingLookup(raw);
+    }
+    return customerSvc.findCustomerByAny(raw);
   }
 
   function isUnpaidInvoice(invoice) {
@@ -150,17 +160,25 @@ function registerPublicPortalRoutes(router, deps) {
       const payload = verifyPublicToken(publicToken, secret);
       const invoiceId = Number(payload?.invoiceId || 0);
       const customerId = Number(payload?.customerId || 0);
-      if (payload && invoiceId > 0 && customerId > 0) {
-        const invoice = billingSvc.getInvoiceById(invoiceId);
-        const invoiceCustomerId = Number(invoice?.customer_id || 0);
-        if (invoice && invoiceCustomerId === customerId) {
+      const invoiceIds = Array.isArray(payload?.invoiceIds)
+        ? payload.invoiceIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : [];
+      if (payload && customerId > 0 && (invoiceId > 0 || invoiceIds.length > 0)) {
+        const tokenInvoiceIds = invoiceId > 0 ? [invoiceId] : invoiceIds;
+        const tokenInvoices = tokenInvoiceIds
+          .map((id) => billingSvc.getInvoiceById(id))
+          .filter(Boolean)
+          .filter((invoice) => Number(invoice.customer_id || 0) === customerId);
+        if (tokenInvoices.length === tokenInvoiceIds.length) {
           customer = customerSvc.getCustomerById(customerId);
           if (customer) {
             const lookup = resolveCustomerLookup(customer, payload.lookup);
             invoices = billingSvc.getInvoicesByAny(lookup) || [];
-            if (!invoices.some((item) => Number(item?.id || 0) === Number(invoice.id))) {
-              invoices = [invoice, ...invoices];
-            }
+            tokenInvoices.forEach((invoice) => {
+              if (!invoices.some((item) => Number(item?.id || 0) === Number(invoice.id))) {
+                invoices.unshift(invoice);
+              }
+            });
             invoices = decorateInvoicesForPublic(invoices, customer);
             unpaidInvoices = invoices.filter(isUnpaidInvoice);
             const paymentTokens = buildInvoicePaymentTokens(unpaidInvoices, customer, lookup, secret);
@@ -176,7 +194,7 @@ function registerPublicPortalRoutes(router, deps) {
     }
 
     if (!customer && query) {
-      customer = customerSvc.findCustomerByAny(query);
+      customer = findCustomerForPublicBilling(query);
       if (customer) {
         const lookup = resolveCustomerLookup(customer, query);
         invoices = decorateInvoicesForPublic(billingSvc.getInvoicesByAny(lookup) || [], customer);
@@ -185,7 +203,9 @@ function registerPublicPortalRoutes(router, deps) {
         invoiceTokens = paymentTokens.invoiceTokens;
         bulkToken = paymentTokens.bulkToken;
       } else {
-        const invs = billingSvc.getInvoicesByAny(query) || [];
+        const numericOnly = query.replace(/\D/g, '');
+        const allowFuzzySearch = !numericOnly || /[a-z]/i.test(query);
+        const invs = allowFuzzySearch ? (billingSvc.getInvoicesByAny(query) || []) : [];
         const unpaid = (Array.isArray(invs) ? invs : []).filter((item) => item && item.status === 'unpaid');
         const map = new Map();
         for (const inv of unpaid) {
@@ -193,6 +213,7 @@ function registerPublicPortalRoutes(router, deps) {
           if (!Number.isFinite(customerId) || customerId <= 0) continue;
           const prev = map.get(customerId) || {
             customer_id: customerId,
+            customer_code: inv.customer_code || '',
             customer_name: inv.customer_name || '-',
             customer_phone: inv.customer_phone || '',
             unpaid_count: 0,

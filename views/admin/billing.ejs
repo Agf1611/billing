@@ -511,6 +511,45 @@
     .pay-quick-grid .btn i{
       font-size:13px;
     }
+    .payment-admin-modal{
+      width:min(94vw, 860px);
+      max-width:860px;
+    }
+    .payment-admin-modal .mbody{
+      padding:22px 24px;
+    }
+    .payment-admin-modal .mf{
+      position:sticky;
+      bottom:0;
+      background:var(--surface-strong);
+      z-index:2;
+    }
+    .payment-admin-modal .pay-quick-grid{
+      grid-template-columns:repeat(auto-fit, minmax(132px, 1fr));
+      gap:8px;
+    }
+    .payment-admin-modal .pay-method-choice{
+      border-color:var(--border);
+      background:var(--bg2);
+      color:var(--text);
+      box-shadow:none;
+      transition:background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .payment-admin-modal .pay-method-choice:hover{
+      transform:translateY(-1px);
+      border-color:rgba(99,102,241,.45);
+    }
+    .payment-admin-modal .pay-method-choice.is-active,
+    .payment-admin-modal .pay-method-choice.btn-p{
+      background:linear-gradient(135deg,#6366f1,#3b82f6);
+      border-color:transparent;
+      color:#fff;
+      box-shadow:0 12px 26px rgba(59,130,246,.24);
+    }
+    .payment-admin-modal .pay-method-choice.is-active i,
+    .payment-admin-modal .pay-method-choice.btn-p i{
+      color:inherit;
+    }
     body[data-theme="light"] .filter-bar,
     body[data-theme="light"] .invoice-card{
       background:rgba(255,255,255,.9);
@@ -673,6 +712,9 @@
       .invoice-actions .action-mini .action-label{display:block;font-size:7.5px;font-weight:700;letter-spacing:0}
       .pay-quick-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
       .pay-quick-grid .btn{font-size:10px}
+      .payment-admin-modal{width:96%;max-width:none}
+      .payment-admin-modal .mbody{padding:16px 14px}
+      .payment-admin-modal .pay-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media(max-width:576px){
       .billing-filter-main-row{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1341,7 +1383,7 @@
 
 <!-- Modal Tandai Bayar -->
 <div class="mo" id="payModal">
-  <div class="mb">
+  <div class="mb payment-admin-modal">
     <div class="mh"><span class="mt"><i class="bi bi-cash-coin"></i> <%= t('admin.billing.actions.mark_paid', 'Tandai Lunas') %></span><button class="mc" onclick="closeModal('payModal')">&times;</button></div>
     <form method="POST" id="payForm">
       <div class="mbody">
@@ -1362,14 +1404,14 @@
           Utamakan payment gateway / Bayar Online agar pelanggan terbaca lunas otomatis. Gunakan opsi manual hanya jika pembayaran diterima di luar sistem.
         </div>
         <div class="pay-quick-grid" aria-label="Pilihan cepat penerima pembayaran">
-          <button type="button" class="btn btn-p" data-pay-by="Online / Payment Gateway" data-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
-          <button type="button" class="btn btn-g" data-pay-by="Transfer BRI" data-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
-          <button type="button" class="btn btn-g" data-pay-by="Transfer Manual" data-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
-          <button type="button" class="btn btn-g" data-pay-by="Tunai / Cash" data-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
-          <button type="button" class="btn btn-g" data-pay-by="Admin Cash" data-pay-note="Tunai admin"><i class="bi bi-person-badge"></i> Admin</button>
-          <button type="button" class="btn btn-g" data-pay-by="Kasir" data-pay-note="Tunai kasir"><i class="bi bi-person-vcard"></i> Kasir</button>
-          <button type="button" class="btn btn-g" data-pay-by="Kolektor" data-pay-note="Tunai kolektor"><i class="bi bi-person-lines-fill"></i> Kolektor</button>
-          <button type="button" class="btn btn-g" data-pay-by="Teknisi" data-pay-note="Tunai teknisi"><i class="bi bi-tools"></i> Teknisi</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Online / Payment Gateway" data-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Transfer BRI" data-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Transfer Manual" data-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Tunai / Cash" data-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Admin Cash" data-pay-note="Tunai admin"><i class="bi bi-person-badge"></i> Admin</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Kasir" data-pay-note="Tunai kasir"><i class="bi bi-person-vcard"></i> Kasir</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Kolektor" data-pay-note="Tunai kolektor"><i class="bi bi-person-lines-fill"></i> Kolektor</button>
+          <button type="button" class="btn btn-g pay-method-choice" data-pay-by="Teknisi" data-pay-note="Tunai teknisi"><i class="bi bi-tools"></i> Teknisi</button>
         </div>
         <div class="fg"><label class="fl"><%= t('admin.billing.received_by', 'Diterima Oleh') %></label><input class="fc" id="payByNameInput" name="paid_by_name" placeholder="<%= t('admin.billing.received_by_placeholder', 'Nama petugas / teknisi') %>" value="<%= payByDefault || 'Admin' %>"></div>
         <div class="fg"><label class="fl"><%= t('admin.billing.notes_optional', 'Catatan (opsional)') %></label><textarea class="fc" id="payNotesInput" name="notes" placeholder="<%= t('admin.billing.notes_placeholder', 'Transfer BRI, tunai, dll...') %>"></textarea></div>
@@ -1444,8 +1486,27 @@ function setBillingTableLoading(message = 'Memuat daftar tagihan...') {
   table.classList.add('is-loading');
 }
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')}));
+function clearBillingPayMethodSelection() {
+  document.querySelectorAll('#payModal [data-pay-by]').forEach((item) => {
+    item.classList.remove('is-active', 'btn-p');
+    item.classList.add('btn-g');
+    item.setAttribute('aria-pressed', 'false');
+  });
+  const payByInput = document.getElementById('payByNameInput');
+  const notesInput = document.getElementById('payNotesInput');
+  if (payByInput) payByInput.value = payByInput.defaultValue || <%- JSON.stringify(payByDefault || 'Admin') %>;
+  if (notesInput) notesInput.value = '';
+}
 document.querySelectorAll('[data-pay-by]').forEach((button) => {
   button.addEventListener('click', () => {
+    const group = button.closest('.pay-quick-grid');
+    group?.querySelectorAll('[data-pay-by]').forEach((item) => {
+      const isActive = item === button;
+      item.classList.toggle('is-active', isActive);
+      item.classList.toggle('btn-p', isActive);
+      item.classList.toggle('btn-g', !isActive);
+      item.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
     const payByInput = document.getElementById('payByNameInput');
     const notesInput = document.getElementById('payNotesInput');
     if (payByInput) payByInput.value = String(button.dataset.payBy || '').trim();
@@ -1642,6 +1703,7 @@ document.addEventListener('click', async function(e) {
   payDesc.textContent = I18N.customerPrefix + ' ' + name;
   setUnpaidListMessage(I18N.loadingOther);
   multiSection.style.display = 'block';
+  clearBillingPayMethodSelection();
   
   openModal('payModal');
 

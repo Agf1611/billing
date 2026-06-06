@@ -979,6 +979,49 @@ function findCustomerByAny(val) {
   return null;
 }
 
+function findCustomerByPublicBillingLookup(val) {
+  ensureMissingCustomerCodes();
+  ensureHotspotBindingSchema();
+  if (!val) return null;
+  const raw = String(val || '').trim();
+  if (!raw) return null;
+
+  const byCode = db.prepare('SELECT id FROM customers WHERE UPPER(customer_code) = UPPER(?)').get(raw);
+  if (byCode) return getCustomerById(byCode.id);
+
+  const normalizedPhone = normalizePhoneDigits(raw);
+  const rawPhoneDigits = raw.replace(/\D/g, '');
+  const phoneCandidates = Array.from(new Set([
+    normalizedPhone,
+    rawPhoneDigits,
+    normalizedPhone && normalizedPhone.startsWith('62') ? `0${normalizedPhone.slice(2)}` : '',
+    rawPhoneDigits && rawPhoneDigits.startsWith('62') ? `0${rawPhoneDigits.slice(2)}` : ''
+  ].filter(Boolean)));
+
+  for (const candidate of phoneCandidates) {
+    const phoneMatch = db.prepare('SELECT id FROM customers WHERE phone = ?').get(candidate);
+    if (phoneMatch) return getCustomerById(phoneMatch.id);
+  }
+
+  const exact = db.prepare(`
+    SELECT id
+    FROM customers
+    WHERE genieacs_tag = ?
+       OR pppoe_username = ?
+       OR hotspot_username = ?
+       OR static_ip = ?
+       OR mac_address = ?
+  `).get(raw, raw, raw, raw, raw);
+  if (exact) return getCustomerById(exact.id);
+
+  if (/^\d+$/.test(raw) && raw.length < 8) {
+    const byId = getCustomerById(Number(raw));
+    if (byId) return byId;
+  }
+
+  return null;
+}
+
 function getExpiredSpeedBoostCustomers(now = new Date()) {
   ensureCustomerCodeSchema();
   const iso = (now instanceof Date ? now : new Date(now)).toISOString();
@@ -1099,7 +1142,7 @@ async function activateCustomer(id) {
 module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
   getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
-  suspendCustomer, activateCustomer, findCustomerByAny, updateCustomerCablePath, updateCustomerMapLocation, updateCustomerOdpLink,
+  suspendCustomer, activateCustomer, findCustomerByAny, findCustomerByPublicBillingLookup, updateCustomerCablePath, updateCustomerMapLocation, updateCustomerOdpLink,
   resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk,
   getCustomerSearchSuggestions, getExpiredSpeedBoostCustomers, clearSpeedBoost
 };

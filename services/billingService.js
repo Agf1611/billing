@@ -305,7 +305,7 @@ function resolveCustomerDiscount(customer = {}, baseAmount = 0) {
 }
 
 function generateMonthlyInvoices(month, year) {
-  const customers = db.prepare("SELECT * FROM customers WHERE status IN ('active','suspended') AND package_id IS NOT NULL").all();
+  const customers = db.prepare("SELECT * FROM customers WHERE status = 'active' AND package_id IS NOT NULL").all();
   const existing  = db.prepare('SELECT customer_id FROM invoices WHERE period_month=? AND period_year=?').all(month, year);
   const existingIds = new Set(existing.map(e => e.customer_id));
   const insert = db.prepare(`INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)`);
@@ -343,7 +343,7 @@ function generateInvoicesDueInDays(leadDays = 7, fromDate = new Date()) {
   const periodYear = dueDate.getFullYear();
   const targetDueDay = dueDate.getDate();
 
-  const customers = db.prepare("SELECT * FROM customers WHERE status IN ('active','suspended') AND package_id IS NOT NULL").all();
+  const customers = db.prepare("SELECT * FROM customers WHERE status = 'active' AND package_id IS NOT NULL").all();
   const existing = db.prepare('SELECT customer_id FROM invoices WHERE period_month=? AND period_year=?').all(periodMonth, periodYear);
   const existingIds = new Set(existing.map(e => e.customer_id));
   const insert = db.prepare(`INSERT INTO invoices (customer_id, period_month, period_year, amount, notes, due_day_snapshot) VALUES (?, ?, ?, ?, ?, ?)`);
@@ -1273,8 +1273,18 @@ function getInvoicesByAny(val) {
   // Find customer ID first using phone, pppoe, or genieacs_tag
   let customer = null;
   
-  if (cleanVal.length >= 8) {
-    customer = db.prepare(`SELECT id FROM customers WHERE phone LIKE ?`).get(`%${cleanVal}%`);
+  customer = db.prepare(`SELECT id FROM customers WHERE UPPER(customer_code) = UPPER(?)`).get(raw);
+
+  if (!customer && cleanVal.length >= 8) {
+    const phoneCandidates = Array.from(new Set([
+      cleanVal,
+      cleanVal.startsWith('62') ? `0${cleanVal.slice(2)}` : '',
+      cleanVal.startsWith('0') ? `62${cleanVal.slice(1)}` : ''
+    ].filter(Boolean)));
+    for (const candidate of phoneCandidates) {
+      customer = db.prepare(`SELECT id FROM customers WHERE phone = ?`).get(candidate);
+      if (customer) break;
+    }
   }
 
   if (!customer && /^\d+$/.test(raw)) {
@@ -1282,13 +1292,21 @@ function getInvoicesByAny(val) {
   }
   
   if (!customer) {
-    customer = db.prepare(`SELECT id FROM customers WHERE pppoe_username = ? OR genieacs_tag = ?`).get(raw, raw);
+    customer = db.prepare(`
+      SELECT id FROM customers
+      WHERE pppoe_username = ?
+         OR genieacs_tag = ?
+         OR hotspot_username = ?
+         OR static_ip = ?
+         OR mac_address = ?
+    `).get(raw, raw, raw, raw, raw);
   }
 
   if (customer) {
     return db.prepare(`
       SELECT i.*,
              c.name as customer_name,
+             c.customer_code as customer_code,
              c.phone as customer_phone,
              c.address as customer_address,
              c.pppoe_username,
@@ -1319,6 +1337,7 @@ function getInvoicesByAny(val) {
   return db.prepare(`
     SELECT i.*,
            c.name as customer_name,
+           c.customer_code as customer_code,
            c.phone as customer_phone,
            c.address as customer_address,
            c.pppoe_username,
@@ -1339,6 +1358,7 @@ function getInvoicesByAny(val) {
     LEFT JOIN routers r ON c.router_id = r.id
     WHERE (
       lower(c.name) LIKE ?
+       OR lower(c.customer_code) LIKE ?
        OR lower(c.phone) LIKE ?
        OR lower(c.genieacs_tag) LIKE ?
        OR lower(c.pppoe_username) LIKE ?
@@ -1346,7 +1366,7 @@ function getInvoicesByAny(val) {
       AND (lower(trim(i.status)) != 'unpaid' OR ((i.period_year * 100) + i.period_month) <= ?)
     ORDER BY i.period_year DESC, i.period_month DESC
     LIMIT 300
-  `).all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, activePeriodKey);
+  `).all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`, activePeriodKey);
 }
 
 function getUnpaidInvoicesByCustomerId(customerId) {

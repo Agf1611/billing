@@ -205,8 +205,41 @@
     }
     .quick-filter-row .btn.is-active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.22)}
     .quick-filter-row .btn.is-active .filter-chip-count{background:rgba(255,255,255,.18);color:#fff}
-    .pay-invoice-method-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
-    .pay-invoice-method-grid .btn{justify-content:center;min-height:36px;padding:0 8px;font-size:11px}
+    .payment-admin-modal{
+      width:min(94vw, 860px);
+      max-width:860px;
+    }
+    .payment-admin-modal .mbody{
+      padding:22px 24px;
+    }
+    .payment-admin-modal .mf{
+      position:sticky;
+      bottom:0;
+      background:var(--surface-strong);
+      z-index:2;
+    }
+    .pay-invoice-method-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
+    .pay-invoice-method-grid .btn{justify-content:center;min-height:40px;padding:6px 8px;font-size:11px;border-radius:12px}
+    .payment-admin-modal .pay-method-choice{
+      border-color:var(--border);
+      background:var(--bg2);
+      color:var(--text);
+      box-shadow:none;
+      transition:background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .payment-admin-modal .pay-method-choice:hover{
+      transform:translateY(-1px);
+      border-color:rgba(99,102,241,.45);
+    }
+    .payment-admin-modal .pay-method-choice.is-active,
+    .payment-admin-modal .pay-method-choice.btn-p{
+      background:linear-gradient(135deg,#6366f1,#3b82f6);
+      border-color:transparent;
+      color:#fff;
+      box-shadow:0 12px 26px rgba(59,130,246,.24);
+    }
+    .payment-admin-modal .pay-method-choice.is-active i,
+    .payment-admin-modal .pay-method-choice.btn-p i{color:inherit}
     .mobile-filter-toggle{display:none;position:relative;align-items:center;gap:8px}
     .mobile-filter-toggle .mobile-filter-toggle-label{display:none;font-weight:800}
     .mobile-filter-badge{
@@ -1170,6 +1203,8 @@
         font-weight:700;
         letter-spacing:0;
       }
+      .payment-admin-modal{width:96%;max-width:none}
+      .payment-admin-modal .mbody{padding:16px 14px}
       .pay-invoice-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media(max-width:576px){
@@ -2538,7 +2573,7 @@
 
 <!-- Modal Bayar Tagihan (Per Pelanggan) -->
 <div class="mo" id="payInvoiceModal">
-  <div class="mb" style="max-width:560px">
+  <div class="mb payment-admin-modal">
     <div class="mh"><span class="mt"><i class="bi bi-cash-coin"></i> <%= t('admin.customers.pay_invoice_title', 'Bayar Tagihan (Pelanggan)') %></span><button class="mc" onclick="closeModal('payInvoiceModal')">&times;</button></div>
     <form method="POST" id="payInvoiceForm">
       <div class="mbody">
@@ -2586,10 +2621,10 @@
                 Jika pelanggan bisa diarahkan, sarankan Bayar Online agar lunas otomatis. Manual tetap bisa dicatat untuk BRI, transfer, atau tunai.
               </div>
               <div class="pay-invoice-method-grid" aria-label="Metode pembayaran manual">
-                <button type="button" class="btn btn-p btn-sm" data-customer-pay-by="Online / Payment Gateway" data-customer-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
-                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Transfer BRI" data-customer-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
-                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Transfer Manual" data-customer-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
-                <button type="button" class="btn btn-g btn-sm" data-customer-pay-by="Tunai / Cash" data-customer-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
+                <button type="button" class="btn btn-g btn-sm pay-method-choice" data-customer-pay-by="Online / Payment Gateway" data-customer-pay-note="Pembayaran online otomatis"><i class="bi bi-credit-card-2-front"></i> Lunas Online</button>
+                <button type="button" class="btn btn-g btn-sm pay-method-choice" data-customer-pay-by="Transfer BRI" data-customer-pay-note="Transfer manual BRI"><i class="bi bi-bank2"></i> Lunas BRI</button>
+                <button type="button" class="btn btn-g btn-sm pay-method-choice" data-customer-pay-by="Transfer Manual" data-customer-pay-note="Transfer manual"><i class="bi bi-arrow-left-right"></i> Lunas Transfer</button>
+                <button type="button" class="btn btn-g btn-sm pay-method-choice" data-customer-pay-by="Tunai / Cash" data-customer-pay-note="Pembayaran tunai"><i class="bi bi-cash-stack"></i> Lunas Cash</button>
               </div>
               <input class="fc" id="payInvoicePaidByInput" name="paid_by_name" value="<%= payByDefault || 'Admin' %>" placeholder="<%= t('admin.billing.received_by_placeholder', 'Nama petugas / teknisi') %>">
             </div>
@@ -2657,12 +2692,32 @@ const PAY_I18N = JSON.parse(document.getElementById('pay-i18n-data').textContent
 
 document.querySelectorAll('[data-customer-pay-by]').forEach((button) => {
   button.addEventListener('click', () => {
+    const group = button.closest('.pay-invoice-method-grid');
+    group?.querySelectorAll('[data-customer-pay-by]').forEach((item) => {
+      const isActive = item === button;
+      item.classList.toggle('is-active', isActive);
+      item.classList.toggle('btn-p', isActive);
+      item.classList.toggle('btn-g', !isActive);
+      item.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
     const payByInput = document.getElementById('payInvoicePaidByInput');
     const notesInput = document.getElementById('payInvoiceNotesInput');
     if (payByInput) payByInput.value = String(button.dataset.customerPayBy || '').trim();
     if (notesInput) notesInput.value = String(button.dataset.customerPayNote || '').trim();
   });
 });
+
+function clearCustomerPayMethodSelection() {
+  document.querySelectorAll('#payInvoiceModal [data-customer-pay-by]').forEach((item) => {
+    item.classList.remove('is-active', 'btn-p');
+    item.classList.add('btn-g');
+    item.setAttribute('aria-pressed', 'false');
+  });
+  const payByInput = document.getElementById('payInvoicePaidByInput');
+  const notesInput = document.getElementById('payInvoiceNotesInput');
+  if (payByInput) payByInput.value = payByInput.defaultValue || <%- JSON.stringify(payByDefault || 'Admin') %>;
+  if (notesInput) notesInput.value = '';
+}
 
 const officeCoords = {
   lat: parseFloat(appSettings.office_lat) || -7.140868012256965,
@@ -3165,6 +3220,7 @@ function openPayInvoice(idx) {
   payBillingMeta = { packagePrice: 0, invoices: {} };
   const currentMonth = new Date().getMonth() + 1;
   Array.from(document.querySelectorAll('#payInvoiceModal .pay-month')).forEach(cb => { cb.checked = parseInt(cb.value) === currentMonth; });
+  clearCustomerPayMethodSelection();
   openModal('payInvoiceModal');
   loadBillingYear();
 }

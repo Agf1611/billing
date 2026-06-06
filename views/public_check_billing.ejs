@@ -255,10 +255,31 @@
       box-shadow: var(--method-shadow);
     }
     .pay-method-item:hover{transform: translateY(-1px);border-color: rgba(99, 102, 241, 0.45)}
-    .pm-radio:checked + .pay-method-item{
+    .pm-radio:checked + .pay-method-item,
+    .pay-method-item.is-selected{
       background: var(--method-selected);
       border-color: rgba(99, 102, 241, 0.82);
       box-shadow: 0 14px 28px rgba(99, 102, 241, 0.14);
+    }
+    .pm-radio:checked + .pay-method-item::after,
+    .pay-method-item.is-selected::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:18px;
+      pointer-events:none;
+      box-shadow:inset 0 0 0 2px rgba(79,110,247,.34);
+    }
+    .pm-radio:checked + .pay-method-item .p-icon,
+    .pay-method-item.is-selected .p-icon{
+      border-color:rgba(79,110,247,.45);
+      background:rgba(79,110,247,.12);
+    }
+    .pm-radio:checked + .pay-method-item .p-chip,
+    .pay-method-item.is-selected .p-chip{
+      background:rgba(79,110,247,.16);
+      border-color:rgba(79,110,247,.28);
+      color:var(--brand);
     }
     .p-icon{
       width:48px;height:48px;
@@ -430,13 +451,13 @@
                     <td>
                       <div class="fw-semibold"><%= m.customer_name %></div>
                       <div class="muted small">
-                        ID: <%= m.customer_id %><% if (m.customer_phone) { %> - WA: <%= m.customer_phone %><% } %>
+                        ID: <%= m.customer_code || m.customer_id %><% if (m.customer_phone) { %> - WA: <%= m.customer_phone %><% } %>
                       </div>
                     </td>
                     <td class="text-end fw-semibold"><%= Number(m.unpaid_count || 0) %></td>
                     <td class="text-end fw-semibold">Rp <%= Number(m.total_amount || 0).toLocaleString('id-ID') %></td>
                     <td class="text-end">
-                      <a class="btn btn-outline-light btn-sm btnx" href="/customer/check-billing?q=<%= encodeURIComponent(String(m.customer_id)) %>">
+                      <a class="btn btn-outline-light btn-sm btnx" href="/customer/check-billing?q=<%= encodeURIComponent(String(m.customer_code || m.customer_id)) %>">
                         Lihat
                       </a>
                     </td>
@@ -698,6 +719,17 @@
                 const bulkAmount = document.getElementById('bulk_amount');
                 const bulkCount = document.getElementById('bulk_count');
                 const singleRows = Array.from(document.querySelectorAll('.billing-row-single'));
+                const methodRadios = Array.from(document.querySelectorAll('.pm-radio[name="method"]'));
+
+                function syncSelectedPaymentMethod() {
+                  methodRadios.forEach(input => {
+                    const card = input.nextElementSibling;
+                    if (!card || !card.classList || !card.classList.contains('pay-method-item')) return;
+                    const checked = !!input.checked;
+                    card.classList.toggle('is-selected', checked);
+                    card.setAttribute('aria-pressed', checked ? 'true' : 'false');
+                  });
+                }
 
                 function currentMode() {
                   const checked = modeRadios.find(r => r.checked);
@@ -753,8 +785,10 @@
                   if (singleMode) singleMode.checked = true;
                   refreshPaymentTarget();
                 }));
+                methodRadios.forEach(r => r.addEventListener('change', syncSelectedPaymentMethod));
                 const first = radios.find(r => r.checked) || radios[0];
                 if (first) refreshPaymentTarget();
+                syncSelectedPaymentMethod();
               })();
             </script>
           <% } %>
