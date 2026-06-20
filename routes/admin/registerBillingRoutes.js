@@ -1,10 +1,11 @@
-const {
+﻿const {
   buildDynamicQrisPayload,
   buildDynamicQrisBuffer,
   hasStaticQrisEnabled
 } = require('../../services/qrisService');
 const { verifyPassword } = require('../../config/passwords');
 const whatsappGateway = require('../../services/whatsappGatewayService');
+const whatsappTemplateMedia = require('../../services/whatsappTemplateMediaService');
 
 module.exports = function registerBillingRoutes(router, deps = {}) {
   const {
@@ -236,7 +237,7 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
     res.render('admin/print_invoice', {
       invoice: inv,
       customer,
-      company: settings.company_header || 'Billing ISP',
+      company: settings.company_header || 'PT Media Solusi Sukses',
       settings,
       printStyle,
       viewerRole: 'admin',
@@ -490,9 +491,15 @@ module.exports = function registerBillingRoutes(router, deps = {}) {
 
           const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
           const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
-          const sent = qrisImageBuffer.length
-            ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
-            : await whatsappGateway.sendText(queuedCustomer.phone, finalMessage);
+          const sent = await whatsappTemplateMedia.sendTemplateMessage(
+            queuedCustomer.phone,
+            finalMessage,
+            'billing',
+            {
+              baseUrl: requestBaseUrl,
+              fallbackImageBuffer: qrisImageBuffer
+            }
+          );
           if (!sent) throw new Error('Gateway WhatsApp menolak pengiriman.');
         } catch (error) {
           console.warn(`[BillingWA] Gagal kirim tagihan invoice ${queuedInvoice.id}: ${error.message || String(error)}`);

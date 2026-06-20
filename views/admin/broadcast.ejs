@@ -14,6 +14,11 @@
     .wa-template-note { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.5; }
     .wa-template-note code { font-size:11px; }
     .wa-inline-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .wa-media-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+    .wa-media-item { border:1px solid var(--border); background:var(--bg2); border-radius:12px; padding:12px; min-width:0; }
+    .wa-media-preview { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:8px; border:1px solid var(--border); background:var(--bg); margin:8px 0; }
+    .wa-media-empty { display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; }
+    .wa-media-remove { display:flex; align-items:center; gap:7px; font-size:11px; color:var(--muted); margin-top:8px; }
     .wa-stack { display:flex; flex-direction:column; gap:18px; }
     .wa-muted-box {
       border:1px dashed var(--border);
@@ -39,7 +44,7 @@
     }
     .wa-form-pending.show { display:flex; }
     @media (max-width: 1024px) {
-      .wa-template-grid, .wa-inline-grid { grid-template-columns:1fr; }
+      .wa-template-grid, .wa-inline-grid, .wa-media-grid { grid-template-columns:1fr; }
     }
     @media (max-width: 768px) {
       .wa-tabs { overflow:auto; padding-bottom:12px; scrollbar-width:none; }
@@ -258,12 +263,40 @@
         <div class="card-hd">
           <h6><i class="bi bi-chat-square-heart"></i> Template Chat Pelanggan</h6>
         </div>
-        <form method="POST" action="/admin/whatsapp/templates" data-wa-submit data-waiting-text="Sedang menyimpan template WhatsApp..." onsubmit="return confirm('Simpan template WhatsApp pelanggan?');">
+        <form method="POST" action="/admin/whatsapp/templates" enctype="multipart/form-data" data-wa-submit data-waiting-text="Sedang menyimpan template WhatsApp..." onsubmit="return confirm('Simpan template WhatsApp pelanggan?');">
           <div class="card-bd">
             <div class="fg" style="margin-bottom:16px;">
               <label class="fl">Link Grup WhatsApp Pelanggan</label>
               <input class="fc" type="url" name="whatsapp_group_invite_link" value="<%= defaultGroupLink %>" placeholder="https://chat.whatsapp.com/...">
               <div class="wa-template-note">Link ini opsional. Jika diisi, template welcome dan aktif kembali bisa otomatis menyisipkan link grup pelanggan.</div>
+            </div>
+
+            <% const templateMediaItems = [
+              { key: 'welcome', setting: 'whatsapp_welcome_image_url', label: 'Selamat Datang' },
+              { key: 'billing', setting: 'whatsapp_billing_image_url', label: 'Tagihan / Invoice' },
+              { key: 'due_reminder', setting: 'whatsapp_due_reminder_image_url', label: 'Jatuh Tempo' },
+              { key: 'isolation', setting: 'whatsapp_isolation_image_url', label: 'Pelanggan Terisolir' },
+              { key: 'paid', setting: 'whatsapp_paid_image_url', label: 'Pembayaran Lunas' },
+              { key: 'reactivation', setting: 'whatsapp_reactivation_image_url', label: 'Aktif Kembali' }
+            ]; %>
+            <div class="wa-media-grid">
+              <% templateMediaItems.forEach((item) => { const imageUrl = String(getSetting(item.setting, '') || '').trim(); %>
+                <div class="wa-media-item">
+                  <label class="fl"><%= item.label %></label>
+                  <% if (imageUrl) { %>
+                    <img class="wa-media-preview" src="<%= imageUrl %>" alt="<%= item.label %>">
+                  <% } else { %>
+                    <div class="wa-media-preview wa-media-empty"><i class="bi bi-image"></i>&nbsp; Teks saja</div>
+                  <% } %>
+                  <input class="fc" type="file" name="<%= item.key %>_image_file" accept="image/png,image/jpeg,image/webp">
+                  <% if (imageUrl) { %>
+                    <label class="wa-media-remove">
+                      <input type="checkbox" name="remove_<%= item.key %>_image" value="1">
+                      Hapus gambar
+                    </label>
+                  <% } %>
+                </div>
+              <% }); %>
             </div>
 
             <div class="wa-template-grid">

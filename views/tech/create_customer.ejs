@@ -7,28 +7,47 @@
   const safeOdps = Array.isArray(odps) ? odps : [];
   const safeOlts = Array.isArray(olts) ? olts : [];
   const safeRequests = Array.isArray(requests) ? requests : [];
+  const formatTechRequestTime = (value) => value ? new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+  const techRequestStatusLabel = (value) => {
+    const status = String(value || '').toLowerCase();
+    if (status === 'approved') return 'Disetujui';
+    if (status === 'rejected') return 'Ditolak';
+    return 'Menunggu';
+  };
+  const techRequestStatusClass = (value) => {
+    const status = String(value || '').toLowerCase();
+    if (status === 'approved') return 'text-bg-success';
+    if (status === 'rejected') return 'text-bg-danger';
+    return 'text-bg-warning';
+  };
 %>
 
 <style>
-  .tech-create-hero{display:grid;gap:10px;padding:16px;background:linear-gradient(145deg, rgba(91,140,255,.16), rgba(39,193,131,.06)), var(--tech-panel)}
-  .tech-create-kicker{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;width:max-content}
-  .tech-create-title{font-size:22px;font-weight:900;letter-spacing:-.04em;line-height:1.06;margin:0}
-  .tech-create-desc{color:var(--tech-muted);font-size:12px;line-height:1.55}
+  .tech-create-hero{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 13px;background:linear-gradient(145deg, rgba(91,140,255,.14), rgba(39,193,131,.05)), var(--tech-panel)}
+  .tech-create-kicker{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:16px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);color:var(--tech-primary);font-size:20px;flex:0 0 auto}
+  .tech-create-kicker span{display:none}
+  .tech-create-title{font-size:16px;font-weight:900;letter-spacing:0;line-height:1.15;margin:0}
+  .tech-create-desc{color:var(--tech-muted);font-size:11px;line-height:1.35}
+  .tech-form-intro{padding:10px 12px}
   .tech-create-section{padding:0}
-  .tech-create-section summary{list-style:none;cursor:pointer;padding:14px 14px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .tech-create-section summary{list-style:none;cursor:pointer;padding:11px 12px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
   .tech-create-section summary::-webkit-details-marker{display:none}
   .tech-create-section .chev{transition:transform .18s ease}
   .tech-create-section[open] .chev{transform:rotate(180deg)}
-  .tech-create-section-body{padding:0 14px 14px}
-  .tech-create-section-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:900}
-  .tech-create-section-sub{font-size:11px;color:var(--tech-muted);margin-top:4px}
-  .tech-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tech-create-section-body{padding:0 12px 12px}
+  .tech-create-section-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:900}
+  .tech-create-section-title i{width:26px;height:26px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--tech-panel-soft);color:var(--tech-primary);font-size:14px}
+  .tech-create-section-sub{font-size:10px;color:var(--tech-muted);margin-top:2px;line-height:1.35}
+  .tech-create-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .tech-create-grid .full{grid-column:1 / -1}
-  .tech-field-card{padding:10px;border-radius:18px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-  .tech-field-card label{display:block;margin-bottom:7px;font-size:11px;font-weight:800;color:var(--tech-muted)}
-  .tech-field-card .field-hint{margin-top:7px}
+  .tech-field-card{padding:8px;border-radius:14px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+  .tech-field-card label{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:10px;font-weight:900;color:var(--tech-muted)}
+  .tech-field-card .field-hint{margin-top:5px;font-size:10px;line-height:1.35;color:var(--tech-muted)}
+  .tech-field-card .form-control,
+  .tech-field-card .form-select{min-height:40px;font-size:12px}
+  .tech-field-card textarea.form-control{min-height:64px}
   .tech-mode-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .tech-mode-btn{min-height:46px;border-radius:16px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));color:var(--tech-text);font-size:12px;font-weight:800;padding:10px 12px}
+  .tech-mode-btn{min-height:40px;border-radius:14px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));color:var(--tech-text);font-size:11px;font-weight:800;padding:8px 10px}
   .tech-mode-btn.active{border-color:rgba(111,141,255,.28);background:linear-gradient(180deg, rgba(111,141,255,.18), rgba(111,141,255,.08));color:var(--tech-primary)}
   .tech-sync-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
   .tech-sync-card{padding:10px 11px;border-radius:16px;border:1px solid var(--tech-border);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025))}
@@ -38,7 +57,7 @@
   .tech-sync-card.warn .value{color:var(--tech-warning)}
   .tech-sync-card.neutral .value{color:var(--tech-text)}
   .tech-upload-actions{display:flex;gap:8px;flex-wrap:wrap}
-  .tech-upload-actions .btn{border-radius:15px;min-height:44px;font-weight:800}
+  .tech-upload-actions .btn{border-radius:14px;min-height:40px;font-size:12px;font-weight:800}
   .tech-upload-preview-row{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-top:10px}
   .tech-upload-preview-card{width:96px;min-height:96px;border-radius:18px;border:1px dashed rgba(148,163,184,.3);background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;overflow:hidden}
   .tech-upload-preview-card img{width:100%;height:96px;object-fit:cover;display:block}
@@ -51,31 +70,64 @@
   .tech-form-actions-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .tech-form-actions .btn{min-height:48px;border-radius:16px;font-weight:800}
   .tech-optional-note{font-size:11px;color:var(--tech-muted);line-height:1.5}
+  .tech-request-list{display:grid;gap:8px}
+  .tech-request-item{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:10px;
+    padding:10px 11px;
+    border-radius:16px;
+    border:1px solid var(--tech-border);
+    background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+  }
+  .tech-request-main{min-width:0;display:grid;gap:5px}
+  .tech-request-title{font-size:13px;font-weight:900;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tech-request-sub{font-size:11px;color:var(--tech-muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tech-request-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .tech-request-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:999px;background:var(--tech-panel-soft);border:1px solid var(--tech-border);font-size:10px;font-weight:800;color:var(--tech-text)}
+  .tech-request-side{display:flex;align-items:center;gap:6px}
+  .tech-request-detail-btn{width:36px;height:36px;border-radius:13px;display:inline-flex;align-items:center;justify-content:center}
+  .tech-request-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tech-request-detail-cell{padding:10px;border-radius:14px;border:1px solid var(--tech-border);background:var(--tech-panel-soft)}
+  .tech-request-detail-label{display:block;margin-bottom:4px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--tech-muted)}
+  .tech-request-detail-value{font-size:12px;font-weight:800;color:var(--tech-text);word-break:break-word}
   .tech-map-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   .tech-map-actions .btn{border-radius:15px;min-height:44px;font-weight:800}
   .tech-hidden-file{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
   @media (max-width:576px){
-    .tech-create-hero{padding:14px}
-    .tech-create-title{font-size:20px}
+    .tech-create-hero{padding:10px 11px}
+    .tech-create-title{font-size:15px}
+    .tech-create-desc{display:none}
+    .tech-form-intro{display:none}
+    .tech-create-section-sub{display:none}
+    .tech-field-card .field-hint{display:none}
     .tech-create-grid{grid-template-columns:1fr}
     .tech-sync-grid{grid-template-columns:1fr}
+    .tech-request-item{padding:9px 10px;gap:8px}
+    .tech-request-title{font-size:12px}
+    .tech-request-sub{font-size:10px}
+    .tech-request-pill:nth-child(n+3){display:none}
+    .tech-request-detail-grid{grid-template-columns:1fr}
     .tech-form-actions{bottom:92px}
   }
 </style>
 
 <div class="t-card tech-create-hero">
-  <span class="tech-create-kicker"><i class="bi bi-person-plus"></i>Tambah Pelanggan</span>
-  <h2 class="tech-create-title">Pengajuan pelanggan baru</h2>
-  <div class="tech-create-desc">Isi data penting dulu, sisanya bisa dilengkapi di bagian opsional.</div>
+  <span class="tech-create-kicker"><i class="bi bi-person-plus"></i><span>Tambah Pelanggan</span></span>
+  <div style="min-width:0;flex:1">
+    <h2 class="tech-create-title">Pengajuan pelanggan baru</h2>
+    <div class="tech-create-desc">Isi data inti, detail tambahan tetap bisa dibuka.</div>
+  </div>
+  <span class="badge-status badge-open" style="white-space:nowrap">Approval</span>
 </div>
 
-<div class="t-card">
+<div class="t-card tech-form-intro">
   <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
     <div>
-      <div class="fw-bold" style="font-size:16px;">Form Pengajuan</div>
-      <div class="text-secondary small">Fokus ke data yang benar-benar dipakai teknisi di lapangan.</div>
+      <div class="fw-bold" style="font-size:13px;">Form Pengajuan</div>
+      <div class="text-secondary small">Gunakan ikon section untuk lompat ke bagian yang diperlukan.</div>
     </div>
-    <span class="badge-status badge-open" style="white-space:nowrap">Butuh approval admin</span>
   </div>
 </div>
 
@@ -118,6 +170,37 @@
         <div class="tech-field-card full">
           <label for="tech_email">Email</label>
           <input id="tech_email" name="email" class="form-control rounded-4 tech-field" type="email" placeholder="Opsional">
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="t-card tech-create-section" open>
+    <summary>
+      <div>
+        <div class="tech-create-section-title"><i class="bi bi-calendar2-check"></i>Pemasangan & Tagihan</div>
+        <div class="tech-create-section-sub">Wajib diisi agar riwayat pemasangan dan jadwal tagihan pelanggan jelas.</div>
+      </div>
+      <i class="bi bi-chevron-down chev"></i>
+    </summary>
+    <div class="tech-create-section-body">
+      <div class="tech-create-grid">
+        <div class="tech-field-card">
+          <label for="install_date">Tanggal Pemasangan</label>
+          <input id="install_date" name="install_date" type="date" class="form-control rounded-4 tech-field" required>
+          <div class="field-hint">Tanggal teknisi memasang atau mengaktifkan layanan pelanggan.</div>
+        </div>
+        <div class="tech-field-card">
+          <label for="tech_isolate_day">Tanggal Jatuh Tempo Tagihan</label>
+          <input id="tech_isolate_day" name="isolate_day" type="number" inputmode="numeric" min="1" max="31" value="10" class="form-control rounded-4 tech-field" required>
+          <div class="field-hint">Diulang setiap bulan. Jika isolir otomatis aktif, layanan juga diisolir pada tanggal ini saat belum lunas.</div>
+        </div>
+        <div class="tech-field-card full">
+          <label for="tech_auto_isolate">Isolir Otomatis Jika Belum Lunas</label>
+          <select id="tech_auto_isolate" name="auto_isolate" class="form-select rounded-4 tech-select">
+            <option value="1">Aktif</option>
+            <option value="0">Tidak Aktif</option>
+          </select>
         </div>
       </div>
     </div>
@@ -366,21 +449,6 @@
           </select>
         </div>
         <div class="tech-field-card">
-          <label for="tech_auto_isolate">Isolir Otomatis</label>
-          <select id="tech_auto_isolate" name="auto_isolate" class="form-select rounded-4 tech-select">
-            <option value="1">Aktif</option>
-            <option value="0">Tidak Aktif</option>
-          </select>
-        </div>
-        <div class="tech-field-card">
-          <label for="tech_isolate_day">Tanggal Isolir (1-31)</label>
-          <input id="tech_isolate_day" name="isolate_day" type="number" min="1" max="31" value="10" class="form-control rounded-4 tech-field">
-        </div>
-        <div class="tech-field-card">
-          <label for="install_date">Tanggal Pasang</label>
-          <input id="install_date" name="install_date" type="date" class="form-control rounded-4 tech-field">
-        </div>
-        <div class="tech-field-card">
           <label for="olt_id">OLT</label>
           <select id="olt_id" name="olt_id" class="form-select rounded-4 tech-select">
             <option value="">-- Tanpa OLT --</option>
@@ -411,21 +479,61 @@
   <% if (safeRequests.length === 0) { %>
     <div class="text-secondary small">Belum ada pengajuan pelanggan.</div>
   <% } else { %>
-    <div class="d-flex flex-column gap-2">
-      <% safeRequests.forEach((r) => { const payload = JSON.parse(String(r.payload_json || '{}') || '{}'); %>
-        <div class="rounded-4 p-3 surface-soft">
-          <div class="d-flex justify-content-between align-items-start gap-2">
-            <div>
-              <div class="fw-bold"><%= r.customer_name %></div>
-              <div class="text-secondary small"><%= r.package_name || 'Tanpa paket' %> &bull; <%= r.customer_phone || '-' %></div>
-              <div class="text-secondary small">Mode secret: <%= payload.create_pppoe_secret ? 'Buat baru saat approval admin' : 'Pakai secret yang sudah ada' %></div>
-              <div class="text-secondary small">Akun: <%= r.pppoe_username || payload.pppoe_username || '-' %> &bull; Password: <%= payload.pppoe_password || '(ikut username)' %></div>
+    <div class="tech-request-list">
+      <% safeRequests.forEach((r, index) => {
+        const payload = JSON.parse(String(r.payload_json || '{}') || '{}');
+        const statusText = techRequestStatusLabel(r.status);
+        const reviewedText = r.reviewed_at ? formatTechRequestTime(r.reviewed_at) : 'Belum diproses';
+        const detailId = `techRequestDetail${Number(r.id || index)}${index}`;
+      %>
+        <div class="tech-request-item">
+          <div class="tech-request-main">
+            <div class="tech-request-title"><%= r.customer_name %></div>
+            <div class="tech-request-sub"><%= r.package_name || 'Tanpa paket' %> &bull; <%= r.customer_phone || '-' %></div>
+            <div class="tech-request-meta">
+              <span class="tech-request-pill"><i class="bi bi-calendar2-check"></i> Pasang <%= payload.install_date || '-' %></span>
+              <span class="tech-request-pill"><i class="bi bi-check2-square"></i> <%= reviewedText %></span>
             </div>
-            <span class="badge <%= r.status === 'approved' ? 'text-bg-success' : (r.status === 'rejected' ? 'text-bg-danger' : 'text-bg-warning') %>"><%= String(r.status || '').toUpperCase() %></span>
           </div>
-          <% if (r.review_note) { %>
-            <div class="text-secondary small mt-2">Catatan: <%= r.review_note %></div>
-          <% } %>
+          <div class="tech-request-side">
+            <span class="badge <%= techRequestStatusClass(r.status) %>"><%= statusText %></span>
+            <button type="button" class="btn btn-outline-light tech-request-detail-btn" data-bs-toggle="modal" data-bs-target="#<%= detailId %>" aria-label="Detail pengajuan <%= r.customer_name %>">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal fade" id="<%= detailId %>" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content rounded-4" style="background:var(--tech-panel);border:1px solid var(--tech-border);color:var(--tech-text)">
+              <div class="modal-header border-0">
+                <div>
+                  <div class="fw-bold"><%= r.customer_name %></div>
+                  <div class="text-secondary small"><%= statusText %> &bull; <%= r.package_name || 'Tanpa paket' %></div>
+                </div>
+                <button type="button" class="btn-close" style="filter:var(--tech-btn-close-filter)" data-bs-dismiss="modal" aria-label="Tutup"></button>
+              </div>
+              <div class="modal-body pt-0">
+                <div class="tech-request-detail-grid">
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">No HP</span><span class="tech-request-detail-value"><%= r.customer_phone || '-' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Paket</span><span class="tech-request-detail-value"><%= r.package_name || '-' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Mode Secret</span><span class="tech-request-detail-value"><%= payload.create_pppoe_secret ? 'Buat baru saat approval admin' : 'Pakai secret yang sudah ada' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Akun PPPoE</span><span class="tech-request-detail-value"><%= r.pppoe_username || payload.pppoe_username || '-' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Password PPPoE</span><span class="tech-request-detail-value"><%= payload.pppoe_password || '(ikut username)' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Tanggal Pemasangan</span><span class="tech-request-detail-value"><%= payload.install_date || '-' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Jatuh Tempo</span><span class="tech-request-detail-value">Tanggal <%= payload.isolate_day || 10 %> setiap bulan</span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Isolir Otomatis</span><span class="tech-request-detail-value"><%= Number(payload.auto_isolate) === 0 ? 'Tidak aktif' : 'Aktif' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Diajukan</span><span class="tech-request-detail-value"><%= formatTechRequestTime(r.created_at) %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label"><%= r.status === 'approved' ? 'Tanggal Approve' : 'Tanggal Review' %></span><span class="tech-request-detail-value"><%= reviewedText %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Diproses Oleh</span><span class="tech-request-detail-value"><%= r.reviewed_by_name || '-' %></span></div>
+                  <div class="tech-request-detail-cell"><span class="tech-request-detail-label">Alamat</span><span class="tech-request-detail-value"><%= payload.address || '-' %></span></div>
+                </div>
+                <% if (r.review_note) { %>
+                  <div class="mt-3 text-secondary small">Catatan review: <%= r.review_note %></div>
+                <% } %>
+              </div>
+            </div>
+          </div>
         </div>
       <% }) %>
     </div>
@@ -875,6 +983,14 @@
     } catch (_e) {}
   }
 
+  function setDefaultInstallDate() {
+    const installDate = document.getElementById('install_date');
+    if (!installDate || installDate.value) return;
+    const now = new Date();
+    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+    installDate.value = localDate;
+  }
+
   function bindTechDraftAutosave() {
     const form = document.getElementById('techCustomerForm');
     let timer = null;
@@ -895,6 +1011,7 @@
   });
 
   restoreTechDraft();
+  setDefaultInstallDate();
   bindTechDraftAutosave();
   bindTechUploadPreview('tech_house_photo_file', 'tech_house_preview', 'tech_house_preview_name', 'Preview Rumah', 'house');
   bindTechUploadPreview('tech_ktp_photo_file', 'tech_ktp_preview', 'tech_ktp_preview_name', 'Preview KTP', 'ktp');

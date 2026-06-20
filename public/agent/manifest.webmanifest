@@ -1,23 +1,23 @@
-{
+﻿{
   "id": "/pwa/agent",
   "name": "Portal Agent",
   "short_name": "Agent",
-  "description": "Portal Agent SICKAS WIFI",
+  "description": "Portal Agent PT Media Solusi Sukses",
   "start_url": "/agent/login?source=pwa",
   "scope": "/agent/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#1e293b",
+  "background_color": "#f5f8ff",
+  "theme_color": "#073dcc",
   "icons": [
     {
-      "src": "/img/logo.png",
+      "src": "/img/mss-logo.png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "/img/logo.png",
+      "src": "/img/mss-logo.png",
       "sizes": "512x512",
       "purpose": "any maskable"
     },

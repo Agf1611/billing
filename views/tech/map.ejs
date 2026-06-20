@@ -1,4 +1,4 @@
-<!-- views/tech/map.ejs -->
+﻿<!-- views/tech/map.ejs -->
 <%- include('partials/header') %>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
@@ -21,7 +21,7 @@
   .lc span { font-size: 11px; font-weight: 700; color: #f1f5f9; }
 
   .marker-odp { color: #f59e0b; font-size: 16px; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
-  .marker-cust-active { color: #3b82f6; font-size: 18px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
+  .marker-cust-active { color: #0b55f4; font-size: 18px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
   .marker-cust-suspended { color: #ef4444; font-size: 18px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff; }
   .popup-dark { color: #1e293b; }
   .popup-dark h6 { margin: 0 0 5px 0; border-bottom: 1px solid #ddd; padding-bottom: 5px; font-weight: bold; }
@@ -58,7 +58,7 @@
     <span>ODP</span>
   </div>
   <div class="lc">
-    <i style="background: #3b82f6;"></i>
+    <i style="background: #0b55f4;"></i>
     <span>Aktif</span>
   </div>
   <div class="lc">
@@ -111,13 +111,13 @@
   // Layers
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '© OSM'
+    attribution: 'Â© OSM'
   });
 
   const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    attribution: '© Google Sat'
+    attribution: 'Â© Google Sat'
   });
 
   osm.addTo(map); // Default set to OSM first
@@ -164,7 +164,7 @@
             <b>Port:</b> ${odp.pon_port || '-'}<br>
             <b>Ket:</b> ${odp.description || '-'}
           </div>
-          <a href="https://www.google.com/maps/dir/?api=1&destination=${odp.lat},${odp.lng}" target="_blank" class="btn btn-wa w-100 text-center mt-2" style="background:#3b82f6">
+          <a href="https://www.google.com/maps/dir/?api=1&destination=${odp.lat},${odp.lng}" target="_blank" class="btn btn-wa w-100 text-center mt-2" style="background:#0b55f4">
             <i class="bi bi-signpost-2"></i> Petunjuk Arah
           </a>
         </div>
@@ -201,7 +201,7 @@
         }
 
         L.polyline(pathCoords, {
-          color: is_active ? '#3b82f6' : '#ef4444',
+          color: is_active ? '#0b55f4' : '#ef4444',
           weight: 3,
           opacity: 0.8,
           dashArray: '10, 10',
@@ -231,7 +231,7 @@
             <a href="${buildWhatsappLink(cust.phone)}" class="btn btn-wa flex-grow-1 text-center">
               <i class="bi bi-whatsapp"></i> Chat
             </a>
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${cust.lat},${cust.lng}" target="_blank" class="btn btn-wa flex-grow-1 text-center" style="background:#3b82f6">
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${cust.lat},${cust.lng}" target="_blank" class="btn btn-wa flex-grow-1 text-center" style="background:#0b55f4">
               <i class="bi bi-geo-alt"></i> Rute
             </a>
           </div>
@@ -255,7 +255,7 @@
         
         L.marker([myLat, myLng], {
           icon: L.divIcon({
-            html: '<i class="bi bi-person-circle text-white" style="font-size:24px; text-shadow: 0 0 10px #3b82f6"></i>',
+            html: '<i class="bi bi-person-circle text-white" style="font-size:24px; text-shadow: 0 0 10px #0b55f4"></i>',
             className: 'custom-div-icon',
             iconSize: [24, 24],
             iconAnchor: [12, 12]

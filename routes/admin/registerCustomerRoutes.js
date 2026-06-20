@@ -2,6 +2,7 @@ const {
   DEFAULT_MAX_BYTES,
   persistCompressedImageUpload
 } = require('../../services/imageUploadService');
+const isolationWhatsappNotificationSvc = require('../../services/isolationWhatsappNotificationService');
 
 module.exports = function registerCustomerRoutes(router, deps = {}) {
   const {
@@ -167,15 +168,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
 
       try {
         if (customer.phone) {
-          const waSent = await trySendWhatsappPayment(
-            customer.phone,
-            buildIsolationWhatsappMessage(
-              customer,
-              unpaidInvoices,
-              'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
-              { baseUrl: requestBaseUrl }
-            )
-          );
+          const waSent = await isolationWhatsappNotificationSvc.sendIsolationNotification(customer, unpaidInvoices, {
+            baseUrl: requestBaseUrl,
+            reason: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.'
+          });
           if (!waSent) logger.warn(`[ManualIsolation] WhatsApp isolir pelanggan ${customer.id} tidak terkirim.`);
         }
       } catch (error) {
@@ -605,7 +601,10 @@ module.exports = function registerCustomerRoutes(router, deps = {}) {
       if (createdCustomer && createdCustomer.phone) {
         const welcomeMessage = buildWelcomeWhatsappMessage(createdCustomer, { baseUrl: resolveRequestBaseUrl(req) });
         if (welcomeMessage) {
-          await trySendWhatsappPayment(createdCustomer.phone, welcomeMessage);
+          await trySendWhatsappPayment(createdCustomer.phone, welcomeMessage, {
+            templateKey: 'welcome',
+            baseUrl: resolveRequestBaseUrl(req)
+          });
         }
       }
 

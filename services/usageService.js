@@ -537,25 +537,16 @@ const syncUsageTotalsTx = db.transaction((customerId, totalIn, totalOut, at = ne
 
     if (suspiciousInflation) {
       anomalyGuardApplied = true;
-      logger.warn(`[usage] Anomali usage terdeteksi untuk customer ${customerId}. Menormalkan ulang total bulanan ke snapshot runtime terbaru. stored=${currentStoredTotal} observed=${currentObservedTotal} prev=${previousObservedTotal}`);
-      createAuditLog(customerId, 'auto_heal', {
+      logger.warn(`[usage] Anomali usage terdeteksi untuk customer ${customerId}. Total bulanan tidak diubah otomatis; simpan audit untuk review manual. stored=${currentStoredTotal} observed=${currentObservedTotal} prev=${previousObservedTotal}`);
+      createAuditLog(customerId, 'suspicious_inflation', {
         storedBytesIn: Number(currentUsage.bytes_in || 0),
         storedBytesOut: Number(currentUsage.bytes_out || 0),
         observedBytesIn: normalizedIn,
         observedBytesOut: normalizedOut,
         deltaBytesIn: deltaIn,
         deltaBytesOut: deltaOut,
-        note: `Auto-heal usage anomaly. previousObserved=${previousObservedTotal}`
+        note: `Suspicious usage anomaly detected; no automatic overwrite. previousObserved=${previousObservedTotal}`
       }, refDate);
-      overwriteUsageForCurrentPeriod(customerId, normalizedIn, normalizedOut, refDate);
-      return {
-        deltaIn: 0,
-        deltaOut: 0,
-        totalIn: normalizedIn,
-        totalOut: normalizedOut,
-        anomalyGuardApplied,
-        healedByOverwrite: true
-      };
     }
   }
 

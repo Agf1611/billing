@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <meta charset="UTF-8">
@@ -154,7 +154,7 @@
 
   <div class="receipt-card" id="receiptCapture">
   <div class="text-center">
-    <img class="logo" src="<%= settings?.company_logo_url || '/img/logo.png' %>" alt="Logo" onerror="this.style.display='none'">
+    <img class="logo" src="<%= settings?.company_logo_url || '/img/mss-logo.png' %>" alt="Logo" onerror="this.style.display='none'">
     <div class="title bold"><%= company %></div>
     <% const wa = (settings && settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length) ? settings.whatsapp_admin_numbers[0] : (settings && settings.company_phone ? settings.company_phone : ''); %>
     <% if (wa) { %>
@@ -223,8 +223,8 @@
   <script>
     (function () {
       const receiptData = {
-        logo: <%- JSON.stringify(settings?.company_logo_url || '/img/logo.png') %>,
-        company: <%- JSON.stringify(company || 'SICKAS WIFI') %>,
+        logo: <%- JSON.stringify(settings?.company_logo_url || '/img/mss-logo.png') %>,
+        company: <%- JSON.stringify(company || 'PT Media Solusi Sukses') %>,
         address: <%- JSON.stringify(settings?.company_address || '') %>,
         phone: <%- JSON.stringify(wa ? (String(wa).startsWith('0') ? wa : ('+' + wa)) : '-') %>,
         support: <%- JSON.stringify(receiptSupportName) %>,

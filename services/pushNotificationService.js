@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const db = require('../config/database');
 const { getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
@@ -63,7 +63,7 @@ function resolveTargetUrl(targetUrl = '', baseUrl = '') {
 }
 
 function resolveNotificationIcon(settings = {}, baseUrl = '') {
-  const icon = normalizeText(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png') || '/img/logo.png';
+  const icon = normalizeText(settings.pwa_logo_url || settings.company_logo_url || '/img/mss-logo.png') || '/img/mss-logo.png';
   return resolveTargetUrl(icon, baseUrl);
 }
 

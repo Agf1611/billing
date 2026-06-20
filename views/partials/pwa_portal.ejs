@@ -4,7 +4,7 @@
   const pwaAssetVersion = '20260528-pwa4';
   const pwaManifestHref = `${pwaManifestBaseHref}${pwaManifestBaseHref.includes('?') ? '&' : '?'}v=${pwaAssetVersion}`;
   const pwaScope = typeof scope !== 'undefined' && scope ? String(scope) : (pwaPortalKey === 'customer' ? '/customer/' : `/${pwaPortalKey}/`);
-  const pwaThemeColor = typeof themeColor !== 'undefined' && themeColor ? String(themeColor) : '#0f172a';
+  const pwaThemeColor = typeof themeColor !== 'undefined' && themeColor ? String(themeColor) : '#073dcc';
   const pwaStartUrlMap = {
     customer: '/customer/login?source=pwa',
     admin: '/admin?source=pwa',
@@ -17,7 +17,7 @@
     ? String(settings.pwa_logo_url || '').trim()
     : ((typeof settings !== 'undefined' && settings && String(settings.company_logo_url || '').trim())
       ? String(settings.company_logo_url || '').trim()
-      : '/img/logo.png');
+      : '/img/mss-logo.png');
   const pwaAppTitle = typeof appTitle !== 'undefined' && appTitle ? String(appTitle) : '';
   const pwaInstallLabelMap = {
     customer: 'Install Pelanggan',
@@ -42,7 +42,7 @@
 <meta name="theme-color" content="<%= pwaThemeColor %>">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="<%= pwaAppTitle || company || 'SICKAS WIFI' %>">
+<meta name="apple-mobile-web-app-title" content="<%= pwaAppTitle || company || 'PT Media Solusi Sukses' %>">
 <link rel="apple-touch-icon" href="<%= pwaLogo %>">
 <link rel="icon" href="<%= pwaLogo %>">
 <style>
@@ -58,9 +58,9 @@
     padding:0 16px;
     border:none;
     border-radius:999px;
-    background:linear-gradient(135deg, #2f6bff 0%, #5b6dfb 100%);
+    background:linear-gradient(135deg, #073dcc 0%, #0b55f4 100%);
     color:#fff;
-    box-shadow:0 18px 40px rgba(47,107,255,.28);
+    box-shadow:0 18px 40px rgba(7,61,204,.26);
     font:700 13px/1 "Plus Jakarta Sans","DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     letter-spacing:.01em;
     cursor:pointer;
@@ -71,7 +71,7 @@
   }
   .pwa-install-launcher:hover{
     transform:translateY(-1px);
-    box-shadow:0 22px 46px rgba(47,107,255,.32);
+    box-shadow:0 22px 46px rgba(7,61,204,.32);
   }
   .pwa-install-launcher:active{
     transform:translateY(0);

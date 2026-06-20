@@ -2,7 +2,7 @@
 <html lang="<%= lang || 'id' %>">
 
 <head>
-  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/mss-logo.png'; %>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title><%= t('customer.pages.tos.meta_title', 'Syarat & Ketentuan') %> | <%= company %></title>
@@ -29,9 +29,9 @@
       --text-main: #1a2740;
       --text-soft: #697897;
       --text-faint: #8c99b0;
-      --brand: #2d6bff;
-      --brand-deep: #204fd7;
-      --teal: #0f9f9a;
+      --brand: #073dcc;
+      --brand-deep: #0634b0;
+      --accent: #f5e900;
       --shadow: 0 28px 70px rgba(41, 79, 143, 0.12);
     }
 
@@ -44,7 +44,7 @@
       color: var(--text-main);
       background:
         radial-gradient(circle at top left, rgba(67, 156, 255, 0.18) 0%, rgba(67, 156, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(15, 159, 154, 0.12) 0%, rgba(15, 159, 154, 0) 28%),
+        radial-gradient(circle at top right, rgba(245, 233, 0, 0.10) 0%, rgba(245, 233, 0, 0) 28%),
         linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
       -webkit-tap-highlight-color: transparent;
     }
@@ -130,7 +130,7 @@
       font-size: 24px;
       line-height: 1.04;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .hero-grid {
@@ -168,7 +168,7 @@
       font-size: clamp(28px, 4vw, 38px);
       line-height: 1.02;
       font-weight: 800;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
     }
 
     .hero-copy p {
@@ -195,7 +195,7 @@
       margin-bottom: 6px;
       font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .summary-card p {
@@ -318,7 +318,7 @@
       font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .section-body p,

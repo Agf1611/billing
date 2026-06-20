@@ -11,6 +11,8 @@ const mikrotikService = require('./mikrotikService');
 const usageSvc = require('./usageService');
 const databaseMaintenanceSvc = require('./databaseMaintenanceService');
 const whatsappGateway = require('./whatsappGatewayService');
+const whatsappTemplateMedia = require('./whatsappTemplateMediaService');
+const isolationWhatsappNotificationSvc = require('./isolationWhatsappNotificationService');
 const { getSetting } = require('../config/settingsManager');
 const { hasStaticQrisEnabled } = require('./qrisService');
 const {
@@ -82,9 +84,14 @@ function isPermanentError(errorMessage) {
   return permanentErrorPatterns.some(pattern => pattern.test(errorMessage));
 }
 
-async function sendCustomerWhatsapp(phone, message) {
+async function sendCustomerWhatsapp(phone, message, templateKey = '', options = {}) {
   if (!getSetting('whatsapp_enabled', false)) return false;
-  return Boolean(await whatsappGateway.sendText(phone, String(message || '').trim()));
+  return Boolean(await whatsappTemplateMedia.sendTemplateMessage(
+    phone,
+    String(message || '').trim(),
+    templateKey,
+    options
+  ));
 }
 
 function buildInvoicePeriods(invoices = []) {
@@ -154,9 +161,9 @@ function buildPaymentGuideMessage(customer, invoices = []) {
   if (baseAmount > 0 && uniqueAmount > 0 && uniqueDelta > 0) {
     lines.push(
       '',
-      `Nominal Bayar Online: Rp ${formatRupiahValue(uniqueAmount)}`,
+      `Nominal transfer: Rp ${formatRupiahValue(uniqueAmount)}`,
       `Kode pembayaran: ${String(uniqueCode || uniqueDelta).padStart(3, '0')}`,
-      'Pilih Bayar Online dan ikuti nominal tersebut agar otomatis terbaca lunas.'
+      'Transfer sesuai nominal tersebut, lalu kirim bukti pembayaran ke admin.'
     );
   }
 
@@ -307,19 +314,14 @@ function startCronJobs() {
             
             // Gunakan fungsi terpusat untuk isolir
             await customerSvc.suspendCustomer(c.id);
-            const isolationTemplate = String(
-              getSetting('whatsapp_isolation_message', defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))) ||
-              defaultIsolationWhatsappTemplate(getSetting('company_header', 'ISP'))
-            ).trim();
             if (c.phone) {
-              const messageContext = buildWhatsappMessageContext(c, dueUnpaidInvoices);
-              await sendCustomerWhatsapp(
-                c.phone,
-                ensureDueDateLine(fillWhatsappTemplate(isolationTemplate, {
-                  ...messageContext,
-                  alasan: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.'
-                }), messageContext.jatuh_tempo)
-              );
+              const waSent = await isolationWhatsappNotificationSvc.sendIsolationNotification(c, dueUnpaidInvoices, {
+                reason: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
+                now
+              });
+              if (!waSent) {
+                logger.warn(`[CRON] Notifikasi WhatsApp isolir pelanggan ${c.name} tidak terkirim.`);
+              }
             }
             
             isolatedCount++;
@@ -469,7 +471,9 @@ function startCronJobs() {
           // Add subtle variation untuk menghindari spam detection
           formattedMsg = addMessageVariation(formattedMsg, i);
 
-          const ok = ready ? await sendCustomerWhatsapp(c.phone, formattedMsg) : false;
+          const ok = ready
+            ? await sendCustomerWhatsapp(c.phone, formattedMsg, target.daysLeft === 7 ? 'billing' : 'due_reminder')
+            : false;
           if (ok) {
             sent++;
             targetCount++;

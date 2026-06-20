@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <%- include('partials/head', { title, company }) %>
 </head>
-<body>
+<body class="agent-voucher-detail-page agent-voucher-detail-<%= (Number(batch.qty_total || vouchers.length || 0) === 1 && vouchers.length === 1) ? 'single' : 'batch' %>">
   <%- include('partials/topbar', { agent, company }) %>
   <main class="wrap">
     <% if (msg) { %>
@@ -14,12 +14,12 @@
       function voucherTheme(price) {
         const value = Number(price || 0);
         const palettes = [
-          { accent:'#a21caf', brand:'#0891b2', soft:'#fdf4ff', wash:'#fff7ff', mark:'rgba(8,145,178,.08)' },
-          { accent:'#2563eb', brand:'#0f766e', soft:'#eff6ff', wash:'#f8fbff', mark:'rgba(15,118,110,.08)' },
+          { accent:'#073dcc', brand:'#073dcc', soft:'#fdf4ff', wash:'#fff7ff', mark:'rgba(8,145,178,.08)' },
+          { accent:'#073dcc', brand:'#0634b0', soft:'#eff6ff', wash:'#f8fbff', mark:'rgba(15,118,110,.08)' },
           { accent:'#dc2626', brand:'#be123c', soft:'#fff1f2', wash:'#fff7f7', mark:'rgba(190,18,60,.08)' },
-          { accent:'#16a34a', brand:'#047857', soft:'#f0fdf4', wash:'#fbfffd', mark:'rgba(4,120,87,.08)' },
+          { accent:'#16a34a', brand:'#073dcc', soft:'#f0fdf4', wash:'#fbfffd', mark:'rgba(4,120,87,.08)' },
           { accent:'#ea580c', brand:'#c2410c', soft:'#fff7ed', wash:'#fffaf5', mark:'rgba(194,65,12,.08)' },
-          { accent:'#7c3aed', brand:'#4338ca', soft:'#f5f3ff', wash:'#fbfaff', mark:'rgba(67,56,202,.08)' }
+          { accent:'#073dcc', brand:'#073dcc', soft:'#f5f3ff', wash:'#fbfaff', mark:'rgba(67,56,202,.08)' }
         ];
         return palettes[Math.abs(Math.floor(value / 1000)) % palettes.length];
       }
@@ -100,7 +100,7 @@
             <% if (firstState && firstState.key === 'ready') { %>
               <button class="btn-action" type="button" data-agent-mark-sold data-voucher-id="<%= firstVoucher.id %>"
               data-company="<%= company %>"
-              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/mss-logo.png' %>"
               data-profile="<%= batch.profile_name || firstVoucher.profile_name || '-' %>"
               data-code="<%= firstVoucher.code || '-' %>"
               data-password="<%= firstVoucher.password || '' %>"
@@ -115,7 +115,7 @@
             <% } else if (firstState && firstState.key === 'sold') { %>
               <button class="btn-action" data-agent-voucher-image data-voucher-id="<%= firstVoucher.id %>"
               data-company="<%= company %>"
-              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+              data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/mss-logo.png' %>"
               data-profile="<%= batch.profile_name || firstVoucher.profile_name || '-' %>"
               data-code="<%= firstVoucher.code || '-' %>"
               data-password="<%= firstVoucher.password || '' %>"
@@ -210,7 +210,7 @@
                   <% if (state.key === 'ready') { %>
                     <button class="btn-action" type="button" data-agent-mark-sold data-voucher-id="<%= v.id %>"
                     data-company="<%= company %>"
-                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/mss-logo.png' %>"
                     data-profile="<%= batch.profile_name || v.profile_name || '-' %>"
                     data-code="<%= v.code || '-' %>"
                     data-password="<%= v.password || '' %>"
@@ -225,7 +225,7 @@
                   <% } else if (state.key === 'sold') { %>
                     <button class="btn-mini" data-agent-voucher-image data-voucher-id="<%= v.id %>"
                     data-company="<%= company %>"
-                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png' %>"
+                    data-logo="<%= typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/mss-logo.png' %>"
                     data-profile="<%= batch.profile_name || v.profile_name || '-' %>"
                     data-code="<%= v.code || '-' %>"
                     data-password="<%= v.password || '' %>"

@@ -2,7 +2,7 @@
 <html lang="<%= lang || 'id' %>">
 
 <head>
-  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/mss-logo.png'; %>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title><%= pageTitle || 'Bayar Online Cadangan' %> | <%= settings.company_header || 'Portal ISP' %></title>
@@ -16,7 +16,7 @@
     portalKey: 'customer',
     manifestPath: '/pwa/customer.webmanifest',
     scope: '/customer/',
-    themeColor: '#f6faff',
+    themeColor: '#073dcc',
     appTitle: 'Portal Pelanggan',
     installLabel: 'Install Pelanggan'
   }) %>
@@ -29,9 +29,9 @@
       --line: rgba(98,128,184,0.16);
       --text-main: #1a2740;
       --text-soft: #697897;
-      --brand: #2d6bff;
-      --brand-deep: #204fd7;
-      --mint: #10a37f;
+      --brand: #073dcc;
+      --brand-deep: #0634b0;
+      --mint: #0b55f4;
       --shadow: 0 28px 70px rgba(41, 79, 143, 0.12);
     }
 
@@ -42,10 +42,7 @@
       margin: 0;
       font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--text-main);
-      background:
-        radial-gradient(circle at top left, rgba(67, 156, 255, 0.18) 0%, rgba(67, 156, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(16, 163, 127, 0.12) 0%, rgba(16, 163, 127, 0) 28%),
-        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+      background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
     }
 
     .wrap {
@@ -95,7 +92,7 @@
       font-size: 22px;
       line-height: 1.08;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .eyebrow {
@@ -185,7 +182,7 @@
       font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
       font-size: clamp(28px, 5vw, 38px);
       line-height: 1;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
       font-weight: 800;
     }
 
@@ -240,7 +237,7 @@
       font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .notice {
@@ -256,7 +253,7 @@
     .notice.success {
       background: rgba(16, 163, 127, 0.10);
       border: 1px solid rgba(16, 163, 127, 0.18);
-      color: #0f766e;
+      color: #0634b0;
     }
 
     .actions {

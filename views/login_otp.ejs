@@ -2,7 +2,7 @@
 <html lang="<%= lang || 'id' %>">
 
 <head>
-    <% const otpLogoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+    <% const otpLogoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/mss-logo.png'; %>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><%= t('customer.otp_title', 'Verifikasi OTP') %> | <%= settings.company_header || 'ISP Portal' %></title>
@@ -16,8 +16,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="apple-touch-icon" href="/img/logo.png">
-    <link rel="icon" href="/img/logo.png">
+    <link rel="apple-touch-icon" href="/img/mss-logo.png">
+    <link rel="icon" href="/img/mss-logo.png">
     <style>
         :root {
             --page-bg: #f4f8ff;
@@ -27,7 +27,7 @@
             --text-main: #18243d;
             --text-soft: #6c7b98;
             --text-faint: #8d98b1;
-            --blue: #2c6bff;
+            --blue: #073dcc;
             --danger-soft: rgba(239, 68, 68, 0.12);
             --danger-text: #d43d51;
             --shadow: 0 28px 70px rgba(40, 79, 144, 0.16);
@@ -150,7 +150,7 @@
             font-size: 21px;
             line-height: 1.04;
             font-weight: 800;
-            letter-spacing: -0.04em;
+            letter-spacing:0;
         }
 
         .brand-copy p {
@@ -192,7 +192,7 @@
             font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
             font-size: 20px;
             font-weight: 800;
-            letter-spacing: -0.03em;
+            letter-spacing:0;
         }
 
         .otp-card-head p {
@@ -224,7 +224,7 @@
         }
 
         .btn-primary {
-            background: linear-gradient(180deg, #4f7dff 0%, #2c6bff 100%);
+            background: linear-gradient(180deg, #4f7dff 0%, #073dcc 100%);
             border: none;
             min-height: 52px;
             border-radius: 16px;

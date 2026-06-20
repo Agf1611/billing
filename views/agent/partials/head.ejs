@@ -4,14 +4,14 @@
   portalKey: 'agent',
   manifestPath: '/pwa/agent.webmanifest',
   scope: '/agent/',
-  themeColor: '#1e293b',
+  themeColor: '#073dcc',
   appTitle: 'Portal Agent'
 }) %>
 <title><%= title || 'Portal Agent' %> - <%= company %></title>
 <script>
   (function () {
     try {
-      var theme = localStorage.getItem('agent-theme') || 'dark';
+      var theme = localStorage.getItem('agent-theme') || 'light';
       document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
     } catch (e) {
       document.documentElement.setAttribute('data-theme', 'dark');

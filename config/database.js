@@ -76,7 +76,8 @@ db.exec(`
     speed_boost_started_at DATETIME,
     speed_boost_note TEXT DEFAULT '',
     notes TEXT DEFAULT '',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME
   );
 
   CREATE TABLE IF NOT EXISTS technicians (
@@ -212,9 +213,11 @@ db.exec(`
     current_name TEXT DEFAULT '',
     current_phone TEXT DEFAULT '',
     current_address TEXT DEFAULT '',
+    current_nik TEXT DEFAULT '',
     requested_name TEXT DEFAULT '',
     requested_phone TEXT DEFAULT '',
     requested_address TEXT DEFAULT '',
+    requested_nik TEXT DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
     request_note TEXT DEFAULT '',
     review_note TEXT DEFAULT '',
@@ -789,6 +792,7 @@ try { db.exec("UPDATE packages SET price_before_tax = price WHERE COALESCE(price
 try { db.exec("ALTER TABLE customers ADD COLUMN normal_pppoe_profile TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE customers ADD COLUMN promo_cycles_used INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("ALTER TABLE customers ADD COLUMN portal_notifications_seen_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE customers ADD COLUMN updated_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_session_id TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE customer_usage_runtime ADD COLUMN last_uptime_seconds INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_customer_portal_notifications_customer_created ON customer_portal_notifications(customer_id, created_at DESC)"); } catch (e) {}
@@ -1027,6 +1031,8 @@ try { db.exec("ALTER TABLE package_change_requests ADD COLUMN rejected_at DATETI
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN cancelled_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN applied_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE package_change_requests ADD COLUMN reviewed_at DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE customer_profile_change_requests ADD COLUMN current_nik TEXT DEFAULT ''"); } catch (e) {}
+try { db.exec("ALTER TABLE customer_profile_change_requests ADD COLUMN requested_nik TEXT DEFAULT ''"); } catch (e) {}
 try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN last_logout_at DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN profile_name TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE pppoe_monitoring_state ADD COLUMN remote_address TEXT"); } catch (e) {}

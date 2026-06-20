@@ -3,7 +3,7 @@
   const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   const agentBalance = Number(agent?.balance || 0);
   const agentFee = Math.max(0, Number(agent?.billing_fee || 0) || 0);
-  const logoSrc = String(typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/logo.png').trim() || '/img/logo.png';
+  const logoSrc = String(typeof logoUrl !== 'undefined' && logoUrl ? logoUrl : '/img/mss-logo.png').trim() || '/img/mss-logo.png';
   const resultTotal = pageInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
   const unpaidTotal = pageInvoices.reduce((sum, inv) => String(inv.status || '').toLowerCase() === 'paid' ? sum : sum + Number(inv.amount || 0), 0);
 %>
@@ -35,7 +35,7 @@
     }
     .pay-check-logo img{max-width:88%;max-height:88%;display:block;object-fit:contain}
     .pay-check-title{min-width:0}
-    .pay-check-title h1{margin:0;font-size:22px;font-weight:950;letter-spacing:-.02em}
+    .pay-check-title h1{margin:0;font-size:22px;font-weight:950;letter-spacing:0}
     .pay-check-title .sub{margin:5px 0 0;color:var(--muted);font-size:12px;font-weight:800}
     .pay-kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
     .pay-kpi{
@@ -68,7 +68,7 @@
     .customer-meta{margin-top:5px;color:var(--muted);font-size:11px;font-weight:800;line-height:1.5}
     .invoice-total{text-align:right;white-space:nowrap}
     .invoice-total strong{display:block;font-size:18px;font-weight:950;color:#7dd3fc}
-    html[data-theme="light"] .invoice-total strong{color:#1d4ed8}
+    html[data-theme="light"] .invoice-total strong{color:#0634b0}
     .payment-card-body{padding:14px;display:grid;gap:12px}
     .pay-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .pay-detail{

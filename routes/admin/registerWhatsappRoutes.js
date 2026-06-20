@@ -1,6 +1,10 @@
-const multer = require('multer');
+﻿const multer = require('multer');
 const { persistCompressedImageUpload } = require('../../services/imageUploadService');
 const whatsappGateway = require('../../services/whatsappGatewayService');
+const {
+  TEMPLATE_IMAGE_SETTINGS,
+  sendTemplateMessage
+} = require('../../services/whatsappTemplateMediaService');
 
 const announcementUpload = multer({
   storage: multer.memoryStorage(),
@@ -11,6 +15,11 @@ const announcementUpload = multer({
     return cb(null, true);
   }
 });
+
+const templateImageFields = Object.keys(TEMPLATE_IMAGE_SETTINGS).map((templateKey) => ({
+  name: `${templateKey}_image_file`,
+  maxCount: 1
+}));
 
 module.exports = function registerWhatsappRoutes(router, deps = {}) {
   const {
@@ -64,6 +73,40 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       maxDimension: 1800
     });
     return saved && saved.publicUrl ? saved : null;
+  }
+
+  function removeUploadedTemplateImage(publicUrl = '') {
+    const cleanUrl = String(publicUrl || '').trim().split('?')[0];
+    if (!/^\/uploads\/whatsapp-template-[a-z0-9-_]+-\d+\.webp$/i.test(cleanUrl)) return;
+    const target = path.resolve(__dirname, '..', '..', 'public', cleanUrl.replace(/^\/+/, '').replace(/\//g, path.sep));
+    const publicRoot = path.resolve(__dirname, '..', '..', 'public');
+    if (!target.startsWith(`${publicRoot}${path.sep}`)) return;
+    try {
+      if (fs.existsSync(target)) fs.unlinkSync(target);
+    } catch (error) {
+      logger.warn(`[WhatsAppTemplate] Gagal menghapus gambar lama: ${error.message || error}`);
+    }
+  }
+
+  async function persistTemplateImages(req, nextSettings) {
+    for (const [templateKey, settingKey] of Object.entries(TEMPLATE_IMAGE_SETTINGS)) {
+      const previousUrl = String(getSetting(settingKey, '') || '').trim();
+      const removeRequested = String(req.body?.[`remove_${templateKey}_image`] || '').trim() === '1';
+      const file = Array.isArray(req.files?.[`${templateKey}_image_file`])
+        ? req.files[`${templateKey}_image_file`][0]
+        : null;
+      if (file) {
+        const saved = await persistCompressedImageUpload(file, `whatsapp-template-${templateKey}`, {
+          maxBytes: 900 * 1024,
+          maxDimension: 1800
+        });
+        removeUploadedTemplateImage(previousUrl);
+        nextSettings[settingKey] = saved.publicUrl;
+      } else if (removeRequested) {
+        removeUploadedTemplateImage(previousUrl);
+        nextSettings[settingKey] = '';
+      }
+    }
   }
 
   function resolveAbsoluteAssetUrl(req, assetUrl = '') {
@@ -504,7 +547,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
     res.redirect('/admin/whatsapp/broadcast');
   });
 
-  router.post('/whatsapp/templates', requireAdminSession, express.urlencoded({ extended: true }), (req, res) => {
+  router.post('/whatsapp/templates', requireAdminSession, announcementUpload.fields(templateImageFields), async (req, res) => {
     try {
       const next = {
         whatsapp_group_invite_link: String(req.body.whatsapp_group_invite_link || '').trim(),
@@ -515,8 +558,9 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
         whatsapp_reactivation_message: String(req.body.whatsapp_reactivation_message || '').trim(),
         whatsapp_paid_message: String(req.body.whatsapp_paid_message || '').trim()
       };
+      await persistTemplateImages(req, next);
       saveSettings(next);
-      req.session._msg = { type: 'success', text: 'Template WhatsApp berhasil diperbarui.' };
+      req.session._msg = { type: 'success', text: 'Template teks dan gambar WhatsApp berhasil diperbarui.' };
     } catch (e) {
       req.session._msg = { type: 'error', text: 'Gagal menyimpan template WhatsApp: ' + e.message };
     }
@@ -544,7 +588,7 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
       const messageText =
         `TEST NOTIFIKASI WHATSAPP\n\n` +
-        `WhatsApp bot untuk ${getSetting('company_header', 'Portal Billing ISP')} sudah berfungsi.\n` +
+        `WhatsApp bot untuk ${getSetting('company_header', 'Portal PT Media Solusi Sukses')} sudah berfungsi.\n` +
         `Waktu: ${new Date().toLocaleString('id-ID')}`;
       const ok = await whatsappGateway.sendText(adminPhone, messageText);
       if (!ok) throw new Error('Gagal mengirim pesan test.');
@@ -568,7 +612,9 @@ module.exports = function registerWhatsappRoutes(router, deps = {}) {
       if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
       const templateKey = String(req.body.template_key || 'billing').trim();
       const previewMessage = buildWhatsappTemplatePreview(templateKey, { baseUrl: resolveRequestBaseUrl(req) });
-      const ok = await whatsappGateway.sendText(adminPhone, previewMessage);
+      const ok = await sendTemplateMessage(adminPhone, previewMessage, templateKey, {
+        baseUrl: resolveRequestBaseUrl(req)
+      });
       if (!ok) throw new Error('Gagal mengirim test message.');
       const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
       req.session._msg = { type: 'success', text: `Test message WhatsApp berhasil dikirim ke ${formatPhoneDisplay(adminPhone)} dalam sekitar ${durationSec} detik.` };

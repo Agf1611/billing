@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -28,9 +28,9 @@
     .map-customer-action-bar.hidden { display:none; }
     .map-customer-action-bar * { pointer-events:auto !important; touch-action:manipulation; }
     .map-customer-action-label { font-size:12px; font-weight:800; white-space:nowrap; color:#e2e8f0; }
-    .btn-customer-action-move { background:linear-gradient(135deg,#6366f1,#4f46e5); border:1px solid rgba(99,102,241,.9); color:#fff; font-weight:900; touch-action:manipulation; min-height:42px; }
+    .btn-customer-action-move { background:linear-gradient(135deg,#073dcc,#0634b0); border:1px solid rgba(99,102,241,.9); color:#fff; font-weight:900; touch-action:manipulation; min-height:42px; }
     .btn-customer-action-move:hover { filter:brightness(.98); color:#fff; }
-    .btn-customer-action-odp { background:linear-gradient(135deg,#14b8a6,#0f766e); border:1px solid rgba(20,184,166,.88); color:#ecfeff; font-weight:900; touch-action:manipulation; min-height:42px; }
+    .btn-customer-action-odp { background:linear-gradient(135deg,#0b55f4,#0634b0); border:1px solid rgba(20,184,166,.88); color:#ecfeff; font-weight:900; touch-action:manipulation; min-height:42px; }
     .btn-customer-action-odp:hover { filter:brightness(.98); color:#ecfeff; }
     .map-relocate-copy { min-width:0; }
     .map-relocate-title { font-size:13px; font-weight:900; display:flex; align-items:center; gap:8px; }
@@ -41,7 +41,7 @@
     .btn-relocate-save { background:linear-gradient(135deg,#22c55e,#16a34a); border:1px solid rgba(22,163,74,.9); color:#03210d; font-weight:900; }
     .btn-relocate-save:hover { filter:brightness(.98); color:#03210d; }
     .btn-relocate-save:disabled { opacity:.55; cursor:not-allowed; filter:none; }
-    .btn-odp-link-save { background:linear-gradient(135deg,#14b8a6,#0f766e); border:1px solid rgba(15,118,110,.9); color:#ecfeff; font-weight:900; }
+    .btn-odp-link-save { background:linear-gradient(135deg,#0b55f4,#0634b0); border:1px solid rgba(15,118,110,.9); color:#ecfeff; font-weight:900; }
     .btn-odp-link-save:hover { filter:brightness(.98); color:#ecfeff; }
     .btn-odp-link-save:disabled { opacity:.55; cursor:not-allowed; filter:none; }
     .customer-relocate-marker,
@@ -56,7 +56,7 @@
     .map-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
     .msc { padding: 12px; border-radius: 18px; background: var(--surface-strong); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-soft); min-width: 0; }
     .msc-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex: 0 0 42px; }
-    .msc-p { background: #eff6ff; color: #3b82f6; }
+    .msc-p { background: #eff6ff; color: #0b55f4; }
     .msc-s { background: #f0fdf4; color: #10b981; }
     .msc-d { background: #fef2f2; color: #ef4444; }
     .msc-w { background: #fff7ed; color: #f59e0b; }
@@ -129,12 +129,12 @@
     .staff-live-head .btn { white-space:nowrap; }
     .staff-filter-bar { display:flex; flex-wrap:wrap; gap:8px; padding:12px 12px 0; }
     .staff-filter-chip { border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:999px; padding:7px 10px; font-size:11px; font-weight:800; display:inline-flex; align-items:center; gap:6px; }
-    .staff-filter-chip.active { background:#eff6ff; border-color:rgba(37,99,235,.28); color:#1d4ed8; }
+    .staff-filter-chip.active { background:#eff6ff; border-color:rgba(37,99,235,.28); color:#0634b0; }
     .staff-filter-chip strong { font-size:10px; color:inherit; opacity:.92; }
     .staff-role-legend { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:12px 12px 0; }
     .staff-role-legend-item { display:flex; align-items:center; gap:8px; min-width:0; border:1px solid #e2e8f0; background:#fff; border-radius:12px; padding:8px 10px; font-size:11px; font-weight:800; color:#334155; }
     .staff-role-dot { width:11px; height:11px; border-radius:999px; display:inline-flex; flex:0 0 11px; box-shadow:0 0 0 2px rgba(255,255,255,.92), 0 0 0 3px rgba(148,163,184,.12); }
-    .staff-role-dot-tech { background:#2563eb; }
+    .staff-role-dot-tech { background:#073dcc; }
     .staff-role-dot-agent { background:#10b981; }
     .staff-role-dot-collector { background:#f59e0b; }
     .staff-role-dot-cashier { background:#8b5cf6; }
@@ -159,7 +159,7 @@
     .staff-live-head-actions { display:flex; align-items:center; gap:8px; }
     .staff-live-card-tools { display:flex; align-items:center; gap:6px; }
     .btn-icon-toggle.is-off { background:#f8fafc; color:#64748b; border-color:#cbd5e1; }
-    .btn-icon-toggle.is-on { background:#eff6ff; color:#2563eb; border-color:rgba(37,99,235,.22); }
+    .btn-icon-toggle.is-on { background:#eff6ff; color:#073dcc; border-color:rgba(37,99,235,.22); }
     .staff-live-actions { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin-top:12px; }
     .staff-live-empty { padding:18px 14px; text-align:center; color:#64748b; font-size:12px; font-weight:700; }
     .staff-live-last { padding:0 12px 12px; font-size:11px; color:var(--muted); font-weight:700; }
@@ -265,19 +265,19 @@
     .customer-div-icon * { pointer-events: none !important; user-select: none; -webkit-user-select: none; }
     .customer-marker-stack { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; min-width:136px; transform: translateY(-2px); }
     .marker-cust-icon { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; font-size:20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
-    .marker-cust-active { color: #3b82f6; }
+    .marker-cust-active { color: #0b55f4; }
     .marker-cust-suspended { color: #ef4444; }
     .marker-cust-good { color: #22c55e; }
     .marker-cust-warning { color: #f59e0b; }
     .customer-div-icon.is-relocating .marker-cust-icon { transform: scale(1.16); filter: drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 0 10px rgba(37,99,235,.5)); }
-    .customer-div-icon.is-relocating .customer-name-inline { display:inline-flex; align-items:center; justify-content:center; background:#1d4ed8; }
+    .customer-div-icon.is-relocating .customer-name-inline { display:inline-flex; align-items:center; justify-content:center; background:#0634b0; }
     .customer-name-inline { display:none; margin-top:4px; max-width:136px; padding:3px 8px; border-radius:999px; background:rgba(15,23,42,.92); color:#fff; box-shadow:0 8px 20px rgba(15,23,42,.24); font-size:11px; font-weight:800; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .customer-div-icon.show-label .customer-name-inline { display:inline-flex; align-items:center; justify-content:center; }
     .customer-label-icon,
     .customer-label-icon * { pointer-events: none !important; user-select: none; -webkit-user-select: none; }
     .customer-name-badge { display:inline-flex; align-items:center; justify-content:center; min-height:22px; max-width:132px; padding:4px 8px; border-radius:999px; background:rgba(15,23,42,.94); color:#fff; box-shadow:0 8px 20px rgba(15,23,42,.24); font-size:10px; font-weight:800; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .marker-staff { font-size: 21px; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.26)); text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
-    .marker-staff-tech { color: #2563eb; }
+    .marker-staff-tech { color: #073dcc; }
     .marker-staff-agent { color: #10b981; }
     .marker-staff-collector { color: #f59e0b; }
     .marker-staff-cashier { color: #8b5cf6; }
@@ -298,14 +298,14 @@
     .popup-actions .btn i { font-size:14px; line-height:1; }
     .popup-actions .btn-popup-detail { background:#0f172a; color:#fff !important; border:1px solid #0f172a; }
     .popup-actions .btn-popup-detail:hover { background:#111827; border-color:#111827; color:#fff !important; }
-    .popup-actions .btn-popup-route { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff !important; border:1px solid #4f46e5; }
+    .popup-actions .btn-popup-route { background:linear-gradient(135deg,#073dcc,#0634b0); color:#fff !important; border:1px solid #0634b0; }
     .popup-actions .btn-popup-route:hover { filter:brightness(.98); color:#fff !important; }
     .popup-actions .btn-popup-wa { background:#25D366; color:#0b1220 !important; border:1px solid #1fb85a; }
     .popup-actions .btn-popup-wa:hover { background:#1fb85a; border-color:#199f4d; }
     .popup-actions-secondary { grid-template-columns:1fr; margin-top:8px; }
     .popup-actions .btn-popup-move { background:#f8fafc; color:#0f172a !important; border:1px solid #cbd5e1; }
-    .popup-actions .btn-popup-move:hover { background:#eef2ff; border-color:#a5b4fc; color:#0f172a !important; }
-    .popup-actions-note { margin-top:8px; padding:8px 10px; border-radius:12px; background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; font-size:11px; font-weight:800; text-align:center; }
+    .popup-actions .btn-popup-move:hover { background:#edf3ff; border-color:#a5b4fc; color:#0f172a !important; }
+    .popup-actions-note { margin-top:8px; padding:8px 10px; border-radius:12px; background:#edf3ff; border:1px solid #c7d2fe; color:#07307f; font-size:11px; font-weight:800; text-align:center; }
     .map-customer-hit-layer { position:absolute; inset:0; z-index:420; pointer-events:none; }
     .map-customer-hit { position:absolute; width:42px; height:42px; margin-left:-21px; margin-top:-21px; border:0; border-radius:999px; background:transparent; pointer-events:auto; touch-action:manipulation; -webkit-tap-highlight-color: transparent; }
     .map-customer-hit:focus-visible { outline:2px solid rgba(37,99,235,.45); outline-offset:2px; }
@@ -349,10 +349,10 @@
     .odp-popup-head { display:flex; flex-direction:column; gap:5px; padding:1px 0 8px; border-bottom:1px solid rgba(148,163,184,.24); }
     .odp-popup-badge { display:inline-flex; align-items:center; width:max-content; padding:3px 8px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:9px; font-weight:900; letter-spacing:.02em; }
     .odp-popup-name { font-size:15px; font-weight:900; line-height:1.05; color:#0f172a; word-break:break-word; }
-    .odp-popup-link { display:inline-flex; align-items:center; gap:5px; color:#2563eb; font-size:11px; font-weight:800; text-decoration:none; }
-    .odp-popup-link:hover { color:#1d4ed8; text-decoration:underline; }
+    .odp-popup-link { display:inline-flex; align-items:center; gap:5px; color:#073dcc; font-size:11px; font-weight:800; text-decoration:none; }
+    .odp-popup-link:hover { color:#0634b0; text-decoration:underline; }
     .odp-copy-btn { margin-top:1px; display:inline-flex; align-items:center; gap:5px; width:max-content; padding:4px 8px; border-radius:9px; border:1px solid #e2e8f0; background:#f8fafc; color:#64748b; font-size:10px; font-weight:800; }
-    .odp-copy-btn:hover { background:#eef2ff; color:#334155; }
+    .odp-copy-btn:hover { background:#edf3ff; color:#334155; }
     .odp-usage-card { margin-top:8px; padding:8px; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; }
     .odp-usage-head { display:flex; align-items:center; justify-content:space-between; gap:6px; color:#334155; font-size:11px; font-weight:800; }
     .odp-usage-head strong { color:#16a34a; font-size:13px; }
@@ -372,7 +372,7 @@
     .odp-popup-empty { font-size:11px; color:#94a3b8; font-weight:700; }
     .odp-popup-actions { display:grid; grid-template-columns:1fr; gap:6px; margin-top:10px; }
     .odp-popup-actions-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
-    .btn-odp-primary { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff !important; border:1px solid #2563eb; font-weight:900; }
+    .btn-odp-primary { background:linear-gradient(135deg,#0b55f4,#073dcc); color:#fff !important; border:1px solid #073dcc; font-weight:900; }
     .btn-odp-primary:hover { filter:brightness(.98); color:#fff !important; }
     .btn-odp-success { background:linear-gradient(135deg,#22c55e,#16a34a); color:#fff !important; border:1px solid #16a34a; font-weight:900; }
     .btn-odp-success:hover { filter:brightness(.98); color:#fff !important; }
@@ -447,7 +447,7 @@
             <span><%= t('admin.map.legend.odp', 'ODP (Box)') %></span>
         </div>
         <div class="lc">
-            <i style="background: #3b82f6;"></i>
+            <i style="background: #0b55f4;"></i>
             <span>Pelanggan Aktif</span>
         </div>
         <div class="lc">
@@ -455,7 +455,7 @@
             <span>Pelanggan Isolir</span>
         </div>
         <div class="lc">
-            <i style="background: #2563eb;"></i>
+            <i style="background: #073dcc;"></i>
             <span>Teknisi</span>
         </div>
         <div class="lc">
@@ -490,7 +490,7 @@
       </div>
       <datalist id="mapCustomerSearchList">
         <% customers.forEach((cust) => { %>
-          <option value="<%= cust.name || '' %>"><%= [cust.pppoe_username, cust.genieacs_tag, cust.phone].filter(Boolean).join(' • ') %></option>
+          <option value="<%= cust.name || '' %>"><%= [cust.pppoe_username, cust.genieacs_tag, cust.phone].filter(Boolean).join(' â€¢ ') %></option>
         <% }) %>
       </datalist>
     </div>
@@ -794,13 +794,13 @@
   // Layers
   const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: 'Â© OpenStreetMap'
+    attribution: 'Ã‚Â© OpenStreetMap'
   });
 
   const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    attribution: 'Â© Google Satellite'
+    attribution: 'Ã‚Â© Google Satellite'
   });
 
   osm.addTo(map);
@@ -891,7 +891,7 @@
     if (kind === 'backbone') {
       return { color: '#8b5cf6', weight, opacity: 0.9, dashArray: null };
     }
-    return { color: '#14b8a6', weight, opacity: 0.88, dashArray: '10, 8' };
+    return { color: '#0b55f4', weight, opacity: 0.88, dashArray: '10, 8' };
   }
 
   function buildBackbonePopupHtml(link) {
@@ -901,7 +901,7 @@
       <div class="odp-popup">
         <div class="odp-popup-head">
           <span class="odp-popup-badge">${escapeHtml(kindText)}</span>
-          <div class="odp-popup-name">${escapeHtml(String(link?.from_odp_name || 'ODP').trim())} → ${escapeHtml(String(link?.to_odp_name || 'ODP').trim())}</div>
+          <div class="odp-popup-name">${escapeHtml(String(link?.from_odp_name || 'ODP').trim())} â†’ ${escapeHtml(String(link?.to_odp_name || 'ODP').trim())}</div>
         </div>
         <div class="odp-popup-section">
           <div class="odp-popup-meta">
@@ -939,7 +939,7 @@
     const usagePercent = Math.max(0, Math.min(100, (usedCount / capacity) * 100));
     const linkedPort = String(odp.pon_port || '').trim();
     const linkedOlt = String(odp.olt_name || '').trim();
-    const connectionSource = [linkedOlt, linkedPort].filter(Boolean).join(' • ') || '-';
+    const connectionSource = [linkedOlt, linkedPort].filter(Boolean).join(' â€¢ ') || '-';
     const coordinates = `${Number(odp.lat || 0).toFixed(6)}, ${Number(odp.lng || 0).toFixed(6)}`;
     const mapsLink = buildMapsLink(odp.lat, odp.lng);
     const customersHtml = previewCustomers.length
@@ -1128,7 +1128,7 @@
         pathCoords = normalizeCustomerPath(pathCoords, customerCoord, odpCoord);
 
         customerPolyline = L.polyline(pathCoords, {
-          color: is_active ? '#3b82f6' : '#ef4444',
+          color: is_active ? '#0b55f4' : '#ef4444',
           weight: 3,
           opacity: 0.8,
           dashArray: '10, 10',
@@ -1166,7 +1166,7 @@
         radius: 22,
         stroke: false,
         fill: true,
-        fillColor: '#2563eb',
+        fillColor: '#073dcc',
         fillOpacity: 0.01,
         opacity: 0,
         interactive: true,
@@ -1486,7 +1486,7 @@
         : '<div class="staff-live-empty">Belum ada karyawan live untuk filter ini.</div>';
     }
     if (last) {
-      last.textContent = `Update lokasi: ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} • Ditampilkan ${visibleStaff.length}/${filtered.length}`;
+      last.textContent = `Update lokasi: ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} â€¢ Ditampilkan ${visibleStaff.length}/${filtered.length}`;
     }
   }
 
@@ -1585,7 +1585,7 @@
         draggable: true,
         zIndexOffset: 2000,
         icon: L.divIcon({
-          html: `<div style="background: ${isEdge ? '#3b82f6' : '#ff0000'}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
+          html: `<div style="background: ${isEdge ? '#0b55f4' : '#ff0000'}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>`,
           className: 'custom-div-icon',
           iconSize: [16, 16],
           iconAnchor: [8, 8]
@@ -1919,7 +1919,7 @@
     const capacity = Math.max(1, Number(odp.port_capacity || 16) || 16);
     const usageText = `${connectedCustomers.length}/${capacity}`;
     const coords = `${Number(odp.lat || 0).toFixed(6)}, ${Number(odp.lng || 0).toFixed(6)}`;
-    const source = [String(odp.olt_name || '').trim(), String(odp.pon_port || '').trim()].filter(Boolean).join(' • ') || '-';
+    const source = [String(odp.olt_name || '').trim(), String(odp.pon_port || '').trim()].filter(Boolean).join(' â€¢ ') || '-';
     const text = [
       `ODP: ${odp.name || '-'}`,
       `Koordinat: ${coords}`,
@@ -2190,7 +2190,7 @@
     if (st.dl.length > 22) st.dl = st.dl.slice(-22);
     if (st.ul.length > 22) st.ul = st.ul.slice(-22);
 
-    drawSparkline(dlCanvas, st.dl, dlMax, '#3b82f6');
+    drawSparkline(dlCanvas, st.dl, dlMax, '#0b55f4');
     drawSparkline(ulCanvas, st.ul, ulMax, '#22c55e');
   }
 
@@ -2288,7 +2288,7 @@
   function toShortText(value, maxLength = 64) {
     const text = String(value || '').replace(/\s+/g, ' ').trim();
     if (!text) return '-';
-    return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…` : text;
+    return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1)).trim()}â€¦` : text;
   }
 
   function buildCustomerCardHtml(payload) {
@@ -2712,7 +2712,7 @@
       } else {
         const isActive = String(ref.customer.status || '').toLowerCase() === 'active';
         ref.polyline = L.polyline([[latlng.lat, latlng.lng], odpCoord], {
-          color: isActive ? '#3b82f6' : '#ef4444',
+          color: isActive ? '#0b55f4' : '#ef4444',
           weight: 3,
           opacity: 0.8,
           dashArray: '10, 10',
@@ -2757,7 +2757,7 @@
     if (odpCoord) {
       const isActive = String(ref.customer.status || '').toLowerCase() === 'active';
       ref.polyline = L.polyline([[customerLatLng.lat, customerLatLng.lng], odpCoord], {
-        color: isActive ? '#3b82f6' : '#ef4444',
+        color: isActive ? '#0b55f4' : '#ef4444',
         weight: 3,
         opacity: 0.8,
         dashArray: '10, 10',

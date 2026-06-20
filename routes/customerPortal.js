@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const customerDevice = require('../services/customerDeviceService');
 const { getSettingsWithCache } = require('../config/settingsManager');
@@ -6,6 +6,7 @@ const billingSvc = require('../services/billingService');
 const paymentSvc = require('../services/paymentService');
 const customerSvc = require('../services/customerService');
 const whatsappGateway = require('../services/whatsappGatewayService');
+const whatsappTemplateMedia = require('../services/whatsappTemplateMediaService');
 const packageChangeSvc = require('../services/packageChangeService');
 const mikrotikService = require('../services/mikrotikService');
 const customerDetailSvc = require('../services/customerDetailService');
@@ -218,9 +219,11 @@ async function trySendGatewayPaidWhatsapp(req, customer, invoice, gatewayLabel, 
     if (!customer?.phone || !invoice) return false;
     const ready = await whatsappGateway.ensureReady(15000);
     if (!ready) throw new Error('WhatsApp belum siap');
-    const ok = await whatsappGateway.sendText(
+    const ok = await whatsappTemplateMedia.sendTemplateMessage(
       customer.phone,
-      buildPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req))
+      buildPaidWhatsappMessage(customer, invoice, gatewayLabel, settings, resolveRequestBaseUrl(req)),
+      'paid',
+      { baseUrl: resolveRequestBaseUrl(req) }
     );
     if (!ok) throw new Error('Gateway WhatsApp mengembalikan gagal');
     return true;
@@ -668,8 +671,9 @@ function getCustomerProfileChangeState(customerId) {
 function normalizeCustomerProfileChangeInput(body = {}) {
   const name = String(body.name || '').trim().replace(/\s+/g, ' ').slice(0, 120);
   const phoneDigits = normalizePhoneDigits(body.phone || '');
+  const nik = String(body.nik || '').trim().replace(/[^\dA-Za-z]/g, '').slice(0, 32);
   const address = String(body.address || '').trim().replace(/\s+/g, ' ').slice(0, 260);
-  return { name, phone: phoneDigits, address };
+  return { name, phone: phoneDigits, nik, address };
 }
 
 async function getCustomerPaymentChannels(settings = {}) {
@@ -844,6 +848,7 @@ function buildPortalCustomerViewModel(profile, deviceData, pppoeSnapshot) {
     id: pickFirstUsable(profileBase.id, deviceBase.id, null),
     name: pickFirstUsable(profileBase.name, deviceBase.name, 'Pelanggan'),
     phone: pickFirstUsable(profileBase.phone, deviceBase.phone, '-'),
+    nik: pickFirstUsable(profileBase.nik, deviceBase.nik, ''),
     address: pickFirstUsable(profileBase.address, deviceBase.address, deviceBase.lokasi, '-'),
     lokasi: pickFirstUsable(profileBase.address, profileBase.lokasi, deviceBase.lokasi, '-'),
     package_name: pickFirstUsable(profileBase.package_name, deviceBase.package_name, '-'),
@@ -1291,7 +1296,7 @@ router.post('/public/voucher/create-payment', async (req, res) => {
   }
 });
 
-// ─── REGISTRATION / PENDAFTARAN ─────────────────────────────────────────────
+// â”€â”€â”€ REGISTRATION / PENDAFTARAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/register', (req, res) => {
   const settings = getSettingsWithCache();
   const packages = customerSvc.getAllPackages().filter(p => p.is_active !== 0);
@@ -1326,10 +1331,10 @@ router.post('/register', async (req, res) => {
       const selectedPkg = packages.find(p => p.id.toString() === package_id.toString());
       const pkgName = selectedPkg ? selectedPkg.name : 'Tidak diketahui';
       
-      const adminMsg = `🔔 *PENDAFTARAN BARU*\n\nAda calon pelanggan baru yang mendaftar via web:\n\n👤 *Nama:* ${name}\n📞 *WA:* ${phone}\n📍 *Alamat:* ${address}\n📦 *Paket:* ${pkgName}\n\nSilakan cek di panel Admin untuk menindaklanjuti.`;
+      const adminMsg = `ðŸ”” *PENDAFTARAN BARU*\n\nAda calon pelanggan baru yang mendaftar via web:\n\nðŸ‘¤ *Nama:* ${name}\nðŸ“ž *WA:* ${phone}\nðŸ“ *Alamat:* ${address}\nðŸ“¦ *Paket:* ${pkgName}\n\nSilakan cek di panel Admin untuk menindaklanjuti.`;
       const latStr = String(lat || '').trim();
       const lngStr = String(lng || '').trim();
-      const mapLine = (latStr && lngStr) ? `\n🗺️ *Lokasi:* https://maps.google.com/?q=${encodeURIComponent(latStr)},${encodeURIComponent(lngStr)}` : '';
+      const mapLine = (latStr && lngStr) ? `\nðŸ—ºï¸ *Lokasi:* https://maps.google.com/?q=${encodeURIComponent(latStr)},${encodeURIComponent(lngStr)}` : '';
       const finalAdminMsg = adminMsg + mapLine;
       
       const seen = new Set();
@@ -1561,7 +1566,7 @@ router.get('/invoices/:id/print', (req, res) => {
   return res.render('admin/print_invoice', {
     invoice,
     customer,
-    company: settings.company_header || 'Billing ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     settings,
     printStyle,
     viewerRole: 'customer',
@@ -1605,7 +1610,7 @@ router.get('/public/invoices/:id/print', (req, res) => {
   return res.render('admin/print_invoice', {
     invoice,
     customer,
-    company: settings.company_header || 'Billing ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     settings,
     printStyle,
     viewerRole: 'public',
@@ -1636,7 +1641,7 @@ router.get('/i/:code', (req, res) => {
   return res.render('admin/print_invoice', {
     invoice,
     customer,
-    company: settings.company_header || 'Billing ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     settings,
     printStyle,
     viewerRole: 'public',
@@ -1665,7 +1670,7 @@ function renderPublicShortInvoice(req, res, code) {
   return res.render('admin/print_invoice', {
     invoice,
     customer,
-    company: settings.company_header || 'Billing ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     settings,
     printStyle,
     viewerRole: 'public',
@@ -2217,9 +2222,13 @@ router.post('/profile/change', async (req, res) => {
     const current = {
       name: String(profile.name || '').trim(),
       phone: normalizePhoneDigits(profile.phone || ''),
+      nik: String(profile.nik || '').trim(),
       address: String(profile.address || '').trim()
     };
-    const changed = current.name !== requested.name || current.phone !== requested.phone || current.address !== requested.address;
+    const changed = current.name !== requested.name
+      || current.phone !== requested.phone
+      || current.nik !== requested.nik
+      || current.address !== requested.address;
     if (!changed) throw new Error('Tidak ada data yang berubah');
 
     const pending = db.prepare(`
@@ -2233,18 +2242,20 @@ router.post('/profile/change', async (req, res) => {
 
     const result = db.prepare(`
       INSERT INTO customer_profile_change_requests (
-        customer_id, current_name, current_phone, current_address,
-        requested_name, requested_phone, requested_address,
+        customer_id, current_name, current_phone, current_address, current_nik,
+        requested_name, requested_phone, requested_address, requested_nik,
         status, request_note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     `).run(
       profile.id,
       current.name,
       current.phone,
       current.address,
+      current.nik,
       requested.name,
       requested.phone,
       requested.address,
+      requested.nik,
       String(req.body.note || '').trim().slice(0, 240)
     );
 
@@ -2262,7 +2273,7 @@ router.post('/profile/change', async (req, res) => {
         title: 'Approval Perubahan Profil',
         requester: profile.name || profile.phone || `Pelanggan #${profile.id}`,
         subject: `Perubahan profil ${profile.name || profile.phone || profile.id}`,
-        detail: `Request #${requestId} - nama/no HP/alamat`,
+        detail: `Request #${requestId} - nama/no HP/NIK/alamat`,
         targetUrl: '/admin/customer-requests?status=pending'
       }).catch((error) => logger.warn(`[ProfileApproval] Gagal kirim notif admin: ${error.message || String(error)}`));
     });
@@ -2326,6 +2337,25 @@ router.post('/notifications/read', (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     return res.status(500).json({ ok: false, error: error.message || 'failed' });
+  }
+});
+
+router.post('/notifications/:id/delete', (req, res) => {
+  try {
+    const profile = getSessionCustomer(req);
+    if (!profile || !profile.id) return res.status(401).json({ ok: false, error: 'unauthorized' });
+    const notificationId = Number(req.params.id || 0);
+    customerSvc.deletePortalNotification(profile.id, notificationId);
+    const wantsJson = String(req.headers['x-requested-with'] || '').toLowerCase() === 'fetch'
+      || String(req.headers.accept || '').includes('application/json');
+    if (wantsJson) return res.json({ ok: true });
+    return res.redirect('/customer/dashboard#notifications');
+  } catch (error) {
+    const wantsJson = String(req.headers['x-requested-with'] || '').toLowerCase() === 'fetch'
+      || String(req.headers.accept || '').includes('application/json');
+    if (wantsJson) return res.status(500).json({ ok: false, error: error.message || 'failed' });
+    req.session._msg = { type: 'danger', text: error.message || 'Gagal menghapus pesan.', target: 'profile' };
+    return res.redirect('/customer/dashboard#profile');
   }
 });
 
@@ -2649,7 +2679,7 @@ router.get('/public/payment/static/:invoiceId/status', async (req, res) => {
   }
 });
 
-// ─── TICKETS / KELUHAN ─────────────────────────────────────────────────────
+// â”€â”€â”€ TICKETS / KELUHAN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.post('/tickets/create', async (req, res) => {
   const profile = getSessionCustomer(req);
   if (!profile) return res.redirect('/customer/login');
@@ -2692,12 +2722,12 @@ router.post('/tickets/create', async (req, res) => {
       if (settings.whatsapp_enabled) {
         const customer = customerSvc.getCustomerById(customerId);
         
-        const waMsg = `🎫 *TIKET KELUHAN BARU*\n\n` +
-                     `👤 *Pelanggan:* ${customer ? customer.name : 'Unknown'}\n` +
-                     `📞 *WhatsApp:* ${customer ? customer.phone : '-'}\n` +
-                     `📍 *Alamat:* ${customer ? customer.address : '-'}\n` +
-                     `📝 *Subjek:* ${subject}\n` +
-                     `💬 *Pesan:* ${message}\n\n` +
+        const waMsg = `ðŸŽ« *TIKET KELUHAN BARU*\n\n` +
+                     `ðŸ‘¤ *Pelanggan:* ${customer ? customer.name : 'Unknown'}\n` +
+                     `ðŸ“ž *WhatsApp:* ${customer ? customer.phone : '-'}\n` +
+                     `ðŸ“ *Alamat:* ${customer ? customer.address : '-'}\n` +
+                     `ðŸ“ *Subjek:* ${subject}\n` +
+                     `ðŸ’¬ *Pesan:* ${message}\n\n` +
                      `Silakan cek di panel Admin/Teknisi untuk menindaklanjuti.`;
 
         // Kirim ke Admin
@@ -2739,7 +2769,7 @@ router.post('/tickets/create', async (req, res) => {
   res.redirect('/customer/dashboard');
 });
 
-// ─── PAYMENT ROUTES ────────────────────────────────────────────────────────
+// â”€â”€â”€ PAYMENT ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/payment/create/:invoiceId', async (req, res) => {
   const profile = getSessionCustomer(req);
   if (!profile) return res.redirect('/customer/login');
@@ -3105,12 +3135,12 @@ router.post('/payment/callback', express.json(), async (req, res) => {
             if (!ready) throw new Error('WhatsApp belum terhubung');
             if (!fresh.buyer_phone) throw new Error('Nomor WhatsApp pembeli kosong');
             const msg =
-              `🎫 *VOUCHER HOTSPOT*\n\n` +
-              `✅ Pembayaran diterima via *${gateway}*\n` +
-              `📦 Paket: *${fresh.profile_name}* (${fresh.validity || '-'})\n` +
-              `💰 Harga: Rp ${Number(fresh.price || 0).toLocaleString('id-ID')}\n\n` +
-              `👤 User: *${created.code}*\n` +
-              `🔑 Pass: *${created.pass}*\n\n` +
+              `ðŸŽ« *VOUCHER HOTSPOT*\n\n` +
+              `âœ… Pembayaran diterima via *${gateway}*\n` +
+              `ðŸ“¦ Paket: *${fresh.profile_name}* (${fresh.validity || '-'})\n` +
+              `ðŸ’° Harga: Rp ${Number(fresh.price || 0).toLocaleString('id-ID')}\n\n` +
+              `ðŸ‘¤ User: *${created.code}*\n` +
+              `ðŸ”‘ Pass: *${created.pass}*\n\n` +
               `Terima kasih.`;
             await whatsappGateway.sendText(fresh.buyer_phone, msg);
             db.prepare(`
@@ -3179,7 +3209,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
           if (!customer.phone) throw new Error('Nomor WhatsApp pelanggan kosong');
           const totalPaid = bulkInvoices.reduce((sum, invoice) => sum + (Number(invoice.amount || 0) || 0), 0);
           const periods = formatBulkInvoicePeriods(bulkInvoices);
-          const msg = `✅ *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran gabungan tagihan internet periode *${periods}* telah kami terima via *${gateway}*.\n\n💰 *Total:* Rp ${totalPaid.toLocaleString('id-ID')}\n🕒 *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus tagihan yang dibayar sudah lunas.`;
+          const msg = `âœ… *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran gabungan tagihan internet periode *${periods}* telah kami terima via *${gateway}*.\n\nðŸ’° *Total:* Rp ${totalPaid.toLocaleString('id-ID')}\nðŸ•’ *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus tagihan yang dibayar sudah lunas.`;
           await whatsappGateway.sendText(customer.phone, msg);
         }
       } catch (waErr) {
@@ -3216,8 +3246,13 @@ router.post('/payment/callback', express.json(), async (req, res) => {
         if (!customer.phone) {
           throw new Error('Nomor WhatsApp pelanggan kosong');
         }
-        const msg = `✅ *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran tagihan internet periode *${checkInv.period_month}/${checkInv.period_year}* telah kami terima via *${gateway}*.\n\n💰 *Total:* Rp ${checkInv.amount.toLocaleString('id-ID')}\n📅 *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus layanan Anda kini telah aktif. Selamat berinternet kembali! 🚀`;
-        const sent = await whatsappGateway.sendText(customer.phone, buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)));
+        const msg = `âœ… *PEMBAYARAN BERHASIL*\n\nTerima kasih Kak *${customer.name}*,\n\nPembayaran tagihan internet periode *${checkInv.period_month}/${checkInv.period_year}* telah kami terima via *${gateway}*.\n\nðŸ’° *Total:* Rp ${checkInv.amount.toLocaleString('id-ID')}\nðŸ“… *Waktu:* ${new Date().toLocaleString('id-ID')}\n\nStatus layanan Anda kini telah aktif. Selamat berinternet kembali! ðŸš€`;
+        const sent = await whatsappTemplateMedia.sendTemplateMessage(
+          customer.phone,
+          buildPaidWhatsappMessage(customer, checkInv, gateway, settings, resolveRequestBaseUrl(req)),
+          'paid',
+          { baseUrl: resolveRequestBaseUrl(req) }
+        );
         if (!sent) {
           throw new Error('sendWA mengembalikan gagal');
         }

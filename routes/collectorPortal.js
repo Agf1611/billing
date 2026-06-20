@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { getSetting } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
@@ -14,10 +14,10 @@ function requireCollectorSession(req, res, next) {
 }
 
 function company() {
-  return getSetting('company_header', 'ISP App');
+  return getSetting('company_header', 'PT Media Solusi Sukses');
 }
 function companyLogo() {
-  return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png';
+  return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
 }
 
 function flashMsg(req) {
@@ -35,17 +35,17 @@ router.get('/manifest.webmanifest', (req, res) => {
     id: '/collector/',
     name: 'Portal Kolektor',
     short_name: 'Kolektor',
-    description: `Portal Kolektor ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    description: `Portal Kolektor ${String(getSetting('company_header', 'PT Media Solusi Sukses') || 'PT Media Solusi Sukses').trim() || 'PT Media Solusi Sukses'}`,
     start_url: '/collector/login?source=pwa',
     scope: '/collector/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
     orientation: 'portrait',
-    background_color: '#08111f',
-    theme_color: '#0f172a',
+    background_color: '#f5f8ff',
+    theme_color: '#073dcc',
     icons: [
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '512x512', purpose: 'any maskable' },
       { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
     ]
   });
@@ -210,6 +210,7 @@ router.get('/', requireCollectorSession, (req, res) => {
   res.render('collector/dashboard', {
     title: 'Dashboard Kolektor',
     company: company(),
+    logoUrl: companyLogo(),
     collectorName: String(req.session.collectorName || req.session.collectorUsername || 'Kolektor').trim(),
     month,
     year,

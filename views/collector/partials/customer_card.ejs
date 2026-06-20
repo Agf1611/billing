@@ -26,11 +26,11 @@
 >
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
     <div style="min-width:0;">
-      <h3 style="margin:0;font-size:15px;font-weight:900;letter-spacing:-.03em;line-height:1.12;"><%= inv.customer_name || '-' %></h3>
+      <h3 style="margin:0;font-size:15px;font-weight:900;letter-spacing:0;line-height:1.12;"><%= inv.customer_name || '-' %></h3>
       <div style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.4;"><%= subtitle %></div>
     </div>
     <div style="text-align:right;white-space:nowrap;">
-      <div style="font-size:18px;font-weight:900;letter-spacing:-.04em;">Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %></div>
+      <div style="font-size:18px;font-weight:900;letter-spacing:0;">Rp <%= Number(inv.amount || 0).toLocaleString('id-ID') %></div>
       <span class="status-pill <%= statusTone %>" style="margin-top:6px;">
         <i class="bi <%= statusIcon %>"></i>
         <span><%= isPaid ? 'LUNAS' : (isPending ? 'PENDING' : 'BELUM') %></span>

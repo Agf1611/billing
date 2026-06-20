@@ -1,4 +1,4 @@
-<script>
+﻿<script>
   (function () {
     const btn = document.getElementById('agentThemeToggle');
     const root = document.documentElement;
@@ -227,21 +227,21 @@
     canvas.width = 1200;
     canvas.height = 760;
     const ctx = canvas.getContext('2d');
-    const company = String(data.company || 'SICKAS WIFI').trim();
+    const company = String(data.company || 'PT Media Solusi Sukses').trim();
     const profile = String(data.profile || '-').trim();
     const code = String(data.code || '-').trim();
     const password = String(data.password || '').trim();
     const validity = String(data.validity || '-').trim();
     const price = String(data.price || '-').trim();
-    const logo = await agentLoadImage(data.logo || '/img/logo.png');
+    const logo = await agentLoadImage(data.logo || '/img/mss-logo.png');
     const numericPrice = Number(price.replace(/[^\d]/g, '')) || 0;
     const palettes = [
-      { accent:'#a21caf', brand:'#0891b2', soft:'#fdf4ff', wash:'#fff7ff', mark:'rgba(8,145,178,.08)' },
-      { accent:'#2563eb', brand:'#0f766e', soft:'#eff6ff', wash:'#f8fbff', mark:'rgba(15,118,110,.08)' },
+      { accent:'#073dcc', brand:'#073dcc', soft:'#fdf4ff', wash:'#fff7ff', mark:'rgba(8,145,178,.08)' },
+      { accent:'#073dcc', brand:'#0634b0', soft:'#eff6ff', wash:'#f8fbff', mark:'rgba(15,118,110,.08)' },
       { accent:'#dc2626', brand:'#be123c', soft:'#fff1f2', wash:'#fff7f7', mark:'rgba(190,18,60,.08)' },
-      { accent:'#16a34a', brand:'#047857', soft:'#f0fdf4', wash:'#fbfffd', mark:'rgba(4,120,87,.08)' },
+      { accent:'#073dcc', brand:'#073dcc', soft:'#f0fdf4', wash:'#fbfffd', mark:'rgba(4,120,87,.08)' },
       { accent:'#ea580c', brand:'#c2410c', soft:'#fff7ed', wash:'#fffaf5', mark:'rgba(194,65,12,.08)' },
-      { accent:'#7c3aed', brand:'#4338ca', soft:'#f5f3ff', wash:'#fbfaff', mark:'rgba(67,56,202,.08)' }
+      { accent:'#073dcc', brand:'#073dcc', soft:'#f5f3ff', wash:'#fbfaff', mark:'rgba(67,56,202,.08)' }
     ];
     const fallbackTheme = palettes[Math.abs(Math.floor(numericPrice / 1000)) % palettes.length];
     const accent = data.accent || fallbackTheme.accent;
@@ -309,7 +309,7 @@
     ctx.textAlign = 'center';
     ctx.translate(845, 420);
     ctx.rotate(-0.18);
-    ctx.fillText('SICKAS', 0, 0);
+    ctx.fillText('MSS', 0, 0);
     ctx.restore();
 
     ctx.fillStyle = accent;

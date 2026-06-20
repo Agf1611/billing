@@ -1,4 +1,4 @@
-<%
+﻿<%
   const safeUnpaidInvoices = Array.isArray(unpaidInvoices) ? unpaidInvoices : [];
   const safePaidInvoices = Array.isArray(paidInvoices) ? paidInvoices : [];
   const safeMonthNames = Array.isArray(monthNames)
@@ -137,7 +137,7 @@
        : (settings?.company_header || 'Portal Pelanggan');
      const pageCompanyLogoUrl = typeof companyLogoUrl !== 'undefined'
        ? companyLogoUrl
-       : (settings?.company_logo_url || '/img/logo.png'); %>
+       : (settings?.company_logo_url || '/img/mss-logo.png'); %>
   <% if (companyLegalName || companyAddressText || companyPhoneText || companyEmailText || hasManualPayment) { %>
     <div class="business-card">
       <div class="business-topline">
@@ -146,7 +146,7 @@
       </div>
 
       <div class="business-head">
-        <img src="<%= pageCompanyLogoUrl %>" alt="Logo Usaha" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <img src="<%= pageCompanyLogoUrl %>" alt="Logo Usaha" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
         <div>
           <strong><%= pageCompanyName %></strong>
           <span><%= companyLegalName || 'Identitas usaha dapat diatur dari menu admin.' %></span>

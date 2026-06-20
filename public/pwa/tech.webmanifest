@@ -1,8 +1,8 @@
-{
+﻿{
   "id": "/pwa/tech",
   "name": "Portal Teknisi",
   "short_name": "Teknisi",
-  "description": "Portal Teknisi SICKAS WIFI",
+  "description": "Portal Teknisi PT Media Solusi Sukses",
   "start_url": "/tech/login?source=pwa",
   "scope": "/tech/",
   "display": "standalone",
@@ -11,11 +11,11 @@
     "client_mode": ["navigate-existing", "auto"]
   },
   "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#f5f8ff",
+  "theme_color": "#073dcc",
   "icons": [
-    { "src": "/img/logo.png", "sizes": "192x192", "purpose": "any maskable" },
-    { "src": "/img/logo.png", "sizes": "512x512", "purpose": "any maskable" },
+    { "src": "/img/mss-logo.png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "/img/mss-logo.png", "sizes": "512x512", "purpose": "any maskable" },
     { "src": "/img/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }

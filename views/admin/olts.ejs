@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -95,7 +95,7 @@
     .stat-card-v2 .details h3 { margin: 0; font-size: 22px; font-weight: 800; color: var(--text); line-height: 1; }
     .stat-card-v2 .details p { margin: 3px 0 0; font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
     
-    .bg-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .bg-blue { background: linear-gradient(135deg, #0b55f4, #073dcc); }
     .bg-green { background: linear-gradient(135deg, #10b981, #059669); }
     .bg-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
     .bg-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
@@ -222,12 +222,12 @@
     .power-danger { color: #dc2626; background: #fef2f2; font-weight: 800; }
 
     .brand-badge { font-weight: 700; text-transform: uppercase; font-size: 10px; padding: 2px 5px; border-radius: 4px; }
-    .brand-zte { background: #eff6ff; color: #2563eb; }
+    .brand-zte { background: #eff6ff; color: #073dcc; }
     .brand-huawei { background: #fef2f2; color: #dc2626; }
     .brand-vsol { background: #f0fdf4; color: #16a34a; }
     .brand-cdata { background: #fff7ed; color: #ea580c; }
     .brand-hioso { background: #fffbeb; color: #d97706; }
-    .brand-hsgq { background: #f5f3ff; color: #7c3aed; }
+    .brand-hsgq { background: #f5f3ff; color: #073dcc; }
 
     .spin { animation: rotate 2s linear infinite; display: inline-block; }
     @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -247,12 +247,12 @@
     }
     .btn-action-v2:hover { background: var(--surface-soft); color: var(--text); border-color: var(--panel-border); }
     .btn-reboot-v2:hover { color: #ef4444; background: #fef2f2; border-color: #fee2e2; }
-    .btn-rename-v2:hover { color: #3b82f6; background: #eff6ff; border-color: #dbeafe; }
+    .btn-rename-v2:hover { color: #0b55f4; background: #eff6ff; border-color: #e6efff; }
     .btn-wan-v2:hover { color: #059669; background: #ecfdf5; border-color: #d1fae5; }
 
     .traffic-v2 { display: flex; gap: 10px; font-family: monospace; font-size: 11px; font-weight: 700; }
     .traffic-in-v2 { color: #10b981; }
-    .traffic-out-v2 { color: #3b82f6; }
+    .traffic-out-v2 { color: #0b55f4; }
 
     .empty-state { padding: 42px 16px; text-align: center; color: var(--muted); }
     .empty-state i { font-size: 40px; display: block; margin-bottom: 12px; }
@@ -1284,7 +1284,7 @@ function renderOnuTable(stats = {}, id) {
         <td data-label="ONU">
           <div class="onu-name-cell">
             <span class="onu-name-main">${onu.name || '-'}</span>
-            <span class="onu-name-meta">${onu.id || '-'}${onu.firmware && onu.firmware !== '-' ? ` • FW ${onu.firmware}` : ''}</span>
+            <span class="onu-name-meta">${onu.id || '-'}${onu.firmware && onu.firmware !== '-' ? ` â€¢ FW ${onu.firmware}` : ''}</span>
           </div>
         </td>
         <td data-label="MAC ONU"><code class="sn-mac">${onu.mac || '-'}</code></td>

@@ -11,50 +11,50 @@
     .request-shell{display:grid;gap:18px}
     .request-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .request-filter-row{display:flex;gap:8px;flex-wrap:wrap}
-    .request-list{display:grid;gap:12px}
+    .request-list{display:grid;gap:8px}
     .request-card{
       background:var(--bg2);
       border:1px solid var(--border);
-      border-radius:18px;
-      padding:14px;
-      box-shadow:var(--shadow-card);
+      border-radius:14px;
+      padding:10px 12px;
+      box-shadow:0 10px 26px rgba(2,8,23,.12);
       display:grid;
-      gap:12px;
+      gap:8px;
     }
     .request-summary{
       display:grid;
       grid-template-columns:minmax(0,1fr) auto;
-      gap:12px;
-      align-items:start;
+      gap:10px;
+      align-items:center;
     }
-    .request-main{display:grid;gap:6px;min-width:0}
-    .request-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-    .request-title{font-size:17px;font-weight:800;line-height:1.2;color:var(--text);word-break:break-word}
+    .request-main{display:grid;gap:5px;min-width:0}
+    .request-title-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .request-title{font-size:14px;font-weight:850;line-height:1.2;color:var(--text);word-break:break-word}
     .request-type{
       display:inline-flex;
       align-items:center;
       gap:6px;
-      padding:5px 9px;
+      padding:4px 8px;
       border-radius:999px;
-      font-size:11px;
+      font-size:10px;
       font-weight:700;
       background:var(--surface-soft);
       color:var(--muted);
       border:1px solid var(--border);
     }
-    .request-subtitle{font-size:12px;color:var(--muted);line-height:1.45}
+    .request-subtitle{font-size:11px;color:var(--muted);line-height:1.35}
     .request-meta{
       display:flex;
       flex-wrap:wrap;
-      gap:8px;
+      gap:6px;
     }
     .request-pill{
       display:inline-flex;
       align-items:center;
-      gap:6px;
-      padding:7px 10px;
+      gap:5px;
+      padding:5px 8px;
       border-radius:999px;
-      font-size:12px;
+      font-size:11px;
       font-weight:700;
       background:var(--surface-soft);
       color:var(--text);
@@ -69,8 +69,8 @@
       flex-wrap:wrap;
     }
     .request-icon-btn{
-      width:38px;
-      height:38px;
+      width:36px;
+      height:36px;
       display:inline-flex;
       align-items:center;
       justify-content:center;
@@ -182,6 +182,13 @@
       min-height:40px;
     }
     .request-action-label-short{display:none}
+    .request-card > .request-actions{display:none}
+    .request-modal-actions{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      padding-top:2px;
+    }
     .request-approved{
       color:var(--success);
       font-size:13px;
@@ -213,18 +220,22 @@
       .request-detail-grid{grid-template-columns:1fr 1fr}
     }
     @media (max-width: 768px){
-      .request-summary{grid-template-columns:1fr}
-      .request-side{justify-content:flex-start}
+      .request-summary{grid-template-columns:minmax(0,1fr) auto}
+      .request-side{justify-content:flex-end}
       .request-actions{grid-template-columns:1fr}
+      .request-modal-actions{grid-template-columns:1fr}
     }
     @media (max-width: 576px){
-      .request-card{padding:12px}
-      .request-title{font-size:15px}
+      .request-card{padding:9px 10px;border-radius:13px}
+      .request-title{font-size:13px}
+      .request-type{display:none}
+      .request-subtitle{font-size:10px}
       .request-detail-grid{grid-template-columns:1fr}
       .request-filter-row{width:100%}
       .request-filter-row .btn{flex:1;justify-content:center}
       .request-meta{gap:6px}
-      .request-pill{font-size:11px;padding:6px 9px}
+      .request-pill{font-size:10px;padding:5px 7px}
+      .request-pill:nth-child(n+4){display:none}
       .request-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
       .request-form{padding:8px;gap:6px}
       .request-form .fc{font-size:12px;padding:8px 10px}
@@ -344,6 +355,7 @@
               ? `${row.current_package_name || '-'} → ${row.target_package_name || '-'}`
               : `${row.package_name || '-'} • ${row.router_name || 'Tanpa router'}`;
             const summaryMetaDate = (isPackageChange || isProfileChange) ? formatDateTime(row.requested_at || row.created_at) : (payload.install_date || '-');
+            const reviewedLabel = ['approved', 'scheduled', 'processing', 'completed'].includes(requestStatus) ? 'Tanggal approve' : 'Tanggal review';
             const approveAction = isProfileChange
               ? `/admin/profile-change-requests/${row.id}/approve`
               : isPackageChange ? `/admin/package-change-requests/${row.id}/approve` : `/admin/customer-requests/${row.id}/approve`;
@@ -372,7 +384,11 @@
                   </div>
                   <div class="request-meta">
                     <span class="request-pill"><i class="bi bi-box-seam"></i> <%= summarySecondary %></span>
-                    <span class="request-pill"><i class="bi bi-calendar3"></i> <%= summaryMetaDate %></span>
+                    <span class="request-pill"><i class="bi bi-calendar3"></i> Diajukan: <%= formatDateTime(row.requested_at || row.created_at) %></span>
+                    <% if (!isPackageChange && !isProfileChange) { %>
+                      <span class="request-pill"><i class="bi bi-calendar2-check"></i> Pasang: <%= summaryMetaDate %></span>
+                    <% } %>
+                    <span class="request-pill"><i class="bi bi-check2-square"></i> <%= reviewedLabel %>: <%= row.reviewed_at ? formatDateTime(row.reviewed_at) : 'Belum diproses' %></span>
                     <% if (!isPackageChange && row.pppoe_username) { %>
                       <span class="request-pill"><i class="bi bi-router"></i> <%= row.pppoe_username %></span>
                     <% } %>
@@ -467,9 +483,12 @@
                     <div class="request-cell"><span class="request-label">Nama Baru</span><span class="request-value"><%= row.requested_name || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">No HP Saat Ini</span><span class="request-value"><%= row.current_phone || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">No HP Baru</span><span class="request-value"><%= row.requested_phone || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">NIK Saat Ini</span><span class="request-value"><%= row.current_nik || row.customer_nik || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">NIK Baru</span><span class="request-value"><%= row.requested_nik || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Alamat Saat Ini</span><span class="request-value"><%= row.current_address || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Alamat Baru</span><span class="request-value"><%= row.requested_address || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Diajukan</span><span class="request-value"><%= formatDateTime(row.requested_at || row.created_at) %></span></div>
+                    <div class="request-cell"><span class="request-label"><%= reviewedLabel %></span><span class="request-value"><%= row.reviewed_at ? formatDateTime(row.reviewed_at) : 'Belum diproses' %></span></div>
                     <div class="request-cell"><span class="request-label">Direview Oleh</span><span class="request-value"><%= row.reviewed_by_name || '-' %></span></div>
                   <% } else if (isPackageChange) { %>
                     <div class="request-cell"><span class="request-label">Nomor Pelanggan</span><span class="request-value"><%= row.customer_phone || '-' %></span></div>
@@ -477,6 +496,7 @@
                     <div class="request-cell"><span class="request-label">Paket Saat Ini</span><span class="request-value"><%= row.current_package_name || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Paket Tujuan</span><span class="request-value"><%= row.target_package_name || '-' %></span></div>
                     <div class="request-cell"><span class="request-label">Diajukan</span><span class="request-value"><%= formatDateTime(row.requested_at || row.created_at) %></span></div>
+                    <div class="request-cell"><span class="request-label"><%= reviewedLabel %></span><span class="request-value"><%= row.reviewed_at ? formatDateTime(row.reviewed_at) : 'Belum diproses' %></span></div>
                     <div class="request-cell"><span class="request-label">Mulai Berlaku</span><span class="request-value"><%= formatDateTime(row.effective_at) %></span></div>
                     <div class="request-cell"><span class="request-label">Bisa Request Lagi</span><span class="request-value"><%= formatDateTime(row.eligibility_after) %></span></div>
                     <div class="request-cell"><span class="request-label">Direview Oleh</span><span class="request-value"><%= row.reviewed_by_name || '-' %></span></div>
@@ -490,7 +510,12 @@
                     <div class="request-cell"><span class="request-label">Password PPPoE</span><span class="request-value"><%= payload.pppoe_password || '(ikut username)' %></span></div>
                     <div class="request-cell"><span class="request-label">Profile Normal</span><span class="request-value"><%= payload.normal_pppoe_profile || '(ikut paket)' %></span></div>
                     <div class="request-cell"><span class="request-label">Alamat</span><span class="request-value"><%= payload.address || '-' %></span></div>
-                    <div class="request-cell"><span class="request-label">Tanggal Pasang</span><span class="request-value"><%= payload.install_date || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Diajukan</span><span class="request-value"><%= formatDateTime(row.created_at) %></span></div>
+                    <div class="request-cell"><span class="request-label"><%= reviewedLabel %></span><span class="request-value"><%= row.reviewed_at ? formatDateTime(row.reviewed_at) : 'Belum diproses' %></span></div>
+                    <div class="request-cell"><span class="request-label">Diproses Oleh</span><span class="request-value"><%= row.reviewed_by_name || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Tanggal Pemasangan</span><span class="request-value"><%= payload.install_date || '-' %></span></div>
+                    <div class="request-cell"><span class="request-label">Jatuh Tempo Tagihan</span><span class="request-value">Tanggal <%= payload.isolate_day || 10 %> setiap bulan</span></div>
+                    <div class="request-cell"><span class="request-label">Isolir Otomatis</span><span class="request-value"><%= Number(payload.auto_isolate) === 0 ? 'Tidak aktif' : 'Aktif' %></span></div>
                   <% } %>
                 </div>
 
@@ -500,6 +525,46 @@
 
                 <% if (row.review_note) { %>
                   <div class="request-note"><strong>Catatan review:</strong> <%= row.review_note %></div>
+                <% } %>
+
+                <% if (requestStatus === 'pending') { %>
+                  <div class="request-modal-actions">
+                    <form method="POST" action="<%= approveAction %>" class="request-form">
+                      <input class="fc" name="review_note" placeholder="Catatan approve (opsional)">
+                      <button class="btn btn-s request-action-btn" type="submit">
+                        <i class="bi bi-check2-circle"></i>
+                        <span>Approve</span>
+                      </button>
+                    </form>
+                    <form method="POST" action="<%= rejectAction %>" class="request-form">
+                      <input class="fc" name="review_note" placeholder="Alasan reject">
+                      <button class="btn btn-d request-action-btn" type="submit">
+                        <i class="bi bi-x-circle"></i>
+                        <span>Reject</span>
+                      </button>
+                    </form>
+                  </div>
+                <% } else if (canForceProcess || canCancelRequest) { %>
+                  <div class="request-modal-actions">
+                    <% if (canForceProcess) { %>
+                      <form method="POST" action="/admin/package-change-requests/<%= row.id %>/complete" class="request-form">
+                        <input class="fc" name="review_note" placeholder="Catatan penyelesaian (opsional)">
+                        <button class="btn btn-s request-action-btn" type="submit">
+                          <i class="bi bi-check2-square"></i>
+                          <span>Selesai</span>
+                        </button>
+                      </form>
+                    <% } %>
+                    <% if (canCancelRequest) { %>
+                      <form method="POST" action="/admin/package-change-requests/<%= row.id %>/cancel" class="request-form">
+                        <input class="fc" name="review_note" placeholder="Alasan pembatalan">
+                        <button class="btn btn-w request-action-btn" type="submit">
+                          <i class="bi bi-slash-circle"></i>
+                          <span>Batalkan</span>
+                        </button>
+                      </form>
+                    <% } %>
+                  </div>
                 <% } %>
               </div>
             </div>

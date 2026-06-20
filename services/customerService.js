@@ -6,6 +6,7 @@ const { logger } = require('../config/logger');
 const { normalizePhoneDigits } = require('./phoneService');
 const { getSetting } = require('../config/settingsManager');
 const whatsappGateway = require('./whatsappGatewayService');
+const whatsappTemplateMedia = require('./whatsappTemplateMediaService');
 const {
   buildCustomerPortalLoginLink,
   buildCustomerCheckBillingLink,
@@ -95,14 +96,14 @@ function parseSqliteUtcTimestampMs(value, fallback = Date.now()) {
   return Number.isFinite(parsed) ? parsed : Number(fallback || Date.now());
 }
 
-async function trySendLifecycleWhatsapp(phone, message) {
+async function trySendLifecycleWhatsapp(phone, message, templateKey = '') {
   try {
     if (!getSetting('whatsapp_enabled', false)) return false;
     const to = String(phone || '').trim();
     if (!to) return false;
     const ready = await whatsappGateway.ensureReady(10000);
     if (!ready) return false;
-    return Boolean(await whatsappGateway.sendText(to, String(message || '').trim()));
+    return Boolean(await whatsappTemplateMedia.sendTemplateMessage(to, String(message || '').trim(), templateKey));
   } catch (e) {
     logger.warn(`[customerService] Gagal kirim WhatsApp lifecycle: ${e.message}`);
     return false;
@@ -574,6 +575,18 @@ function getPortalNotifications(customerId, limit = 20) {
     ORDER BY datetime(created_at) DESC, id DESC
     LIMIT ${safeLimit}
   `).all(id);
+}
+
+function deletePortalNotification(customerId, notificationId) {
+  ensurePortalNotificationsSchema();
+  const cid = Number(customerId);
+  const nid = Number(notificationId);
+  if (!Number.isFinite(cid) || cid <= 0) throw new Error('ID pelanggan tidak valid');
+  if (!Number.isFinite(nid) || nid <= 0) throw new Error('ID pesan tidak valid');
+  return db.prepare(`
+    DELETE FROM customer_portal_notifications
+    WHERE id = ? AND customer_id = ?
+  `).run(nid, cid);
 }
 
 function addPortalNotification(customerId, data = {}, options = {}) {
@@ -1128,7 +1141,7 @@ async function activateCustomer(id) {
       group_line: groupLink ? `Grup pelanggan: ${groupLink}` : '',
       company: getSetting('company_header', 'ISP')
     });
-    await trySendLifecycleWhatsapp(customer.phone, message);
+    await trySendLifecycleWhatsapp(customer.phone, message, 'reactivation');
   }
   addPortalNotification(id, {
     kind: 'reactivation',
@@ -1143,6 +1156,6 @@ module.exports = {
   getAllCustomers, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getCustomerStats,
   getAllPackages, getPortalPackages, getPackageById, createPackage, updatePackage, deletePackage, applyCustomerPackageChange, applyPortalPackageChange,
   suspendCustomer, activateCustomer, findCustomerByAny, findCustomerByPublicBillingLookup, updateCustomerCablePath, updateCustomerMapLocation, updateCustomerOdpLink,
-  resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, addPortalNotification, addPortalNotificationsBulk,
+  resetPromoCyclesUsed, markPortalNotificationsSeen, pruneOldPortalNotifications, getPortalNotifications, deletePortalNotification, addPortalNotification, addPortalNotificationsBulk,
   getCustomerSearchSuggestions, getExpiredSpeedBoostCustomers, clearSpeedBoost
 };

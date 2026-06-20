@@ -3,7 +3,7 @@
   const customerData = customer || {};
   const profileData = profile || {};
   const companyName = settings?.company_header || 'Portal Pelanggan';
-  const companyLogoUrl = settings?.company_logo_url || '/img/logo.png';
+  const companyLogoUrl = settings?.company_logo_url || '/img/mss-logo.png';
   const companyLegalName = String(settings?.company_legal_name || '').trim();
   const upstreamProviderName = String(settings?.upstream_provider_name || '').trim();
   const companyAddressText = String(settings?.company_address || '').trim();
@@ -37,6 +37,7 @@
   const customerName = profileData.name || customerData.name || 'Pelanggan';
   const packageName = profileData.package_name || customerData.package_name || 'Paket Internet';
   const customerPhone = profileData.phone || customerData.phone || '-';
+  const customerNik = String(profileData.nik || customerData.nik || '').trim();
   const customerAddress = profileData.address || customerData.lokasi || '-';
   const customerOdp = profileData.odp_name || '-';
   const customerIdLabel = customerCode || String(profileData.id || '-');
@@ -198,7 +199,7 @@
     portalKey: 'customer',
     manifestPath: '/pwa/customer.webmanifest',
     scope: '/customer/',
-    themeColor: '#4f6ef7',
+    themeColor: '#073dcc',
     appTitle: 'Portal Pelanggan',
     installLabel: 'Install Pelanggan'
   }) %>
@@ -208,7 +209,7 @@
         var savedTheme = localStorage.getItem('customer-portal-theme');
         var theme = savedTheme === 'dark' || savedTheme === 'light'
           ? savedTheme
-          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          : 'light';
         document.documentElement.setAttribute('data-theme', theme);
         document.body && document.body.setAttribute('data-theme', theme);
       } catch (_) {}
@@ -216,15 +217,15 @@
   </script>
   <style>
     :root {
-      --app-bg: #eef3ff;
+      --app-bg: #f5f8ff;
       --app-surface: rgba(255, 255, 255, 0.94);
       --app-surface-strong: #ffffff;
       --app-line: rgba(170, 186, 215, 0.22);
       --app-text: #1b2740;
       --app-text-soft: #6b7b97;
-      --app-blue: #4f6ef7;
-      --app-blue-deep: #3654db;
-      --app-blue-soft: rgba(79, 110, 247, 0.12);
+      --app-blue: #073dcc;
+      --app-blue-deep: #073dcc;
+      --app-blue-soft: rgba(7, 61, 204, 0.12);
       --app-danger: #e05d6d;
       --app-success: #1ca56f;
       --app-warning: #ec9a36;
@@ -240,8 +241,8 @@
       --app-line: rgba(148, 163, 184, 0.16);
       --app-text: #edf2ff;
       --app-text-soft: #96a3bf;
-      --app-blue: #6f8dff;
-      --app-blue-deep: #4f6ef7;
+      --app-blue: #0b55f4;
+      --app-blue-deep: #073dcc;
       --app-blue-soft: rgba(111, 141, 255, 0.16);
       --app-danger: #ff7286;
       --app-success: #35c98a;
@@ -256,10 +257,7 @@
     html, body {
       margin: 0;
       min-height: 100%;
-      background:
-        radial-gradient(circle at top left, rgba(111, 141, 255, 0.30) 0%, rgba(111, 141, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(77, 189, 255, 0.18) 0%, rgba(77, 189, 255, 0) 30%),
-        linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
       font-family: 'Plus Jakarta Sans', 'Manrope', sans-serif;
       color: var(--app-text);
       -webkit-tap-highlight-color: transparent;
@@ -267,10 +265,7 @@
 
     html[data-theme="dark"],
     body[data-theme="dark"] {
-      background:
-        radial-gradient(circle at top left, rgba(111, 141, 255, 0.18) 0%, rgba(111, 141, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(77, 189, 255, 0.10) 0%, rgba(77, 189, 255, 0) 30%),
-        linear-gradient(180deg, #09111d 0%, #111827 100%);
+      background: linear-gradient(180deg, #06153a 0%, #0b1f56 100%);
       color: var(--app-text);
     }
 
@@ -392,7 +387,7 @@
       height: 60px;
       margin: 0 auto 14px;
       border-radius: 20px;
-      background: linear-gradient(135deg, #2f6bff 0%, #72a6ff 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #72a6ff 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -409,7 +404,7 @@
       margin: 0;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .splash-card p {
@@ -430,7 +425,7 @@
       height: 100%;
       width: 42%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #2f6bff 0%, #7bb3ff 100%);
+      background: linear-gradient(90deg, #073dcc 0%, #7bb3ff 100%);
       animation: splashLoad 1.2s ease-in-out infinite;
     }
 
@@ -1049,7 +1044,7 @@
       display: block;
       font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .account-menu-head span {
@@ -1104,7 +1099,7 @@
     .brand-meta strong {
       font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1174,7 +1169,7 @@
       display: block;
       font-size: 15px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .app-menu-head span {
@@ -1235,7 +1230,7 @@
       display: block;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .app-menu-tile span {
@@ -1260,7 +1255,7 @@
       margin: 4px 0 0;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .app-main {
@@ -1287,7 +1282,7 @@
       padding: 13px 13px 12px;
       border-radius: 24px;
       color: #ffffff;
-      background: linear-gradient(135deg, #2f6bff 0%, #4d8cff 50%, #2c66ea 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #4d8cff 50%, #2c66ea 100%);
       box-shadow: 0 20px 40px rgba(47, 107, 255, 0.24);
       overflow: hidden;
     }
@@ -1355,7 +1350,7 @@
       font-size: 19px;
       font-weight: 800;
       line-height: 1.02;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
     }
 
     .hero-sub {
@@ -1532,7 +1527,7 @@
       margin: 0;
       font-size: 15px;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .section-head p {
@@ -1616,7 +1611,7 @@
       font-size: 12px;
       font-weight: 800;
       line-height: 1.3;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .focus-card b {
@@ -1625,7 +1620,7 @@
       font-size: 15px;
       font-weight: 800;
       line-height: 1.2;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
       color: var(--app-text);
     }
 
@@ -1668,7 +1663,7 @@
       margin: 0;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .quick-card p {
@@ -1730,7 +1725,7 @@
     .usage-chip strong {
       font-size: 14px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .progress-card {
@@ -1770,7 +1765,7 @@
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #2f6bff 0%, #82b8ff 100%);
+      background: linear-gradient(90deg, #073dcc 0%, #82b8ff 100%);
     }
 
     .speed-meter-grid {
@@ -1810,7 +1805,7 @@
       margin-top: 4px;
       font-size: 14px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .meter-badge {
@@ -1843,7 +1838,7 @@
       font-size: 18px;
       line-height: 1;
       font-weight: 800;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
     }
 
     .meter-readout strong span {
@@ -1947,7 +1942,7 @@
       margin: 0;
       font-size: 16px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .traffic-panel-title p {
@@ -1986,7 +1981,7 @@
     .usage-bandwidth-total strong {
       font-size: 42px;
       line-height: 0.95;
-      letter-spacing: -0.06em;
+      letter-spacing:0;
       color: #1290de;
       font-weight: 800;
     }
@@ -2035,7 +2030,7 @@
     }
 
     .usage-breakdown-item.download small {
-      color: #2f6bff;
+      color: #073dcc;
     }
 
     .usage-breakdown-item.upload small {
@@ -2045,7 +2040,7 @@
     .usage-breakdown-item strong {
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .traffic-gauge-grid {
@@ -2131,7 +2126,7 @@
 
     .traffic-gauge-arc {
       --gauge-fill: 8;
-      --gauge-color: #2f6bff;
+      --gauge-color: #073dcc;
       position: absolute;
       inset: 0;
       border-radius: 50%;
@@ -2214,7 +2209,7 @@
     .traffic-gauge-center strong {
       font-size: 22px;
       line-height: 1;
-      letter-spacing: -0.06em;
+      letter-spacing:0;
       font-weight: 800;
       color: var(--gauge-value-color);
       text-shadow: 0 1px 0 rgba(255,255,255,0.22);
@@ -2249,7 +2244,7 @@
       color: var(--gauge-value-color);
       line-height: 1;
       font-weight: 800;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
     }
 
     .traffic-gauge-readout strong span {
@@ -2310,12 +2305,12 @@
     .traffic-gauge-card.download-tone .traffic-gauge-label i,
     .traffic-gauge-card.download-tone .traffic-gauge-label h5,
     .traffic-gauge-card.download-tone .traffic-gauge-center strong {
-      color: #2f6bff;
+      color: #073dcc;
     }
 
     .traffic-gauge-card.download-tone .traffic-gauge-arc,
     .traffic-gauge-card.download-tone .traffic-gauge-needle {
-      --gauge-color: #2f6bff;
+      --gauge-color: #073dcc;
       --gauge-needle-shadow: rgba(47, 107, 255, 0.2);
     }
 
@@ -2346,11 +2341,11 @@
       gap: 10px;
       font-size: 14px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .traffic-period-item strong i {
-      color: #2f6bff;
+      color: #073dcc;
       font-size: 18px;
     }
 
@@ -2379,7 +2374,7 @@
       margin: 0;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .speedtest-head p {
@@ -2485,7 +2480,7 @@
     }
 
     .speedtest-inline-btn.primary {
-      background: linear-gradient(135deg, #2f6bff 0%, #5d92ff 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #5d92ff 100%);
       border-color: transparent;
       color: #fff;
       box-shadow: 0 16px 28px rgba(47, 107, 255, 0.22);
@@ -2505,7 +2500,7 @@
       margin: 0;
       font-size: 15px;
       font-weight: 700;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
       color: #5d6983;
       line-height: 1.15;
     }
@@ -2522,7 +2517,7 @@
       font-size: 22px;
       font-weight: 800;
       color: #1a2340;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
       line-height: 1.05;
     }
 
@@ -2537,7 +2532,7 @@
       font-size: 14px;
       font-weight: 700;
       color: #4d8cff;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .home-code-copy {
@@ -2584,7 +2579,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: #2f6bff;
+      background: #073dcc;
       color: #fff;
       font-size: 16px;
     }
@@ -2618,7 +2613,7 @@
       align-items: center;
       justify-content: center;
       gap: 7px;
-      background: linear-gradient(135deg, #2f6bff, #5f8fff);
+      background: linear-gradient(135deg, #073dcc, #5f8fff);
       color: #fff;
       font-size: 11px;
       font-weight: 850;
@@ -2755,7 +2750,7 @@
     .home-hero-payment-card strong {
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
       color: #ffffff;
       line-height: 1.2;
     }
@@ -2859,7 +2854,7 @@
       font-weight: 800;
       color: #ffffff;
       line-height: 1;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
       text-align: left;
     }
 
@@ -2872,7 +2867,7 @@
       margin: 0 4px;
       font-size: 15px;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
       color: #1a2340;
     }
 
@@ -3062,7 +3057,7 @@
       font-weight: 800;
       line-height: 1.25;
       margin-bottom: 4px;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .item-text p,
@@ -3112,7 +3107,7 @@
       font-weight: 800;
       line-height: 1.2;
       color: var(--app-text);
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .billing-period {
@@ -3204,7 +3199,7 @@
       margin: 0;
       font-size: 16px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     html[data-theme="dark"] :is(.activity-item, .billing-item, .ticket-item, .detail-item, .device-item),
@@ -3292,6 +3287,13 @@
       gap: 10px;
     }
 
+    .notification-item-wrap {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+
     .notification-toolbar {
       display: flex;
       align-items: center;
@@ -3334,7 +3336,7 @@
       padding: 7px 10px;
       font-size: 10.5px;
       font-weight: 800;
-      letter-spacing: -0.01em;
+      letter-spacing:0;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -3342,7 +3344,7 @@
     }
 
     .notification-filter-chip.is-active {
-      background: linear-gradient(135deg, #2f6bff 0%, #6f7cff 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #6f7cff 100%);
       color: #fff;
       border-color: transparent;
       box-shadow: 0 12px 24px rgba(47, 107, 255, 0.22);
@@ -3402,7 +3404,7 @@
 
     .notification-item.kind-announcement .notification-icon {
       background: rgba(59, 130, 246, 0.12);
-      color: #2563eb;
+      color: #073dcc;
     }
 
     .notification-item.kind-password .notification-icon {
@@ -3423,7 +3425,7 @@
 
     .notification-item.kind-ticket .notification-icon {
       background: rgba(139, 92, 246, 0.12);
-      color: #7c3aed;
+      color: #073dcc;
     }
 
     .notification-content {
@@ -3455,12 +3457,12 @@
       color: var(--app-blue);
     }
 
-    .notification-kind-badge.kind-announcement { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+    .notification-kind-badge.kind-announcement { background: rgba(59, 130, 246, 0.12); color: #073dcc; }
     .notification-kind-badge.kind-password { background: rgba(16, 185, 129, 0.12); color: #059669; }
     .notification-kind-badge.kind-wifi-offline,
     .notification-kind-badge.kind-suspension { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
     .notification-kind-badge.kind-invoice { background: rgba(245, 158, 11, 0.12); color: #d97706; }
-    .notification-kind-badge.kind-ticket { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+    .notification-kind-badge.kind-ticket { background: rgba(139, 92, 246, 0.12); color: #073dcc; }
 
     .notification-time {
       color: var(--app-text-soft);
@@ -3473,7 +3475,7 @@
       display: block;
       font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
       color: var(--app-text);
     }
 
@@ -3508,6 +3510,25 @@
       margin-top: 2px;
       flex: 0 0 auto;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    }
+
+    .notification-delete-btn {
+      width: 40px;
+      min-height: 40px;
+      border: 1px solid rgba(242, 72, 91, 0.16);
+      border-radius: 16px;
+      background: rgba(242, 72, 91, 0.1);
+      color: #e23f52;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      font-size: 16px;
+    }
+
+    .notification-delete-btn[disabled] {
+      opacity: .55;
+      cursor: wait;
     }
 
     .notification-detail {
@@ -3583,7 +3604,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #2f6bff 0%, #10b981 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #10b981 100%);
       color: #fff;
       font-size: 18px;
       flex: 0 0 auto;
@@ -3647,10 +3668,15 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      background: linear-gradient(135deg, #2f6bff 0%, #10b981 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #10b981 100%);
       color: #fff;
       font-size: 12px;
       font-weight: 900;
+    }
+
+    .notification-detail-action.danger {
+      background: rgba(242, 72, 91, 0.14);
+      color: #d83b4e;
     }
 
     .app-notification-toast-wrap {
@@ -3863,6 +3889,11 @@
       margin-top: 4px;
     }
 
+    .detail-item > div,
+    .device-item > div {
+      min-width: 0;
+    }
+
     .profile-highlight {
       padding: 16px;
       border-radius: 22px;
@@ -3870,8 +3901,66 @@
       border: 1px solid rgba(47, 107, 255, 0.1);
     }
 
+    .profile-headline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .profile-headline-main {
+      min-width: 0;
+    }
+
+    .profile-headline-main span {
+      display: block;
+      margin-top: 4px;
+      color: var(--app-text-soft);
+      font-size: 12px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-edit-toggle {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 15px;
+      background: var(--app-blue);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      font-size: 18px;
+      box-shadow: 0 14px 26px rgba(47, 107, 255, 0.22);
+    }
+
+    .profile-edit-panel[hidden] {
+      display: none !important;
+    }
+
+    .profile-edit-panel {
+      margin-top: 12px;
+    }
+
+    .profile-data-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 255, 0.08);
+      color: var(--app-blue);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
     .profile-highlight h4 {
-      margin-bottom: 8px;
+      margin: 0;
     }
 
     .profile-highlight p {
@@ -4041,7 +4130,7 @@
       margin: 0;
       font-size: 17px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .package-upgrade-head p {
@@ -4091,7 +4180,7 @@
       display: block;
       font-size: 15px;
       font-weight: 900;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .portal-package-desc {
@@ -4177,7 +4266,7 @@
     .package-request-copy strong {
       font-size: 14px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
       color: var(--app-text);
     }
 
@@ -4321,7 +4410,7 @@
       height: 54px;
       border-radius: 22px;
       color: #fff;
-      background: linear-gradient(135deg, #2f6bff 0%, #5b8dff 58%, #1bb3a6 100%);
+      background: linear-gradient(135deg, #073dcc 0%, #5b8dff 58%, #1bb3a6 100%);
       box-shadow: 0 14px 28px rgba(47, 107, 255, 0.34);
       font-size: 25px;
     }
@@ -4359,7 +4448,7 @@
 
     .app-modal .modal-title {
       font-weight: 900;
-      letter-spacing: -.03em;
+      letter-spacing:0;
     }
 
     .app-modal .btn-close {
@@ -4420,7 +4509,7 @@
       margin: 0;
       font-size: 18px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .business-chip {
@@ -4457,7 +4546,7 @@
       display: block;
       font-size: 15px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .business-head span {
@@ -4525,7 +4614,7 @@
       margin: 0;
       font-size: 14px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .manual-payment-bank {
@@ -4899,7 +4988,7 @@
   <div class="app-splash" id="appSplash" aria-hidden="true">
     <div class="splash-card">
       <div class="splash-logo">
-        <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <img src="<%= companyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
       </div>
       <h1><%= companyName %></h1>
       <p>Menyiapkan dashboard pelanggan yang lebih ringan dan nyaman di HP.</p>
@@ -5141,12 +5230,23 @@
       <section class="app-screen" data-tab="profile">
         <div class="profile-card">
           <div class="profile-highlight">
-            <h4>Profil Pelanggan</h4>
+            <div class="profile-headline">
+              <div class="profile-headline-main">
+                <h4>Profil Pelanggan</h4>
+                <span><%= customerIdLabel %> - <%= portalAccountLabel %></span>
+              </div>
+              <button class="profile-edit-toggle" type="button" id="profileEditToggle" aria-expanded="false" aria-controls="profileEditPanel" title="Ubah data">
+                <i class="bi bi-pencil-square"></i>
+              </button>
+            </div>
+            <div class="profile-data-note">
+              <i class="bi bi-shield-check"></i> Perubahan data perlu approval admin
+            </div>
           </div>
 
           <div class="section-head" style="margin-top:18px;">
-            <h3>Info Identitas</h3>
-            <span>Data utama</span>
+            <h3>Data Pelanggan</h3>
+            <span><%= customerIdLabel %></span>
           </div>
 
           <div class="detail-grid">
@@ -5162,6 +5262,13 @@
               <div>
                 <strong>Nomor HP</strong>
                 <span><%= customerPhone %></span>
+              </div>
+            </div>
+            <div class="detail-item">
+              <i class="bi bi-person-vcard"></i>
+              <div>
+                <strong>NIK</strong>
+                <span><%= customerNik || '-' %></span>
               </div>
             </div>
             <div class="detail-item">
@@ -5201,11 +5308,11 @@
             </div>
           </div>
 
-          <div class="settings-card" style="margin-top:16px;">
+          <div class="settings-card profile-edit-panel" id="profileEditPanel" <%= (profileLocalNotif || activeProfileChangeRequest) ? '' : 'hidden' %>>
             <div class="billing-card-head">
               <div>
                 <h4>Ubah Data Profil</h4>
-                <div class="soft-muted">Perubahan diproses setelah admin approve.</div>
+                <div class="soft-muted">Nama, nomor HP, NIK, dan alamat.</div>
               </div>
             </div>
             <% if (activeProfileChangeRequest) { %>
@@ -5227,6 +5334,10 @@
               <div class="settings-field">
                 <label for="profilePhoneField">No HP</label>
                 <input id="profilePhoneField" type="tel" name="phone" value="<%= customerPhone %>" maxlength="24" required <%= activeProfileChangeRequest ? 'disabled' : '' %>>
+              </div>
+              <div class="settings-field">
+                <label for="profileNikField">NIK</label>
+                <input id="profileNikField" type="text" name="nik" value="<%= customerNik %>" maxlength="32" inputmode="numeric" <%= activeProfileChangeRequest ? 'disabled' : '' %>>
               </div>
               <div class="settings-field">
                 <label for="profileAddressField">Alamat</label>
@@ -5844,7 +5955,7 @@
       document.body?.setAttribute('data-theme', nextTheme);
       const themeMeta = document.querySelector('meta[name="theme-color"]');
       if (themeMeta) {
-        themeMeta.setAttribute('content', nextTheme === 'dark' ? '#0b1628' : '#2f6bff');
+        themeMeta.setAttribute('content', nextTheme === 'dark' ? '#0b1628' : '#073dcc');
       }
       const themeIcon = document.getElementById('portalThemeToggleIcon');
       const themeButton = document.getElementById('portalThemeToggle');
@@ -5871,6 +5982,31 @@
     function togglePortalTheme() {
       const nextTheme = getPortalTheme() === 'dark' ? 'light' : 'dark';
       applyPortalTheme(nextTheme, true);
+    }
+
+    function initProfileEditPanel() {
+      const toggle = document.getElementById('profileEditToggle');
+      const panel = document.getElementById('profileEditPanel');
+      if (!toggle || !panel) return;
+      const sync = () => {
+        const open = !panel.hasAttribute('hidden');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        const icon = toggle.querySelector('i');
+        if (icon) icon.className = `bi ${open ? 'bi-x-lg' : 'bi-pencil-square'}`;
+      };
+      toggle.addEventListener('click', () => {
+        if (panel.hasAttribute('hidden')) {
+          panel.removeAttribute('hidden');
+          window.setTimeout(() => {
+            const firstInput = panel.querySelector('input:not([disabled]), textarea:not([disabled])');
+            firstInput?.focus({ preventScroll: true });
+          }, 60);
+        } else {
+          panel.setAttribute('hidden', '');
+        }
+        sync();
+      });
+      sync();
     }
 
     function setPushStatus(message) {
@@ -6372,12 +6508,20 @@
             <button type="button" class="notification-detail-action" id="notificationOpenRelatedBtn" data-notification-tab="${escapeNotificationHtml(targetTab)}">
               <i class="bi bi-box-arrow-up-right"></i> Buka terkait
             </button>
+            ${item.sourceId ? `
+              <button type="button" class="notification-detail-action danger" id="notificationDeleteDetailBtn" data-notification-id="${escapeNotificationHtml(item.sourceId)}">
+                <i class="bi bi-trash"></i> Hapus
+              </button>
+            ` : ''}
           </div>
         </article>
       `;
       document.getElementById('notificationBackBtn')?.addEventListener('click', () => renderNotificationModalContent());
       document.getElementById('notificationOpenRelatedBtn')?.addEventListener('click', (event) => {
         goToNotification(event.currentTarget.dataset.notificationTab || 'home');
+      });
+      document.getElementById('notificationDeleteDetailBtn')?.addEventListener('click', (event) => {
+        deleteNotificationItem(event.currentTarget.dataset.notificationId, event.currentTarget);
       });
     }
 
@@ -6495,22 +6639,29 @@
         const sender = getNotificationSender(item);
         const imageUrl = getNotificationImageUrl(item);
         return `
-        <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-index="${itemIndex}">
-          <span class="notification-icon">
-            <i class="bi ${notificationKindIcon(item.kind)}"></i>
-          </span>
-          <div class="notification-content">
-            <div class="notification-topline">
-              <span class="notification-kind-badge kind-${escapeNotificationHtml(item.kind || 'system')}">${escapeNotificationHtml(notificationKindLabel(item.kind))}</span>
-              <span class="notification-time">${escapeNotificationHtml(formatDateTime(item.time))}</span>
+        <div class="notification-item-wrap">
+          <button type="button" class="notification-item kind-${escapeNotificationHtml(item.kind || 'system')} ${item.unread ? 'unread' : ''}" data-notification-index="${itemIndex}">
+            <span class="notification-icon">
+              <i class="bi ${notificationKindIcon(item.kind)}"></i>
+            </span>
+            <div class="notification-content">
+              <div class="notification-topline">
+                <span class="notification-kind-badge kind-${escapeNotificationHtml(item.kind || 'system')}">${escapeNotificationHtml(notificationKindLabel(item.kind))}</span>
+                <span class="notification-time">${escapeNotificationHtml(formatDateTime(item.time))}</span>
+              </div>
+              <strong>${escapeNotificationHtml(item.title || 'Info pelanggan')}</strong>
+              <span class="notification-time">Dari ${escapeNotificationHtml(sender.name)}</span>
+              <p>${escapeNotificationHtml(item.body || '')}</p>
+              ${imageUrl ? `<img class="notification-thumb" src="${escapeNotificationHtml(imageUrl)}" alt="Foto pengumuman">` : ''}
             </div>
-            <strong>${escapeNotificationHtml(item.title || 'Info pelanggan')}</strong>
-            <span class="notification-time">Dari ${escapeNotificationHtml(sender.name)}</span>
-            <p>${escapeNotificationHtml(item.body || '')}</p>
-            ${imageUrl ? `<img class="notification-thumb" src="${escapeNotificationHtml(imageUrl)}" alt="Foto pengumuman">` : ''}
-          </div>
-          <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
-        </button>
+            <span class="notification-arrow"><i class="bi bi-chevron-right"></i></span>
+          </button>
+          ${item.sourceId ? `
+            <button type="button" class="notification-delete-btn" data-notification-delete="${escapeNotificationHtml(item.sourceId)}" aria-label="Hapus pesan">
+              <i class="bi bi-trash"></i>
+            </button>
+          ` : ''}
+        </div>
       `;
       }).join('');
 
@@ -6528,6 +6679,12 @@
       bindNotificationFilterButtons();
       container.querySelectorAll('[data-notification-index]').forEach((button) => {
         button.addEventListener('click', () => renderNotificationDetail(button.dataset.notificationIndex));
+      });
+      container.querySelectorAll('[data-notification-delete]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          deleteNotificationItem(button.dataset.notificationDelete, button);
+        });
       });
     }
 
@@ -6591,6 +6748,32 @@
         };
         renderNotificationUI();
       } catch {}
+    }
+
+    async function deleteNotificationItem(notificationId, trigger = null) {
+      const id = Number(notificationId || 0);
+      if (!Number.isFinite(id) || id <= 0) return false;
+      if (trigger) trigger.disabled = true;
+      try {
+        const response = await fetch(`/customer/notifications/${id}/delete`, {
+          method: 'POST',
+          headers: { 'x-requested-with': 'fetch' }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.ok === false) throw new Error(data.error || 'Gagal menghapus pesan');
+        notificationState = {
+          unreadCount: 0,
+          items: (notificationState.items || []).filter((item) => Number(item.sourceId || 0) !== id)
+        };
+        notificationState.unreadCount = notificationState.items.filter((item) => item.unread === true).length;
+        knownNotificationSignatures = new Set((notificationState.items || []).map((item) => `${item.kind || 'system'}|${item.title || ''}|${item.body || ''}|${item.time || ''}`));
+        renderNotificationUI();
+        return true;
+      } catch (error) {
+        if (trigger) trigger.disabled = false;
+        showNotificationToast([{ title: 'Gagal hapus pesan', body: error.message || 'Silakan coba lagi.' }]);
+        return false;
+      }
     }
 
     async function openNotificationsPanel() {
@@ -6827,6 +7010,7 @@
 
       try {
         applyPortalTheme(getPortalTheme(), false);
+        initProfileEditPanel();
 
         if (window.bootstrap?.Modal) {
           paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));

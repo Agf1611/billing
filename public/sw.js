@@ -1,8 +1,8 @@
-const CACHE_NAME = 'billing-pwa-v8';
+﻿const CACHE_NAME = 'billing-pwa-v8';
 const PRECACHE_URLS = [
   '/css/style.css',
   '/css/admin.css',
-  '/img/logo.png',
+  '/img/mss-logo.png',
   '/img/pwa-icon.svg',
   '/img/hero.png',
   '/pwa/customer.webmanifest',
@@ -110,11 +110,11 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type !== 'SHOW_NOTIFICATION') return;
-  const title = String(data.title || 'SICKAS WIFI');
+  const title = String(data.title || 'PT Media Solusi Sukses');
   const options = {
     body: String(data.body || ''),
-    icon: data.icon || '/img/logo.png',
-    badge: data.badge || '/img/logo.png',
+    icon: data.icon || '/img/mss-logo.png',
+    badge: data.badge || '/img/mss-logo.png',
     tag: data.tag || `notif-${Date.now()}`,
     data: data.data || {},
     renotify: Boolean(data.renotify),

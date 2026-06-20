@@ -6,14 +6,93 @@
   <title><%= title %> | <%= company %></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/admin.css">
+  <%
+    const monthNamesAudit = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    const actionLabels = {
+      CREATE: 'Data dibuat',
+      UPDATE: 'Data diperbarui',
+      DELETE: 'Data dihapus',
+      LOGIN: 'Login',
+      LOGOUT: 'Logout',
+      MARK_INVOICE_PAID: 'Tagihan dilunaskan',
+      INVOICE_PAID: 'Tagihan dilunaskan',
+      PAYMENT_RECEIVED: 'Pembayaran diterima',
+      SUSPEND_CUSTOMER: 'Pelanggan diisolir',
+      REACTIVATE_CUSTOMER: 'Pelanggan diaktifkan',
+      CHANGE_WIFI_PASSWORD: 'Password WiFi diubah',
+      CHANGE_WIFI_NAME: 'Nama WiFi diubah'
+    };
+    const moduleLabels = {
+      invoice: 'Tagihan',
+      invoices: 'Tagihan',
+      customer: 'Pelanggan',
+      customers: 'Pelanggan',
+      package: 'Paket',
+      packages: 'Paket',
+      admin: 'Admin',
+      cashier: 'Kasir',
+      technician: 'Teknisi',
+      agent: 'Agent',
+      payment: 'Pembayaran',
+      pppoe: 'Layanan Internet',
+      router: 'MikroTik',
+      mikrotik: 'MikroTik',
+      system: 'Sistem'
+    };
+    const titleizeAudit = (value) => String(value || '-')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+    const actionLabel = (value) => actionLabels[String(value || '').toUpperCase()] || titleizeAudit(value);
+    const moduleLabel = (value) => moduleLabels[String(value || '').toLowerCase()] || titleizeAudit(value);
+    const actorLabel = (value) => moduleLabels[String(value || '').toLowerCase()] || titleizeAudit(value || 'Admin');
+    const formatAuditMoney = (value) => {
+      const amount = Number(value || 0);
+      return Number.isFinite(amount) && amount > 0 ? `Rp ${amount.toLocaleString('id-ID')}` : '';
+    };
+    const formatAuditPeriod = (month, year) => {
+      const m = Number(month || 0);
+      const y = Number(year || 0);
+      return m >= 1 && m <= 12 && y > 0 ? `${monthNamesAudit[m - 1]} ${y}` : '';
+    };
+    const pickAuditValue = (source, keys = []) => {
+      if (!source || typeof source !== 'object') return '';
+      for (const key of keys) {
+        const value = source[key];
+        if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+      }
+      return '';
+    };
+    const auditDetailSummary = (log) => {
+      const details = log && log.details && typeof log.details === 'object' ? log.details : {};
+      const parts = [];
+      const customerName = pickAuditValue(details, ['customer_name', 'customerName', 'name', 'customer']);
+      const invoiceNo = pickAuditValue(details, ['invoice_number', 'invoiceNumber', 'invoice_id', 'invoiceId']);
+      const amount = formatAuditMoney(pickAuditValue(details, ['amount', 'paid_amount', 'total', 'nominal']));
+      const period = formatAuditPeriod(pickAuditValue(details, ['period_month', 'month']), pickAuditValue(details, ['period_year', 'year']));
+      const method = pickAuditValue(details, ['payment_method', 'method', 'paymentMethod']);
+      const statusBefore = pickAuditValue(details, ['old_status', 'status_before', 'from_status']);
+      const statusAfter = pickAuditValue(details, ['new_status', 'status_after', 'to_status']);
+      const note = pickAuditValue(details, ['note', 'notes', 'reason']);
+      if (customerName) parts.push(`Pelanggan: ${customerName}`);
+      if (invoiceNo) parts.push(`Ref: ${invoiceNo}`);
+      if (period) parts.push(`Periode: ${period}`);
+      if (amount) parts.push(`Nominal: ${amount}`);
+      if (method) parts.push(`Metode: ${titleizeAudit(method)}`);
+      if (statusBefore || statusAfter) parts.push(`Status: ${statusBefore || '-'} ke ${statusAfter || '-'}`);
+      if (note) parts.push(`Catatan: ${String(note).slice(0, 120)}`);
+      return parts.length ? parts.join(' | ') : 'Aktivitas tercatat.';
+    };
+  %>
   <style>
-    .log-details { font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.1); padding: 8px; border-radius: 4px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
-    .badge-action { padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; }
+    .log-details { font-size: 12px; background: rgba(99,102,241,0.08); padding: 10px 12px; border-radius: 12px; line-height: 1.45; color: var(--text); max-width: 520px; }
+    .badge-action { padding: 5px 10px; border-radius: 999px; font-weight: 700; font-size: 10px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
     .badge-CREATE { background: var(--sdim); color: var(--success); }
     .badge-UPDATE { background: var(--wdim); color: var(--warning); }
     .badge-DELETE { background: var(--ddim); color: var(--danger); }
     .badge-LOGIN { background: var(--pdim); color: var(--primary); }
     .badge-LOGOUT { background: var(--bg3); color: var(--muted); }
+    .badge-MARK_INVOICE_PAID, .badge-INVOICE_PAID, .badge-PAYMENT_RECEIVED { background: rgba(16,185,129,.12); color: var(--success); }
     .stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
   </style>
 </head>
@@ -54,19 +133,19 @@
 
     <div class="card">
       <div class="card-hd">
-        <h6><i class="bi bi-list-columns-reverse"></i> Log Aktivitas Sistem</h6>
+        <h6><i class="bi bi-list-columns-reverse"></i> Log Aktivitas Operasional</h6>
         <div class="flex gap">
           <form class="flex gap" method="GET">
             <select class="fs fs-sm" name="action" onchange="this.form.submit()">
-              <option value="">-- Semua Aksi --</option>
+              <option value="">-- Semua Aktivitas --</option>
               <% stats.by_action.forEach(a => { %>
-                <option value="<%= a.action %>" <%= filters.action === a.action ? 'selected' : '' %>><%= a.action %></option>
+                <option value="<%= a.action %>" <%= filters.action === a.action ? 'selected' : '' %>><%= actionLabel(a.action) %></option>
               <% }) %>
             </select>
             <select class="fs fs-sm" name="entity_type" onchange="this.form.submit()">
               <option value="">-- Semua Modul --</option>
               <% stats.by_entity_type.forEach(e => { %>
-                <option value="<%= e.entity_type %>" <%= filters.entity_type === e.entity_type ? 'selected' : '' %>><%= e.entity_type %></option>
+                <option value="<%= e.entity_type %>" <%= filters.entity_type === e.entity_type ? 'selected' : '' %>><%= moduleLabel(e.entity_type) %></option>
               <% }) %>
             </select>
           </form>
@@ -77,12 +156,11 @@
           <thead>
             <tr>
               <th>Waktu</th>
-              <th>Aksi</th>
+              <th>Aktivitas</th>
               <th>Modul</th>
-              <th>ID Entity</th>
+              <th>Referensi</th>
               <th>Pelaku</th>
               <th>Detail</th>
-              <th>IP / Device</th>
             </tr>
           </thead>
           <tbody>
@@ -92,29 +170,20 @@
                   <%= new Date(log.created_at).toLocaleString('id-ID') %>
                 </td>
                 <td>
-                  <span class="badge-action badge-<%= log.action %>"><%= log.action %></span>
+                  <span class="badge-action badge-<%= String(log.action || '').replace(/[^A-Z0-9_]/gi, '_') %>"><%= actionLabel(log.action) %></span>
                 </td>
-                <td><span class="badge bm"><%= log.entity_type %></span></td>
+                <td><span class="badge bm"><%= moduleLabel(log.entity_type) %></span></td>
                 <td class="text-muted"><%= log.entity_id || '-' %></td>
                 <td>
                   <div class="fw6"><%= log.actor_name %></div>
-                  <div class="text-muted" style="font-size:10px"><%= log.actor_type %> (ID: <%= log.actor_id %>)</div>
+                  <div class="text-muted" style="font-size:10px"><%= actorLabel(log.actor_type) %></div>
                 </td>
                 <td>
                   <% if (log.details) { %>
-                    <button class="btn btn-g btn-sm" onclick="toggleDetails('det-<%= log.id %>')">Lihat Detail</button>
-                    <div id="det-<%= log.id %>" class="log-details mt-2" style="display:none">
-                      <%= JSON.stringify(log.details, null, 2) %>
-                    </div>
+                    <div class="log-details"><%= auditDetailSummary(log) %></div>
                   <% } else { %>
-                    <span class="text-muted">-</span>
+                    <span class="text-muted">Aktivitas tercatat.</span>
                   <% } %>
-                </td>
-                <td class="text-muted" style="font-size:10px">
-                  <div><%= log.ip_address || '-' %></div>
-                  <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<%= log.user_agent %>">
-                    <%= log.user_agent || '-' %>
-                  </div>
                 </td>
               </tr>
             <% }) %>

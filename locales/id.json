@@ -586,6 +586,16 @@
         "note_placeholder": "Contoh: topup awal shift",
         "process": "Proses"
       },
+      "withdraw": {
+        "title": "Tarik Saldo Agent",
+        "agent": "Agent",
+        "current_balance": "Saldo Saat Ini",
+        "amount": "Nominal Tarik (Rp)",
+        "note": "Catatan",
+        "note_placeholder": "Contoh: koreksi salah topup",
+        "process": "Tarik Saldo",
+        "confirm": "Tarik saldo agent ini? Pastikan nominal dan catatan sudah benar."
+      },
       "prices": {
         "title": "Harga Voucher Agent",
         "agent": "Agent",
@@ -629,6 +639,7 @@
       },
       "type": {
         "topup": "TOPUP",
+        "withdraw": "TARIK",
         "invoice": "TAGIHAN",
         "voucher": "VOUCHER",
         "adjust": "ADJUST"

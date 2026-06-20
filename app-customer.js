@@ -60,8 +60,8 @@ const app = express();
 
 function buildPortalManifest(portalKey = 'customer') {
   const settings = getSettingsWithCache();
-  const companyName = String(settings.company_header || 'SICKAS WIFI').trim() || 'SICKAS WIFI';
-  const logoSrc = String(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
+  const companyName = String(settings.company_header || 'PT Media Solusi Sukses').trim() || 'PT Media Solusi Sukses';
+  const logoSrc = String(settings.pwa_logo_url || settings.company_logo_url || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
   const portalMap = {
     customer: {
       id: '/pwa/customer',
@@ -69,8 +69,8 @@ function buildPortalManifest(portalKey = 'customer') {
       shortName: 'Pelanggan',
       startUrl: '/customer/login?source=pwa',
       scope: '/customer/',
-      themeColor: '#2f6bff',
-      backgroundColor: '#f6faff'
+      themeColor: '#073dcc',
+      backgroundColor: '#f5f8ff'
     },
     admin: {
       id: '/pwa/admin',
@@ -78,8 +78,8 @@ function buildPortalManifest(portalKey = 'customer') {
       shortName: 'Admin',
       startUrl: '/admin?source=pwa',
       scope: '/admin/',
-      themeColor: '#0f172a',
-      backgroundColor: '#0f172a'
+      themeColor: '#073dcc',
+      backgroundColor: '#f5f8ff'
     },
     tech: {
       id: '/pwa/tech',
@@ -87,8 +87,8 @@ function buildPortalManifest(portalKey = 'customer') {
       shortName: 'Teknisi',
       startUrl: '/tech/login?source=pwa',
       scope: '/tech/',
-      themeColor: '#0f172a',
-      backgroundColor: '#0f172a'
+      themeColor: '#073dcc',
+      backgroundColor: '#f5f8ff'
     },
     agent: {
       id: '/pwa/agent',
@@ -96,8 +96,8 @@ function buildPortalManifest(portalKey = 'customer') {
       shortName: 'Agent',
       startUrl: '/agent/login?source=pwa',
       scope: '/agent/',
-      themeColor: '#1e293b',
-      backgroundColor: '#0f172a'
+      themeColor: '#073dcc',
+      backgroundColor: '#f5f8ff'
     },
     collector: {
       id: '/pwa/collector',
@@ -105,8 +105,8 @@ function buildPortalManifest(portalKey = 'customer') {
       shortName: 'Kolektor',
       startUrl: '/collector/login?source=pwa',
       scope: '/collector/',
-      themeColor: '#0f172a',
-      backgroundColor: '#08111f'
+      themeColor: '#073dcc',
+      backgroundColor: '#f5f8ff'
     }
   };
   const portal = portalMap[portalKey] || portalMap.customer;
@@ -223,8 +223,8 @@ app.use((req, res, next) => {
   res.locals.settings = settings;
   res.locals.runtimeWarnings = getRuntimeConfigurationWarnings(settings, process.env);
   res.locals.selfUpdateEnabled = isSelfUpdateEnabled(settings, process.env);
-  res.locals.companyLogoUrl = String(settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
-  res.locals.pwaLogoUrl = String(settings.pwa_logo_url || settings.company_logo_url || '/img/logo.png').trim() || '/img/logo.png';
+  res.locals.companyLogoUrl = String(settings.company_logo_url || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
+  res.locals.pwaLogoUrl = String(settings.pwa_logo_url || settings.company_logo_url || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
   res.locals.normalizePhoneDigits = normalizePhoneDigits;
   res.locals.formatPhoneDisplay = formatPhoneDisplay;
   res.locals.buildWhatsAppLink = buildWhatsAppLink;
@@ -441,7 +441,7 @@ function formatRupiah(value) {
 
 function buildIncomingWhatsappReply({ customer, text, settings, req }) {
   const normalized = String(text || '').trim().toLowerCase();
-  const companyName = settings?.company_header || 'SICKAS WIFI';
+  const companyName = settings?.company_header || 'PT Media Solusi Sukses';
   const wantsMenu = !normalized || ['menu', 'halo', 'hallo', 'hai', 'hi', 'hello', 'bantuan', 'help'].includes(normalized);
   if (wantsMenu) {
     return [
@@ -1195,7 +1195,7 @@ global.appSettings = {
   genieacsUrl: getSetting('genieacs_url', 'http://localhost:7557'),
   genieacsUsername: getSetting('genieacs_username', ''),
   genieacsPassword: getSetting('genieacs_password', ''),
-  companyHeader: getSetting('company_header', 'ISP Monitor'),
+  companyHeader: getSetting('company_header', 'PT Media Solusi Sukses'),
   footerInfo: getSetting('footer_info', ''),
 };
 
@@ -1230,7 +1230,7 @@ app.get('/isolated', (req, res) => {
   const normalizedStatus = String(profile?.status || 'suspended').trim().toLowerCase();
   const isInactive = normalizedStatus === 'inactive';
   res.render('isolated', {
-    company: settings.company_header || 'My ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     adminPhone: settings.company_phone || '',
     address: settings.company_address || '',
     accountState: isInactive ? 'inactive' : 'suspended',

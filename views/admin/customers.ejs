@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -12,7 +12,7 @@
     .usage-bar { height: 4px; background: var(--bg3); border-radius: 2px; margin: 4px 0; overflow: hidden; width: 100px; }
     .usage-fill { height: 100%; width: var(--p, 0%); background: var(--b, var(--primary)); transition: width 0.3s; }
     #picker-map { height: 400px; width: 100%; border-radius: 8px; margin-bottom: 15px; }
-    .picker-icon { color: #3b82f6; font-size: 32px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); display: block; width: 32px; height: 32px; text-align: center; line-height: 32px; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
+    .picker-icon { color: #0b55f4; font-size: 32px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); display: block; width: 32px; height: 32px; text-align: center; line-height: 32px; text-shadow: -1.5px -1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px 1.5px 0 #fff; }
     .location-input-group{display:flex;gap:6px;align-items:stretch}
     .location-input-group .fc{flex:1}
     .location-action-btn{min-width:42px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
@@ -58,7 +58,7 @@
       box-shadow:0 4px 10px rgba(15,23,42,.18);
       transition:.2s ease;
     }
-    .discount-toggle-line input:checked + .discount-switch{background:linear-gradient(135deg,#6366f1,#22c55e)}
+    .discount-toggle-line input:checked + .discount-switch{background:linear-gradient(135deg,#073dcc,#22c55e)}
     .discount-toggle-line input:checked + .discount-switch::after{transform:translateX(20px)}
     .discount-amount-wrap{margin-top:10px}
     .discount-amount-wrap[hidden]{display:none!important}
@@ -233,7 +233,7 @@
     }
     .payment-admin-modal .pay-method-choice.is-active,
     .payment-admin-modal .pay-method-choice.btn-p{
-      background:linear-gradient(135deg,#6366f1,#3b82f6);
+      background:linear-gradient(135deg,#073dcc,#0b55f4);
       border-color:transparent;
       color:#fff;
       box-shadow:0 12px 26px rgba(59,130,246,.24);
@@ -1770,9 +1770,9 @@
               const rowBoostLabel = rowBoostActive ? rowBoostDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '';
               const rowConnectionLabel = connectionTypeLabels[rowConnectionType] || 'PPPoE';
               const rowConnectionInfo = rowConnectionType === 'hotspot_binding'
-                ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' • ')
+                ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' â€¢ ')
                 : rowConnectionType === 'static'
-                  ? [c.static_ip, c.mac_address].filter(Boolean).join(' • ')
+                  ? [c.static_ip, c.mac_address].filter(Boolean).join(' â€¢ ')
                   : rowConnectionType === 'billing_only'
                     ? 'Tanpa sinkron MikroTik'
                   : String(c.pppoe_username || '').trim();
@@ -1909,9 +1909,9 @@
             const cardConnectionType = String(c.connection_type || 'pppoe');
             const cardConnectionLabel = connectionTypeLabels[cardConnectionType] || 'PPPoE';
             const cardConnectionInfo = cardConnectionType === 'hotspot_binding'
-              ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' • ')
+              ? [c.hotspot_username, c.mac_address, c.static_ip].filter(Boolean).join(' â€¢ ')
                 : cardConnectionType === 'static'
-                  ? [c.static_ip, c.mac_address].filter(Boolean).join(' • ')
+                  ? [c.static_ip, c.mac_address].filter(Boolean).join(' â€¢ ')
                   : cardConnectionType === 'billing_only'
                     ? 'Tanpa sinkron MikroTik'
                   : String(c.pppoe_username || '').trim();
@@ -2065,7 +2065,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="add_ktp_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">JPG, PNG, atau WEBP • otomatis dikompres maks 500 KB</div>
+                <div class="upload-preview-state">JPG, PNG, atau WEBP â€¢ otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_ktp_photo_file','add_ktp_preview','add_ktp_preview_name','Preview KTP')">Hapus</button>
               </div>
             </div>
@@ -2079,7 +2079,7 @@
               </div>
               <div class="upload-preview-meta">
                 <div class="upload-preview-name" id="add_house_preview_name">Belum ada file dipilih</div>
-                <div class="upload-preview-state">Foto tampak depan • otomatis dikompres maks 500 KB</div>
+                <div class="upload-preview-state">Foto tampak depan â€¢ otomatis dikompres maks 500 KB</div>
                 <button type="button" class="btn btn-g btn-sm upload-preview-clear" onclick="clearUploadPreview('add_house_photo_file','add_house_preview','add_house_preview_name','Preview Rumah')">Hapus</button>
               </div>
             </div>
@@ -3058,11 +3058,11 @@ function bindUploadPreview(inputId, previewId, nameId, emptyLabel) {
         nameId,
         previewUrl,
         emptyLabel,
-        `${optimizedFile.name || 'File dipilih'} • ${formatUploadSize(optimizedFile.size)}`
+        `${optimizedFile.name || 'File dipilih'} â€¢ ${formatUploadSize(optimizedFile.size)}`
       );
     } catch (_error) {
       const previewUrl = await readImageDataUrl(file);
-      setUploadPreview(previewId, nameId, previewUrl, emptyLabel, `${file.name || 'File dipilih'} • ${formatUploadSize(file.size)}`);
+      setUploadPreview(previewId, nameId, previewUrl, emptyLabel, `${file.name || 'File dipilih'} â€¢ ${formatUploadSize(file.size)}`);
     }
   });
 }
@@ -3423,7 +3423,7 @@ async function syncCustomerSearchSuggestions(query) {
       const mac = String(row.mac_address || '').trim();
       const tag = String(row.genieacs_tag || '').trim();
       option.value = name || phone || pppoe || hotspot || mac || tag;
-      option.label = [phone, pppoe, tag].filter(Boolean).join(' • ');
+      option.label = [phone, pppoe, tag].filter(Boolean).join(' â€¢ ');
       option.label = [phone, pppoe, hotspot, mac, tag].filter(Boolean).join(' - ');
       list.appendChild(option);
     });

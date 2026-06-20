@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <%
-  const logoSrc = logoUrl || '/img/logo.png';
+  const logoSrc = logoUrl || '/img/mss-logo.png';
 %>
 <head>
   <meta charset="UTF-8">
@@ -13,17 +13,17 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root {
-      --page-bg: #09111d;
-      --page-bg-2: #111827;
-      --surface: rgba(17, 24, 39, 0.94);
-      --surface-soft: rgba(255, 255, 255, 0.05);
-      --line: rgba(148, 163, 184, 0.16);
-      --text-main: #edf2ff;
-      --text-soft: #96a3bf;
-      --text-faint: #b4c0d8;
-      --blue: #6f8dff;
-      --blue-deep: #4f6ef7;
-      --shadow: 0 30px 70px rgba(0, 0, 0, 0.38);
+      --page-bg: #f5f8ff;
+      --page-bg-2: #ffffff;
+      --surface: rgba(255, 255, 255, 0.96);
+      --surface-soft: #f8fbff;
+      --line: rgba(28, 54, 102, 0.14);
+      --text-main: #07163f;
+      --text-soft: #62708c;
+      --text-faint: #8d98b1;
+      --blue: #073dcc;
+      --blue-deep: #0634b0;
+      --shadow: 0 28px 70px rgba(18, 47, 102, 0.14);
       --shell-width: min(100vw, 430px);
     }
 
@@ -34,10 +34,7 @@
       margin: 0;
       color: var(--text-main);
       font-family: "Plus Jakarta Sans", "Manrope", system-ui, -apple-system, sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(111, 141, 255, 0.22) 0%, rgba(111, 141, 255, 0) 34%),
-        radial-gradient(circle at top right, rgba(77, 189, 255, 0.12) 0%, rgba(77, 189, 255, 0) 28%),
-        linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-2) 100%);
+      background: linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -46,7 +43,7 @@
       position: fixed;
       inset: 0;
       pointer-events: none;
-      opacity: 0.2;
+      opacity: 0.10;
       background-image:
         linear-gradient(rgba(111, 141, 255, 0.05) 1px, transparent 1px),
         linear-gradient(90deg, rgba(111, 141, 255, 0.05) 1px, transparent 1px);
@@ -129,7 +126,7 @@
       font-size: 22px;
       line-height: 1.04;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .brand-copy p {
@@ -171,7 +168,7 @@
       margin: 0 0 5px;
       font-size: 20px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
     }
 
     .login-card-head p {

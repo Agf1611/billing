@@ -1,8 +1,8 @@
-{
+﻿{
   "id": "/pwa/admin",
   "name": "Admin",
   "short_name": "Admin",
-  "description": "Admin SICKAS WIFI",
+  "description": "Admin PT Media Solusi Sukses",
   "start_url": "/admin?source=pwa",
   "scope": "/admin/",
   "display": "standalone",
@@ -11,16 +11,16 @@
     "client_mode": ["navigate-existing", "auto"]
   },
   "orientation": "portrait",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#f5f8ff",
+  "theme_color": "#073dcc",
   "icons": [
     {
-      "src": "/img/logo.png",
+      "src": "/img/mss-logo.png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "/img/logo.png",
+      "src": "/img/mss-logo.png",
       "sizes": "512x512",
       "purpose": "any maskable"
     },

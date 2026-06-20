@@ -1,34 +1,43 @@
 :root{
-  --bg:#08111f;
-  --panel:rgba(12,22,38,.92);
-  --panel2:rgba(255,255,255,.045);
-  --border:rgba(148,163,184,.16);
-  --muted:#8fa3bf;
-  --text:#edf4ff;
-  --brand:#2563eb;
-  --brand2:#14b8a6;
+  --bg:#f5f8ff;
+  --panel:rgba(255,255,255,.96);
+  --panel2:rgba(243,247,255,.96);
+  --border:rgba(28,54,102,.14);
+  --muted:#62708c;
+  --text:#07163f;
+  --brand:#073dcc;
+  --brand2:#0b55f4;
+  --accent-yellow:#fff200;
   --danger:#ef4444;
   --success:#22c55e;
   --warn:#f59e0b;
-  --shadow:0 22px 46px rgba(2,8,23,.28);
+  --shadow:0 18px 40px rgba(18,47,102,.12);
 }
 html[data-theme="light"]{
-  --bg:#eef5fb;
+  --bg:#f5f8ff;
   --panel:rgba(255,255,255,.96);
-  --panel2:rgba(243,248,253,.96);
-  --border:rgba(148,163,184,.22);
-  --muted:#64748b;
-  --text:#10233f;
+  --panel2:rgba(243,247,255,.96);
+  --border:rgba(28,54,102,.14);
+  --muted:#62708c;
+  --text:#07163f;
   --shadow:0 18px 38px rgba(57,84,124,.12);
+}
+html[data-theme="dark"]{
+  --bg:#06153a;
+  --panel:rgba(9,28,76,.94);
+  --panel2:rgba(255,255,255,.07);
+  --border:rgba(195,211,244,.18);
+  --muted:#b7c5e6;
+  --text:#f5f8ff;
+  --brand:#7da2ff;
+  --brand2:#073dcc;
+  --shadow:0 22px 46px rgba(0,0,0,.30);
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{
   margin:0;
-  background:
-    radial-gradient(820px 460px at 8% 0%, rgba(20,184,166,.18), transparent 58%),
-    radial-gradient(760px 420px at 100% 0%, rgba(37,99,235,.22), transparent 54%),
-    var(--bg);
+  background:var(--bg);
   color:var(--text);
   font-family:"Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, sans-serif;
   padding-bottom:calc(128px + env(safe-area-inset-bottom));
@@ -57,8 +66,9 @@ html[data-theme="light"] .topbar{background:rgba(255,255,255,.9)}
 .brand .icon{
   width:42px;height:42px;border-radius:15px;
   display:grid;place-items:center;
-  background:linear-gradient(135deg, rgba(20,184,166,.2), rgba(37,99,235,.2));
-  border:1px solid rgba(37,99,235,.24);
+  background:#fff;
+  border:1px solid rgba(7,61,204,.18);
+  color:var(--brand);
 }
 .brand .title{margin:0;font-size:14px;font-weight:900;line-height:1.12;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand .sub{margin:2px 0 0;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -86,11 +96,11 @@ html[data-theme="light"] :is(.icon-btn,.btn-mini,.theme-toggle){background:rgba(
   border:1px solid var(--border);
   border-radius:26px;
   padding:18px;
-  background:linear-gradient(135deg, rgba(20,184,166,.18), rgba(37,99,235,.18)), var(--panel);
+  background:linear-gradient(135deg, rgba(7,61,204,.10), rgba(11,85,244,.08)), var(--panel);
   box-shadow:var(--shadow);
   overflow:hidden;
 }
-.hero h1{font-size:22px;margin:0 0 6px;font-weight:950;letter-spacing:-.02em}
+.hero h1{font-size:22px;margin:0 0 6px;font-weight:950;letter-spacing: 0}
 .hero p{margin:0;color:rgba(237,244,255,.78);font-size:12px;line-height:1.5}
 html[data-theme="light"] .hero p{color:#475569}
 .cardx{
@@ -130,7 +140,7 @@ html[data-theme="light"] .hero p{color:#475569}
   display:grid;
   place-items:center;
   background:rgba(255,255,255,.06);
-  color:#93c5fd;
+  color:#7da2ff;
   font-size:20px;
 }
 .voucher-menu-link span{grid-area:title;font-size:14px;font-weight:950}
@@ -160,7 +170,7 @@ html[data-theme="light"] .hero p{color:#475569}
   background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
 }
 .kpi .lbl{font-size:11px;color:var(--muted);font-weight:800;margin-bottom:5px}
-.kpi .val{font-size:18px;font-weight:950;letter-spacing:-.03em}
+.kpi .val{font-size:18px;font-weight:950;letter-spacing: 0}
 .pill,.badgey{
   display:inline-flex;align-items:center;gap:6px;
   border-radius:999px;
@@ -175,11 +185,11 @@ html[data-theme="light"] .hero p{color:#475569}
 .badgey.s{color:#bbf7d0;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.1)}
 .badgey.d{color:#fecaca;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1)}
 .badgey.w{color:#fde68a;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.1)}
-.badgey.n{color:#bfdbfe;border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.1)}
+.badgey.n{color:#dbe7ff;border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.1)}
 html[data-theme="light"] .badgey.s{color:#166534;background:#dcfce7}
 html[data-theme="light"] .badgey.d{color:#b91c1c;background:#fee2e2}
 html[data-theme="light"] .badgey.w{color:#92400e;background:#fef3c7}
-html[data-theme="light"] .badgey.n{color:#1d4ed8;background:#dbeafe}
+html[data-theme="light"] .badgey.n{color:#0634b0;background:#e6efff}
 .form-control,.form-select{
   width:100%;
   min-height:48px;
@@ -197,7 +207,7 @@ html[data-theme="light"] :is(.form-control,.form-select){background:#fff;color:v
   min-height:50px;
   border:0;
   border-radius:17px;
-  background:linear-gradient(135deg, var(--brand2), var(--brand));
+  background:linear-gradient(135deg, var(--brand), var(--brand2));
   color:#fff;
   font-weight:950;
   padding:12px 14px;
@@ -235,7 +245,7 @@ html[data-theme="light"] :is(.form-control,.form-select){background:#fff;color:v
 .vcard.sel{border-color:rgba(37,99,235,.55);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 .vcard .name{font-size:15px;font-weight:950;margin-top:8px}
 .vcard .price{font-size:18px;font-weight:950;color:#7dd3fc}
-html[data-theme="light"] .vcard .price{color:#1d4ed8}
+html[data-theme="light"] .vcard .price{color:#0634b0}
 .vcard .meta{font-size:11px;color:var(--muted);margin-top:4px}
 .inline-form{display:grid;gap:10px}
 .form-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -275,8 +285,8 @@ html[data-theme="light"] .vcard .price{color:#1d4ed8}
 }
 .mode-tab.active{
   color:#fff;
-  background:linear-gradient(135deg, rgba(20,184,166,.86), rgba(37,99,235,.9));
-  box-shadow:0 12px 24px rgba(37,99,235,.2);
+  background:linear-gradient(135deg, var(--brand), var(--brand2));
+  box-shadow:0 12px 24px rgba(7,61,204,.2);
 }
 .single-sale-panel{
   padding:12px;
@@ -325,7 +335,7 @@ html[data-theme="light"] .sold-focus-code{color:#92400e}
   color:#7dd3fc;
   overflow-wrap:anywhere;
 }
-html[data-theme="light"] .single-code{color:#1d4ed8}
+html[data-theme="light"] .single-code{color:#0634b0}
 .single-meta{
   display:flex;
   gap:8px;
@@ -397,7 +407,7 @@ html[data-theme="light"] .single-code{color:#1d4ed8}
 }
 .filter-chip.active{
   color:#fff;
-  background:linear-gradient(135deg, var(--brand2), var(--brand));
+  background:linear-gradient(135deg, var(--brand), var(--brand2));
   border-color:transparent;
 }
 .voucher-item.state-used,.voucher-item.state-missing{opacity:.78}
@@ -439,7 +449,7 @@ html[data-theme="light"] .single-code{color:#1d4ed8}
   border-color:rgba(37,99,235,.24);
 }
 .pay-total strong{font-size:20px;color:#7dd3fc}
-html[data-theme="light"] .pay-total strong{color:#1d4ed8}
+html[data-theme="light"] .pay-total strong{color:#0634b0}
 .bottom-nav{
   position:fixed;
   left:10px;right:10px;bottom:8px;
@@ -468,7 +478,7 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
   font-weight:900;
 }
 .bn-item i{font-size:18px}
-.bn-item.active{color:#93c5fd;background:rgba(37,99,235,.12)}
+.bn-item.active{color:#7da2ff;background:rgba(37,99,235,.12)}
 .bn-main{margin-top:-18px;color:#fff}
 .bn-main i{
   width:56px;height:56px;border-radius:20px;
@@ -568,31 +578,50 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
 
 @media(max-width:640px){
   .agent-vouchers-page .wrap{padding:10px 10px 76px}
-  .agent-vouchers-page .hero{padding:13px 14px;border-radius:18px}
-  .agent-vouchers-page .hero h1{font-size:19px}
-  .agent-vouchers-page .hero p{font-size:11px}
+  .agent-vouchers-page .hero{
+    padding:6px 2px 2px;
+    border:0;
+    box-shadow:none;
+    background:transparent;
+    border-radius:0;
+  }
+  .agent-vouchers-page .hero h1{font-size:18px;margin:0;color:var(--text)}
+  .agent-vouchers-page .hero p{display:none}
   .agent-vouchers-page .voucher-menu{
     grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:7px;
+    gap:6px;
+    padding:5px;
+    margin-top:8px;
+    border:1px solid var(--border);
+    border-radius:18px;
+    background:rgba(255,255,255,.045);
+    box-shadow:var(--shadow);
   }
   .agent-vouchers-page .voucher-menu-link{
-    min-height:58px;
-    padding:8px 7px;
-    border-radius:16px;
+    min-height:46px;
+    padding:7px 8px;
+    border-radius:14px;
+    border-color:transparent;
+    box-shadow:none;
     grid-template-columns:auto 1fr;
     grid-template-areas:"icon title" "icon sub";
     justify-items:start;
     text-align:left;
     column-gap:7px;
+    background:transparent;
   }
   .agent-vouchers-page .voucher-menu-link i{
-    width:32px;
-    height:32px;
-    border-radius:12px;
-    font-size:16px;
+    width:30px;
+    height:30px;
+    border-radius:11px;
+    font-size:15px;
   }
-  .agent-vouchers-page .voucher-menu-link span{font-size:11px}
-  .agent-vouchers-page .voucher-menu-link small{font-size:8px}
+  .agent-vouchers-page .voucher-menu-link span{font-size:11px;line-height:1.1}
+  .agent-vouchers-page .voucher-menu-link small{font-size:8px;line-height:1.1}
+  .agent-vouchers-page .voucher-menu-link.active{
+    background:linear-gradient(135deg, rgba(20,184,166,.13), rgba(37,99,235,.14)), var(--panel);
+    border-color:rgba(37,99,235,.28);
+  }
   .agent-vouchers-page .cardx{border-radius:17px;margin-top:10px}
   .agent-vouchers-page .cardx .hd{padding:10px 11px}
   .agent-vouchers-page .cardx h2{font-size:13px}
@@ -602,9 +631,10 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
     gap:7px;
   }
   .agent-vouchers-page .vcard{
-    min-height:96px;
-    padding:8px;
+    min-height:92px;
+    padding:9px;
     border-radius:15px;
+    box-shadow:0 8px 18px rgba(15,23,42,.06);
   }
   .agent-vouchers-page .vcard .badgey{
     font-size:9px;
@@ -617,16 +647,23 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
     overflow:hidden;
     text-overflow:ellipsis;
   }
-  .agent-vouchers-page .vcard .price{font-size:16px}
+  .agent-vouchers-page .vcard .price{font-size:16px;color:#073dcc}
   .agent-vouchers-page .vcard .meta{
     font-size:9px;
     margin-top:2px;
   }
-  .agent-vouchers-page .vcard .meta:last-child{
-    display:-webkit-box;
-    -webkit-line-clamp:2;
-    -webkit-box-orient:vertical;
-    overflow:hidden;
+  .agent-vouchers-page .vcard .meta:nth-of-type(2){display:none}
+  .agent-vouchers-page .vcard.sel::after{
+    content:"Dipilih";
+    position:absolute;
+    top:7px;
+    right:7px;
+    padding:3px 6px;
+    border-radius:999px;
+    background:#dcfce7;
+    color:#166534;
+    font-size:8px;
+    font-weight:950;
   }
   .agent-vouchers-page .single-sale-panel{
     padding:9px;
@@ -638,27 +675,247 @@ html[data-theme="light"] .bottom-nav{background:rgba(255,255,255,.95)}
   .agent-vouchers-page .single-sale-panel .t2{
     display:none;
   }
+  .agent-vouchers-page .single-sale-panel .badgey{font-size:9px}
   .agent-vouchers-page .batch-options{
     grid-template-columns:repeat(2,minmax(0,1fr));
     gap:8px;
   }
   .agent-vouchers-page .batch-options .mode-note{
-    padding:9px;
-    border-radius:14px;
+    grid-column:1/-1;
+    padding:8px 9px;
+    border-radius:13px;
+  }
+  .agent-vouchers-page .batch-options .mode-note .t2{
+    display:none;
+  }
+  .agent-vouchers-page .batch-options label .t2{
+    font-size:9px;
+    font-weight:950;
+    text-transform:uppercase;
+    letter-spacing:.05em;
   }
   .agent-vouchers-page :is(.form-control,.form-select){
-    min-height:42px;
-    border-radius:13px;
-    padding:9px 10px;
+    min-height:39px;
+    border-radius:12px;
+    padding:8px 9px;
     font-size:12px;
   }
   .agent-vouchers-page #agentVoucherSubmit{
-    min-height:44px;
+    min-height:43px;
     font-size:12px;
     padding:10px 12px;
+    box-shadow:0 14px 26px rgba(37,99,235,.22);
   }
   .agent-vouchers-page .itemx{
     border-radius:15px;
     padding:10px;
   }
+  .agent-vouchers-page .batch-item .item-head{
+    align-items:center;
+  }
+  .agent-vouchers-page .batch-item .t1{
+    font-size:12px;
+  }
+  .agent-vouchers-page .batch-item .t2{
+    display:none;
+  }
+  .agent-vouchers-page .batch-count-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:5px;
+  }
+  .agent-vouchers-page .batch-count-grid div{
+    padding:7px 5px;
+    text-align:center;
+    border-radius:11px;
+  }
+  .agent-vouchers-page .batch-count-grid span{font-size:8px}
+  .agent-vouchers-page .batch-count-grid strong{font-size:14px}
+  .agent-vouchers-page .btn-row{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+  .agent-vouchers-page .btn-row .btn-action,
+  .agent-vouchers-page .btn-row .btn-mini{
+    min-height:38px;
+    border-radius:12px;
+    font-size:10px;
+    padding:8px 9px;
+  }
+}
+
+@media(max-width:640px){
+  .agent-voucher-detail-page .wrap{padding:10px 10px 76px}
+  .agent-voucher-detail-page .hero{
+    padding:9px 10px;
+    border-radius:16px;
+    background:linear-gradient(135deg, rgba(20,184,166,.10), rgba(37,99,235,.10)), var(--panel);
+  }
+  .agent-voucher-detail-page .hero h1{
+    font-size:16px;
+    margin-bottom:3px;
+  }
+  .agent-voucher-detail-page .hero p{
+    font-size:10px;
+    line-height:1.35;
+  }
+  .agent-voucher-detail-page .cardx{
+    border-radius:16px;
+    margin-top:9px;
+  }
+  .agent-voucher-detail-page .cardx .hd{
+    padding:9px 10px;
+  }
+  .agent-voucher-detail-page .cardx h2{
+    font-size:12px;
+  }
+  .agent-voucher-detail-page .cardx .bd{
+    padding:10px;
+  }
+  .agent-voucher-detail-page .single-voucher-card .bd{
+    display:grid;
+    gap:8px;
+  }
+  .agent-voucher-detail-page .single-code-label{
+    font-size:9px;
+  }
+  .agent-voucher-detail-page .single-code{
+    font-size:30px;
+  }
+  .agent-voucher-detail-page .single-meta{
+    gap:5px;
+    margin-top:0;
+    font-size:10px;
+  }
+  .agent-voucher-detail-page .grid-2{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+  .agent-voucher-detail-page .kpi{
+    padding:8px;
+    border-radius:12px;
+  }
+  .agent-voucher-detail-page .kpi .lbl{
+    font-size:8px;
+    margin-bottom:3px;
+  }
+  .agent-voucher-detail-page .kpi .val{
+    font-size:14px;
+    line-height:1.1;
+  }
+  .agent-voucher-detail-page .status-guide{
+    gap:5px;
+    margin-top:8px;
+  }
+  .agent-voucher-detail-page .status-guide .badgey{
+    font-size:9px;
+    padding:4px 7px;
+  }
+  .agent-voucher-detail-page .voucher-filter-row{
+    padding-bottom:7px;
+    gap:6px;
+  }
+  .agent-voucher-detail-page .filter-chip{
+    padding:6px 9px;
+    font-size:10px;
+  }
+  .agent-voucher-detail-page .voucher-item{
+    border-radius:14px;
+    padding:9px;
+  }
+  .agent-voucher-detail-page .voucher-item .item-head{
+    align-items:center;
+  }
+  .agent-voucher-detail-page .voucher-item .t1{
+    font-size:16px !important;
+  }
+  .agent-voucher-detail-page .voucher-item .t2{
+    font-size:10px;
+  }
+  .agent-voucher-detail-page .btn-row{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px;
+  }
+  .agent-voucher-detail-page .btn-row .btn-action,
+  .agent-voucher-detail-page .btn-row .btn-mini,
+  .agent-voucher-detail-page .btn-row .disabled-note{
+    min-height:38px;
+    border-radius:12px;
+    font-size:10px;
+    padding:8px 9px;
+  }
+  .agent-voucher-detail-page.agent-voucher-detail-batch .single-voucher-card{
+    display:none;
+  }
+}
+
+/* MSS portal polish shared by agent and collector surfaces. */
+html[data-theme="light"] .topbar,
+.topbar {
+  background: rgba(255,255,255,.94);
+  border-bottom: 1px solid rgba(28,54,102,.12);
+  box-shadow: 0 10px 26px rgba(18,47,102,.08);
+}
+
+.brand .title,
+.cardx h2,
+.cardx h3,
+.cardx h6,
+.t1,
+.kpi .val {
+  color: var(--text);
+}
+
+.cardx,
+.voucher-menu-link,
+.vcard,
+.itemx,
+.kpi {
+  background: var(--panel);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+.voucher-menu-link.active,
+.single-sale-panel,
+.single-voucher-card,
+.pay-total {
+  border-color: rgba(7,61,204,.22);
+  background: linear-gradient(135deg, rgba(7,61,204,.10), rgba(11,85,244,.07)), var(--panel);
+}
+
+.voucher-menu-link.active i {
+  color: #073dcc;
+  background: #fff200;
+}
+
+.vcard.sel {
+  border-color: rgba(7,61,204,.55);
+  box-shadow: 0 0 0 3px rgba(7,61,204,.12);
+}
+
+.vcard .price,
+.single-code,
+.pay-total strong,
+html[data-theme="light"] .vcard .price,
+html[data-theme="light"] .single-code,
+html[data-theme="light"] .pay-total strong {
+  color: #073dcc;
+}
+
+.qris-image {
+  border-color: rgba(28,54,102,.14);
+}
+
+.bottom-nav,
+html[data-theme="light"] .bottom-nav {
+  background: rgba(255,255,255,.96);
+  border-color: rgba(28,54,102,.14);
+  box-shadow: 0 16px 38px rgba(18,47,102,.14);
+}
+
+.bn-item.active {
+  color: #073dcc;
+  background: rgba(7,61,204,.10);
 }

@@ -11,7 +11,7 @@
 <%- include('partials/sidebar', { activePage: activePage || 'update', company }) %>
 <div class="mw">
   <div class="topbar">
-    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-cloud-arrow-down"></i> <%= t('admin.update.title', 'Update GitHub') %></div>
+    <div class="tb-title"><button class="hb-menu" onclick="toggleSidebar()"><i class="bi bi-list"></i></button><i class="bi bi-cloud-arrow-down"></i> <%= t('admin.update.title', 'Update Aplikasi') %></div>
     <div class="tb-right">
       <span class="adm-badge"><i class="bi bi-person-fill"></i> <%= t('admin.role.admin', 'Admin') %></span>
       <a href="/admin/logout" class="btn btn-g btn-sm"><i class="bi bi-box-arrow-left"></i> <%= t('common.logout', 'Logout') %></a>
@@ -32,71 +32,21 @@
         <% } %>
         <div class="form-row" style="align-items:flex-start">
           <div class="fg">
-            <label class="fl"><%= t('admin.update.server_version', 'Versi Server (version.txt)') %></label>
+            <label class="fl"><%= t('admin.update.server_version', 'Versi Terpasang') %></label>
             <div class="fc" style="display:flex;align-items:center;gap:8px">
-              <i class="bi bi-hdd-network"></i>
+              <i class="bi bi-phone-flip"></i>
               <span style="font-weight:800"><%= info?.localVersion || '-' %></span>
             </div>
           </div>
           <div class="fg">
-            <label class="fl"><%= t('admin.update.github_version_prefix', 'Versi GitHub (origin/') %><%= info?.branch || '-' %><%= t('admin.update.github_version_suffix', ')') %></label>
+            <label class="fl"><%= t('admin.update.github_version_prefix', 'Versi Terbaru') %></label>
             <div class="fc" style="display:flex;align-items:center;gap:8px">
-              <i class="bi bi-github"></i>
+              <i class="bi bi-cloud-check"></i>
               <span style="font-weight:800"><%= info?.remoteVersion || '-' %></span>
               <% if (info?.needsUpdate) { %>
                 <span class="badge badge-d" style="margin-left:8px"><i class="bi bi-arrow-up-circle"></i> <%= t('admin.update.has_update', 'Ada update') %></span>
               <% } else { %>
                 <span class="badge badge-s" style="margin-left:8px"><i class="bi bi-check2-circle"></i> <%= t('admin.update.latest', 'Terbaru') %></span>
-              <% } %>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-top:12px;align-items:flex-start">
-          <div class="fg">
-            <label class="fl">Commit Server</label>
-            <div class="fc" style="display:flex;align-items:center;gap:8px">
-              <i class="bi bi-diagram-3"></i>
-              <span style="font-weight:800"><%= info?.localCommit || '-' %></span>
-            </div>
-          </div>
-          <div class="fg">
-            <label class="fl">Commit GitHub</label>
-            <div class="fc" style="display:flex;align-items:center;gap:8px">
-              <i class="bi bi-cloud-check"></i>
-              <span style="font-weight:800"><%= info?.remoteCommit || '-' %></span>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-top:12px">
-          <div class="fg">
-            <label class="fl">Repo Update Default</label>
-            <div class="fc" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <i class="bi bi-github"></i>
-              <% if (info?.originUrl) { %>
-                <a href="<%= info.originUrl %>" target="_blank" rel="noopener" style="font-weight:700"><%= info.originUrl %></a>
-              <% } else { %>
-                <span style="font-weight:700">Origin belum diatur</span>
-              <% } %>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-top:12px;align-items:flex-start">
-          <div class="fg">
-            <label class="fl">Folder Instance Aktif</label>
-            <div class="fc" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;word-break:break-all">
-              <%= info?.repoPath || '-' %>
-            </div>
-          </div>
-          <div class="fg">
-            <label class="fl">Proses PM2 Target</label>
-            <div class="fc" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <i class="bi bi-cpu"></i>
-              <span style="font-weight:800"><%= info?.pm2ProcessName || '-' %></span>
-              <% if (info?.pm2ProcessId !== '' && info?.pm2ProcessId !== undefined && info?.pm2ProcessId !== null) { %>
-                <span class="badge badge-g">pm2 id <%= info.pm2ProcessId %></span>
               <% } %>
             </div>
           </div>
@@ -112,16 +62,19 @@
         </div>
 
         <div style="margin-top:12px;color:var(--muted);font-size:12px;line-height:1.5">
-          Update hanya berlaku untuk <strong>instance/folder aktif</strong> ini. Data yang tetap dijaga saat update: <strong>konfigurasi runtime</strong>, <strong>database</strong>, <strong>auth WhatsApp</strong>, <strong>log</strong>, dan <strong>uploads</strong>. Jika ada perubahan source lokal yang menghalangi update, sistem akan mengamankannya dulu ke <strong>git stash</strong>. Setelah source diambil, sistem akan menjalankan validasi dan rollback commit sebelumnya jika update gagal.
+          Fitur ini hanya untuk mengecek dan memasang versi aplikasi terbaru. Data pelanggan, tagihan, pembayaran, WhatsApp, dan file upload tetap dijaga selama proses update.
         </div>
       </div>
     </div>
 
     <% if (log) { %>
       <div class="card mb16">
-        <div class="card-hd"><h6><i class="bi bi-terminal"></i> <%= t('admin.update.log_title', 'Log Update') %></h6></div>
+        <div class="card-hd"><h6><i class="bi bi-check2-circle"></i> <%= t('admin.update.log_title', 'Status Update') %></h6></div>
         <div class="card-bd">
-          <pre style="white-space:pre-wrap;word-break:break-word;margin:0;background:rgba(0,0,0,0.08);padding:12px;border-radius:12px"><%= log %></pre>
+          <div class="alert alert-s" style="margin:0">
+            <i class="bi bi-info-circle"></i>
+            Proses update sudah dijalankan. Silakan cek kembali versi aplikasi setelah halaman selesai dimuat ulang.
+          </div>
         </div>
       </div>
     <% } %>
@@ -130,7 +83,7 @@
 
 <script>
   function confirmUpdate() {
-    return confirm("<%= t('admin.update.confirm', 'Jalankan update dari GitHub sekarang? Sistem akan menarik source terbaru, menjalankan validasi, lalu menjadwalkan restart proses instance ini.') %>");
+    return confirm("<%= t('admin.update.confirm', 'Jalankan update aplikasi sekarang?') %>");
   }
 </script>
 </body>

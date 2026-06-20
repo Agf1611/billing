@@ -133,6 +133,39 @@ function getAgentPrices(agentId) {
     .all(agentId);
 }
 
+async function getAgentPricesWithCurrentValidity(agentId) {
+  const prices = getAgentPrices(agentId);
+  const routerIds = [...new Set(prices.map((price) => price.router_id ?? null))];
+  const profileMaps = new Map();
+
+  await Promise.all(routerIds.map(async (routerId) => {
+    try {
+      const profiles = await mikrotikSvc.getHotspotUserProfiles(routerId);
+      profileMaps.set(
+        String(routerId ?? 'default'),
+        new Map((profiles || []).map((profile) => [String(profile?.name || '').trim(), profile]))
+      );
+    } catch (_error) {
+      profileMaps.set(String(routerId ?? 'default'), new Map());
+    }
+  }));
+
+  return prices.map((price) => {
+    const profile = profileMaps
+      .get(String(price.router_id ?? 'default'))
+      ?.get(String(price.profile_name || '').trim());
+    const profileMeta = parseMikhmonOnLogin(profile?.onLogin || profile?.['on-login'] || '');
+    const currentValidity = String(profileMeta?.validity || '').trim();
+
+    return {
+      ...price,
+      validity: currentValidity || price.validity,
+      configured_validity: price.validity,
+      validity_source: currentValidity ? 'mikrotik' : 'configured'
+    };
+  });
+}
+
 function upsertAgentHotspotPrice(agentId, data) {
   const routerId = data.router_id !== undefined && data.router_id !== null && String(data.router_id).trim() !== ''
     ? Number(data.router_id)
@@ -255,6 +288,36 @@ function topupAgent(agentId, amount, note, actorName = 'Admin') {
     console.warn('[AGENT] Gagal catat pemasukan topup agent:', error.message);
   }
   return result;
+}
+
+function withdrawAgentBalance(agentId, amount, note, actorName = 'Admin') {
+  const delta = Math.floor(Number(amount) || 0);
+  if (!Number.isFinite(delta) || delta <= 0) throw new Error('Nominal tarik saldo tidak valid');
+
+  const agent = getAgentById(agentId);
+  if (!agent) throw new Error('Agent tidak ditemukan');
+
+  const run = db.transaction(() => {
+    const fresh = getAgentById(agentId);
+    const before = Number(fresh.balance || 0);
+    if (before < delta) {
+      throw new Error(`Saldo agent tidak cukup. Saldo saat ini Rp ${before.toLocaleString('id-ID')}`);
+    }
+    const after = before - delta;
+
+    db.prepare('UPDATE agents SET balance = ? WHERE id = ?').run(after, agentId);
+    const tx = db.prepare(
+      `
+      INSERT INTO agent_transactions (
+        agent_id, type, amount_buy, amount_sell, fee, balance_before, balance_after, note
+      ) VALUES (?, 'withdraw', ?, 0, 0, ?, ?, ?)
+    `
+    ).run(agentId, delta, before, after, `${actorName}: ${note || 'Tarik saldo agent'}`);
+
+    return { before, after, txId: Number(tx.lastInsertRowid || 0) };
+  });
+
+  return run();
 }
 
 function toSqlDateTime(date) {
@@ -1013,7 +1076,9 @@ module.exports = {
   updateAgent,
   deleteAgent,
   topupAgent,
+  withdrawAgentBalance,
   getAgentPrices,
+  getAgentPricesWithCurrentValidity,
   upsertAgentHotspotPrice,
   deleteAgentHotspotPrice,
   listAgentTransactions,

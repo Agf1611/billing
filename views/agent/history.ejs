@@ -17,6 +17,8 @@
       acc.invoiceCount += 1;
       acc.invoiceAmount += sell || Number(tx.amount_invoice || 0);
       acc.profit += Math.max(0, fee);
+    } else if (type === 'withdraw') {
+      acc.otherCount += 1;
     } else {
       acc.otherCount += 1;
     }
@@ -35,6 +37,7 @@
   const txTypeInfo = (tx) => {
     const type = String(tx.type || '').toLowerCase();
     if (type === 'topup') return { label: 'Topup Saldo', icon: 'bi-plus-circle', sign: '+', tone: 's' };
+    if (type === 'withdraw') return { label: 'Tarik Saldo', icon: 'bi-cash-coin', sign: '-', tone: 'd' };
     if (type === 'voucher_sale') return { label: 'Jual Voucher', icon: 'bi-ticket-perforated', sign: '-', tone: 'w' };
     if (type === 'invoice_payment') return { label: 'Bayar Tagihan', icon: 'bi-receipt-cutoff', sign: '-', tone: 'd' };
     if (type === 'pulsa') return { label: 'Produk Digital', icon: 'bi-phone', sign: '-', tone: 'w' };
@@ -88,10 +91,11 @@
             <% historyTxs.forEach(tx => {
               const type = String(tx.type || '').toLowerCase();
               const isTopup = type === 'topup';
+              const isWithdraw = type === 'withdraw';
               const isVoucher = type === 'voucher_sale';
               const isInvoice = type === 'invoice_payment';
               const info = txTypeInfo(tx);
-              const mutationAmount = Number(isTopup ? (tx.amount_buy || tx.amount_sell || 0) : (tx.amount_buy || tx.amount_sell || 0));
+              const mutationAmount = Number((isTopup || isWithdraw) ? (tx.amount_buy || tx.amount_sell || 0) : (tx.amount_buy || tx.amount_sell || 0));
               const sellAmount = Number(tx.amount_sell || tx.amount_invoice || 0);
               const costAmount = Number(tx.amount_buy || 0);
               const voucherCount = Number(tx.voucher_count || 0);

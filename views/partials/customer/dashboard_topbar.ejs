@@ -1,10 +1,10 @@
-<%
+﻿<%
   const pageCompanyName = typeof companyName !== 'undefined'
     ? companyName
     : (settings?.company_header || 'Portal Pelanggan');
   const pageCompanyLogoUrl = typeof companyLogoUrl !== 'undefined'
     ? companyLogoUrl
-    : (settings?.company_logo_url || '/img/logo.png');
+    : (settings?.company_logo_url || '/img/mss-logo.png');
   const unreadCount = typeof notificationUnread !== 'undefined'
     ? Number(notificationUnread) || 0
     : (typeof notificationUnreadCount !== 'undefined'
@@ -37,7 +37,7 @@
   <div class="topbar-row">
     <div class="topbar-left">
       <div class="brand-chip">
-        <img src="<%= pageCompanyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <img src="<%= pageCompanyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
         <div class="brand-meta">
           <strong><%= pageCompanyName %></strong>
           <span>Customer App</span>

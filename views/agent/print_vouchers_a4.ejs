@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <head>
   <meta charset="UTF-8">
@@ -33,7 +33,7 @@
       background:var(--vc-soft);
     }
     .voucher:after{
-      content:"SICKAS";
+      content:"MSS";
       position:absolute;
       right:15mm;bottom:6.4mm;
       color:var(--vc-mark);
@@ -96,31 +96,38 @@
       background:var(--vc-accent);color:#fff;font-size:5.5pt;font-weight:950;
       padding:.85mm 1.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     }
-    .no-print{padding:8px 10px;margin-bottom:8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}
+    .no-print{padding:8px 10px;margin-bottom:8px;background:#eff6ff;border:1px solid #dbe7ff;border-radius:8px;font-size:12px}
     @media print{.no-print{display:none}}
   </style>
 </head>
 <body>
+  <%
+    const isReprintMode = typeof reprintMode !== 'undefined' && !!reprintMode;
+    const safeSkippedCount = typeof skippedCount !== 'undefined' ? Number(skippedCount || 0) : 0;
+  %>
   <div class="no-print">
-    Print A4 Batch #<%= batch.id %> - <%= vouchers.length %> voucher siap cetak.
-    <% if (Number(skippedCount || 0) > 0) { %>
-      <strong><%= Number(skippedCount || 0) %> voucher yang sudah terjual/digunakan/dicetak tidak ikut dicetak.</strong>
+    Print A4 Batch #<%= batch.id %> - <%= vouchers.length %> <%= isReprintMode ? 'voucher ditampilkan ulang' : 'voucher siap cetak' %>.
+    <% if (isReprintMode) { %>
+      <strong>Batch ini sudah pernah ditandai dicetak. Voucher yang belum terjual/digunakan ditampilkan ulang.</strong>
+    <% } %>
+    <% if (safeSkippedCount > 0) { %>
+      <strong><%= safeSkippedCount %> voucher yang sudah terjual/digunakan tidak ikut dicetak.</strong>
     <% } %>
   </div>
   <%
-    const logo = settings.company_logo_url || '/img/logo.png';
+    const logo = settings.company_logo_url || '/img/mss-logo.png';
     const phone = (settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0)
       ? '+' + settings.whatsapp_admin_numbers[0]
       : (settings.company_phone || '-');
     function voucherTheme(price) {
       const value = Number(price || 0);
       const palettes = [
-        { accent:'#a21caf', brand:'#0891b2', soft:'rgba(162,28,175,.10)', wash:'#fdf4ff', mark:'rgba(8,145,178,.08)' },
-        { accent:'#2563eb', brand:'#0f766e', soft:'rgba(37,99,235,.12)', wash:'#eff6ff', mark:'rgba(15,118,110,.08)' },
+        { accent:'#073dcc', brand:'#073dcc', soft:'rgba(162,28,175,.10)', wash:'#fdf4ff', mark:'rgba(8,145,178,.08)' },
+        { accent:'#073dcc', brand:'#0634b0', soft:'rgba(37,99,235,.12)', wash:'#eff6ff', mark:'rgba(15,118,110,.08)' },
         { accent:'#dc2626', brand:'#be123c', soft:'rgba(220,38,38,.11)', wash:'#fff1f2', mark:'rgba(190,18,60,.08)' },
-        { accent:'#16a34a', brand:'#047857', soft:'rgba(22,163,74,.12)', wash:'#f0fdf4', mark:'rgba(4,120,87,.08)' },
+        { accent:'#073dcc', brand:'#073dcc', soft:'rgba(22,163,74,.12)', wash:'#f0fdf4', mark:'rgba(4,120,87,.08)' },
         { accent:'#ea580c', brand:'#c2410c', soft:'rgba(234,88,12,.12)', wash:'#fff7ed', mark:'rgba(194,65,12,.08)' },
-        { accent:'#7c3aed', brand:'#4338ca', soft:'rgba(124,58,237,.12)', wash:'#f5f3ff', mark:'rgba(67,56,202,.08)' }
+        { accent:'#073dcc', brand:'#073dcc', soft:'rgba(124,58,237,.12)', wash:'#f5f3ff', mark:'rgba(67,56,202,.08)' }
       ];
       return palettes[Math.abs(Math.floor(value / 1000)) % palettes.length];
     }
@@ -167,10 +174,12 @@
       <% }) %>
     </section>
   <% }) %>
-  <script>
-    window.addEventListener('load', function () {
-      setTimeout(function () { window.print(); }, 400);
-    });
-  </script>
+  <% if (vouchers.length) { %>
+    <script>
+      window.addEventListener('load', function () {
+        setTimeout(function () { window.print(); }, 400);
+      });
+    </script>
+  <% } %>
 </body>
 </html>

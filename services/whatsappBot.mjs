@@ -15,6 +15,7 @@ const billingSvc = require('./billingService.js');
 const mikrotikSvc = require('./mikrotikService.js');
 const customerSvc = require('./customerService.js');
 const agentSvc = require('./agentService.js');
+const isolationWhatsappNotificationSvc = require('./isolationWhatsappNotificationService.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
@@ -103,7 +104,7 @@ function getPhoneFromKey(key) {
 }
 
 function waBrand() {
-  const companyHeader = getSetting('company_header', 'Portal Billing ISP');
+  const companyHeader = getSetting('company_header', 'PT Media Solusi Sukses');
   const footerInfo = getSetting('footer_info', 'Internet Tanpa Batas');
   const sep = '─'.repeat(30);
   return { companyHeader, footerInfo, sep };
@@ -418,7 +419,7 @@ async function resolveTargetTagForAdmin(tagToken) {
 }
 
 function formatListOnu(devices) {
-  const companyHeader = getSetting('company_header', 'Portal Billing ISP');
+  const companyHeader = getSetting('company_header', 'PT Media Solusi Sukses');
   const footerInfo = getSetting('footer_info', 'Internet Tanpa Batas');
   
   const header = `📱 *DAFTAR ONU BER-TAG*
@@ -1716,6 +1717,10 @@ export async function startWhatsAppBot(options = {}) {
             const cust = customerSvc.findCustomerByAny(parsed.targetId);
             if (!cust) return await reply(`❌ Pelanggan *${parsed.targetId}* tidak ditemukan.`);
             await customerSvc.suspendCustomer(cust.id);
+            const dueUnpaidInvoices = billingSvc.getDueUnpaidInvoicesByCustomerId(cust.id, new Date());
+            await isolationWhatsappNotificationSvc.sendIsolationNotification(cust, dueUnpaidInvoices, {
+              reason: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.'
+            });
             await reply(`✅ Pelanggan *${cust.name}* (ID: ${cust.id}) berhasil di-isolir.`);
           } catch (e) {
             await reply('❌ Gagal isolir: ' + e.message);

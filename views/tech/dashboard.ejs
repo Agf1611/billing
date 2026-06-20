@@ -80,7 +80,7 @@
   .tech-hero-title {
     font-size: 24px;
     font-weight: 900;
-    letter-spacing: -.04em;
+    letter-spacing:0;
     line-height: 1.05;
     margin-bottom: 6px;
   }
@@ -137,7 +137,7 @@
   .dash-outage-title {
     font-size: 16px;
     font-weight: 800;
-    letter-spacing: -.02em;
+    letter-spacing:0;
   }
 
   .dash-outage-copy {
@@ -425,7 +425,7 @@
   .dash-ticket-name {
     font-size: 15px;
     font-weight: 800;
-    letter-spacing: -.02em;
+    letter-spacing:0;
   }
 
   .dash-ticket-meta,
@@ -528,13 +528,63 @@
   }
 
   @media (max-width: 576px) {
+    html[data-theme="light"] .tech-hero-title,
+    html[data-theme="light"] .tech-command-title,
+    html[data-theme="light"] .dash-task-customer,
+    html[data-theme="light"] .dash-ticket-name,
+    html[data-theme="light"] .dash-section-title {
+      color: #102044 !important;
+    }
+
+    html[data-theme="light"] .tech-command-desc,
+    html[data-theme="light"] .dash-task-title,
+    html[data-theme="light"] .dash-task-address,
+    html[data-theme="light"] .dash-ticket-meta,
+    html[data-theme="light"] .dash-ticket-message {
+      color: #627391 !important;
+    }
+
+    html[data-theme="light"] .dash-outage-card {
+      background: #fff7f7;
+      border-color: rgba(248, 113, 113, .18);
+      box-shadow: 0 8px 18px rgba(248, 113, 113, .08);
+    }
+
+    html[data-theme="light"] .dash-outage-title {
+      color: #102044 !important;
+    }
+
     .tech-hero-card {
-      padding: 14px;
+      padding: 0;
       gap: 12px;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      margin-bottom: 12px;
+    }
+
+    .tech-hero-card::after {
+      display: none;
+    }
+
+    .tech-hero-copy {
+      padding: 2px 2px 0;
+    }
+
+    .tech-hero-kicker,
+    .tech-hero-text {
+      display: none;
     }
 
     .tech-hero-title {
-      font-size: 21px;
+      font-size: 17px;
+      letter-spacing:0;
+      margin: 0 0 4px;
+    }
+
+    .tech-hero-card {
+      padding: 0;
+      gap: 10px;
     }
 
     .tech-command-grid {
@@ -543,43 +593,209 @@
     }
 
     .tech-command-card {
-      min-height: 96px;
-      padding: 12px 10px;
+      min-height: 86px;
+      padding: 11px 10px;
       border-radius: 16px;
+      gap: 7px;
+      background: var(--tech-panel);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
     }
 
     .tech-command-icon {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
       border-radius: 12px;
       font-size: 16px;
     }
 
     .tech-command-title {
-      font-size: 12px;
+      font-size: 12.5px;
     }
 
     .tech-command-desc {
-      font-size: 10px;
+      display: none;
+    }
+
+    .tech-command-count {
+      padding: 4px 7px;
+      font-size: 9px;
+    }
+
+    .stat-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-bottom: 13px;
+    }
+
+    .stat-box {
+      padding: 9px 7px;
+      border-radius: 14px;
+      text-align: center;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .07);
+    }
+
+    .stat-box::after,
+    .stat-box .stat-icon {
+      display: none;
+    }
+
+    .stat-box .lbl {
+      margin-bottom: 5px;
+      font-size: 8px;
+      letter-spacing: .05em;
+      line-height: 1.2;
+    }
+
+    .stat-box .val {
+      font-size: 18px;
+    }
+
+    .dash-section-head {
+      margin-bottom: 8px;
+    }
+
+    .dash-section-title {
+      color: var(--tech-text);
+      font-size: 13px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .dash-section-link {
+      font-size: 11px;
     }
 
     .dash-task-card {
-      padding: 10px 11px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 10px 10px 10px 11px;
+      gap: 8px;
+      border-radius: 15px;
+      margin-bottom: 0;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .07);
+    }
+
+    .dash-task-list {
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .dash-task-row {
+      margin-bottom: 4px;
+      gap: 5px;
+    }
+
+    .dash-task-row .dash-task-pill {
+      display: none;
+    }
+
+    .dash-task-row .badge-status {
+      padding: 4px 7px;
+      font-size: 9px;
     }
 
     .dash-task-title {
+      font-size: 12px;
+      color: var(--tech-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dash-task-customer {
+      font-size: 13px;
+      font-weight: 900;
+      margin-bottom: 3px;
+    }
+
+    .dash-task-subline {
+      display: none;
+    }
+
+    .dash-task-address {
+      font-size: 10.5px;
+      margin-top: 4px;
+    }
+
+    .dash-task-actions {
+      align-self: center;
+      justify-content: center;
+      gap: 6px;
+      flex-direction: column;
+      flex-wrap: nowrap;
+    }
+
+    .dash-task-actions a.dash-task-icon:not(:first-child) {
+      display: none;
+    }
+
+    .dash-task-icon,
+    .dash-task-btn {
+      width: 36px;
+      height: 36px;
+      min-height: 36px;
+      padding: 0;
+      border-radius: 12px;
+      font-size: 0;
+    }
+
+    .dash-task-icon i,
+    .dash-task-btn i {
+      font-size: 15px;
+      margin: 0 !important;
+    }
+
+    .dash-task-actions form {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .dash-outage-list {
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .dash-outage-card {
+      padding: 11px;
+      border-radius: 15px;
+    }
+
+    .dash-outage-title {
       font-size: 13px;
     }
 
-    .dash-task-customer,
-    .dash-task-subline,
-    .dash-task-address {
-      font-size: 11px;
+    .dash-outage-copy,
+    .dash-outage-meta {
+      display: none;
+    }
+
+    .dash-outage-badge {
+      padding: 5px 8px;
+      font-size: 10px;
     }
 
     .dash-task-detail-grid {
       grid-template-columns: 1fr;
       gap: 8px;
+    }
+
+    .dash-ticket-card {
+      gap: 8px;
+      padding: 10px 11px;
+      border-radius: 15px;
+    }
+
+    .dash-ticket-name {
+      font-size: 13px;
+    }
+
+    .dash-ticket-meta,
+    .dash-ticket-message {
+      font-size: 11px;
+    }
+
+    .dash-ticket-message {
+      padding: 8px 9px;
+      border-radius: 12px;
     }
 
     .dash-ticket-actions {
@@ -602,24 +818,25 @@
   <div class="tech-command-grid">
     <a href="/tech/customers/new" class="tech-command-card">
       <span class="tech-command-icon"><i class="bi bi-person-plus"></i></span>
-      <span class="tech-command-title">Mulai Pemasangan</span>
-      <span class="tech-command-desc">Buka form pelanggan baru.</span>
+      <span class="tech-command-title">Tambah Pelanggan</span>
+      <span class="tech-command-desc">Input calon pelanggan baru.</span>
+    </a>
+    <a href="/tech/tasks" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-clipboard2-check"></i></span>
+      <span class="tech-command-title">Tugas Hari Ini</span>
+      <span class="tech-command-desc">Pekerjaan aktif dan jadwal.</span>
+      <span class="tech-command-count"><i class="bi bi-list-check"></i> <%= activeTaskPreview.length %> tugas</span>
     </a>
     <a href="/tech/pool" class="tech-command-card">
       <span class="tech-command-icon"><i class="bi bi-broadcast-pin"></i></span>
-      <span class="tech-command-title">Tiket Hari Ini</span>
-      <span class="tech-command-desc">Lihat keluhan yang belum ditangani.</span>
+      <span class="tech-command-title">Gangguan</span>
+      <span class="tech-command-desc">Tiket baru yang belum ditangani.</span>
       <span class="tech-command-count"><i class="bi bi-bell"></i> <%= todayTicketCount %> tiket</span>
     </a>
-    <a href="/tech/customers" class="tech-command-card">
-      <span class="tech-command-icon"><i class="bi bi-search"></i></span>
-      <span class="tech-command-title">Cari Pelanggan</span>
-      <span class="tech-command-desc">Buka detail, WA, dan rute cepat.</span>
-    </a>
-    <a href="/tech/monitoring" class="tech-command-card">
-      <span class="tech-command-icon"><i class="bi bi-display"></i></span>
-      <span class="tech-command-title">Monitoring ONU</span>
-      <span class="tech-command-desc">Cek online, offline, dan tindakan cepat.</span>
+    <a href="/tech/history" class="tech-command-card">
+      <span class="tech-command-icon"><i class="bi bi-clock-history"></i></span>
+      <span class="tech-command-title">Riwayat</span>
+      <span class="tech-command-desc">Pekerjaan yang sudah selesai.</span>
     </a>
   </div>
 </div>
@@ -691,7 +908,7 @@
 
 <div class="dash-section-head">
   <h6 class="dash-section-title">
-    <i class="bi bi-clipboard-check me-1"></i> Pekerjaan Aktif Saya (<%= activeTaskPreview.length %>)
+    <i class="bi bi-clipboard-check me-1"></i> Prioritas Hari Ini
   </h6>
   <a href="/tech/tasks" class="dash-section-link">Lihat semua</a>
 </div>

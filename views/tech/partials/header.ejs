@@ -7,16 +7,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <script>
     (function () {
-      const savedTheme = localStorage.getItem('tech-portal-theme') || 'dark';
+      const savedTheme = localStorage.getItem('tech-portal-theme') || 'light';
       document.documentElement.setAttribute('data-theme', savedTheme);
     })();
   </script>
-  <meta name="theme-color" content="#09111d">
+  <meta name="theme-color" content="#eef3ff">
   <%- include('../../partials/pwa_portal', {
     portalKey: 'tech',
     manifestPath: '/pwa/tech.webmanifest',
     scope: '/tech/',
-    themeColor: '#09111d',
+    themeColor: '#073dcc',
     appTitle: 'Portal Teknisi'
   }) %>
   <title><%= title %> - <%= company %></title>
@@ -55,38 +55,16 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <style>
     :root,
-    html[data-theme="dark"] {
-      --tech-bg: #09111d;
-      --tech-bg-alt: #111827;
-      --tech-panel: rgba(17, 24, 39, .92);
-      --tech-panel-soft: rgba(79, 110, 247, .10);
-      --tech-panel-soft-2: rgba(79, 110, 247, .14);
-      --tech-border: rgba(148, 163, 184, .18);
-      --tech-text: #edf2ff;
-      --tech-muted: #96a3bf;
-      --tech-primary: #6f8dff;
-      --tech-primary-soft: rgba(111, 141, 255, .18);
-      --tech-success: #35c98a;
-      --tech-warning: #ffb34d;
-      --tech-danger: #ff7286;
-      --tech-shadow: 0 26px 54px rgba(2, 8, 23, .34);
-      --tech-topbar: rgba(15, 23, 42, .84);
-      --tech-nav-bg: rgba(17, 24, 39, .94);
-      --tech-input-bg: rgba(15, 23, 42, .92);
-      --tech-icon-bg: rgba(255, 255, 255, .055);
-      --tech-btn-close-filter: invert(1) grayscale(1) brightness(200%);
-    }
-
     html[data-theme="light"] {
-      --tech-bg: #eef3ff;
-      --tech-bg-alt: #f8fbff;
+      --tech-bg: #f5f8ff;
+      --tech-bg-alt: #ffffff;
       --tech-panel: rgba(255, 255, 255, .94);
       --tech-panel-soft: rgba(79, 110, 247, .06);
       --tech-panel-soft-2: rgba(79, 110, 247, .10);
       --tech-border: rgba(170, 186, 215, .30);
       --tech-text: #1b2740;
       --tech-muted: #6b7b97;
-      --tech-primary: #4f6ef7;
+      --tech-primary: #073dcc;
       --tech-primary-soft: rgba(79, 110, 247, .12);
       --tech-success: #149b68;
       --tech-warning: #d98a18;
@@ -97,6 +75,28 @@
       --tech-input-bg: rgba(255, 255, 255, .98);
       --tech-icon-bg: rgba(79, 110, 247, .06);
       --tech-btn-close-filter: none;
+    }
+
+    html[data-theme="dark"] {
+      --tech-bg: #06153a;
+      --tech-bg-alt: #0b1f56;
+      --tech-panel: rgba(9, 28, 76, .94);
+      --tech-panel-soft: rgba(125, 162, 255, .12);
+      --tech-panel-soft-2: rgba(125, 162, 255, .18);
+      --tech-border: rgba(195, 211, 244, .18);
+      --tech-text: #f5f8ff;
+      --tech-muted: #b7c5e6;
+      --tech-primary: #7da2ff;
+      --tech-primary-soft: rgba(125, 162, 255, .18);
+      --tech-success: #35c98a;
+      --tech-warning: #ffb34d;
+      --tech-danger: #ff7286;
+      --tech-shadow: 0 26px 54px rgba(2, 8, 23, .34);
+      --tech-topbar: rgba(9, 28, 76, .88);
+      --tech-nav-bg: rgba(9, 28, 76, .94);
+      --tech-input-bg: rgba(15, 31, 76, .92);
+      --tech-icon-bg: rgba(255, 255, 255, .055);
+      --tech-btn-close-filter: invert(1) grayscale(1) brightness(200%);
     }
 
     html,
@@ -112,10 +112,7 @@
       padding-bottom: 92px;
       -webkit-tap-highlight-color: transparent;
       transition: background-color .2s ease, color .2s ease;
-      background:
-        radial-gradient(460px 260px at 0% 0%, rgba(111, 141, 255, .18) 0%, rgba(111, 141, 255, 0) 72%),
-        radial-gradient(420px 240px at 100% 0%, rgba(73, 186, 255, .10) 0%, rgba(73, 186, 255, 0) 68%),
-        linear-gradient(180deg, var(--tech-bg-alt) 0%, var(--tech-bg) 100%);
+      background: linear-gradient(180deg, var(--tech-bg-alt) 0%, var(--tech-bg) 100%);
     }
 
     a {
@@ -165,10 +162,47 @@
       margin: 0;
       font-size: 18px;
       font-weight: 900;
-      letter-spacing: -.03em;
+      letter-spacing:0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .top-nav-mobile-title,
+    .top-nav-mobile-meta {
+      display: none;
+    }
+
+    .top-nav-mobile-meta {
+      align-items: center;
+      gap: 7px;
+      color: var(--tech-muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .top-nav-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(20, 155, 104, .10);
+      color: var(--tech-success);
+      border: 1px solid rgba(20, 155, 104, .16);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .top-nav-status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 0 4px rgba(20, 155, 104, .10);
     }
 
     .top-nav-actions {
@@ -275,6 +309,24 @@
       color: var(--tech-text);
     }
 
+    html[data-theme="light"] body,
+    html[data-theme="light"] .top-nav-title,
+    html[data-theme="light"] .top-nav-mobile-meta,
+    html[data-theme="light"] .nav-item,
+    html[data-theme="light"] .nav-item-trigger,
+    html[data-theme="light"] .tech-menu-title,
+    html[data-theme="light"] .tech-menu-link,
+    html[data-theme="light"] .tech-menu-secondary a {
+      color: #1b2740 !important;
+    }
+
+    html[data-theme="light"] .text-secondary,
+    html[data-theme="light"] .text-muted,
+    html[data-theme="light"] .muted-text,
+    html[data-theme="light"] .field-hint {
+      color: #6b7b97 !important;
+    }
+
     html[data-theme="dark"] .btn-close {
       filter: var(--tech-btn-close-filter);
       opacity: .78;
@@ -374,7 +426,7 @@
       font-size: 24px;
       font-weight: 900;
       line-height: 1;
-      letter-spacing: -.03em;
+      letter-spacing:0;
       margin: 0;
     }
 
@@ -438,7 +490,7 @@
 
     .tech-modal-card .modal-title {
       font-weight: 900;
-      letter-spacing: -.02em;
+      letter-spacing:0;
     }
 
     .tech-modal-card .btn-close {
@@ -551,7 +603,7 @@
     .tech-menu-title {
       font-size: 18px;
       font-weight: 900;
-      letter-spacing: -.03em;
+      letter-spacing:0;
     }
 
     .tech-menu-subtitle {
@@ -625,37 +677,44 @@
 
     @media (max-width: 576px) {
       body {
-        padding-top: 70px;
-        padding-bottom: 94px;
+        padding-top: 76px;
+        padding-bottom: 98px;
+        background:
+          linear-gradient(180deg, var(--tech-bg-alt) 0%, var(--tech-bg) 100%);
       }
 
       .top-nav {
         left: 10px;
         right: 10px;
         top: 8px;
-        min-height: 54px;
-        padding: 9px 10px;
-        border-radius: 20px;
+        min-height: 58px;
+        padding: 8px 10px 8px 12px;
+        border-radius: 18px;
       }
 
       .top-nav-kicker {
-        font-size: 9px;
+        display: none;
       }
 
       .top-nav-title {
-        font-size: 16px;
-        max-width: 40vw;
+        font-size: 18px;
+        line-height: 1.08;
+        max-width: 46vw;
       }
+
+      .top-nav-desktop-title { display: none; }
+      .top-nav-mobile-title { display: inline; }
+      .top-nav-mobile-meta { display: flex; }
 
       .top-nav-actions {
         gap: 6px;
       }
 
       .top-nav-btn {
-        width: 38px;
-        height: 38px;
-        border-radius: 13px;
-        font-size: 17px;
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        font-size: 16px;
       }
 
       .theme-switch-btn {
@@ -667,8 +726,8 @@
       }
 
       .t-card {
-        padding: 12px;
-        border-radius: 22px;
+        padding: 11px;
+        border-radius: 16px;
       }
 
       .stat-box {
@@ -692,9 +751,9 @@
         left: 10px;
         right: 10px;
         bottom: 8px;
-        gap: 6px;
-        padding: 8px;
-        border-radius: 24px;
+        gap: 4px;
+        padding: 7px 6px calc(7px + env(safe-area-inset-bottom));
+        border-radius: 22px;
       }
 
       .tech-menu-sheet {
@@ -703,19 +762,41 @@
 
       .nav-item,
       .nav-item-trigger {
-        min-height: 50px;
-        padding: 7px 4px;
+        min-height: 48px;
+        padding: 6px 3px;
+        border-radius: 15px;
         font-size: 10px;
+        gap: 4px;
       }
 
       .nav-item i,
       .nav-item-trigger i {
-        font-size: 18px;
+        font-size: 17px;
       }
 
       .nav-item--center {
-        min-height: 64px;
+        min-height: 62px;
         transform: translateY(-14px);
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(111, 141, 255, .98), rgba(79, 110, 247, .96));
+        color: #fff !important;
+        border-color: rgba(255, 255, 255, .18);
+        box-shadow: 0 16px 26px rgba(79, 110, 247, .26);
+      }
+
+      .nav-item--center.active {
+        color: #fff !important;
+        border-color: rgba(255, 255, 255, .24);
+        background: linear-gradient(180deg, rgba(111, 141, 255, 1), rgba(79, 110, 247, .97));
+      }
+
+      .nav-item--center i {
+        font-size: 21px;
+      }
+
+      .nav-count {
+        top: -2px;
+        right: 6px;
       }
     }
   </style>
@@ -723,11 +804,13 @@
 
 <body>
   <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 }; %>
+  <% const techHeaderDate = new Date().toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short' }); %>
 
   <div class="top-nav">
     <div class="top-nav-brand">
       <span class="top-nav-kicker">Portal Teknisi</span>
-      <h1 class="top-nav-title"><%= title %></h1>
+      <h1 class="top-nav-title"><span class="top-nav-desktop-title"><%= title %></span><span class="top-nav-mobile-title">Teknisi</span></h1>
+      <div class="top-nav-mobile-meta"><span><%= techHeaderDate %></span><span class="top-nav-status">Online</span></div>
     </div>
     <div class="top-nav-actions">
       <button type="button" class="top-nav-btn theme-switch-btn" id="themeToggleBtn" aria-label="Ganti tema portal teknisi">

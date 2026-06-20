@@ -2,7 +2,7 @@
 <html lang="<%= lang || 'id' %>">
 
 <head>
-  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/logo.png'; %>
+  <% const logoSrc = (settings && settings.company_logo_url) ? settings.company_logo_url : '/img/mss-logo.png'; %>
   <% const waContact = settings.company_phone || (settings.whatsapp_admin_numbers ? settings.whatsapp_admin_numbers[0] : ''); %>
   <% const waLink = waContact ? buildWhatsAppLink(waContact) : '#'; %>
   <% const supportEmail = settings.company_email || `support@${company.toLowerCase().replace(/\s+/g, '')}.com`; %>
@@ -33,8 +33,8 @@
       --text-main: #1a2740;
       --text-soft: #697897;
       --text-faint: #8c99b0;
-      --brand: #2d6bff;
-      --brand-deep: #204fd7;
+      --brand: #073dcc;
+      --brand-deep: #0634b0;
       --mint: #10a37f;
       --amber: #f59e0b;
       --rose: #ea580c;
@@ -130,7 +130,7 @@
       font-size: 24px;
       line-height: 1.04;
       font-weight: 800;
-      letter-spacing: -0.04em;
+      letter-spacing:0;
     }
 
     .hero-grid {
@@ -168,7 +168,7 @@
       font-size: clamp(28px, 4vw, 38px);
       line-height: 1.02;
       font-weight: 800;
-      letter-spacing: -0.05em;
+      letter-spacing:0;
     }
 
     .hero-copy p {
@@ -194,7 +194,7 @@
       margin-bottom: 6px;
       font-size: 13px;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing:0;
     }
 
     .quick-panel p {
@@ -343,7 +343,7 @@
       font-family: "Plus Jakarta Sans", "DM Sans", sans-serif;
       font-size: 16px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing:0;
       color: var(--text-main);
     }
 

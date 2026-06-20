@@ -2,7 +2,7 @@
 
   <% const safeTechNav = (typeof techNav !== 'undefined' && techNav) ? techNav : { openTickets: 0, myTickets: 0, assignedTasks: 0, inProgress: 0, resolved: 0 }; %>
   <% const currentTechPage = typeof activePage !== 'undefined' ? activePage : ''; %>
-  <% const isMoreActive = ['create_customer', 'map', 'monitoring', 'history'].includes(currentTechPage); %>
+  <% const isMoreActive = ['create_customer', 'map', 'monitoring', 'pool'].includes(currentTechPage); %>
 
   <nav class="bottom-nav">
     <a href="/tech/customers" class="nav-item <%= currentTechPage === 'customers' ? 'active' : '' %>">
@@ -12,20 +12,19 @@
     <a href="/tech/tasks" class="nav-item <%= currentTechPage === 'tasks' ? 'active' : '' %>">
       <i class="bi bi-clipboard2-check"></i>
       <% if (safeTechNav.assignedTasks > 0) { %><span class="nav-count"><%= safeTechNav.assignedTasks > 99 ? '99+' : safeTechNav.assignedTasks %></span><% } %>
-      <span class="nav-item-label">Job</span>
+      <span class="nav-item-label">Tugas</span>
     </a>
     <a href="/tech" class="nav-item nav-item--center <%= currentTechPage === 'dashboard' ? 'active' : '' %>">
       <i class="bi bi-grid-1x2"></i>
       <span class="nav-item-label">Dashboard</span>
     </a>
-    <a href="/tech/pool" class="nav-item <%= currentTechPage === 'pool' ? 'active' : '' %>">
-      <i class="bi bi-broadcast-pin"></i>
-      <% if (safeTechNav.openTickets > 0) { %><span class="nav-count"><%= safeTechNav.openTickets > 99 ? '99+' : safeTechNav.openTickets %></span><% } %>
-      <span class="nav-item-label"><%= t('tech.nav.new_tickets', 'Tiket') %></span>
+    <a href="/tech/history" class="nav-item <%= currentTechPage === 'history' ? 'active' : '' %>">
+      <i class="bi bi-clock-history"></i>
+      <span class="nav-item-label">Riwayat</span>
     </a>
     <button type="button" class="nav-item-trigger <%= isMoreActive ? 'active' : '' %>" data-bs-toggle="offcanvas" data-bs-target="#techMoreMenu" aria-controls="techMoreMenu">
-      <i class="bi bi-grid-3x3-gap"></i>
-      <span class="nav-item-label">Menu</span>
+      <i class="bi bi-headset"></i>
+      <span class="nav-item-label">Bantuan</span>
     </button>
   </nav>
 
@@ -65,6 +64,13 @@
           <div>
             <strong>Riwayat Kerja</strong>
             <span>Cek pekerjaan yang pernah ditangani.</span>
+          </div>
+        </a>
+        <a href="/tech/pool" class="tech-menu-link">
+          <i class="bi bi-broadcast-pin"></i>
+          <div>
+            <strong>Gangguan</strong>
+            <span>Lihat tiket baru yang perlu ditangani.</span>
           </div>
         </a>
       </div>

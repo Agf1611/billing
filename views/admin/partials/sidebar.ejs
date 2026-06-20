@@ -1,9 +1,9 @@
-<!-- views/admin/partials/sidebar.ejs -->
+﻿<!-- views/admin/partials/sidebar.ejs -->
 <%
   const sidebarLogoSrc =
     (typeof settings !== 'undefined' && settings && String(settings.company_logo_url || '').trim())
       ? String(settings.company_logo_url || '').trim()
-      : '/img/logo.png';
+      : '/img/mss-logo.png';
 %>
 <style id="admin-sidebar-unified-style">
   .sidebar{
@@ -13,12 +13,10 @@
     top:14px!important;
     padding-top:0!important;
     border-radius:28px!important;
-    background:var(--surface)!important;
-    border:1px solid var(--border)!important;
-    box-shadow:var(--shadow-card)!important;
-    background-image:
-      radial-gradient(circle at top left, rgba(255,255,255,.05), transparent 26%),
-      linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0))!important;
+    background-color:#073dcc!important;
+    background-image:linear-gradient(180deg,#073dcc 0%,#0634b0 100%)!important;
+    border:1px solid rgba(255,255,255,.18)!important;
+    box-shadow:0 22px 52px rgba(7,61,204,.24)!important;
   }
   .sidebar .sb-brand{
     padding:18px 18px 14px!important;
@@ -38,14 +36,14 @@
     justify-content:center!important;
     flex-shrink:0!important;
     overflow:hidden!important;
-    color:var(--primary)!important;
-    background:transparent!important;
-    border:1px solid rgba(148,163,184,.16)!important;
+    color:#fff!important;
+    background:#fff!important;
+    border:1px solid rgba(255,255,255,.80)!important;
     box-shadow:none!important;
   }
   body[data-theme="light"] .sidebar .sb-icon{
-    background:transparent!important;
-    border-color:rgba(148,163,184,.18)!important;
+    background:#fff!important;
+    border-color:rgba(255,255,255,.80)!important;
     box-shadow:none!important;
   }
   .sidebar .sb-name{
@@ -53,7 +51,7 @@
     font-weight:800!important;
     line-height:1.2!important;
     letter-spacing:0!important;
-    color:var(--text)!important;
+    color:#fff!important;
     overflow:hidden!important;
     text-overflow:ellipsis!important;
     white-space:nowrap!important;
@@ -61,7 +59,7 @@
   .sidebar .sb-sub{
     margin-top:3px!important;
     font-size:10px!important;
-    color:var(--muted)!important;
+    color:rgba(232,240,255,.78)!important;
     text-transform:uppercase!important;
     letter-spacing:.12em!important;
   }
@@ -72,8 +70,8 @@
     gap:6px!important;
     padding:5px!important;
     border-radius:999px!important;
-    background:var(--surface-soft)!important;
-    border:1px solid var(--border)!important;
+    background:rgba(255,255,255,.12)!important;
+    border:1px solid rgba(255,255,255,.18)!important;
   }
   .sidebar .sb-lang-btn{
     min-width:34px!important;
@@ -83,22 +81,22 @@
     font-size:11px!important;
     font-weight:800!important;
     letter-spacing:.04em!important;
-    color:var(--muted)!important;
+    color:rgba(232,240,255,.78)!important;
   }
   .sidebar .sb-lang-btn:hover,
   .sidebar .sb-lang-btn.active{
-    color:var(--text)!important;
-    background:var(--surface-strong)!important;
-    box-shadow:inset 0 0 0 1px var(--border)!important;
+    color:#073dcc!important;
+    background:#fff!important;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)!important;
   }
   .sidebar .sb-theme-toggle{
     flex:1!important;
     height:40px!important;
     padding:0 12px!important;
     border-radius:14px!important;
-    border:1px solid var(--border)!important;
-    background:linear-gradient(135deg,var(--surface-soft),rgba(255,255,255,.02))!important;
-    color:var(--text)!important;
+    border:1px solid rgba(255,255,255,.18)!important;
+    background:rgba(255,255,255,.12)!important;
+    color:#fff!important;
     display:inline-flex!important;
     align-items:center!important;
     justify-content:center!important;
@@ -111,7 +109,7 @@
     width:auto!important;
     height:auto!important;
     font-size:15px!important;
-    color:var(--primary)!important;
+    color:#fff!important;
     background:transparent!important;
     border:0!important;
     box-shadow:none!important;
@@ -122,7 +120,7 @@
     padding:14px 10px 8px!important;
     font-size:10px!important;
     font-weight:800!important;
-    color:var(--muted)!important;
+    color:rgba(232,240,255,.78)!important;
     letter-spacing:.14em!important;
     text-transform:uppercase!important;
   }
@@ -133,7 +131,7 @@
     margin:2px 0!important;
     padding:11px 12px!important;
     border-radius:16px!important;
-    color:var(--muted)!important;
+    color:rgba(232,240,255,.78)!important;
     text-decoration:none!important;
     font-size:13px!important;
     font-weight:600!important;
@@ -150,38 +148,38 @@
     justify-content:center!important;
     font-size:13px!important;
     color:inherit!important;
-    background:rgba(255,255,255,.03)!important;
+    background:rgba(255,255,255,.10)!important;
     border:0!important;
     box-shadow:none!important;
   }
-  body[data-theme="light"] .sidebar .sb-item i{background:rgba(105,88,255,.1)!important;color:#5d64a6!important}
-  .sidebar .sb-item:hover{color:var(--text)!important;background:rgba(255,255,255,.045)!important}
-  body[data-theme="light"] .sidebar .sb-item:hover{background:rgba(105,88,255,.06)!important;color:#3f4d68!important}
+  body[data-theme="light"] .sidebar .sb-item i{background:rgba(255,255,255,.10)!important;color:rgba(232,240,255,.78)!important}
+  .sidebar .sb-item:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
+  body[data-theme="light"] .sidebar .sb-item:hover{background:rgba(255,255,255,.12)!important;color:#fff!important}
   .sidebar .sb-item.active{
-    color:var(--primary)!important;
-    background:linear-gradient(135deg,rgba(124,116,255,.16),rgba(92,141,255,.08))!important;
-    box-shadow:inset 0 0 0 1px rgba(124,116,255,.18)!important;
+    color:#fff!important;
+    background:rgba(255,255,255,.18)!important;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.20)!important;
   }
   .sidebar .sb-item.active i{
-    color:#fff!important;
-    background:linear-gradient(145deg,var(--primary),var(--primary-2))!important;
-    box-shadow:0 12px 24px rgba(104,95,255,.22)!important;
+    color:#073dcc!important;
+    background:#fff200!important;
+    box-shadow:0 12px 24px rgba(0,0,0,.14)!important;
   }
-  body[data-theme="light"] .sidebar .sb-item.active{background:linear-gradient(135deg,rgba(105,88,255,.12),rgba(92,141,255,.08))!important;color:#4c4de0!important}
+  body[data-theme="light"] .sidebar .sb-item.active{background:rgba(255,255,255,.18)!important;color:#fff!important}
   .sidebar .sb-item.logout{color:var(--danger)!important}
   .sidebar .sb-item.logout:hover{background:var(--ddim)!important}
   .sidebar .sb-footer{
     margin:0!important;
     padding:14px 18px 20px!important;
-    border-top:1px solid var(--border)!important;
-    color:var(--muted)!important;
+    border-top:1px solid rgba(255,255,255,.16)!important;
+    color:rgba(232,240,255,.78)!important;
   }
   .sidebar .sb-footer a,
   .sidebar .sb-footer div{
     display:inline-flex!important;
     align-items:center!important;
     gap:8px!important;
-    color:var(--muted)!important;
+    color:rgba(232,240,255,.78)!important;
     font-size:11px!important;
     font-weight:700!important;
     text-decoration:none!important;
@@ -202,13 +200,28 @@
     .sidebar .sb-item{padding:10px 12px!important}
     .sidebar .sb-close{display:inline-flex!important}
   }
+  body .sidebar#sidebar{
+    background:#073dcc!important;
+    background:linear-gradient(180deg,#073dcc 0%,#0634b0 100%)!important;
+    color:#fff!important;
+  }
+  body .sidebar#sidebar .sb-name,
+  body .sidebar#sidebar .sb-footer a,
+  body .sidebar#sidebar .sb-footer div{color:#fff!important}
+  body .sidebar#sidebar .sb-sub,
+  body .sidebar#sidebar .sb-section,
+  body .sidebar#sidebar .sb-footer,
+  body .sidebar#sidebar .sb-item{color:rgba(232,240,255,.84)!important}
+  body .sidebar#sidebar .sb-item:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
+  body .sidebar#sidebar .sb-item.active{color:#fff!important;background:rgba(255,255,255,.18)!important}
+  body .sidebar#sidebar .sb-item.active i{color:#073dcc!important;background:#fff200!important}
 </style>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="sb-brand">
     <div class="sb-brand-main">
       <div class="sb-icon">
-        <img src="<%= sidebarLogoSrc %>" alt="Logo <%= company %>" style="width:30px;height:30px;object-fit:contain" onerror="this.onerror=null;this.src='/img/logo.png'">
+        <img src="<%= sidebarLogoSrc %>" alt="Logo <%= company %>" style="width:30px;height:30px;object-fit:contain" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
       </div>
       <div class="sb-brand-copy">
         <div class="sb-name"><%= company %></div>

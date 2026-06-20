@@ -586,6 +586,16 @@
         "note_placeholder": "Example: shift starting top-up",
         "process": "Process"
       },
+      "withdraw": {
+        "title": "Withdraw Agent Balance",
+        "agent": "Agent",
+        "current_balance": "Current Balance",
+        "amount": "Withdraw Amount (Rp)",
+        "note": "Note",
+        "note_placeholder": "Example: wrong top-up correction",
+        "process": "Withdraw Balance",
+        "confirm": "Withdraw this agent balance? Make sure the amount and note are correct."
+      },
       "prices": {
         "title": "Agent Voucher Prices",
         "agent": "Agent",
@@ -629,6 +639,7 @@
       },
       "type": {
         "topup": "TOPUP",
+        "withdraw": "WITHDRAW",
         "invoice": "INVOICE",
         "voucher": "VOUCHER",
         "adjust": "ADJUST"

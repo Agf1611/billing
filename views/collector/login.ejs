@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
 <%
-  const logoSrc = logoUrl || '/img/logo.png';
+  const logoSrc = logoUrl || '/img/mss-logo.png';
 %>
 <head>
   <meta charset="UTF-8">
@@ -10,7 +10,7 @@
     portalKey: 'collector',
     manifestPath: '/pwa/collector.webmanifest',
     scope: '/collector/',
-    themeColor: '#4f6ef7',
+    themeColor: '#073dcc',
     appTitle: 'Portal Kolektor'
   }) %>
   <title><%= title %> | <%= company %></title>
@@ -28,8 +28,8 @@
       --text-main:#1b2740;
       --text-soft:#6b7b97;
       --text-faint:#8a98b3;
-      --primary:#4f6ef7;
-      --primary-2:#6f8dff;
+      --primary:#073dcc;
+      --primary-2:#0b55f4;
       --accent:#ec9a36;
       --shadow:0 26px 60px rgba(85,104,148,.16);
       --shell-width:min(100vw, 430px);
@@ -40,10 +40,7 @@
       margin:0;
       color:var(--text-main);
       font-family:"Plus Jakarta Sans","Manrope",system-ui,-apple-system,sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(111,141,255,.22) 0%, rgba(111,141,255,0) 34%),
-        radial-gradient(circle at top right, rgba(236,154,54,.10) 0%, rgba(236,154,54,0) 28%),
-        linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
+      background:linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
       -webkit-tap-highlight-color:transparent;
     }
     body::before{
@@ -87,7 +84,7 @@
       background:rgba(79,110,247,.10);border:1px solid rgba(79,110,247,.14);color:var(--primary);
       font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;
     }
-    .brand-copy h1{margin:0 0 4px;font-size:22px;line-height:1.04;font-weight:800;letter-spacing:-.04em}
+    .brand-copy h1{margin:0 0 4px;font-size:22px;line-height:1.04;font-weight:800;letter-spacing:0}
     .brand-copy p{margin:0;color:var(--text-soft);font-size:12px;line-height:1.45}
     .login-card{
       background:var(--surface);border:1px solid rgba(255,255,255,.74);border-radius:28px;
@@ -100,7 +97,7 @@
       border:1px solid rgba(79,110,247,.16);color:var(--accent);font-size:24px;
       box-shadow:0 18px 32px rgba(79,110,247,.14);
     }
-    .login-card-head h2{margin:0 0 5px;font-size:20px;font-weight:800;letter-spacing:-.03em}
+    .login-card-head h2{margin:0 0 5px;font-size:20px;font-weight:800;letter-spacing:0}
     .login-card-head p{margin:0;font-size:12px;line-height:1.5;color:var(--text-soft)}
     .form-container{padding:12px 18px 18px}
     .field{margin-bottom:12px}

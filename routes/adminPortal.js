@@ -1,5 +1,5 @@
-/**
- * Route Admin Dashboard — termasuk Billing System
+﻿/**
+ * Route Admin Dashboard â€” termasuk Billing System
  */
 const express = require('express');
 const router = express.Router();
@@ -19,6 +19,8 @@ const usageSvc = require('../services/usageService');
 const packageChangeSvc = require('../services/packageChangeService');
 const billingSvc = require('../services/billingService');
 const whatsappGateway = require('../services/whatsappGatewayService');
+const whatsappTemplateMedia = require('../services/whatsappTemplateMediaService');
+const isolationWhatsappNotificationSvc = require('../services/isolationWhatsappNotificationService');
 const mikrotikService = require('../services/mikrotikService');
 const monitoringCollectorSvc = require('../services/monitoringCollectorService');
 const massOutageSvc = require('../services/massOutageService');
@@ -148,17 +150,17 @@ router.get('/manifest.webmanifest', (req, res) => {
     id: '/admin/',
     name: 'Admin',
     short_name: 'Admin',
-    description: `Admin ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    description: `Admin ${String(getSetting('company_header', 'PT Media Solusi Sukses') || 'PT Media Solusi Sukses').trim() || 'PT Media Solusi Sukses'}`,
     start_url: '/admin?source=pwa',
     scope: '/admin/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
     orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#0f172a',
+    background_color: '#f5f8ff',
+    theme_color: '#073dcc',
     icons: [
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '512x512', purpose: 'any maskable' },
       { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
     ]
   });
@@ -337,15 +339,10 @@ function queueManualIsolationNotifications({ req, customer, unpaidInvoices = [] 
 
     try {
       if (customer.phone) {
-        const waSent = await trySendWhatsappPayment(
-          customer.phone,
-          buildIsolationWhatsappMessage(
-            customer,
-            unpaidInvoices,
-            'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.',
-            { baseUrl: requestBaseUrl }
-          )
-        );
+        const waSent = await isolationWhatsappNotificationSvc.sendIsolationNotification(customer, unpaidInvoices, {
+          baseUrl: requestBaseUrl,
+          reason: 'Layanan dinonaktifkan sementara karena masih ada tagihan yang belum lunas.'
+        });
         if (!waSent) logger.warn(`[ManualIsolation] WhatsApp isolir pelanggan ${customer.id} tidak terkirim.`);
       }
     } catch (error) {
@@ -580,7 +577,7 @@ async function invokeRouterOsMenuCommand(menu, command, args) {
   return null;
 }
 
-// ─── AUTH ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function requireAdmin(req, res, next) {
   if (req.session?.isAdmin || req.session?.isCashier) return next();
   const adminKey = getSetting('admin_api_key', '');
@@ -656,7 +653,7 @@ function resolvePaymentActor(req, fallbackName = 'Admin') {
   return null;
 }
 
-async function trySendWhatsappPayment(customerPhone, message) {
+async function trySendWhatsappPayment(customerPhone, message, options = {}) {
   try {
     if (!getSetting('whatsapp_enabled', false)) return false;
     const to = String(customerPhone || '').trim();
@@ -667,7 +664,12 @@ async function trySendWhatsappPayment(customerPhone, message) {
       logger.warn(`[WhatsApp] Kirim pesan pelanggan dibatalkan karena gateway belum siap (${status?.provider || 'local'}:${status?.connection || 'unknown'}).`);
       return false;
     }
-    return Boolean(await whatsappGateway.sendText(to, String(message || '').trim()));
+    return Boolean(await whatsappTemplateMedia.sendTemplateMessage(
+      to,
+      String(message || '').trim(),
+      options.templateKey || '',
+      options
+    ));
   } catch (error) {
     logger.warn(`[WhatsApp] Gagal kirim pesan pelanggan: ${error.message || String(error)}`);
     return false;
@@ -722,9 +724,9 @@ function buildTechnicianTaskWhatsappMessage(task, technician, options = {}) {
   const priority = TECHNICIAN_TASK_PRIORITY_LABELS[String(task?.priority || '').trim()] || String(task?.priority || '-').trim() || '-';
   const status = TECHNICIAN_TASK_STATUS_LABELS[String(task?.status || '').trim()] || String(task?.status || '-').trim() || '-';
   const title =
-    mode === 'updated' ? '🔄 *UPDATE TUGAS TEKNISI*'
-      : mode === 'done' ? '✅ *TUGAS TEKNISI SELESAI*'
-        : '📋 *TUGAS TEKNISI BARU*';
+    mode === 'updated' ? 'ðŸ”„ *UPDATE TUGAS TEKNISI*'
+      : mode === 'done' ? 'âœ… *TUGAS TEKNISI SELESAI*'
+        : 'ðŸ“‹ *TUGAS TEKNISI BARU*';
   const customerName = String(task?.customer_name || task?.linked_customer_name || '-').trim() || '-';
   const customerPhone = String(task?.customer_phone || task?.linked_customer_phone || '-').trim() || '-';
   const customerAddress = String(task?.customer_address || '-').trim() || '-';
@@ -902,7 +904,10 @@ async function notifyCustomerWelcomeAfterApproval(customer, options = {}) {
   if (customer.phone) {
     const welcomeMessage = buildWelcomeWhatsappMessage(customer, { baseUrl });
     if (welcomeMessage) {
-      results.whatsapp = await trySendWhatsappPayment(customer.phone, welcomeMessage);
+      results.whatsapp = await trySendWhatsappPayment(customer.phone, welcomeMessage, {
+        templateKey: 'welcome',
+        baseUrl
+      });
     }
   }
   return results;
@@ -965,8 +970,8 @@ function restrictCashierLimitedAccess(req, res, next) {
   return res.redirect('/admin');
 }
 
-function company() { return getSetting('company_header', 'ISP Admin'); }
-function companyLogo() { return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png'; }
+function company() { return getSetting('company_header', 'PT Media Solusi Sukses'); }
+function companyLogo() { return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png'; }
 
 function normalizeAdminReturnTo(value) {
   const raw = String(value || '').trim();
@@ -1173,9 +1178,9 @@ function buildPaymentGuideMessage(customer, invoices = [], fallbackInvoice = nul
   if (baseInvoiceAmount > 0 && qrisAmountUnique > 0 && uniqueDelta > 0) {
     lines.push(
       '',
-      `Nominal otomatis: Rp ${formatRupiahValue(qrisAmountUnique)}`,
+      `Nominal transfer: Rp ${formatRupiahValue(qrisAmountUnique)}`,
       `Kode pembayaran: ${String(qrisCode || uniqueDelta).padStart(3, '0')}`,
-      'Pilih Bayar Online dan ikuti nominal tersebut agar otomatis terbaca lunas.'
+      'Transfer sesuai nominal tersebut, lalu kirim bukti pembayaran ke admin.'
     );
   }
 
@@ -1375,7 +1380,10 @@ async function sendPaidWhatsappNotification(customer, invoices = [], fallbackInv
   if (!customer || !customer.phone) return false;
   const message = buildPaidWhatsappMessage(customer, invoices, fallbackInvoice, options);
   if (!message) return false;
-  return trySendWhatsappPayment(customer.phone, message);
+  return trySendWhatsappPayment(customer.phone, message, {
+    ...options,
+    templateKey: 'paid'
+  });
 }
 
 function buildWhatsappTemplatePreview(templateKey = 'billing', options = {}) {
@@ -1852,8 +1860,12 @@ function getDashboardFinanceSnapshot({ year, month } = {}) {
   };
 }
 
-function getDashboardPriorityCollections(limit = 6) {
+function getDashboardPriorityCollections(limit = 6, options = {}) {
   const now = new Date();
+  const fallbackMonth = now.getMonth() + 1;
+  const fallbackYear = now.getFullYear();
+  const targetMonth = Math.min(12, Math.max(1, Number(options.month || fallbackMonth) || fallbackMonth));
+  const targetYear = Math.max(2000, Number(options.year || fallbackYear) || fallbackYear);
   const rows = db.prepare(`
     SELECT
       i.id,
@@ -1866,15 +1878,16 @@ function getDashboardPriorityCollections(limit = 6) {
       c.phone
     FROM invoices i
     JOIN customers c ON c.id = i.customer_id
-    WHERE i.status = 'unpaid'
+    WHERE LOWER(TRIM(COALESCE(i.status, ''))) = 'unpaid'
+      AND LOWER(TRIM(COALESCE(c.status, 'active'))) = 'active'
+      AND i.period_month = ?
+      AND i.period_year = ?
     ORDER BY
-      i.period_year ASC,
-      i.period_month ASC,
       COALESCE(i.due_day_snapshot, 31) ASC,
       i.amount DESC,
       c.name ASC
     LIMIT ?
-  `).all(limit * 3);
+  `).all(targetMonth, targetYear, limit * 3);
 
   const prioritized = (Array.isArray(rows) ? rows : []).map((row) => {
     const month = Math.max(1, Number(row.period_month || 1));
@@ -2633,7 +2646,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// ─── AUTH ROUTES ───────────────────────────────────────────────────────────
+// â”€â”€â”€ AUTH ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/login', (req, res) => {
   if (req.session?.isAdmin || req.session?.isCashier) return res.redirect('/admin');
   res.render('admin/login', {
@@ -2695,7 +2708,7 @@ router.get('/logout', (req, res) => {
   });
 });
 
-// ─── OLT MANAGEMENT ────────────────────────────────────────────────────────
+// â”€â”€â”€ OLT MANAGEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/olts', requireAdminSession, async (req, res) => {
   const olts = oltSvc.getAllOlts();
   
@@ -2832,7 +2845,7 @@ router.post('/olts/:id/delete', requireAdminSession, restrictToAdmin, (req, res)
   res.redirect('/admin/olts');
 });
 
-// ─── ODP & MAP MANAGEMENT ───────────────────────────────────────────────────
+// â”€â”€â”€ ODP & MAP MANAGEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/map', requireAdminSession, async (req, res) => {
   const customers = customerSvc.getAllCustomers();
   const odps = odpSvc.getAllOdps();
@@ -3407,7 +3420,8 @@ router.get('/customer-requests', requireAdminSession, restrictToAdmin, (req, res
            'profile_change' AS request_type,
            c.name AS customer_name,
            c.phone AS customer_phone,
-           c.address AS customer_address
+           c.address AS customer_address,
+           c.nik AS customer_nik
     FROM customer_profile_change_requests r
     JOIN customers c ON c.id = r.customer_id
     WHERE r.status = ?
@@ -3502,6 +3516,7 @@ router.post('/profile-change-requests/:id/approve', requireAdminSession, restric
 
     const requestedName = String(row.requested_name || row.current_name || '').trim();
     const requestedPhone = normalizePhoneDigits(row.requested_phone || row.current_phone || '');
+    const requestedNik = String(row.requested_nik || row.current_nik || '').trim();
     const requestedAddress = String(row.requested_address || row.current_address || '').trim();
     if (!requestedName || !requestedPhone || !requestedAddress) throw new Error('Data request belum lengkap');
 
@@ -3512,9 +3527,9 @@ router.post('/profile-change-requests/:id/approve', requireAdminSession, restric
     const tx = db.transaction(() => {
       db.prepare(`
         UPDATE customers
-        SET name = ?, phone = ?, address = ?, updated_at = CURRENT_TIMESTAMP
+        SET name = ?, phone = ?, nik = ?, address = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(requestedName, requestedPhone, requestedAddress, row.customer_id);
+      `).run(requestedName, requestedPhone, requestedNik, requestedAddress, row.customer_id);
       db.prepare(`
         UPDATE customer_profile_change_requests
         SET status = 'approved',
@@ -3878,12 +3893,12 @@ router.post('/collector-payments/:id/approve', requireAdminSession, express.urle
     if (customer && customer.phone) {
       try {
       const msg =
-        `✅ *PEMBAYARAN BERHASIL*\n\n` +
-        `👤 *Pelanggan:* ${customer.name}\n` +
-        `🧾 *Invoice:* #${inv.id}\n` +
-        `📅 *Periode:* ${inv.period_month}/${inv.period_year}\n` +
-        `💰 *Nominal Tagihan:* Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}\n` +
-        `🏷️ *Dibayar Via:* ${collectorLabel}\n\n` +
+        `âœ… *PEMBAYARAN BERHASIL*\n\n` +
+        `ðŸ‘¤ *Pelanggan:* ${customer.name}\n` +
+        `ðŸ§¾ *Invoice:* #${inv.id}\n` +
+        `ðŸ“… *Periode:* ${inv.period_month}/${inv.period_year}\n` +
+        `ðŸ’° *Nominal Tagihan:* Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}\n` +
+        `ðŸ·ï¸ *Dibayar Via:* ${collectorLabel}\n\n` +
         `Terima kasih.`;
       await sendPaidWhatsappNotification(customer, [inv], inv, {
         baseUrl: resolveRequestBaseUrl(req),
@@ -4130,6 +4145,19 @@ router.post('/agents/:id/topup', requireAdminSession, restrictToAdmin, express.u
   res.redirect('/admin/agents');
 });
 
+router.post('/agents/:id/withdraw', requireAdminSession, restrictToAdmin, express.urlencoded({ extended: true }), (req, res) => {
+  try {
+    const amount = Number(req.body.amount || 0);
+    const note = String(req.body.note || '').trim();
+    const actorName = req.session?.isCashier ? resolvePaidByName(req, 'Kasir') : (req.session.adminUser || 'Admin');
+    agentSvc.withdrawAgentBalance(req.params.id, amount, note, actorName);
+    req.session._msg = { type: 'success', text: 'Tarik saldo agent berhasil.' };
+  } catch (e) {
+    req.session._msg = { type: 'error', text: 'Gagal tarik saldo: ' + e.message };
+  }
+  res.redirect('/admin/agents');
+});
+
 router.get('/agents/reports', requireAdminSession, restrictToAdmin, (req, res) => {
   const agents = agentSvc.getAllAgents();
   const agentId = req.query.agentId ? Number(req.query.agentId) : null;
@@ -4175,7 +4203,7 @@ router.post('/api/agents/:id/prices/:priceId/delete', requireAdmin, restrictToAd
   }
 });
 
-// ─── DASHBOARD ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/', requireAdminSession, async (req, res) => {
   try {
     const dashboardFinance = getDashboardFinanceSnapshot({
@@ -4186,7 +4214,10 @@ router.get('/', requireAdminSession, async (req, res) => {
     const custStats = customerSvc.getCustomerStats();
     const opsSummary = getAdminHomeSummary({ billing, custStats });
     const recentPayments = dashboardFinance.recentPayments;
-    const topUnpaid = getDashboardPriorityCollections(6);
+    const topUnpaid = getDashboardPriorityCollections(6, {
+      month: dashboardFinance.filterMonth,
+      year: dashboardFinance.filterYear
+    });
     const ticketStats = ticketSvc.getTicketStats();
     const allActiveTickets = ticketSvc
       .getAllTickets()
@@ -4295,7 +4326,7 @@ router.get('/api/outages', requireAdminSession, (req, res) => {
   }
 });
 
-// ─── DEVICE ROUTES (existing) ───────────────────────────────────────────────
+// â”€â”€â”€ DEVICE ROUTES (existing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/devices', requireAdminSession, (req, res) => {
   res.redirect('/admin/monitoring');
 });
@@ -4304,7 +4335,7 @@ router.get('/bulk', requireAdminSession, (req, res) => {
   res.render('admin/dashboard', { title: 'Konfigurasi Massal', company: company(), version: '2.0.0', activePage: 'bulk', billing: null, custStats: null });
 });
 
-// ─── CUSTOMERS ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ CUSTOMERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildInvoiceSummaryFromList(invoices = [], options = {}) {
   const summary = {
     total: { count: 0, total: 0 },
@@ -4625,7 +4656,10 @@ router.post('/customers', requireAdminSession, restrictToAdmin, upload.fields(CU
     if (createdCustomer && createdCustomer.phone) {
       const welcomeMessage = buildWelcomeWhatsappMessage(createdCustomer, { baseUrl: resolveRequestBaseUrl(req) });
       if (welcomeMessage) {
-        await trySendWhatsappPayment(createdCustomer.phone, welcomeMessage);
+        await trySendWhatsappPayment(createdCustomer.phone, welcomeMessage, {
+          templateKey: 'welcome',
+          baseUrl: resolveRequestBaseUrl(req)
+        });
       }
     }
 
@@ -4737,7 +4771,7 @@ router.post('/customers/:id/delete', requireAdminSession, restrictToAdmin, async
   res.redirect('/admin/customers');
 });
 
-// ─── EXPORT/IMPORT CUSTOMERS ──────────────────────────────────────
+// â”€â”€â”€ EXPORT/IMPORT CUSTOMERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildCustomerImportTemplateWorkbook() {
   const headers = [
     'ID Pelanggan',
@@ -5130,12 +5164,12 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
       if (customer && customer.phone && done > 0) {
         const monthsText = (sum.paidMonths || []).join(', ');
         const msg =
-          `✅ *PEMBAYARAN BERHASIL*\n\n` +
-          `👤 *Pelanggan:* ${customer.name}\n` +
-          `📅 *Tahun:* ${sum.year}\n` +
-          `🧾 *Bulan Dibayar:* ${monthsText || '-'}\n` +
-          `💰 *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
-          `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
+          `âœ… *PEMBAYARAN BERHASIL*\n\n` +
+          `ðŸ‘¤ *Pelanggan:* ${customer.name}\n` +
+          `ðŸ“… *Tahun:* ${sum.year}\n` +
+          `ðŸ§¾ *Bulan Dibayar:* ${monthsText || '-'}\n` +
+          `ðŸ’° *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
+          `ðŸ·ï¸ *Dibayar Via:* ${paidBy}\n\n` +
           `Terima kasih.`;
         const paidInvoicesLegacy = (Array.isArray(sum.paidMonths) ? sum.paidMonths : [])
           .map((paidMonth) => {
@@ -5172,12 +5206,12 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
           const inv = (Array.isArray(invs) ? invs : []).find(i => Number(i?.period_month) === Number(m) && Number(i?.period_year) === Number(y)) || null;
           const amount = inv ? Number(inv.amount || 0) : 0;
           const msg =
-            `✅ *PEMBAYARAN BERHASIL*\n\n` +
-            `👤 *Pelanggan:* ${customer.name}\n` +
-            `📅 *Periode:* ${m}/${y}\n` +
-            `${inv ? `🧾 *Invoice:* #${inv.id}\n` : ''}` +
-            `💰 *Nominal Tagihan:* Rp ${amount.toLocaleString('id-ID')}\n` +
-            `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
+            `âœ… *PEMBAYARAN BERHASIL*\n\n` +
+            `ðŸ‘¤ *Pelanggan:* ${customer.name}\n` +
+            `ðŸ“… *Periode:* ${m}/${y}\n` +
+            `${inv ? `ðŸ§¾ *Invoice:* #${inv.id}\n` : ''}` +
+            `ðŸ’° *Nominal Tagihan:* Rp ${amount.toLocaleString('id-ID')}\n` +
+            `ðŸ·ï¸ *Dibayar Via:* ${paidBy}\n\n` +
             `Terima kasih.`;
           try {
             await sendPaidWhatsappNotification(customer, inv ? [inv] : [], inv, {
@@ -5205,7 +5239,7 @@ router.post('/customers/:id/billing/pay', requireAdminSession, express.urlencode
   return redirectBack(res, '/admin/customers');
 });
 
-// ─── PACKAGES ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ PACKAGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/packages', requireAdminSession, (req, res) => {
   res.render('admin/packages', {
     title: 'Paket Internet', company: company(), activePage: 'packages',
@@ -5243,7 +5277,7 @@ router.post('/packages/:id/delete', requireAdminSession, (req, res) => {
   res.redirect('/admin/packages');
 });
 
-// ─── BILLING ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ BILLING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 */
 registerCustomerRoutes(router, {
   express,
@@ -5333,7 +5367,7 @@ router.get('/billing/:id/print', requireAdminSession, (req, res) => {
   res.render('admin/print_invoice', {
     invoice: inv,
     customer,
-    company: settings.company_header || 'Billing ISP',
+    company: settings.company_header || 'PT Media Solusi Sukses',
     settings,
     printStyle,
     viewerRole: 'admin',
@@ -5456,12 +5490,12 @@ router.post('/billing/pay-bulk', requireAdminSession, express.urlencoded({ exten
           .slice(0, 10)
           .join(', ') + (paidInvoices.length > 10 ? `, +${paidInvoices.length - 10} lainnya` : '');
         const msg =
-          `✅ *PEMBAYARAN BERHASIL*\n\n` +
-          `👤 *Pelanggan:* ${customer.name}\n` +
-          `🧾 *Tagihan Dibayar:* ${paidInvoices.length} invoice\n` +
-          `📅 *Periode:* ${periods}\n` +
-          `💰 *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
-          `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
+          `âœ… *PEMBAYARAN BERHASIL*\n\n` +
+          `ðŸ‘¤ *Pelanggan:* ${customer.name}\n` +
+          `ðŸ§¾ *Tagihan Dibayar:* ${paidInvoices.length} invoice\n` +
+          `ðŸ“… *Periode:* ${periods}\n` +
+          `ðŸ’° *Total:* Rp ${Number(total || 0).toLocaleString('id-ID')}\n` +
+          `ðŸ·ï¸ *Dibayar Via:* ${paidBy}\n\n` +
           `Terima kasih.`;
         try {
           await sendPaidWhatsappNotification(customer, paidInvoices, paidInvoices[0] || null, {
@@ -5496,12 +5530,12 @@ router.post('/billing/:id/pay', requireAdminSession, express.urlencoded({ extend
     const customer = customerSvc.getCustomerById(inv.customer_id);
     if (!wasPaid && customer && customer.phone) {
       const msg =
-        `✅ *PEMBAYARAN BERHASIL*\n\n` +
-        `👤 *Pelanggan:* ${customer.name}\n` +
-        `🧾 *Invoice:* #${inv.id}\n` +
-        `📅 *Periode:* ${inv.period_month}/${inv.period_year}\n` +
-        `💰 *Nominal Tagihan:* Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}\n` +
-        `🏷️ *Dibayar Via:* ${paidBy}\n\n` +
+        `âœ… *PEMBAYARAN BERHASIL*\n\n` +
+        `ðŸ‘¤ *Pelanggan:* ${customer.name}\n` +
+        `ðŸ§¾ *Invoice:* #${inv.id}\n` +
+        `ðŸ“… *Periode:* ${inv.period_month}/${inv.period_year}\n` +
+        `ðŸ’° *Nominal Tagihan:* Rp ${Number(inv.amount || 0).toLocaleString('id-ID')}\n` +
+        `ðŸ·ï¸ *Dibayar Via:* ${paidBy}\n\n` +
         `Terima kasih.`;
       try {
         await sendPaidWhatsappNotification(customer, [inv], inv, {
@@ -5606,9 +5640,15 @@ router.post('/billing/:id/whatsapp', requireAdminSession, async (req, res) => {
         const qrisAmountUnique = Number(queuedInvoice.qris_amount_unique || 0) || 0;
         const qrisImageBuffer = qrisAmountUnique > 0 ? await buildInvoiceQrisImageBuffer(queuedInvoice) : Buffer.alloc(0);
 
-        const sent = qrisImageBuffer.length
-          ? await whatsappGateway.sendImage(queuedCustomer.phone, qrisImageBuffer, finalMessage)
-          : await whatsappGateway.sendText(queuedCustomer.phone, finalMessage);
+        const sent = await whatsappTemplateMedia.sendTemplateMessage(
+          queuedCustomer.phone,
+          finalMessage,
+          'billing',
+          {
+            baseUrl: requestBaseUrl,
+            fallbackImageBuffer: qrisImageBuffer
+          }
+        );
         if (!sent) {
           const waState = `${whatsappStatus?.provider || 'local'}:${whatsappStatus?.connection || 'unknown'}`;
           throw new Error(`Gateway WhatsApp menolak pengiriman. Status saat ini: ${waState}.`);
@@ -5724,10 +5764,10 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
     // Generate Link Login
     const loginLink = `${requestBaseUrl}/customer/login`;
 
-    const templateQris = `Yth. *{{nama}}*,\n\nTagihan internet Anda untuk periode *{{periode}}*.\n\n📦 *Paket:* {{paket}}\n💳 *Bayar Online / Payment Gateway*\n💰 *Nominal (WAJIB tepat):* Rp {{qris_nominal}}\n🏷️ *Kode pembayaran:* {{qris_kode}}\n{{qris_qr}}\n\nCatatan: nominal harus sama persis agar sistem dapat mendeteksi pembayaran.\n\nTerima kasih.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
+    const templateQris = `Yth. *{{nama}}*,\n\nTagihan internet Anda untuk periode *{{periode}}*.\n\nðŸ“¦ *Paket:* {{paket}}\nðŸ’³ *Bayar Online / Payment Gateway*\nðŸ’° *Nominal (WAJIB tepat):* Rp {{qris_nominal}}\nðŸ·ï¸ *Kode pembayaran:* {{qris_kode}}\n{{qris_qr}}\n\nCatatan: nominal harus sama persis agar sistem dapat mendeteksi pembayaran.\n\nTerima kasih.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
 
     // Pesan Template (Sama dengan Broadcast Unpaid)
-    const template = `Yth. *{{nama}}*,\n\nBerdasarkan data sistem kami, Anda memiliki tagihan internet yang *BELUM LUNAS*.\n\n📦 *Paket:* {{paket}}\n💰 *Total Tagihan:* Rp {{tagihan}}\n📅 *Periode:* {{rincian}}\n\nMohon segera melakukan pembayaran melalui portal pelanggan: {{link}}\n\nTerima kasih atas kerja samanya.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
+    const template = `Yth. *{{nama}}*,\n\nBerdasarkan data sistem kami, Anda memiliki tagihan internet yang *BELUM LUNAS*.\n\nðŸ“¦ *Paket:* {{paket}}\nðŸ’° *Total Tagihan:* Rp {{tagihan}}\nðŸ“… *Periode:* {{rincian}}\n\nMohon segera melakukan pembayaran melalui portal pelanggan: {{link}}\n\nTerima kasih atas kerja samanya.\nSalam,\nAdmin ${getSetting('company_header', 'ISP')}`;
 
     const manualPaymentInfo = buildManualPaymentMessage();
     const formattedMsg = (qrisAmountUnique > 0 && qrisCode > 0)
@@ -5737,7 +5777,7 @@ router.post('/_legacy-disabled/billing/:id/whatsapp', requireAdminSession, async
           .replace(/{{paket}}/gi, inv.package_name || '-')
           .replace(/{{qris_nominal}}/gi, Number(qrisAmountUnique).toLocaleString('id-ID'))
           .replace(/{{qris_kode}}/gi, String(qrisCode).padStart(3, '0'))
-          .replace(/{{qris_qr}}/gi, qrisQrUrl ? `🔗 Link bayar: ${qrisQrUrl}` : '')
+          .replace(/{{qris_qr}}/gi, qrisQrUrl ? `ðŸ”— Link bayar: ${qrisQrUrl}` : '')
       : template
           .replace(/{{nama}}/gi, customer.name || 'Pelanggan')
           .replace(/{{tagihan}}/gi, totalTagihan.toLocaleString('id-ID'))
@@ -5780,7 +5820,7 @@ router.post('/billing/:id/delete', requireAdminSession, restrictToAdmin, (req, r
   return redirectBack(res, '/admin/billing');
 });
 
-// ─── TICKETS ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ TICKETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 */
 registerBillingRoutes(router, {
   express,
@@ -5840,11 +5880,11 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
         const settings = getSettings();
         if (settings.whatsapp_enabled) {
           if (ticket) {
-            const waMsg = `✅ *TIKET KELUHAN SELESAI*\n\n` +
-                         `🎫 *ID Tiket:* #${ticket.id}\n` +
-                         `👤 *Pelanggan:* ${ticket.customer_name}\n` +
-                         `📝 *Subjek:* ${ticket.subject}\n` +
-                         `🛠️ *Petugas:* Admin\n\n` +
+            const waMsg = `âœ… *TIKET KELUHAN SELESAI*\n\n` +
+                         `ðŸŽ« *ID Tiket:* #${ticket.id}\n` +
+                         `ðŸ‘¤ *Pelanggan:* ${ticket.customer_name}\n` +
+                         `ðŸ“ *Subjek:* ${ticket.subject}\n` +
+                         `ðŸ› ï¸ *Petugas:* Admin\n\n` +
                          `Keluhan Anda telah selesai dikerjakan. Terima kasih atas kesabarannya.`;
 
             // Kirim ke Pelanggan
@@ -5854,11 +5894,11 @@ router.post('/tickets/:id/update', requireAdminSession, express.urlencoded({ ext
 
             // Kirim ke Admin Numbers
             if (settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0) {
-              const adminMsg = `✅ *LAPORAN TIKET SELESAI (OLEH ADMIN)*\n\n` +
-                               `🎫 *ID Tiket:* #${ticket.id}\n` +
-                               `👤 *Pelanggan:* ${ticket.customer_name}\n` +
-                               `📝 *Subjek:* ${ticket.subject}\n` +
-                               `💬 *Pesan:* ${ticket.message}`;
+              const adminMsg = `âœ… *LAPORAN TIKET SELESAI (OLEH ADMIN)*\n\n` +
+                               `ðŸŽ« *ID Tiket:* #${ticket.id}\n` +
+                               `ðŸ‘¤ *Pelanggan:* ${ticket.customer_name}\n` +
+                               `ðŸ“ *Subjek:* ${ticket.subject}\n` +
+                               `ðŸ’¬ *Pesan:* ${ticket.message}`;
               const seen = new Set();
               for (const adminPhone of settings.whatsapp_admin_numbers) {
                 let digits = String(adminPhone || '').replace(/\D/g, '');
@@ -5893,7 +5933,7 @@ router.post('/tickets/:id/delete', requireAdminSession, (req, res) => {
   return redirectBack(res, '/admin/tickets');
 });
 
-// ─── REPORTS ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ REPORTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/reports/export-paid', requireAdminSession, (req, res) => {
   try {
     const year = Math.max(2000, parseInt(req.query.year, 10) || new Date().getFullYear());
@@ -6191,7 +6231,7 @@ router.get('/reports', requireAdminSession, (req, res) => {
   }
 });
 
-// ─── SETTINGS ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderBookkeepingFormPage(req, res, formData = {}, msg = null, options = {}) {
   const now = new Date();
   const isEdit = Boolean(options.isEdit);
@@ -7544,7 +7584,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
   return finishSettingsRedirect();
 });
 
-// ─── BACKUP & RECOVERY ──────────────────────────────────────────────────────
+// â”€â”€â”€ BACKUP & RECOVERY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/backup', requireAdminSession, (req, res) => {
   const result = backupSvc.listBackups();
   res.render('admin/backup', {
@@ -7694,7 +7734,7 @@ router.post('/backup/cleanup', requireAdminSession, express.urlencoded({ extende
   res.redirect('/admin/backup');
 });
 
-// ─── INVENTORY / WAREHOUSE ──────────────────────────────────────────────────
+// â”€â”€â”€ INVENTORY / WAREHOUSE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/inventory', requireAdminSession, (req, res) => {
   const items = inventorySvc.getAllItems(req.query.q);
   const categories = inventorySvc.getAllCategories();
@@ -7780,7 +7820,7 @@ router.get('/audit-logs', requireAdminSession, restrictToAdmin, (req, res) => {
   });
 });
 
-// ─── MONITORING ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ MONITORING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/monitoring', requireAdminSession, restrictToAdmin, async (req, res) => {
   const healthStatus = monitoringSvc.getHealthStatus();
   const performanceSummary = monitoringSvc.getPerformanceSummary();
@@ -7814,7 +7854,7 @@ router.get('/api/metrics/history', requireAdmin, (req, res) => {
   res.json(history);
 });
 
-// ─── API ROUTES (existing) ──────────────────────────────────────────────────
+// â”€â”€â”€ API ROUTES (existing) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/api/stats', requireAdmin, async (req, res) => {
   try {
     const result = await customerDevice.listAllDevices(1000);
@@ -7939,7 +7979,7 @@ router.get('/api/mikrotik/users', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── MIKROTIK MONITORING ───────────────────────────────────────────────────
+// â”€â”€â”€ MIKROTIK MONITORING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 router.get('/mikrotik', requireAdminSession, (req, res) => {
     const routers = mikrotikService.getAllRouters();
     const defaultRouter = routers.find((router) => Number(router.is_active || 0) === 1) || routers[0] || null;
@@ -8157,7 +8197,7 @@ body{margin:0;font-family:Arial,sans-serif;color:#0f172a}
       const html = rows.map(r => `<div class="vc">
   <div class="vh">${r.company}</div>
   <div class="vp">${r.currency} ${r.priceText}</div>
-  <div class="vm">${r.profile} • ${r.validityText}</div>
+  <div class="vm">${r.profile} â€¢ ${r.validityText}</div>
   <div class="vu">${r.credential}</div>
   <div class="vf">WA: ${r.phone}</div>
 </div>`).join('\n');
@@ -8178,7 +8218,7 @@ body{margin:0;font-family:Arial,sans-serif;color:#0f172a}
 </style>`;
       const html = rows.map(r => `<div class="card">
   <div class="hd">${r.company}</div>
-  <div class="meta">${r.profile} • ${r.validityText} • ${r.currency} ${r.priceText}</div>
+  <div class="meta">${r.profile} â€¢ ${r.validityText} â€¢ ${r.currency} ${r.priceText}</div>
   <div class="code">${r.username}</div>
   <div class="meta">${r.password}</div>
   <div class="wa">WA: ${r.phone}</div>
@@ -8202,7 +8242,7 @@ body{margin:0;font-family:Arial,sans-serif;color:#0f172a}
   <div class="t">${r.company}</div>
   <div class="m">${r.profile}</div>
   <div class="k">${r.username}</div>
-  <div class="w">${r.validityText} • ${r.currency} ${r.priceText} • ${r.phone}</div>
+  <div class="w">${r.validityText} â€¢ ${r.currency} ${r.priceText} â€¢ ${r.phone}</div>
 </div>`).join('\n');
       return `${css}<div class="g">\n${html}\n</div>`;
     }
@@ -9003,7 +9043,7 @@ router.get('/api/mikrotik/backup', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── WHATSAPP ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ WHATSAPP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Global Broadcast Tracker
 global.broadcastStatus = {
   active: false,
@@ -9037,9 +9077,9 @@ function addMessageVariation(message, index) {
   const variations = [
     '',
     '\n\n_',
-    '\n\n•',
-    '\n\n▪',
-    '\n\n▫'
+    '\n\nâ€¢',
+    '\n\nâ–ª',
+    '\n\nâ–«'
   ];
   const suffix = variations[index % variations.length];
   return message + suffix;
@@ -9492,12 +9532,12 @@ router.post('/whatsapp/test-notification', requireAdminSession, async (req, res)
     const adminPhone = resolveWhatsappTestRecipient(whatsappStatus, req.body?.test_phone);
     if (!adminPhone) throw new Error('Nomor tujuan test WhatsApp belum tersedia. Isi kolom Nomor Test WA atau nomor admin/telepon usaha yang berbeda dari nomor bot.');
     const msg =
-      `🧪 *TEST NOTIFIKASI WHATSAPP*\n\n` +
-      `✅ Jika pesan ini masuk, berarti notifikasi WhatsApp portal billing sudah berfungsi.\n` +
-      `📅 Waktu: ${new Date().toLocaleString('id-ID')}`;
+      `ðŸ§ª *TEST NOTIFIKASI WHATSAPP*\n\n` +
+      `âœ… Jika pesan ini masuk, berarti notifikasi WhatsApp portal billing sudah berfungsi.\n` +
+      `ðŸ“… Waktu: ${new Date().toLocaleString('id-ID')}`;
     const messageText =
       `TEST NOTIFIKASI WHATSAPP\n\n` +
-      `WhatsApp bot untuk ${getSetting('company_header', 'Portal Billing ISP')} sudah berfungsi.\n` +
+      `WhatsApp bot untuk ${getSetting('company_header', 'Portal PT Media Solusi Sukses')} sudah berfungsi.\n` +
       `Waktu: ${new Date().toLocaleString('id-ID')}`;
     const ok = await whatsappGateway.sendText(adminPhone, messageText);
     if (!ok) throw new Error('Gagal mengirim pesan test.');
@@ -9560,7 +9600,7 @@ router.post('/whatsapp/reset', requireAdminSession, (req, res) => {
   }
 });
 
-// ─── ROUTERS (MULTI-ROUTER) ──────────────────────────────────────────────────
+// â”€â”€â”€ ROUTERS (MULTI-ROUTER) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 */
 registerWhatsappRoutes(router, {
   express,

@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const { getSetting, getSettingsWithCache } = require('../config/settingsManager');
 const agentSvc = require('../services/agentService');
@@ -7,6 +7,7 @@ const customerSvc = require('../services/customerService');
 const employeeLocationSvc = require('../services/employeeLocationService');
 const { buildDynamicQrisDataUrl, hasStaticQrisEnabled } = require('../services/qrisService');
 const whatsappGateway = require('../services/whatsappGatewayService');
+const paymentWhatsappNotificationSvc = require('../services/paymentWhatsappNotificationService');
 
 function requireAgentSession(req, res, next) {
   if (req.session && req.session.isAgent && req.session.agentId) return next();
@@ -26,10 +27,10 @@ function popReceipt(req) {
 }
 
 function company() {
-  return getSetting('company_header', 'ISP App');
+  return getSetting('company_header', 'PT Media Solusi Sukses');
 }
 function companyLogo() {
-  return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png';
+  return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
 }
 
 function normalizePhoneDigits(v) {
@@ -58,6 +59,21 @@ function buildWaUrl(phone, message) {
 function getAgentPricesSorted(agentId) {
   return agentSvc
     .getAgentPrices(agentId)
+    .filter(p => p && p.is_active)
+    .sort((a, b) => {
+      const as = Number(a.sell_price || 0);
+      const bs = Number(b.sell_price || 0);
+      if (as !== bs) return as - bs;
+      const ab = Number(a.buy_price || 0);
+      const bb = Number(b.buy_price || 0);
+      if (ab !== bb) return ab - bb;
+      return String(a.profile_name || '').localeCompare(String(b.profile_name || ''));
+    });
+}
+
+async function getAgentPricesForVoucherDisplay(agentId) {
+  const prices = await agentSvc.getAgentPricesWithCurrentValidity(agentId);
+  return prices
     .filter(p => p && p.is_active)
     .sort((a, b) => {
       const as = Number(a.sell_price || 0);
@@ -102,17 +118,17 @@ router.get('/manifest.webmanifest', (req, res) => {
     id: '/agent/',
     name: 'Portal Agent',
     short_name: 'Agent',
-    description: `Portal Agent ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    description: `Portal Agent ${String(getSetting('company_header', 'PT Media Solusi Sukses') || 'PT Media Solusi Sukses').trim() || 'PT Media Solusi Sukses'}`,
     start_url: '/agent/login?source=pwa',
     scope: '/agent/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
     orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#1e293b',
+    background_color: '#f5f8ff',
+    theme_color: '#073dcc',
     icons: [
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '512x512', purpose: 'any maskable' },
       { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
     ]
   });
@@ -165,6 +181,7 @@ router.get('/', requireAgentSession, (req, res) => {
   res.render('agent/dashboard', {
     title: 'Dashboard Agent',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     prices,
     batches,
@@ -193,15 +210,17 @@ router.get('/billing', requireAgentSession, (req, res) => {
   });
 });
 
-function renderAgentVoucherPage(req, res, pageMode = 'single') {
+async function renderAgentVoucherPage(req, res, pageMode = 'single') {
   const agentId = req.session.agentId;
   const agent = agentSvc.getAgentById(agentId);
+  const prices = await getAgentPricesForVoucherDisplay(agentId);
   res.render('agent/vouchers', {
     title: pageMode === 'batch' ? 'Voucher Banyak Agent' : 'Voucher Satuan Agent',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     pageMode,
-    prices: getAgentPricesSorted(agentId),
+    prices,
     batches: agentSvc.listAgentVoucherBatches(agentId, { limit: 50 }),
     msg: flashMsg(req)
   });
@@ -211,12 +230,20 @@ router.get('/vouchers', requireAgentSession, (req, res) => {
   return res.redirect('/agent/vouchers/single');
 });
 
-router.get('/vouchers/single', requireAgentSession, (req, res) => {
-  return renderAgentVoucherPage(req, res, 'single');
+router.get('/vouchers/single', requireAgentSession, async (req, res, next) => {
+  try {
+    return await renderAgentVoucherPage(req, res, 'single');
+  } catch (error) {
+    return next(error);
+  }
 });
 
-router.get('/vouchers/batch', requireAgentSession, (req, res) => {
-  return renderAgentVoucherPage(req, res, 'batch');
+router.get('/vouchers/batch', requireAgentSession, async (req, res, next) => {
+  try {
+    return await renderAgentVoucherPage(req, res, 'batch');
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.post('/vouchers/create', requireAgentSession, express.urlencoded({ extended: true }), async (req, res) => {
@@ -288,9 +315,17 @@ router.get('/vouchers/batches/:id/print', requireAgentSession, (req, res) => {
   } catch (_error) {}
   const data = agentSvc.getAgentVoucherBatch(req.session.agentId, req.params.id);
   if (!data) return res.status(404).send('Batch voucher tidak ditemukan');
-  const printableVouchers = Array.isArray(printResult?.vouchers)
-    ? printResult.vouchers
-    : (data.vouchers || []).filter((v) => !v.sold_at && !v.used_at && !v.printed_at);
+  const batchVouchers = Array.isArray(data.vouchers) ? data.vouchers : [];
+  let reprintMode = false;
+  let printableVouchers = Array.isArray(printResult?.vouchers) ? printResult.vouchers : [];
+  if (!printableVouchers.length) {
+    printableVouchers = batchVouchers.filter((v) => !v.sold_at && !v.used_at && !v.printed_at);
+  }
+  if (!printableVouchers.length) {
+    printableVouchers = batchVouchers.filter((v) => !v.sold_at && !v.used_at && v.printed_at);
+    reprintMode = printableVouchers.length > 0;
+  }
+  const blockedCount = batchVouchers.filter((v) => v.sold_at || v.used_at).length;
   res.render('agent/print_vouchers_a4', {
     title: 'Print Voucher Agent',
     company: company(),
@@ -302,7 +337,8 @@ router.get('/vouchers/batches/:id/print', requireAgentSession, (req, res) => {
     },
     batch: data.batch,
     vouchers: printableVouchers,
-    skippedCount: Math.max(0, Number(data.vouchers?.length || 0) - Number(printableVouchers.length || 0))
+    skippedCount: blockedCount,
+    reprintMode
   });
 });
 
@@ -335,6 +371,7 @@ router.get('/topup', requireAgentSession, (req, res) => {
   res.render('agent/topup', {
     title: 'Topup Saldo Agent',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     qrisReady: hasStaticQrisEnabled(settings) && Boolean(String(settings.qris_static_payload || '').trim()),
     minTopup: 10000,
@@ -364,6 +401,7 @@ router.get('/topup/:id', requireAgentSession, async (req, res) => {
   res.render('agent/topup_order', {
     title: 'Bayar Topup QRIS',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     order,
     qrisDataUrl,
@@ -378,6 +416,7 @@ router.get('/history', requireAgentSession, (req, res) => {
   res.render('agent/history', {
     title: 'Riwayat Agent',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     txs,
     profit: calculateAgentProfit(txs),
@@ -397,6 +436,7 @@ router.get('/help', requireAgentSession, (req, res) => {
   res.render('agent/help', {
     title: 'Bantuan Agent',
     company: company(),
+    logoUrl: companyLogo(),
     agent,
     adminContact,
     adminWaUrl: buildWaUrl(adminContact.phone, message),
@@ -445,25 +485,11 @@ router.post('/pay-invoice', requireAgentSession, express.urlencoded({ extended: 
     const result = await agentSvc.payInvoiceAsAgent(req.session.agentId, invoiceId, note);
 
     const customer = customerSvc.getCustomerById(result.invoice.customer_id);
-    const settings = { whatsapp_enabled: getSetting('whatsapp_enabled', false) };
-
-    let waSent = false;
-    if (settings.whatsapp_enabled && customer && customer.phone) {
-      try {
-        if (await whatsappGateway.ensureReady(12000)) {
-          const msg =
-            `✅ *PEMBAYARAN BERHASIL*\n\n` +
-            `👤 *Pelanggan:* ${customer.name}\n` +
-            `🧾 *Invoice:* #${result.invoice.id}\n` +
-            `📅 *Periode:* ${result.invoice.period_month}/${result.invoice.period_year}\n` +
-            `💰 *Nominal Tagihan:* Rp ${Number(result.invoice.amount || 0).toLocaleString('id-ID')}\n` +
-            `🏷️ *Dibayar Via:* Agent ${result.agent.name}\n\n` +
-            `Terima kasih.`;
-          await whatsappGateway.sendText(customer.phone, msg);
-          waSent = true;
-        }
-      } catch (e) {}
-    }
+    const waSent = await paymentWhatsappNotificationSvc.sendPaidInvoiceNotification(result.invoice.id, {
+      customer,
+      paidBy: `Agent ${result.agent.name}`,
+      paidAt: new Date()
+    });
 
     req.session._agentReceipt = {
       type: 'invoice',
@@ -548,13 +574,13 @@ router.post('/pulsa', requireAgentSession, express.urlencoded({ extended: true }
       try {
         if (await whatsappGateway.ensureReady(12000)) {
           const msg =
-            `${isSuccess ? '✅' : isFailed ? '❌' : '⏳'} *TRANSAKSI PULSA*\n\n` +
-            `📦 *SKU:* ${sku}\n` +
-            `🎯 *Target:* ${target}\n` +
-            `🧾 *Ref ID:* ${result?.tx?.digi_ref_id || '-'}\n` +
-            `📡 *Status:* ${status.toUpperCase()}\n` +
-            `${result?.tx?.digi_sn ? `🔢 *SN:* ${result.tx.digi_sn}\n` : ''}` +
-            `${result?.tx?.digi_message ? `💬 *Pesan:* ${result.tx.digi_message}\n` : ''}` +
+            `${isSuccess ? 'âœ…' : isFailed ? 'âŒ' : 'â³'} *TRANSAKSI PULSA*\n\n` +
+            `ðŸ“¦ *SKU:* ${sku}\n` +
+            `ðŸŽ¯ *Target:* ${target}\n` +
+            `ðŸ§¾ *Ref ID:* ${result?.tx?.digi_ref_id || '-'}\n` +
+            `ðŸ“¡ *Status:* ${status.toUpperCase()}\n` +
+            `${result?.tx?.digi_sn ? `ðŸ”¢ *SN:* ${result.tx.digi_sn}\n` : ''}` +
+            `${result?.tx?.digi_message ? `ðŸ’¬ *Pesan:* ${result.tx.digi_message}\n` : ''}` +
             `\nTerima kasih.`;
           await whatsappGateway.sendText(buyerPhone, msg);
           waSent = true;
@@ -606,14 +632,14 @@ router.post('/api/pulsa/order', requireAgentSession, express.json({ limit: '50kb
       try {
         if (await whatsappGateway.ensureReady(12000)) {
           const msg =
-            `${isSuccess ? '✅' : isFailed ? '❌' : '⏳'} *TRANSAKSI PULSA*\n\n` +
-            `📦 *SKU:* ${sku}\n` +
-            `🎯 *Target:* ${target}\n` +
-            `💰 *Harga:* Rp ${Number(result?.tx?.amount_sell || 0).toLocaleString('id-ID')}\n` +
-            `🧾 *Ref ID:* ${result?.tx?.digi_ref_id || '-'}\n` +
-            `📡 *Status:* ${status.toUpperCase()}\n` +
-            `${result?.tx?.digi_sn ? `🔢 *SN:* ${result.tx.digi_sn}\n` : ''}` +
-            `${result?.tx?.digi_message ? `💬 *Pesan:* ${result.tx.digi_message}\n` : ''}` +
+            `${isSuccess ? 'âœ…' : isFailed ? 'âŒ' : 'â³'} *TRANSAKSI PULSA*\n\n` +
+            `ðŸ“¦ *SKU:* ${sku}\n` +
+            `ðŸŽ¯ *Target:* ${target}\n` +
+            `ðŸ’° *Harga:* Rp ${Number(result?.tx?.amount_sell || 0).toLocaleString('id-ID')}\n` +
+            `ðŸ§¾ *Ref ID:* ${result?.tx?.digi_ref_id || '-'}\n` +
+            `ðŸ“¡ *Status:* ${status.toUpperCase()}\n` +
+            `${result?.tx?.digi_sn ? `ðŸ”¢ *SN:* ${result.tx.digi_sn}\n` : ''}` +
+            `${result?.tx?.digi_message ? `ðŸ’¬ *Pesan:* ${result.tx.digi_message}\n` : ''}` +
             `\nTerima kasih.`;
           await whatsappGateway.sendText(buyerPhone, msg);
           waSent = true;

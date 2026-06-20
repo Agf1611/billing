@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 const techSvc = require('../services/techService');
 const customerSvc = require('../services/customerService');
@@ -21,6 +21,7 @@ const {
 } = require('../services/pushNotificationService');
 const { notifyApprovalRequired } = require('../services/adminPaymentNotificationService');
 const whatsappGateway = require('../services/whatsappGatewayService');
+const paymentWhatsappNotificationSvc = require('../services/paymentWhatsappNotificationService');
 const techUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 }
@@ -35,17 +36,17 @@ router.get('/manifest.webmanifest', (req, res) => {
     id: '/tech/',
     name: 'Portal Teknisi',
     short_name: 'Teknisi',
-    description: `Portal Teknisi ${String(getSetting('company_header', 'SICKAS WIFI') || 'SICKAS WIFI').trim() || 'SICKAS WIFI'}`,
+    description: `Portal Teknisi ${String(getSetting('company_header', 'PT Media Solusi Sukses') || 'PT Media Solusi Sukses').trim() || 'PT Media Solusi Sukses'}`,
     start_url: '/tech/login?source=pwa',
     scope: '/tech/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],
     orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#0f172a',
+    background_color: '#f5f8ff',
+    theme_color: '#073dcc',
     icons: [
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '192x192', purpose: 'any maskable' },
-      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png', sizes: '512x512', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '192x192', purpose: 'any maskable' },
+      { src: String(getSetting('pwa_logo_url', '') || getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png', sizes: '512x512', purpose: 'any maskable' },
       { src: '/img/pwa-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
     ]
   });
@@ -64,8 +65,8 @@ function flashMsg(req) {
   return m || null;
 }
 
-function company() { return getSetting('company_header', 'ISP App'); }
-function companyLogo() { return String(getSetting('company_logo_url', '/img/logo.png') || '/img/logo.png').trim() || '/img/logo.png'; }
+function company() { return getSetting('company_header', 'PT Media Solusi Sukses'); }
+function companyLogo() { return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png'; }
 
 function isTruthyFormValue(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
@@ -305,11 +306,11 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
         
         if (settings.whatsapp_enabled) {
           if (ticket) {
-            const waMsg = `✅ *TIKET KELUHAN SELESAI*\n\n` +
-                         `🎫 *ID Tiket:* #${ticket.id}\n` +
-                         `👤 *Pelanggan:* ${ticket.customer_name}\n` +
-                         `📝 *Subjek:* ${ticket.subject}\n` +
-                         `🛠️ *Teknisi:* ${req.session.techName}\n\n` +
+            const waMsg = `âœ… *TIKET KELUHAN SELESAI*\n\n` +
+                         `ðŸŽ« *ID Tiket:* #${ticket.id}\n` +
+                         `ðŸ‘¤ *Pelanggan:* ${ticket.customer_name}\n` +
+                         `ðŸ“ *Subjek:* ${ticket.subject}\n` +
+                         `ðŸ› ï¸ *Teknisi:* ${req.session.techName}\n\n` +
                          `Keluhan Anda telah selesai dikerjakan. Terima kasih atas kesabarannya.`;
 
             // Kirim ke Pelanggan
@@ -319,12 +320,12 @@ router.post('/tickets/:id/update', requireTechSession, express.urlencoded({ exte
 
             // Kirim ke Admin
             if (settings.whatsapp_admin_numbers && settings.whatsapp_admin_numbers.length > 0) {
-              const adminMsg = `✅ *LAPORAN TIKET SELESAI*\n\n` +
-                               `🎫 *ID Tiket:* #${ticket.id}\n` +
-                               `👤 *Pelanggan:* ${ticket.customer_name}\n` +
-                               `🛠️ *Teknisi:* ${req.session.techName}\n` +
-                               `📝 *Subjek:* ${ticket.subject}\n` +
-                               `💬 *Pesan:* ${ticket.message}`;
+              const adminMsg = `âœ… *LAPORAN TIKET SELESAI*\n\n` +
+                               `ðŸŽ« *ID Tiket:* #${ticket.id}\n` +
+                               `ðŸ‘¤ *Pelanggan:* ${ticket.customer_name}\n` +
+                               `ðŸ› ï¸ *Teknisi:* ${req.session.techName}\n` +
+                               `ðŸ“ *Subjek:* ${ticket.subject}\n` +
+                               `ðŸ’¬ *Pesan:* ${ticket.message}`;
               const seen = new Set();
               for (const adminPhone of settings.whatsapp_admin_numbers) {
                 let digits = String(adminPhone || '').replace(/\D/g, '');
@@ -411,6 +412,18 @@ router.post('/customers', requireTechSession, techUpload.fields([
   try {
     const name = String(req.body.name || '').trim();
     if (!name) throw new Error('Nama pelanggan wajib diisi');
+    const installDate = String(req.body.install_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(installDate)) {
+      throw new Error('Tanggal pemasangan wajib diisi');
+    }
+    const parsedInstallDate = new Date(`${installDate}T00:00:00Z`);
+    if (Number.isNaN(parsedInstallDate.getTime()) || parsedInstallDate.toISOString().slice(0, 10) !== installDate) {
+      throw new Error('Tanggal pemasangan tidak valid');
+    }
+    const isolateDay = Number.parseInt(req.body.isolate_day, 10);
+    if (!Number.isInteger(isolateDay) || isolateDay < 1 || isolateDay > 31) {
+      throw new Error('Tanggal jatuh tempo tagihan wajib diisi antara 1 sampai 31');
+    }
 
     const housePhotoResult = req.files?.house_photo_file?.[0]
       ? await persistCompressedImageUpload(req.files.house_photo_file[0], 'tech-house-photo', { maxBytes: DEFAULT_MAX_BYTES })
@@ -443,10 +456,10 @@ router.post('/customers', requireTechSession, techUpload.fields([
       lng: String(req.body.lng || '').trim(),
       isolir_profile: String(req.body.isolir_profile || 'BEATISOLIR').trim() || 'BEATISOLIR',
       status: String(req.body.status || 'active').trim() || 'active',
-      install_date: req.body.install_date ? String(req.body.install_date).trim() : null,
+      install_date: installDate,
       notes: String(req.body.notes || '').trim(),
       auto_isolate: req.body.auto_isolate !== undefined ? Number(req.body.auto_isolate) : 1,
-      isolate_day: req.body.isolate_day !== undefined ? Number(req.body.isolate_day) : 10
+      isolate_day: isolateDay
     };
 
     if (customerData.pppoe_password && customerData.pppoe_password.length < 4) {
@@ -570,6 +583,13 @@ async function activateCustomerWhenNoUnpaid(customerId) {
   return stillUnpaid;
 }
 
+async function notifyTechPaidInvoice(invoiceId, paidBy) {
+  return paymentWhatsappNotificationSvc.sendPaidInvoiceNotification(invoiceId, {
+    paidBy,
+    paidAt: new Date()
+  });
+}
+
 router.post('/api/customers/:id/pay-unpaid-first', requireTechSession, express.json(), async (req, res) => {
   try {
     const customerId = Number(req.params.id || 0);
@@ -601,9 +621,11 @@ router.post('/api/customers/:id/pay-unpaid-first', requireTechSession, express.j
     }
 
     const stillUnpaid = await activateCustomerWhenNoUnpaid(customerId);
+    const whatsappSent = await notifyTechPaidInvoice(paidInvoice.id || invoice.id, paidBy);
     res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
+      whatsappSent,
       invoice: {
         id: Number(paidInvoice.id || invoice.id),
         status: String(paidInvoice.status || 'paid').trim().toLowerCase(),
@@ -654,10 +676,12 @@ router.post('/api/customers/:id/invoices/:invoiceId/pay', requireTechSession, ex
     }
 
     const stillUnpaid = await activateCustomerWhenNoUnpaid(customerId);
+    const whatsappSent = !wasPaid ? await notifyTechPaidInvoice(invoiceId, paidBy) : false;
 
     res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
+      whatsappSent,
       invoice: {
         id: Number(paidInvoice.id || invoiceId),
         status: String(paidInvoice.status || 'paid').trim().toLowerCase(),
