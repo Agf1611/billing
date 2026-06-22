@@ -1043,3 +1043,43 @@ html[data-theme="light"] .bottom-nav {
   font-size: 9px;
   line-height: 1.05;
 }
+
+/* Final logo guard: uploaded SVG/PNG logos must never stretch the agent topbar. */
+.topbar .brand .icon,
+.topbar .brand > .icon {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  flex: 0 0 42px !important;
+  overflow: hidden !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.topbar .brand .icon img,
+.topbar .brand .icon .agent-brand-logo,
+.topbar .brand img.agent-brand-logo {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  display: block !important;
+  flex: 0 0 32px !important;
+  transform: none !important;
+}
+
+.topbar .brand .icon svg,
+.topbar .brand .icon picture,
+.topbar .brand .icon canvas {
+  width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  max-height: 32px !important;
+}

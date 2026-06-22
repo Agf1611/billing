@@ -2,7 +2,7 @@
   <div class="inner">
     <div class="brand">
       <div class="icon">
-        <img src="<%= (typeof logoUrl !== 'undefined' && logoUrl) ? logoUrl : '/img/mss-logo.png' %>" alt="Logo <%= company %>" style="width:32px;height:32px;object-fit:contain" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
+        <img class="agent-brand-logo" src="<%= (typeof logoUrl !== 'undefined' && logoUrl) ? logoUrl : '/img/mss-logo.png' %>" alt="Logo <%= company %>" style="width:32px!important;min-width:32px!important;max-width:32px!important;height:32px!important;min-height:32px!important;max-height:32px!important;object-fit:contain!important;display:block!important;flex:0 0 32px!important;" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
       </div>
       <div class="agent-brand-copy">
         <p class="title">Agent: <%= agent?.name || '-' %></p>
