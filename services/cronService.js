@@ -28,6 +28,9 @@ const {
   ensureDueDateLine
 } = require('./publicLinkService');
 
+let usageTrackingRunning = false;
+let fupCheckRunning = false;
+
 function getEffectiveCustomerBillingDay(rawDay, month, year) {
   const day = Number(rawDay || 0) || Number(getSetting('isolir_day', 10) || 10) || 10;
   return billingSvc.getEffectiveBillingDay(day, month, year);
@@ -610,7 +613,12 @@ function startCronJobs() {
   cron.schedule('* * * * *', async () => {
     const enabled = getSetting('usage_tracking_enabled', true);
     if (!enabled) return;
+    if (usageTrackingRunning) {
+      logger.warn('[CRON] Usage tracking dilewati karena proses sebelumnya belum selesai.');
+      return;
+    }
 
+    usageTrackingRunning = true;
     try {
       const routers = mikrotikService.getAllRouters();
       const customers = customerSvc.getAllCustomers();
@@ -642,11 +650,18 @@ function startCronJobs() {
       }
     } catch (e) {
       logger.error(`[CRON] Error Usage Tracking: ${e.message}`);
+    } finally {
+      usageTrackingRunning = false;
     }
   });
 
   // 8. FUP (Fair Usage Policy) Check - Setiap Jam
   cron.schedule('0 * * * *', async () => {
+    if (fupCheckRunning) {
+      logger.warn('[CRON] FUP check dilewati karena proses sebelumnya belum selesai.');
+      return;
+    }
+    fupCheckRunning = true;
     logger.info('[CRON] Mengecek FUP Pelanggan...');
     try {
       const customers = customerSvc.getAllCustomers();
@@ -680,6 +695,8 @@ function startCronJobs() {
       }
     } catch (e) {
       logger.error(`[CRON] Error FUP Check: ${e.message}`);
+    } finally {
+      fupCheckRunning = false;
     }
   });
 

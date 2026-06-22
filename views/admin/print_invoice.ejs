@@ -49,6 +49,13 @@
   const stampUrl = settings?.invoice_stamp_url || '';
   const supportByEnabled = settings?.support_by_enabled === true || settings?.support_by_enabled === 'true' || settings?.support_by_enabled === 1 || settings?.support_by_enabled === '1';
   const supportLogo = settings?.support_isp_logo_url || '';
+  const partnerBrandEnabled = settings?.partner_brand_enabled === true || settings?.partner_brand_enabled === 'true' || settings?.partner_brand_enabled === 1 || settings?.partner_brand_enabled === '1';
+  const partnerBrandName = String(settings?.partner_brand_name || '').trim();
+  const partnerLegalName = String(settings?.partner_legal_name || '').trim();
+  const partnerLogo = String(settings?.partner_logo_url || '').trim();
+  const showPartnerBrand = partnerBrandEnabled && (partnerBrandName || partnerLogo);
+  const partnerPrintLabel = partnerBrandName ? `Mitra Resmi MSS: ${partnerBrandName}` : 'Mitra Resmi MSS';
+  const partnerPrintCaption = partnerBrandName || 'Mitra Resmi';
   const manualPaymentBank = settings?.manual_payment_bank || '-';
   const manualPaymentAccountNumber = settings?.manual_payment_account_number || '-';
   const manualPaymentAccountName = settings?.manual_payment_account_name || '-';
@@ -189,19 +196,38 @@
       background:#fff;
       border-bottom:1.5px solid #94a3b8;
     }
-    .brand-box{
-      display:flex;
-      gap:12px;
-      align-items:flex-start;
+    .brand-stack{
+      display:grid;
+      gap:10px;
+      align-content:start;
     }
-    .brand-box img{
-      width:52px;
-      height:52px;
-      object-fit:contain;
-      border-radius:6px;
-      background:#fff;
-      border:1px solid rgba(15,23,42,.1);
+    .brand-box{
+      display:grid;
+      grid-template-columns:64px 1fr;
+      gap:12px;
+      align-items:start;
+    }
+    .brand-logo-card{
+      width:64px;
+      min-height:64px;
+      border-radius:10px;
+      background:linear-gradient(180deg,#fff,#f8fbff);
+      border:1px solid #cbd5e1;
+      display:grid;
+      place-items:center;
       padding:7px;
+      box-shadow:0 8px 18px rgba(15,23,42,.06);
+    }
+    .brand-logo-card img{
+      width:100%;
+      height:100%;
+      max-width:50px;
+      max-height:50px;
+      object-fit:contain;
+      border:0;
+      padding:0;
+      border-radius:0;
+      background:transparent;
     }
     .brand-copy h1{
       margin:0;
@@ -223,6 +249,72 @@
       color:var(--muted);
       font-size:11px;
       line-height:1.35;
+    }
+    .partner-print-card{
+      display:grid;
+      grid-template-columns:54px 1fr;
+      gap:10px;
+      align-items:center;
+      max-width:430px;
+      border:1px solid #cbd5e1;
+      border-left:4px solid var(--accent);
+      border-radius:10px;
+      background:linear-gradient(135deg,#f8fbff 0%,#ffffff 62%,#eef6ff 100%);
+      padding:8px 10px;
+      color:#0f172a;
+      box-shadow:0 8px 20px rgba(15,23,42,.05);
+    }
+    .partner-print-logo{
+      width:54px;
+      height:54px;
+      border-radius:10px;
+      background:#fff;
+      border:1px solid #dbe3f0;
+      display:grid;
+      place-items:center;
+      padding:5px;
+    }
+    .partner-print-logo img{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      border:0;
+      padding:0;
+      border-radius:0;
+      background:transparent;
+    }
+    .partner-print-kicker{
+      margin:0 0 3px;
+      color:#475569;
+      font-family:"Segoe UI", Arial, sans-serif;
+      font-size:8.8px;
+      font-weight:900;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+    }
+    .partner-print-name{
+      display:block;
+      color:#073dcc;
+      font-size:14px;
+      font-weight:900;
+      line-height:1.1;
+    }
+    .partner-print-legal{
+      display:block;
+      margin-top:3px;
+      color:#475569;
+      font-size:10px;
+      font-weight:700;
+      line-height:1.25;
+    }
+    .partner-print-note{
+      display:block;
+      margin-top:4px;
+      color:#0f172a;
+      font-size:9px;
+      font-weight:700;
+      letter-spacing:.04em;
+      text-transform:uppercase;
     }
     .invoice-meta-card{
       background:#fff;
@@ -864,6 +956,9 @@
       <% } %>
 
       <div class="receipt-foot">Simpan struk ini sebagai bukti pembayaran.</div>
+      <% if (showPartnerBrand) { %>
+        <div class="receipt-support"><%= partnerPrintLabel %></div>
+      <% } %>
       <% if (receiptSupportBrandName) { %>
         <div class="receipt-support">Support by <%= receiptSupportBrandName %></div>
       <% } %>
@@ -871,17 +966,38 @@
   <% } else { %>
     <div class="invoice-sheet">
       <div class="sheet-head">
-        <div class="brand-box">
-          <img src="<%= companyLogo %>" alt="Logo" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
-          <div class="brand-copy">
-            <h1><%= companyLegalName || companyName %></h1>
-            <% if (companyLegalName && companyName && companyLegalName !== companyName) { %>
-              <h2><%= companyName %></h2>
-            <% } %>
-            <% supportLines.forEach((line) => { %>
-              <p><%= line %></p>
-            <% }) %>
+        <div class="brand-stack">
+          <div class="brand-box">
+            <div class="brand-logo-card">
+              <img src="<%= companyLogo %>" alt="Logo <%= companyLegalName || companyName %>" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
+            </div>
+            <div class="brand-copy">
+              <h1><%= companyLegalName || companyName %></h1>
+              <% if (companyLegalName && companyName && companyLegalName !== companyName) { %>
+                <h2><%= companyName %></h2>
+              <% } %>
+              <% supportLines.forEach((line) => { %>
+                <p><%= line %></p>
+              <% }) %>
+            </div>
           </div>
+          <% if (showPartnerBrand) { %>
+            <div class="partner-print-card">
+              <div class="partner-print-logo">
+                <% if (partnerLogo) { %>
+                  <img src="<%= partnerLogo %>" alt="Logo <%= partnerBrandName || 'Mitra Resmi MSS' %>" onerror="this.style.display='none'">
+                <% } else { %>
+                  <strong style="font:900 18px/1 'Segoe UI',Arial,sans-serif;color:#073dcc;"><%= (partnerPrintCaption || 'MR').slice(0,2).toUpperCase() %></strong>
+                <% } %>
+              </div>
+              <div>
+                <div class="partner-print-kicker">Mitra Resmi ISP</div>
+                <strong class="partner-print-name"><%= partnerPrintCaption %></strong>
+                <% if (partnerLegalName) { %><small class="partner-print-legal"><%= partnerLegalName %></small><% } %>
+                <span class="partner-print-note">Terdaftar sebagai mitra layanan <%= companyLegalName || companyName %></span>
+              </div>
+            </div>
+          <% } %>
         </div>
 
         <div class="invoice-meta-card">
@@ -1095,6 +1211,7 @@
         address: <%- JSON.stringify(companyAddress) %>,
         phone: <%- JSON.stringify(companyPhone) %>,
         support: <%- JSON.stringify(receiptSupportBrandName) %>,
+        partner: <%- JSON.stringify(showPartnerBrand ? partnerPrintLabel : '') %>,
         title: <%- JSON.stringify(isPaid ? 'STRUK PEMBAYARAN' : 'STRUK TAGIHAN') %>,
         invoice: <%- JSON.stringify(invoiceCode) %>,
         dateLabel: <%- JSON.stringify(isPaid ? 'Tanggal Bayar' : 'Tanggal Tagih') %>,
@@ -1260,8 +1377,11 @@
         ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
         ctx.setLineDash([]);
         fitText(ctx, 'Simpan struk ini sebagai bukti pembayaran.', mid, y + 24, 340, 11, 900, '#000000', 'center');
+        if (receiptData.partner) {
+          fitText(ctx, receiptData.partner, mid, y + 42, 340, 11, 900, '#000000', 'center');
+        }
         if (receiptData.support) {
-          fitText(ctx, 'Support by ' + receiptData.support, mid, y + 42, 340, 11, 900, '#000000', 'center');
+          fitText(ctx, 'Support by ' + receiptData.support, mid, y + (receiptData.partner ? 60 : 42), 340, 11, 900, '#000000', 'center');
         }
         return new Promise((resolve) => {
           try { canvas.toBlob(resolve, 'image/png', 0.95); } catch (e) { resolve(null); }

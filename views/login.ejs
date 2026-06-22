@@ -642,6 +642,7 @@
           <strong><i class="bi bi-person-vcard-fill"></i> Portal Pelanggan</strong>
           <h1><%= settings.company_header || 'Portal ISP' %></h1>
           <p>Akses layanan pelanggan.</p>
+          <%- include('partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'hero' }) %>
         </div>
       </section>
 

@@ -470,8 +470,8 @@
       min-width: 0;
       max-width: 100%;
       min-height: 46px;
-      padding: 8px 14px;
-      gap: 10px;
+      padding: 7px 10px;
+      gap: 9px;
     }
 
     .topbar-left,
@@ -1093,6 +1093,7 @@
       flex-direction: column;
       line-height: 1.05;
       min-width: 0;
+      flex: 1 1 auto;
       overflow: hidden;
     }
 
@@ -1105,11 +1106,124 @@
       text-overflow: ellipsis;
     }
 
-    .brand-meta span {
+    .brand-subline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+      margin-top: 2px;
+      overflow: hidden;
+    }
+
+    .brand-app-label {
       font-size: 10.5px;
       color: var(--app-text-soft);
       font-weight: 700;
       white-space: nowrap;
+      flex: 0 0 auto;
+    }
+
+    .mss-partner-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      margin-top: 6px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(7, 61, 204, .16);
+      background: rgba(255, 255, 255, .90);
+      color: var(--app-text);
+      box-shadow: 0 10px 24px rgba(18, 47, 102, .08);
+    }
+
+    .mss-partner-logo {
+      width: 40px;
+      height: 22px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .mss-partner-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.12;
+    }
+
+    .mss-partner-copy span {
+      color: var(--app-text-soft);
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .mss-partner-copy strong {
+      color: var(--app-blue);
+      font-size: 11.5px;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mss-partner-copy small {
+      color: var(--app-text-soft);
+      font-size: 10px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mss-partner-badge--topbar {
+      min-width: 0;
+      max-width: 138px;
+      margin-top: 0;
+      padding: 2px 6px;
+      gap: 5px;
+      border: 1px solid rgba(7, 61, 204, .12);
+      background: rgba(7, 61, 204, .04);
+      box-shadow: none;
+      flex: 0 1 auto;
+    }
+
+    .mss-partner-badge--topbar .mss-partner-logo {
+      width: 22px;
+      height: 14px;
+      max-width: 22px;
+      max-height: 14px;
+      border-radius: 4px;
+      flex: 0 0 22px;
+    }
+
+    .mss-partner-badge--topbar .mss-partner-copy {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .mss-partner-badge--topbar .mss-partner-copy span {
+      display: none;
+    }
+
+    .mss-partner-badge--topbar .mss-partner-copy strong {
+      display: block;
+      max-width: 94px;
+      font-size: 9px;
+      line-height: 1.05;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mss-partner-badge--stack {
+      margin-top: 10px;
+      border-radius: 16px;
+      background: #fff;
     }
 
     .page-title {

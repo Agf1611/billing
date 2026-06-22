@@ -6,6 +6,7 @@ const router = express.Router();
 const {
   getSetting,
   getSettings,
+  getSettingsWithCache,
   saveSettings,
   getOperationalSettingsPath,
   getPrivateSettingsPath
@@ -177,6 +178,7 @@ const REMEMBER_ME_SESSION_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const IMAGE_UPLOAD_FIELDS = [
   'company_logo_file',
   'pwa_logo_file',
+  'partner_logo_file',
   'support_isp_logo_file',
   'invoice_signature_file',
   'invoice_stamp_file',
@@ -185,6 +187,11 @@ const IMAGE_UPLOAD_FIELDS = [
   'customer_portal_banner_2_file',
   'customer_portal_banner_3_file'
 ];
+
+router.use((req, res, next) => {
+  res.locals.settings = getSettingsWithCache();
+  next();
+});
 
 function isEnabledSwitch(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
@@ -7052,6 +7059,10 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'footer_info',
       'company_legal_name',
       'upstream_provider_name',
+      'partner_brand_enabled',
+      'partner_brand_name',
+      'partner_legal_name',
+      'partner_logo_url',
       'support_by_enabled',
       'support_isp_logo_url',
       'pwa_logo_url',
@@ -7264,6 +7275,9 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       'customer_id_prefix',
       'company_legal_name',
       'upstream_provider_name',
+      'partner_brand_name',
+      'partner_legal_name',
+      'partner_logo_url',
       'support_isp_logo_url',
       'company_logo_url',
       'customer_portal_banner_1_url',
@@ -7332,6 +7346,7 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
 
     const removeCompanyLogo = settingsSection === 'usaha' && String(req.body.remove_company_logo || '').trim() === '1';
     const removePwaLogo = settingsSection === 'usaha' && String(req.body.remove_pwa_logo || '').trim() === '1';
+    const removePartnerLogo = settingsSection === 'usaha' && String(req.body.remove_partner_logo || '').trim() === '1';
     const removeSupportLogo = settingsSection === 'usaha' && String(req.body.remove_support_logo || '').trim() === '1';
     const removeSignature = settingsSection === 'usaha' && String(req.body.remove_invoice_signature || '').trim() === '1';
     const removeStamp = settingsSection === 'usaha' && String(req.body.remove_invoice_stamp || '').trim() === '1';
@@ -7376,6 +7391,19 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
           newSettings[settingKey] = String(newSettings[settingKey] || currentSettings[settingKey] || '').trim();
         }
       }
+    }
+
+    const uploadedPartnerLogo = settingsSection === 'usaha' ? getUploadedSingleFile(req, 'partner_logo_file') : null;
+    if (uploadedPartnerLogo) {
+      const previousPartnerLogo = String(getSetting('partner_logo_url', '') || '').trim();
+      safeRemoveUploadAsset(previousPartnerLogo, /^\/uploads\/partner-logo-\d+\.(png|jpg|jpeg|webp|svg)$/i);
+      newSettings.partner_logo_url = persistUploadedImageSetting(uploadedPartnerLogo, 'partner-logo');
+    } else if (removePartnerLogo) {
+      const previousPartnerLogo = String(getSetting('partner_logo_url', '') || '').trim();
+      safeRemoveUploadAsset(previousPartnerLogo, /^\/uploads\/partner-logo-\d+\.(png|jpg|jpeg|webp|svg)$/i);
+      newSettings.partner_logo_url = '';
+    } else if (settingsSection === 'usaha') {
+      newSettings.partner_logo_url = String(newSettings.partner_logo_url || currentSettings.partner_logo_url || '').trim();
     }
 
     const uploadedSupportLogo = settingsSection === 'usaha' ? getUploadedSingleFile(req, 'support_isp_logo_file') : null;
@@ -7540,6 +7568,13 @@ router.post('/settings', requireAdminSession, upload.fields(IMAGE_UPLOAD_FIELDS.
       newSettings.support_by_enabled === '1' ||
       newSettings.support_by_enabled === 1 ||
       newSettings.support_by_enabled === 'on'
+    );
+    newSettings.partner_brand_enabled = (
+      newSettings.partner_brand_enabled === 'true' ||
+      newSettings.partner_brand_enabled === true ||
+      newSettings.partner_brand_enabled === '1' ||
+      newSettings.partner_brand_enabled === 1 ||
+      newSettings.partner_brand_enabled === 'on'
     );
 
     if (settingsSection === 'akun') {

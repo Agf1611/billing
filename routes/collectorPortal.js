@@ -1,6 +1,6 @@
 ﻿const express = require('express');
 const router = express.Router();
-const { getSetting } = require('../config/settingsManager');
+const { getSetting, getSettingsWithCache } = require('../config/settingsManager');
 const { logger } = require('../config/logger');
 const db = require('../config/database');
 const billingSvc = require('../services/billingService');
@@ -19,6 +19,11 @@ function company() {
 function companyLogo() {
   return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
 }
+
+router.use((req, res, next) => {
+  res.locals.settings = getSettingsWithCache();
+  next();
+});
 
 function flashMsg(req) {
   const m = req.session._msg;

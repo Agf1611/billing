@@ -99,7 +99,7 @@ async function createTripayTransaction(invoice, customer, method = 'QRIS', appUr
     throw new Error(res.data.message || 'Gagal membuat transaksi');
   } catch (error) {
     const msg = error.response ? JSON.stringify(error.response.data) : error.message;
-    logger.error('[Tripay] Error:', msg);
+    logger.error(`[Tripay] Error: ${msg}`);
     throw new Error('Tripay Error: ' + msg);
   }
 }
@@ -421,7 +421,8 @@ async function getTripayChannels() {
     });
     return res.data.success ? res.data.data : [];
   } catch (error) {
-    logger.warn(`[Tripay] Gagal ambil channel dalam ${timeoutMs}ms: ${error.message || String(error)}`);
+    const detail = error.response?.data ? JSON.stringify(error.response.data) : (error.message || String(error));
+    logger.warn(`[Tripay] Gagal ambil channel dalam ${timeoutMs}ms: ${detail}`);
     return [];
   }
 }

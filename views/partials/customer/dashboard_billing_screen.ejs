@@ -150,6 +150,7 @@
         <div>
           <strong><%= pageCompanyName %></strong>
           <span><%= companyLegalName || 'Identitas usaha dapat diatur dari menu admin.' %></span>
+          <%- include('../partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'stack', showLegal: true }) %>
         </div>
       </div>
 

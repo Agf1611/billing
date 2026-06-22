@@ -19,6 +19,7 @@
     .row { display:flex; justify-content:space-between; gap: 8px; align-items:flex-start; }
     .co { font-weight: 950; font-size: 10.5px; letter-spacing: .15px; line-height: 1.1; }
     .co-sub { font-size: 9.5px; color: #334155; margin-top: 6px; line-height: 1.1; white-space: nowrap; }
+    .partner-sub { font-size: 8.5px; color: #073dcc; margin-top: 3px; line-height: 1.1; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wa-btm { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font-size: 9.5px; color: #334155; white-space: nowrap; z-index: 4; }
     .pkg { font-weight: 800; font-size: 10.5px; margin-top: 6px; }
     .pill { display:inline-flex; align-items:center; gap: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(2,6,23,.06); font-size: 10px; color: #0f172a; white-space:nowrap; line-height: 1.1; }
@@ -42,6 +43,7 @@
     }
     .thermal-company{ font-size:10px; font-weight:900; line-height:1.1; }
     .thermal-meta{ font-size:9px; color:#334155; margin-top:3px; line-height:1.2; }
+    .thermal-partner{ font-size:8.5px; color:#073dcc; margin-top:3px; line-height:1.2; font-weight:900; }
     .thermal-code{ font-size:24px; font-weight:900; letter-spacing:2px; margin:8px 0 4px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
     .thermal-pass{ font-size:11px; font-weight:800; margin-top:4px; }
     .thermal-price{ font-size:11px; font-weight:900; margin-top:6px; }
@@ -54,6 +56,9 @@
 </head>
 <body>
   <%
+    const voucherPartnerEnabled = settings?.partner_brand_enabled === true || settings?.partner_brand_enabled === 'true' || settings?.partner_brand_enabled === 1 || settings?.partner_brand_enabled === '1';
+    const voucherPartnerName = String(settings?.partner_brand_name || '').trim();
+    const voucherPartnerLabel = voucherPartnerEnabled && voucherPartnerName ? `Mitra Resmi MSS: ${voucherPartnerName}` : '';
     function formatValidity(v) {
       if (!v) return '-';
       const s = String(v).trim();
@@ -76,6 +81,7 @@
       <% vouchers.forEach(v => { %>
         <div class="thermal-ticket">
           <div class="thermal-company"><%= settings.company_header || company %></div>
+          <% if (voucherPartnerLabel) { %><div class="thermal-partner"><%= voucherPartnerLabel %></div><% } %>
           <div class="thermal-meta"><%= batch.profile_name || v.profile_name || '-' %></div>
           <div class="thermal-code"><%= v.code %></div>
           <% if (v.code !== v.password) { %>
@@ -95,7 +101,10 @@
         <div class="card">
           <div class="left">
             <div class="row">
-              <div class="co"><%= settings.company_header || company %></div>
+              <div class="co">
+                <%= settings.company_header || company %>
+                <% if (voucherPartnerLabel) { %><div class="partner-sub"><%= voucherPartnerLabel %></div><% } %>
+              </div>
             </div>
             <div class="row" style="margin-top:6px">
               <div class="pills"></div>

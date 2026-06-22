@@ -214,6 +214,14 @@
   <div class="foot-note">
     Simpan struk ini sebagai bukti pembayaran.
   </div>
+  <%
+    const receiptPartnerEnabled = settings?.partner_brand_enabled === true || settings?.partner_brand_enabled === 'true' || settings?.partner_brand_enabled === 1 || settings?.partner_brand_enabled === '1';
+    const receiptPartnerName = String(settings?.partner_brand_name || '').trim();
+    const receiptPartnerLabel = receiptPartnerEnabled && receiptPartnerName ? `Mitra Resmi MSS: ${receiptPartnerName}` : '';
+  %>
+  <% if (receiptPartnerLabel) { %>
+    <div class="support-note"><%= receiptPartnerLabel %></div>
+  <% } %>
   <% const receiptSupportName = String(settings?.upstream_provider_name || settings?.company_legal_name || company || '').trim(); %>
   <% if (receiptSupportName) { %>
     <div class="support-note">Support by <%= receiptSupportName %></div>
@@ -228,6 +236,7 @@
         address: <%- JSON.stringify(settings?.company_address || '') %>,
         phone: <%- JSON.stringify(wa ? (String(wa).startsWith('0') ? wa : ('+' + wa)) : '-') %>,
         support: <%- JSON.stringify(receiptSupportName) %>,
+        partner: <%- JSON.stringify(receiptPartnerLabel) %>,
         title: 'STRUK PEMBAYARAN',
         invoice: <%- JSON.stringify('#' + (invoice?.id || tx.invoice_id || '-')) %>,
         tx: <%- JSON.stringify('#' + (tx.id || '-')) %>,
@@ -259,7 +268,8 @@
         ctx.setLineDash([4,4]);rr(ctx,116,y,152,30,999);ctx.strokeStyle='#111';ctx.lineWidth=1.2;ctx.stroke();ctx.setLineDash([]);fit(ctx,'LUNAS',mid,y+21,120,13,900,'#000','center');y+=43;
         ctx.setLineDash([5,5]);ctx.strokeStyle='#111';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.setLineDash([]);
         fit(ctx,'Simpan struk ini sebagai bukti pembayaran.',mid,y+24,340,11,900,'#000','center');
-        if(receiptData.support){fit(ctx,'Support by '+receiptData.support,mid,y+42,340,11,900,'#000','center');}
+        if(receiptData.partner){fit(ctx,receiptData.partner,mid,y+42,340,11,900,'#000','center');}
+        if(receiptData.support){fit(ctx,'Support by '+receiptData.support,mid,y+(receiptData.partner?60:42),340,11,900,'#000','center');}
         return new Promise(resolve=>{try{canvas.toBlob(resolve,'image/png',0.95)}catch(e){resolve(null)}});
       }
       async function saveOrShare(share){const blob=await buildBlob();if(!blob)return window.print();const name='struk-'+receiptData.tx.replace(/[^\w.-]+/g,'-')+'.png';const file=new File([blob],name,{type:'image/png'});if(share&&navigator.canShare&&navigator.canShare({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:receiptData.title,text:receiptData.tx});return;}catch(e){}}const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);}

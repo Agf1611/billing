@@ -1,41 +1,53 @@
 <!DOCTYPE html>
 <html lang="<%= lang || 'id' %>">
 <%
-  const logoSrc = logoUrl || '/img/mss-logo.png';
+  const mssLegalName = 'PT Media Solusi Sukses';
+  const mssShortName = 'MSS';
+  const logoSrc = '/img/mss-logo.png';
 %>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title><%= t('common.login', 'Login') %> Admin | <%= company %></title>
+  <title><%= t('common.login', 'Login') %> Admin | <%= mssLegalName %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root {
-      --page-bg: #f5f8ff;
-      --page-bg-2: #ffffff;
-      --surface: rgba(255, 255, 255, 0.96);
-      --surface-soft: #f8fbff;
+      --page-bg: #f4f8ff;
+      --surface: #ffffff;
+      --surface-soft: #f7faff;
       --line: rgba(28, 54, 102, 0.14);
+      --line-strong: rgba(7, 61, 204, 0.24);
       --text-main: #07163f;
-      --text-soft: #62708c;
-      --text-faint: #8d98b1;
+      --text-soft: #5f6f90;
+      --text-faint: #8795b1;
       --blue: #073dcc;
+      --blue-2: #0b55f4;
       --blue-deep: #0634b0;
+      --yellow: #fff200;
       --shadow: 0 28px 70px rgba(18, 47, 102, 0.14);
-      --shell-width: min(100vw, 430px);
+      --shell-width: min(100%, 470px);
     }
 
     * { box-sizing: border-box; }
 
-    html, body {
+    html,
+    body {
       min-height: 100%;
       margin: 0;
       color: var(--text-main);
       font-family: "Plus Jakarta Sans", "Manrope", system-ui, -apple-system, sans-serif;
-      background: linear-gradient(180deg, var(--page-bg-2) 0%, var(--page-bg) 100%);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(244,248,255,.98) 100%);
       -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: 18px;
     }
 
     body::before {
@@ -43,24 +55,19 @@
       position: fixed;
       inset: 0;
       pointer-events: none;
-      opacity: 0.10;
-      background-image:
-        linear-gradient(rgba(111, 141, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(111, 141, 255, 0.05) 1px, transparent 1px);
-      background-size: 32px 32px;
-    }
-
-    body {
-      display: flex;
-      justify-content: center;
-      padding: 14px;
+      background:
+        linear-gradient(rgba(7, 61, 204, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(7, 61, 204, 0.035) 1px, transparent 1px);
+      background-size: 34px 34px;
+      opacity: .75;
     }
 
     .login-shell {
       position: relative;
+      z-index: 1;
       width: var(--shell-width);
-      min-height: calc(100vh - 28px);
-      min-height: calc(100dvh - 28px);
+      min-height: calc(100vh - 36px);
+      min-height: calc(100dvh - 36px);
       display: flex;
       align-items: center;
     }
@@ -71,32 +78,47 @@
       gap: 12px;
     }
 
+    .brand-panel,
+    .login-card {
+      background: var(--surface);
+      border: 1px solid rgba(28, 54, 102, 0.12);
+      box-shadow: var(--shadow);
+    }
+
     .brand-panel {
       display: flex;
       align-items: center;
       gap: 14px;
-      padding: 14px 16px;
+      padding: 16px;
       border-radius: 24px;
-      background: rgba(17, 24, 39, 0.86);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
-      backdrop-filter: blur(18px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 6px;
+      background: linear-gradient(180deg, var(--blue), var(--blue-2));
     }
 
     .brand-logo {
-      width: 64px;
-      height: 64px;
-      flex: 0 0 64px;
+      width: 68px;
+      height: 68px;
+      flex: 0 0 68px;
       display: grid;
       place-items: center;
       border-radius: 20px;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(111, 141, 255, 0.08));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 18px 34px rgba(79, 110, 247, 0.14);
+      background: #ffffff;
+      border: 1px solid rgba(7, 61, 204, 0.16);
+      box-shadow: 0 18px 34px rgba(7, 61, 204, 0.12);
+      overflow: hidden;
     }
 
     .brand-logo img {
-      width: 48px;
-      height: 48px;
+      width: 58px;
+      height: 58px;
       object-fit: contain;
     }
 
@@ -105,18 +127,18 @@
       flex: 1;
     }
 
-    .brand-copy strong {
+    .brand-kicker {
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      margin-bottom: 7px;
-      padding: 7px 11px;
+      margin-bottom: 8px;
+      padding: 7px 10px;
       border-radius: 999px;
-      background: rgba(111, 141, 255, 0.12);
-      border: 1px solid rgba(111, 141, 255, 0.18);
+      background: rgba(7, 61, 204, 0.08);
+      border: 1px solid rgba(7, 61, 204, 0.14);
       color: var(--blue);
       font-size: 10px;
-      font-weight: 800;
+      font-weight: 900;
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
@@ -124,9 +146,10 @@
     .brand-copy h1 {
       margin: 0 0 4px;
       font-size: 22px;
-      line-height: 1.04;
-      font-weight: 800;
-      letter-spacing:0;
+      line-height: 1.08;
+      font-weight: 900;
+      color: var(--text-main);
+      letter-spacing: 0;
     }
 
     .brand-copy p {
@@ -134,63 +157,109 @@
       color: var(--text-soft);
       font-size: 12px;
       line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .mss-partner-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      margin-top: 10px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(7, 61, 204, 0.16);
+      background: rgba(7, 61, 204, 0.045);
+      box-shadow: none;
+      color: var(--text-main);
+    }
+
+    .mss-partner-logo {
+      width: 40px;
+      height: 22px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .mss-partner-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.12;
+    }
+
+    .mss-partner-copy span {
+      color: var(--text-soft);
+      font-size: 8.5px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .mss-partner-copy strong {
+      color: var(--blue);
+      font-size: 11.5px;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .login-card {
-      background: var(--surface);
-      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 28px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
       overflow: hidden;
     }
 
     .login-card-head {
-      padding: 18px 18px 10px;
+      padding: 22px 22px 12px;
       text-align: center;
     }
 
     .portal-icon {
-      width: 60px;
-      height: 60px;
+      width: 62px;
+      height: 62px;
       margin: 0 auto 14px;
       display: grid;
       place-items: center;
       border-radius: 20px;
-      background: linear-gradient(135deg, rgba(111, 141, 255, 0.18), rgba(79, 110, 247, 0.3));
-      border: 1px solid rgba(111, 141, 255, 0.2);
-      color: #fff;
-      font-size: 24px;
-      box-shadow: 0 20px 34px rgba(79, 110, 247, 0.22);
+      background: linear-gradient(135deg, rgba(7, 61, 204, 0.10), rgba(11, 85, 244, 0.16));
+      border: 1px solid rgba(7, 61, 204, 0.18);
+      color: var(--blue);
+      font-size: 25px;
+      box-shadow: 0 18px 32px rgba(7, 61, 204, 0.16);
     }
 
     .login-card-head h2 {
-      margin: 0 0 5px;
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing:0;
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text-main);
+      letter-spacing: 0;
     }
 
     .login-card-head p {
       margin: 0;
-      font-size: 12px;
+      font-size: 13px;
       line-height: 1.5;
       color: var(--text-soft);
+      font-weight: 700;
     }
 
     .form-container {
-      padding: 12px 18px 18px;
+      padding: 12px 22px 22px;
     }
 
     .field {
-      margin-bottom: 12px;
+      margin-bottom: 13px;
     }
 
     .field-label {
       display: block;
       margin-bottom: 7px;
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 900;
       color: var(--text-faint);
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -198,38 +267,40 @@
 
     .field-wrap {
       position: relative;
+      display: block;
     }
 
     .field-wrap i {
       position: absolute;
-      left: 14px;
+      left: 15px;
       top: 50%;
       transform: translateY(-50%);
-      color: var(--text-soft);
-      font-size: 15px;
+      color: var(--blue);
+      font-size: 16px;
       pointer-events: none;
     }
 
     .fc {
       width: 100%;
-      min-height: 54px;
+      min-height: 56px;
       border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid rgba(28, 54, 102, 0.16);
+      background: #f3f7ff;
       color: var(--text-main);
-      padding: 14px 14px 14px 42px;
-      font-size: 14px;
+      padding: 15px 15px 15px 44px;
+      font-size: 15px;
+      font-weight: 700;
       outline: none;
-      box-shadow: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
       transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
     }
 
-    .fc::placeholder { color: rgba(150, 163, 191, 0.85); }
+    .fc::placeholder { color: #8b99b3; }
 
     .fc:focus {
-      border-color: rgba(111, 141, 255, 0.42);
-      box-shadow: 0 0 0 4px rgba(111, 141, 255, 0.12);
-      background: rgba(17, 24, 39, 0.96);
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 4px rgba(7, 61, 204, 0.10);
+      background: #ffffff;
     }
 
     .remember-row {
@@ -237,9 +308,10 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin: 2px 0 14px;
+      margin: 4px 0 16px;
       color: var(--text-soft);
       font-size: 12px;
+      font-weight: 700;
     }
 
     .remember-check {
@@ -248,45 +320,47 @@
       gap: 9px;
       cursor: pointer;
       user-select: none;
-      font-weight: 700;
       color: var(--text-main);
+      font-weight: 800;
     }
 
     .remember-check input {
-      width: 16px;
-      height: 16px;
+      width: 17px;
+      height: 17px;
       margin: 0;
       accent-color: var(--blue);
     }
 
     .btn-login {
       width: 100%;
-      min-height: 52px;
+      min-height: 54px;
       border: none;
       border-radius: 18px;
-      background: linear-gradient(135deg, var(--blue) 0%, var(--blue-deep) 100%);
+      background: linear-gradient(135deg, var(--blue) 0%, var(--blue-2) 100%);
       color: #fff;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      font-size: 14px;
-      font-weight: 800;
-      box-shadow: 0 20px 34px rgba(79, 110, 247, 0.24);
+      font-size: 15px;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 20px 34px rgba(7, 61, 204, 0.24);
     }
 
     .btn-login:hover,
     .btn-login:focus {
-      background: linear-gradient(135deg, #5f7dfa 0%, #4462eb 100%);
+      background: linear-gradient(135deg, #0634b0 0%, #0745dd 100%);
     }
 
     .alert-d {
-      background: rgba(255, 114, 134, 0.12);
-      color: #ffc5cf;
-      border: 1px solid rgba(255, 114, 134, 0.18);
+      background: rgba(239, 68, 68, 0.10);
+      color: #991b1b;
+      border: 1px solid rgba(239, 68, 68, 0.18);
       padding: 12px 13px;
       border-radius: 16px;
       font-size: 12px;
+      font-weight: 800;
       margin-bottom: 12px;
       display: flex;
       align-items: center;
@@ -297,36 +371,25 @@
       margin-bottom: 12px;
       padding: 12px 13px;
       border-radius: 16px;
-      background: rgba(111, 141, 255, 0.12);
-      color: #dbe5ff;
-      border: 1px solid rgba(111, 141, 255, 0.2);
+      background: rgba(7, 61, 204, 0.08);
+      color: var(--text-soft);
+      border: 1px solid rgba(7, 61, 204, 0.14);
       font-size: 12px;
       line-height: 1.55;
+      font-weight: 700;
     }
 
     .first-install-note strong {
       display: block;
       margin-bottom: 4px;
-      color: #fff;
-      font-weight: 800;
+      color: var(--text-main);
+      font-weight: 900;
     }
 
     .first-install-note code {
-      color: #fff;
+      color: var(--blue);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-weight: 800;
-    }
-
-    .support-note {
-      margin-top: 12px;
-      padding: 12px 13px;
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      font-size: 11px;
-      line-height: 1.55;
-      color: var(--text-soft);
-      text-align: center;
+      font-weight: 900;
     }
 
     .back-btn {
@@ -336,14 +399,29 @@
       gap: 8px;
       margin-top: 12px;
       width: 100%;
-      min-height: 46px;
+      min-height: 48px;
       border-radius: 16px;
-      border: 1px solid rgba(111, 141, 255, 0.14);
-      background: rgba(111, 141, 255, 0.08);
+      border: 1px solid rgba(7, 61, 204, 0.14);
+      background: rgba(7, 61, 204, 0.06);
       color: var(--blue);
       text-decoration: none;
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .legal-line {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+      color: var(--text-soft);
+      font-size: 11px;
       font-weight: 800;
+      text-align: center;
+    }
+
+    .legal-line b {
+      color: var(--blue);
     }
 
     @media (max-width: 576px) {
@@ -352,27 +430,28 @@
         min-height: calc(100vh - 24px);
         min-height: calc(100dvh - 24px);
       }
-      .brand-panel,
-      .login-card-head,
-      .form-container {
-        padding-left: 14px;
-        padding-right: 14px;
-      }
       .brand-panel {
+        padding: 14px;
         gap: 12px;
-        align-items: center;
       }
       .brand-logo {
-        width: 58px;
-        height: 58px;
-        flex-basis: 58px;
+        width: 60px;
+        height: 60px;
+        flex-basis: 60px;
+        border-radius: 18px;
       }
       .brand-logo img {
-        width: 44px;
-        height: 44px;
+        width: 50px;
+        height: 50px;
       }
-      .brand-copy h1 { font-size: 20px; }
-      .login-card-head h2 { font-size: 18px; }
+      .brand-copy h1 { font-size: 18px; }
+      .brand-copy p { font-size: 11px; }
+      .login-card-head,
+      .form-container {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+      .login-card-head h2 { font-size: 19px; }
       .remember-row {
         display: grid;
         gap: 8px;
@@ -385,20 +464,21 @@
     <main class="login-main">
       <section class="brand-panel">
         <div class="brand-logo">
-          <img src="<%= logoSrc %>" alt="Logo <%= company %>">
+          <img src="<%= logoSrc %>" alt="Logo <%= mssShortName %>" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
         </div>
         <div class="brand-copy">
-          <strong><i class="bi bi-grid-1x2-fill"></i> Admin Panel</strong>
-          <h1><%= company %></h1>
-          <p>Akses admin sistem.</p>
+          <span class="brand-kicker"><i class="bi bi-building-check"></i> Admin Panel MSS</span>
+          <h1><%= mssLegalName %></h1>
+          <p><%= mssShortName %> Internet Service Provider</p>
+          <%- include('../partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'hero' }) %>
         </div>
       </section>
 
       <section class="login-card">
         <div class="login-card-head">
-          <div class="portal-icon"><i class="bi bi-shield-check"></i></div>
+          <div class="portal-icon"><i class="bi bi-shield-lock"></i></div>
           <h2>Masuk ke Portal Admin</h2>
-          <p>Masuk dengan akun admin atau kasir.</p>
+          <p>Akses panel operasional dan billing resmi MSS.</p>
         </div>
 
         <div class="form-container">
@@ -443,7 +523,7 @@
 
             <button type="submit" class="btn-login">
               <i class="bi bi-box-arrow-in-right"></i>
-              <span><%= t('admin.login.sign_in', 'Masuk') %></span>
+              <span><%= t('admin.login.sign_in', 'Masuk') %> Admin</span>
             </button>
           </form>
 
@@ -451,6 +531,11 @@
             <i class="bi bi-arrow-left-circle"></i>
             <span><%= t('admin.login.back_customer', 'Kembali ke Portal Pelanggan') %></span>
           </a>
+
+          <div class="legal-line">
+            <span>Penyelenggara:</span>
+            <b><%= mssLegalName %></b>
+          </div>
         </div>
       </section>
     </main>

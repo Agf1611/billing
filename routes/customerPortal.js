@@ -2993,13 +2993,30 @@ router.get('/payment/callback', (req, res) => {
   res.json({ success: true, message: 'OK. Use POST for gateway notifications.' });
 });
 router.head('/payment/callback', (req, res) => res.status(200).end());
+
+function normalizeGatewayPaidStatus(statusValue, gatewayName = '') {
+  const value = String(statusValue || '').trim().toUpperCase();
+  if (!value) return '';
+  if (['PAID', 'SUCCESS', 'SETTLED', 'SETTLEMENT', 'CAPTURE', '00'].includes(value)) return 'paid';
+  if (gatewayName === 'midtrans' && ['SETTLEMENT', 'CAPTURE'].includes(value)) return 'paid';
+  return String(statusValue || '').trim();
+}
+
+function getGatewayOrderLookupValues(...values) {
+  return [...new Set(values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+  )];
+}
+
 router.post('/payment/callback', express.json(), async (req, res) => {
   const settings = getSettingsWithCache();
   const tripaySignature = req.headers['x-callback-signature'];
   const midtransSignature = req.headers['x-callback-token']; // Midtrans usually uses Basic Auth or IP whitelist, but let's check payload
   
-  const jsonBody = JSON.stringify(req.body);
+  const jsonBody = req.rawBody || JSON.stringify(req.body || {});
   let gatewayOrderId = null;
+  let gatewayReferenceId = null;
   let invoiceIdCandidate = null;
   let status = null;
   let gateway = null;
@@ -3007,14 +3024,15 @@ router.post('/payment/callback', express.json(), async (req, res) => {
   // --- DETEKSI TRIPAY ---
   if (tripaySignature) {
     if (paymentSvc.verifyTripayWebhook(jsonBody, tripaySignature, settings.tripay_private_key)) {
-      const { merchant_ref, status: tpStatus } = req.body;
+      const { merchant_ref, reference, status: tpStatus } = req.body;
       const parts = String(merchant_ref || '').split('-');
       gatewayOrderId = String(merchant_ref || '') || null;
+      gatewayReferenceId = String(reference || '') || null;
       invoiceIdCandidate = parts[1] || null;
-      status = tpStatus === 'PAID' ? 'paid' : tpStatus;
+      status = normalizeGatewayPaidStatus(tpStatus, 'tripay');
       gateway = 'Tripay';
     } else {
-      logger.error('[Webhook] Signature Tripay tidak valid');
+      logger.error(`[Webhook] Signature Tripay tidak valid ref=${req.body?.merchant_ref || '-'} reference=${req.body?.reference || '-'} status=${req.body?.status || '-'}`);
       return res.status(401).json({ success: false, message: 'Invalid signature' });
     }
   } 
@@ -3026,7 +3044,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       const parts = String(order_id || '').split('-');
       gatewayOrderId = String(order_id || '') || null;
       invoiceIdCandidate = parts[1] || null;
-      status = (transaction_status === 'settlement' || transaction_status === 'capture') ? 'paid' : transaction_status;
+      status = normalizeGatewayPaidStatus(transaction_status, 'midtrans');
       gateway = 'Midtrans';
     } else {
       logger.error('[Webhook] Signature Midtrans tidak valid');
@@ -3046,7 +3064,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       const parts = String(external_id || '').split('-');
       gatewayOrderId = String(external_id || '') || null;
       invoiceIdCandidate = parts[1] || null;
-      status = xStatus === 'PAID' ? 'paid' : xStatus;
+      status = normalizeGatewayPaidStatus(xStatus, 'xendit');
       gateway = 'Xendit';
     } else {
       logger.error('[Webhook] Callback Token Xendit tidak valid');
@@ -3060,7 +3078,7 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       const parts = String(merchantOrderId || '').split('-');
       gatewayOrderId = String(merchantOrderId || '') || null;
       invoiceIdCandidate = parts[1] || null;
-      status = resultCode === '00' ? 'paid' : resultCode;
+      status = normalizeGatewayPaidStatus(resultCode, 'duitku');
       gateway = 'Duitku';
     } else {
       logger.error('[Webhook] Signature Duitku tidak valid');
@@ -3068,8 +3086,22 @@ router.post('/payment/callback', express.json(), async (req, res) => {
     }
   }
 
-  if (gatewayOrderId && status === 'paid') {
-    const order = db.prepare('SELECT * FROM public_voucher_orders WHERE payment_order_id = ?').get(gatewayOrderId);
+  if (gateway && status && status !== 'paid') {
+    logger.info(`[Webhook] ${gateway} callback diterima tapi status belum lunas: order=${gatewayOrderId || '-'} ref=${gatewayReferenceId || '-'} status=${status}`);
+  }
+
+  if ((gatewayOrderId || gatewayReferenceId) && status === 'paid') {
+    const lookupValues = getGatewayOrderLookupValues(gatewayOrderId, gatewayReferenceId);
+    const order = lookupValues.length
+      ? db.prepare(`
+          SELECT *
+          FROM public_voucher_orders
+          WHERE payment_order_id IN (${lookupValues.map(() => '?').join(',')})
+             OR payment_reference IN (${lookupValues.map(() => '?').join(',')})
+          ORDER BY id ASC
+          LIMIT 1
+        `).get(...lookupValues, ...lookupValues)
+      : null;
     if (order) {
       const orderId = Number(order.id || 0);
       if (!Number.isFinite(orderId) || orderId <= 0) return res.json({ success: true });
@@ -3163,13 +3195,16 @@ router.post('/payment/callback', express.json(), async (req, res) => {
       return res.json({ success: true });
     }
 
-    const paymentInfoInvoice = db.prepare(`
-      SELECT *
-      FROM invoices
-      WHERE payment_order_id = ? OR payment_reference = ?
-      ORDER BY id ASC
-      LIMIT 1
-    `).get(gatewayOrderId, gatewayOrderId);
+    const paymentInfoInvoice = lookupValues.length
+      ? db.prepare(`
+          SELECT *
+          FROM invoices
+          WHERE payment_order_id IN (${lookupValues.map(() => '?').join(',')})
+             OR payment_reference IN (${lookupValues.map(() => '?').join(',')})
+          ORDER BY id ASC
+          LIMIT 1
+        `).get(...lookupValues, ...lookupValues)
+      : null;
     const bulkMeta = extractBulkPaymentMetadata(paymentInfoInvoice?.payment_payload);
     if (bulkMeta && bulkMeta.invoiceIds.length > 1) {
       const bulkInvoices = sortInvoicesForBulkPayment(bulkMeta.invoiceIds

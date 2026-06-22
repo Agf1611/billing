@@ -105,8 +105,17 @@
       background: var(--panel-soft);
       box-shadow:inset 0 1px 0 rgba(255,255,255,.92), 0 16px 28px rgba(79,110,247,.10);
     }
-    .brand-hero-logo img{width:44px;height:44px;object-fit:contain}
-    .brand-hero-copy{min-width:0}
+    .brand-hero-logo img{
+      width:44px!important;
+      min-width:44px!important;
+      max-width:44px!important;
+      height:44px!important;
+      min-height:44px!important;
+      max-height:44px!important;
+      object-fit:contain!important;
+      display:block!important;
+    }
+    .brand-hero-copy{min-width:0;flex:1 1 auto;overflow:hidden}
     .brand-hero-copy strong{
       display:inline-flex;align-items:center;gap:7px;margin-bottom:6px;padding:7px 11px;border-radius:999px;
       background:rgba(79,110,247,.10);border:1px solid rgba(79,110,247,.14);color:var(--brand);
@@ -114,6 +123,49 @@
     }
     .brand-hero-copy h1{margin:0 0 4px;font-size:22px;line-height:1.04;font-weight:800;letter-spacing:0}
     .brand-hero-copy p{margin:0;color:var(--text-soft);font-size:12px;line-height:1.45}
+    .brand-hero-copy .mss-partner-badge,
+    .brand-hero-copy .mss-partner-badge--hero{
+      width:auto!important;
+      max-width:100%!important;
+      min-width:0!important;
+      margin-top:8px!important;
+      padding:5px 8px!important;
+      gap:7px!important;
+      border-radius:14px!important;
+      overflow:hidden!important;
+    }
+    .brand-hero-copy .mss-partner-logo{
+      width:40px!important;
+      min-width:40px!important;
+      max-width:40px!important;
+      height:24px!important;
+      min-height:24px!important;
+      max-height:24px!important;
+      padding:3px!important;
+      object-fit:contain!important;
+      flex:0 0 40px!important;
+    }
+    .brand-hero-copy .mss-partner-copy{
+      min-width:0!important;
+      overflow:hidden!important;
+    }
+    .brand-hero-copy .mss-partner-copy span{
+      font-size:7.5px!important;
+      line-height:1!important;
+    }
+    .brand-hero-copy .mss-partner-copy strong{
+      max-width:170px!important;
+      font-size:10.5px!important;
+      line-height:1.08!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+    }
+    .brand-hero-copy .mss-partner-copy small{
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+    }
     html[data-theme="dark"] .brand-hero,
     html[data-theme="dark"] .brand-hero-logo{
       box-shadow:0 16px 34px rgba(0,0,0,.28);
@@ -359,8 +411,27 @@
       .cardx{border-radius:18px}
       .brand-hero{padding:12px 13px;gap:12px}
       .brand-hero-logo{width:54px;height:54px;flex-basis:54px}
-      .brand-hero-logo img{width:40px;height:40px}
+      .brand-hero-logo img{
+        width:40px!important;
+        min-width:40px!important;
+        max-width:40px!important;
+        height:40px!important;
+        min-height:40px!important;
+        max-height:40px!important;
+      }
       .brand-hero-copy h1{font-size:20px}
+      .brand-hero-copy .mss-partner-badge,
+      .brand-hero-copy .mss-partner-badge--hero{padding:4px 7px!important;gap:6px!important}
+      .brand-hero-copy .mss-partner-logo{
+        width:34px!important;
+        min-width:34px!important;
+        max-width:34px!important;
+        height:21px!important;
+        min-height:21px!important;
+        max-height:21px!important;
+        flex-basis:34px!important;
+      }
+      .brand-hero-copy .mss-partner-copy strong{max-width:132px!important;font-size:9.5px!important}
       .head,.body{padding:16px 14px}
       .manual-grid{grid-template-columns:1fr}
       .pay-mode-grid{grid-template-columns:1fr}
@@ -380,6 +451,7 @@
         <div class="brand-hero-copy">
           <strong><i class="bi bi-credit-card-2-front-fill"></i> Cek Pembayaran</strong>
           <h1><%= settings.company_header || 'Portal ISP' %></h1>
+          <%- include('partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'hero' }) %>
         </div>
       </div>
 

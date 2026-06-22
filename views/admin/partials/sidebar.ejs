@@ -26,7 +26,7 @@
     border-bottom:0!important;
   }
   .sidebar .sb-brand-main{display:flex!important;align-items:center!important;gap:12px!important;min-width:0!important}
-  .sidebar .sb-brand-copy{min-width:0!important}
+  .sidebar .sb-brand-copy{min-width:0!important;flex:1 1 auto!important;overflow:hidden!important}
   .sidebar .sb-icon{
     width:42px!important;
     height:42px!important;
@@ -40,6 +40,22 @@
     background:#fff!important;
     border:1px solid rgba(255,255,255,.80)!important;
     box-shadow:none!important;
+  }
+  .sidebar .sb-icon img,
+  .sidebar#sidebar .sb-icon img{
+    width:30px!important;
+    min-width:30px!important;
+    max-width:30px!important;
+    height:30px!important;
+    min-height:30px!important;
+    max-height:30px!important;
+    object-fit:contain!important;
+    display:block!important;
+    flex:0 0 30px!important;
+  }
+  .sidebar#sidebar img{
+    max-width:100%!important;
+    object-fit:contain!important;
   }
   body[data-theme="light"] .sidebar .sb-icon{
     background:#fff!important;
@@ -62,6 +78,62 @@
     color:rgba(232,240,255,.78)!important;
     text-transform:uppercase!important;
     letter-spacing:.12em!important;
+  }
+  .sidebar .sb-brand-partner{
+    width:100%!important;
+    max-width:172px!important;
+    margin-top:7px!important;
+    overflow:hidden!important;
+  }
+  .sidebar .sb-brand-partner .mss-partner-badge,
+  .sidebar .sb-brand-partner .mss-partner-badge--sidebar-brand{
+    display:inline-flex!important;
+    align-items:center!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:4px 7px!important;
+    gap:6px!important;
+    border-radius:12px!important;
+    border:1px solid rgba(255,255,255,.22)!important;
+    background:rgba(255,255,255,.14)!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  .sidebar .sb-brand-partner .mss-partner-logo{
+    width:30px!important;
+    min-width:30px!important;
+    max-width:30px!important;
+    height:19px!important;
+    min-height:19px!important;
+    max-height:19px!important;
+    padding:2px!important;
+    object-fit:contain!important;
+    flex:0 0 30px!important;
+    border-radius:6px!important;
+    background:#fff!important;
+  }
+  .sidebar .sb-brand-partner .mss-partner-copy{
+    min-width:0!important;
+    overflow:hidden!important;
+    line-height:1.05!important;
+  }
+  .sidebar .sb-brand-partner .mss-partner-copy span{
+    color:rgba(232,240,255,.76)!important;
+    font-size:6.8px!important;
+    line-height:1!important;
+    letter-spacing:.08em!important;
+  }
+  .sidebar .sb-brand-partner .mss-partner-copy strong{
+    display:block!important;
+    max-width:118px!important;
+    color:#fff!important;
+    font-size:9.5px!important;
+    line-height:1.05!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
   }
   .sidebar .sb-toolbar{display:flex!important;align-items:center!important;gap:10px!important;padding:0 18px 14px!important}
   .sidebar .sb-lang-group{
@@ -173,6 +245,38 @@
     padding:14px 18px 20px!important;
     border-top:1px solid rgba(255,255,255,.16)!important;
     color:rgba(232,240,255,.78)!important;
+    overflow:hidden!important;
+  }
+  .sidebar .sb-footer .mss-partner-badge,
+  .sidebar .sb-footer .mss-partner-badge--sidebar{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    padding:7px 9px!important;
+    gap:8px!important;
+    overflow:hidden!important;
+  }
+  .sidebar .sb-footer .mss-partner-logo{
+    width:42px!important;
+    min-width:42px!important;
+    max-width:42px!important;
+    height:26px!important;
+    min-height:26px!important;
+    max-height:26px!important;
+    padding:3px!important;
+    object-fit:contain!important;
+    flex:0 0 42px!important;
+  }
+  .sidebar .sb-footer .mss-partner-copy{
+    min-width:0!important;
+    overflow:hidden!important;
+  }
+  .sidebar .sb-footer .mss-partner-copy strong,
+  .sidebar .sb-footer .mss-partner-copy span,
+  .sidebar .sb-footer .mss-partner-copy small{
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
   }
   .sidebar .sb-footer a,
   .sidebar .sb-footer div{
@@ -226,6 +330,9 @@
       <div class="sb-brand-copy">
         <div class="sb-name"><%= company %></div>
         <div class="sb-sub"><%= t('admin.panel', 'Admin Panel') %></div>
+        <div class="sb-brand-partner">
+          <%- include('../../partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'sidebar-brand', label: 'Mitra Resmi' }) %>
+        </div>
       </div>
     </div>
     <button class="sb-close btn btn-g btn-sm" onclick="toggleSidebar()"><i class="bi bi-x-lg"></i></button>

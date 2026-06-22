@@ -33,6 +33,11 @@ function companyLogo() {
   return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png';
 }
 
+router.use((req, res, next) => {
+  res.locals.settings = getSettingsWithCache();
+  next();
+});
+
 function normalizePhoneDigits(v) {
   let digits = String(v || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -332,6 +337,10 @@ router.get('/vouchers/batches/:id/print', requireAgentSession, (req, res) => {
     settings: {
       company_header: company(),
       company_logo_url: companyLogo(),
+      partner_brand_enabled: getSetting('partner_brand_enabled', false),
+      partner_brand_name: getSetting('partner_brand_name', ''),
+      partner_legal_name: getSetting('partner_legal_name', ''),
+      partner_logo_url: getSetting('partner_logo_url', ''),
       company_phone: getSetting('company_phone', ''),
       whatsapp_admin_numbers: getSetting('whatsapp_admin_numbers', [])
     },

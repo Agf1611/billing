@@ -130,6 +130,11 @@
       overflow:hidden;
       text-overflow:ellipsis;
     }
+    .mss-partner-badge{display:inline-flex;align-items:center;gap:8px;max-width:100%;margin-top:5px;padding:0;border:0;background:transparent;color:var(--text);box-shadow:none}
+    .mss-partner-logo{width:32px;height:18px;object-fit:contain;flex:0 0 auto;border-radius:7px;background:#fff}
+    .mss-partner-copy{min-width:0;display:flex;flex-direction:column;line-height:1.12}
+    .mss-partner-copy span{color:var(--muted);font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+    .mss-partner-copy strong{color:var(--primary);font-size:10.5px;font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .collector-topbar-actions{
       display:flex;
       align-items:center;
@@ -617,6 +622,7 @@
       <div style="min-width:0">
         <div class="collector-brand-title">Portal Kolektor</div>
         <div class="collector-brand-sub"><%= collectorDisplayName %> - <%= company %></div>
+        <%- include('../partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'topbar' }) %>
       </div>
     </div>
     <div class="collector-topbar-actions">

@@ -4,7 +4,7 @@ const techSvc = require('../services/techService');
 const customerSvc = require('../services/customerService');
 const customerDetailSvc = require('../services/customerDetailService');
 const odpSvc = require('../services/odpService');
-const { getSetting } = require('../config/settingsManager');
+const { getSetting, getSettingsWithCache } = require('../config/settingsManager');
 const mikrotikService = require('../services/mikrotikService');
 const billingSvc = require('../services/billingService');
 const db = require('../config/database');
@@ -67,6 +67,11 @@ function flashMsg(req) {
 
 function company() { return getSetting('company_header', 'PT Media Solusi Sukses'); }
 function companyLogo() { return String(getSetting('company_logo_url', '/img/mss-logo.png') || '/img/mss-logo.png').trim() || '/img/mss-logo.png'; }
+
+router.use((req, res, next) => {
+  res.locals.settings = getSettingsWithCache();
+  next();
+});
 
 function isTruthyFormValue(value) {
   return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';

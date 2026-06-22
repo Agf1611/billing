@@ -108,6 +108,70 @@
     body[data-theme="light"] .card-hd h6{
       color:#2a3650;
     }
+    body[data-theme="dark"] .settings-category-card{
+      background:linear-gradient(180deg, rgba(12,30,78,.96), rgba(7,20,58,.96));
+      border-color:rgba(183,198,232,.18);
+      box-shadow:0 20px 48px rgba(0,0,0,.24);
+    }
+    body[data-theme="dark"] .settings-category-btn{
+      background:rgba(255,255,255,.06);
+      border-color:rgba(183,198,232,.18);
+      color:#dce7ff;
+      box-shadow:none;
+    }
+    body[data-theme="dark"] .settings-category-btn.active{
+      background:linear-gradient(135deg,#073dcc,#0b55f4);
+      color:#fff;
+      border-color:rgba(255,255,255,.16);
+      box-shadow:0 14px 28px rgba(7,61,204,.26);
+    }
+    body[data-theme="dark"] .settings-category-btn:hover{
+      background:rgba(255,255,255,.10);
+      border-color:rgba(183,198,232,.28);
+      color:#fff;
+    }
+    body[data-theme="dark"] .settings-shell-card,
+    body[data-theme="dark"] .settings-card-pane{
+      background:linear-gradient(180deg, rgba(10,27,72,.98), rgba(6,19,54,.98)) !important;
+      border-color:rgba(183,198,232,.18) !important;
+      color:#edf4ff !important;
+      box-shadow:0 24px 60px rgba(0,0,0,.30) !important;
+    }
+    body[data-theme="dark"] .settings-shell-card .card-hd,
+    body[data-theme="dark"] .settings-card-pane .card-hd{
+      background:rgba(255,255,255,.025) !important;
+      border-bottom-color:rgba(183,198,232,.16) !important;
+    }
+    body[data-theme="dark"] .settings-shell-card .card-bd,
+    body[data-theme="dark"] .settings-card-pane .card-bd{
+      background:rgba(7,20,58,.96) !important;
+      color:#edf4ff !important;
+    }
+    body[data-theme="dark"] .settings-shell-card .fc,
+    body[data-theme="dark"] .settings-shell-card .fs,
+    body[data-theme="dark"] .settings-card-pane .fc,
+    body[data-theme="dark"] .settings-card-pane .fs{
+      background:#102a70 !important;
+      border-color:rgba(183,198,232,.24) !important;
+      color:#f8fbff !important;
+      box-shadow:none !important;
+    }
+    body[data-theme="dark"] .settings-shell-card .fc::placeholder,
+    body[data-theme="dark"] .settings-card-pane .fc::placeholder{
+      color:#aebdea !important;
+      opacity:1;
+    }
+    body[data-theme="dark"] .settings-shell-card .fl,
+    body[data-theme="dark"] .settings-card-pane .fl,
+    body[data-theme="dark"] .settings-pane-title,
+    body[data-theme="dark"] .settings-category-head strong,
+    body[data-theme="dark"] .card-hd h6{
+      color:#edf4ff !important;
+    }
+    body[data-theme="dark"] .settings-category-head span,
+    body[data-theme="dark"] .hint{
+      color:#b7c6ea !important;
+    }
   </style>
 </head>
 <body>
@@ -231,6 +295,7 @@
         <input type="hidden" name="settings_section" id="settings_section" value="<%= activeSettingsPane || 'usaha' %>">
         <input type="hidden" name="remove_company_logo" id="remove_company_logo" value="0">
         <input type="hidden" name="remove_pwa_logo" id="remove_pwa_logo" value="0">
+        <input type="hidden" name="remove_partner_logo" id="remove_partner_logo" value="0">
         <input type="hidden" name="remove_support_logo" id="remove_support_logo" value="0">
         <input type="hidden" name="remove_invoice_signature" id="remove_invoice_signature" value="0">
         <input type="hidden" name="remove_invoice_stamp" id="remove_invoice_stamp" value="0">
@@ -380,6 +445,42 @@
           <div class="fg">
             <label class="fl">Domain Publik Portal</label>
             <input class="fc" name="public_base_url" value="<%= settings.public_base_url || '' %>" placeholder="Contoh: https://gembok.ahnnet.my.id">
+          </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="fl">Brand Mitra Resmi MSS</label>
+              <select class="fs" name="partner_brand_enabled">
+                <option value="false" <%= !settings.partner_brand_enabled ? 'selected' : '' %>>Nonaktif</option>
+                <option value="true" <%= settings.partner_brand_enabled ? 'selected' : '' %>>Aktif</option>
+              </select>
+              <div class="hint" style="margin-top:8px">Aktifkan jika ingin nama usaha mitra tampil sebagai identitas layanan lokal tanpa mengganti brand MSS.</div>
+            </div>
+            <div class="fg">
+              <label class="fl">Nama Brand Mitra</label>
+              <input class="fc" name="partner_brand_name" value="<%= settings.partner_brand_name || '' %>" placeholder="Contoh: SICKAS Net / AHN Net">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="fg">
+              <label class="fl">Nama Legal Mitra <span style="color:var(--muted);font-weight:600">(opsional)</span></label>
+              <input class="fc" name="partner_legal_name" value="<%= settings.partner_legal_name || '' %>" placeholder="Contoh: CV / PT nama usaha mitra">
+            </div>
+            <div class="fg">
+              <label class="fl">Logo Mitra Resmi MSS</label>
+              <% if (settings.partner_logo_url) { %>
+                <div class="asset-preview-card">
+                  <button type="button" class="asset-remove-btn" title="Hapus logo mitra" aria-label="Hapus logo mitra" onclick="removePartnerLogo()">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                  <img src="<%= settings.partner_logo_url %>" alt="Logo mitra saat ini" style="width:48px;height:48px;object-fit:contain;border-radius:12px;background:#fff;padding:6px;border:1px solid var(--border)">
+                  <div style="font-size:12px;color:var(--muted)">
+                    <div style="font-weight:700;color:var(--text)">Logo mitra saat ini</div>
+                    <div><%= settings.partner_logo_url %></div>
+                  </div>
+                </div>
+              <% } %>
+              <input class="fc" type="file" name="partner_logo_file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*">
+            </div>
           </div>
           <div class="form-row">
             <div class="fg">
@@ -1172,6 +1273,10 @@ function removeCompanyLogo() {
 
 function removePwaLogo() {
   submitAssetRemoval('usaha', 'remove_pwa_logo', 'Hapus logo PWA aplikasi yang sedang dipakai?');
+}
+
+function removePartnerLogo() {
+  submitAssetRemoval('usaha', 'remove_partner_logo', 'Hapus logo mitra resmi MSS yang sedang dipakai?');
 }
 
 function removeSupportLogo() {

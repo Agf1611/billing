@@ -17,6 +17,7 @@ const MIKROTIK_CONNECT_TIMEOUT_MS = envNumber('MIKROTIK_CONNECT_TIMEOUT_MS', 180
 const MIKROTIK_QUEUE_WAIT_TIMEOUT_MS = envNumber('MIKROTIK_QUEUE_WAIT_TIMEOUT_MS', 45000, 5000);
 const MIKROTIK_CONNECTION_HOLD_TIMEOUT_MS = envNumber('MIKROTIK_CONNECTION_HOLD_TIMEOUT_MS', 45000, 10000);
 const MIKROTIK_SUCCESS_LOG_TTL_MS = envNumber('MIKROTIK_SUCCESS_LOG_TTL_MS', 120000, 30000);
+const MIKROTIK_WRITE_COMMAND_TIMEOUT_MS = envNumber('MIKROTIK_WRITE_COMMAND_TIMEOUT_MS', 7000, 1500);
 const connectionProbeCache = new Map();
 const connectionQueueByRouter = new Map();
 const connectionSuccessLogCache = new Map();
@@ -738,7 +739,11 @@ async function setPppoeProfile(username, profileName, routerId = null, options =
   try {
     conn = await getWriteConnection(routerId);
     const secretMenu = conn.client.menu('/ppp/secret');
-    const secrets = await secretMenu.where('name', username).get();
+    const secrets = await withTimeout(
+      secretMenu.where('name', username).get(),
+      MIKROTIK_WRITE_COMMAND_TIMEOUT_MS,
+      `find PPPoE secret ${username}`
+    );
     
     if (!secrets || secrets.length === 0) {
       throw new Error(`PPPoE User ${username} not found in MikroTik`);
@@ -754,7 +759,11 @@ async function setPppoeProfile(username, profileName, routerId = null, options =
     // Hanya update dan kick jika profil berubah
     if (currentProfile !== profileName) {
       logger.info(`[MikroTik] Changing profile for ${username}: ${currentProfile} -> ${profileName}`);
-      await secretMenu.set({ profile: profileName }, secretId);
+      await withTimeout(
+        secretMenu.set({ profile: profileName }, secretId),
+        MIKROTIK_WRITE_COMMAND_TIMEOUT_MS,
+        `set PPPoE profile ${username}`
+      );
       shouldKick = true;
     } else {
       shouldKick = Boolean(options && options.forceKick);
@@ -769,7 +778,11 @@ async function setPppoeProfile(username, profileName, routerId = null, options =
     // Buka koneksi baru untuk kick supaya tidak menunggu queue koneksi yang sedang dipakai.
     if (shouldKick) {
       try {
-        await kickPppoeUser(username, routerId);
+        await withTimeout(
+          kickPppoeUser(username, routerId),
+          MIKROTIK_WRITE_COMMAND_TIMEOUT_MS,
+          `kick PPPoE ${username}`
+        );
       } catch (kickError) {
         logger.warn(`[MikroTik] Profile ${username} sudah diset ke ${profileName}, tetapi gagal kick sesi aktif: ${kickError.message || String(kickError)}`);
       }
@@ -793,7 +806,11 @@ async function kickPppoeUser(username, routerId = null) {
   let conn = null;
   try {
     conn = await getWriteConnection(routerId);
-    const sessions = await conn.client.menu('/ppp/active').where('name', normalizedUsername).get();
+    const sessions = await withTimeout(
+      conn.client.menu('/ppp/active').where('name', normalizedUsername).get(),
+      MIKROTIK_WRITE_COMMAND_TIMEOUT_MS,
+      `find active PPPoE ${normalizedUsername}`
+    );
     
     if (sessions.length > 0) {
       logger.info(`[MikroTik] Kicking ${sessions.length} active session(s) for user: ${normalizedUsername}`);
@@ -803,7 +820,11 @@ async function kickPppoeUser(username, routerId = null) {
           logger.warn(`[MikroTik] Skipping PPPoE active remove because session id missing for user: ${normalizedUsername}`);
           continue;
         }
-        await conn.client.menu('/ppp/active').remove(sessionId);
+        await withTimeout(
+          conn.client.menu('/ppp/active').remove(sessionId),
+          MIKROTIK_WRITE_COMMAND_TIMEOUT_MS,
+          `remove active PPPoE ${normalizedUsername}`
+        );
       }
       return true;
     }

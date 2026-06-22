@@ -8,6 +8,23 @@ const SESSION_RESET_TOLERANCE_SECONDS = 120;
 const SESSION_RESET_FRESH_UPTIME_SECONDS = 15 * 60;
 const USAGE_REPLAY_MIN_BYTES = 1024 * 1024 * 1024;
 const USAGE_REPLAY_TOLERANCE_BYTES = 64 * 1024 * 1024;
+const USAGE_ANOMALY_NOTICE_TTL_MS = 15 * 60 * 1000;
+const usageAnomalyNoticeCache = new Map();
+
+function shouldLogUsageAnomaly(customerId, eventType, at = new Date()) {
+  const ref = at instanceof Date && !Number.isNaN(at.getTime()) ? at : new Date();
+  const key = `${eventType}:${ref.getFullYear()}-${ref.getMonth() + 1}`;
+  const now = Date.now();
+  const last = Number(usageAnomalyNoticeCache.get(key) || 0);
+  if ((now - last) < USAGE_ANOMALY_NOTICE_TTL_MS) return false;
+  usageAnomalyNoticeCache.set(key, now);
+  if (usageAnomalyNoticeCache.size > 5000) {
+    for (const [cacheKey, ts] of usageAnomalyNoticeCache.entries()) {
+      if ((now - Number(ts || 0)) > (USAGE_ANOMALY_NOTICE_TTL_MS * 4)) usageAnomalyNoticeCache.delete(cacheKey);
+    }
+  }
+  return true;
+}
 
 function parseUptimeToSeconds(value) {
   const text = String(value || '').trim();
@@ -537,16 +554,18 @@ const syncUsageTotalsTx = db.transaction((customerId, totalIn, totalOut, at = ne
 
     if (suspiciousInflation) {
       anomalyGuardApplied = true;
-      logger.warn(`[usage] Anomali usage terdeteksi untuk customer ${customerId}. Total bulanan tidak diubah otomatis; simpan audit untuk review manual. stored=${currentStoredTotal} observed=${currentObservedTotal} prev=${previousObservedTotal}`);
-      createAuditLog(customerId, 'suspicious_inflation', {
-        storedBytesIn: Number(currentUsage.bytes_in || 0),
-        storedBytesOut: Number(currentUsage.bytes_out || 0),
-        observedBytesIn: normalizedIn,
-        observedBytesOut: normalizedOut,
-        deltaBytesIn: deltaIn,
-        deltaBytesOut: deltaOut,
-        note: `Suspicious usage anomaly detected; no automatic overwrite. previousObserved=${previousObservedTotal}`
-      }, refDate);
+      if (shouldLogUsageAnomaly(customerId, 'suspicious_inflation', refDate)) {
+        logger.warn(`[usage] Anomali usage terdeteksi untuk customer ${customerId}. Total bulanan tidak diubah otomatis; simpan audit untuk review manual. stored=${currentStoredTotal} observed=${currentObservedTotal} prev=${previousObservedTotal}`);
+        createAuditLog(customerId, 'suspicious_inflation', {
+          storedBytesIn: Number(currentUsage.bytes_in || 0),
+          storedBytesOut: Number(currentUsage.bytes_out || 0),
+          observedBytesIn: normalizedIn,
+          observedBytesOut: normalizedOut,
+          deltaBytesIn: deltaIn,
+          deltaBytesOut: deltaOut,
+          note: `Suspicious usage anomaly detected; no automatic overwrite. previousObserved=${previousObservedTotal}`
+        }, refDate);
+      }
     }
   }
 

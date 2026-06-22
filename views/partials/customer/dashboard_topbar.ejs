@@ -40,7 +40,10 @@
         <img src="<%= pageCompanyLogoUrl %>" alt="Logo" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
         <div class="brand-meta">
           <strong><%= pageCompanyName %></strong>
-          <span>Customer App</span>
+          <div class="brand-subline">
+            <span class="brand-app-label">Customer App</span>
+            <%- include('../partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'topbar', label: 'Mitra Resmi' }) %>
+          </div>
         </div>
       </div>
     </div>

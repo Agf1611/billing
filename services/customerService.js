@@ -110,6 +110,30 @@ async function trySendLifecycleWhatsapp(phone, message, templateKey = '') {
   }
 }
 
+function withOperationalTimeout(promise, timeoutMs, label = 'operasi') {
+  const ms = Math.max(1000, Number(timeoutMs || 0) || 0);
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const timer = setTimeout(() => {
+        clearTimeout(timer);
+        reject(new Error(`${label} timeout ${ms}ms`));
+      }, ms);
+      if (typeof timer.unref === 'function') timer.unref();
+    })
+  ]);
+}
+
+async function runCustomerNetworkSync(label, fn, timeoutMs = 9000) {
+  try {
+    await withOperationalTimeout(Promise.resolve().then(fn), timeoutMs, label);
+    return true;
+  } catch (error) {
+    logger.warn(`[customerService] ${label} gagal/timeout: ${error.message || String(error)}`);
+    return false;
+  }
+}
+
 // ─── CUSTOMERS ───────────────────────────────────────────────
 function getAllCustomers(search = '') {
   ensureMissingCustomerCodes();
@@ -1071,22 +1095,26 @@ async function suspendCustomer(id) {
   const mikrotikSvc = require('./mikrotikService');
 
   if (customer.connection_type === 'hotspot_binding') {
-    await mikrotikSvc.setHotspotBindingCustomerAccess(customer, false);
+    await runCustomerNetworkSync(`Sinkron isolir hotspot pelanggan ${customer.id}`, () => mikrotikSvc.setHotspotBindingCustomerAccess(customer, false));
   } else if (customer.connection_type === 'static' && customer.static_ip) {
     const pkg = getPackageById(customer.package_id);
     const limit = pkg ? `${Math.round(pkg.speed_up/1000)}M/${Math.round(pkg.speed_down/1000)}M` : '5M/5M';
-    await mikrotikSvc.manageStaticIp({
+    await runCustomerNetworkSync(`Sinkron isolir IP statis pelanggan ${customer.id}`, () => mikrotikSvc.manageStaticIp({
       ip: customer.static_ip,
       name: customer.name,
       limit: limit,
       isolate: true
-    }, customer.router_id);
+    }, customer.router_id));
   } else if (customer.pppoe_username) {
     const isolirProfile = customer.isolir_profile || 'BEATISOLIR';
-    await mikrotikSvc.setPppoeProfile(customer.pppoe_username, isolirProfile, customer.router_id);
+    await runCustomerNetworkSync(`Sinkron isolir PPPoE pelanggan ${customer.id}`, () => mikrotikSvc.setPppoeProfile(customer.pppoe_username, isolirProfile, customer.router_id));
     if (customer.router_id) {
       try {
-        await mikrotikSvc.ensurePppProfileIsolirAddressListHook(isolirProfile, customer.router_id);
+        await withOperationalTimeout(
+          mikrotikSvc.ensurePppProfileIsolirAddressListHook(isolirProfile, customer.router_id),
+          9000,
+          `Hook profil isolir ${isolirProfile}`
+        );
       } catch (e) {
         logger.warn(`[suspendCustomer] Hook profil isolir "${isolirProfile}" di router ${customer.router_id}: ${e.message}`);
       }
@@ -1109,20 +1137,20 @@ async function activateCustomer(id) {
   const mikrotikSvc = require('./mikrotikService');
 
   if (customer.connection_type === 'hotspot_binding') {
-    await mikrotikSvc.setHotspotBindingCustomerAccess(customer, true);
+    await runCustomerNetworkSync(`Sinkron aktif hotspot pelanggan ${customer.id}`, () => mikrotikSvc.setHotspotBindingCustomerAccess(customer, true));
   } else if (customer.connection_type === 'static' && customer.static_ip) {
     const pkg = getPackageById(customer.package_id);
     const limit = pkg ? `${Math.round(pkg.speed_up/1000)}M/${Math.round(pkg.speed_down/1000)}M` : '5M/5M';
-    await mikrotikSvc.manageStaticIp({
+    await runCustomerNetworkSync(`Sinkron aktif IP statis pelanggan ${customer.id}`, () => mikrotikSvc.manageStaticIp({
       ip: customer.static_ip,
       name: customer.name,
       limit: limit,
       isolate: false
-    }, customer.router_id);
+    }, customer.router_id));
   } else if (customer.pppoe_username) {
     const pkg = getPackageById(customer.package_id);
     const targetProfile = customer.normal_pppoe_profile || (pkg ? (pkg.pppoe_profile || pkg.name) : 'default');
-    await mikrotikSvc.setPppoeProfile(customer.pppoe_username, targetProfile, customer.router_id, { forceKick: true });
+    await runCustomerNetworkSync(`Sinkron aktif PPPoE pelanggan ${customer.id}`, () => mikrotikSvc.setPppoeProfile(customer.pppoe_username, targetProfile, customer.router_id, { forceKick: true }));
   }
 
   if (customer.phone) {
@@ -1141,7 +1169,13 @@ async function activateCustomer(id) {
       group_line: groupLink ? `Grup pelanggan: ${groupLink}` : '',
       company: getSetting('company_header', 'ISP')
     });
-    await trySendLifecycleWhatsapp(customer.phone, message, 'reactivation');
+    withOperationalTimeout(
+      trySendLifecycleWhatsapp(customer.phone, message, 'reactivation'),
+      12000,
+      `WhatsApp reaktivasi pelanggan ${customer.id}`
+    ).catch((error) => {
+      logger.warn(`[customerService] WhatsApp reaktivasi pelanggan ${customer.id} gagal/timeout: ${error.message || String(error)}`);
+    });
   }
   addPortalNotification(id, {
     kind: 'reactivation',

@@ -205,6 +205,52 @@
       box-shadow: 0 0 0 4px rgba(20, 155, 104, .10);
     }
 
+    .mss-partner-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      margin-top: 5px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--tech-text);
+      box-shadow: none;
+    }
+
+    .mss-partner-logo {
+      width: 32px;
+      height: 18px;
+      object-fit: contain;
+      flex: 0 0 auto;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .mss-partner-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.12;
+    }
+
+    .mss-partner-copy span {
+      color: var(--tech-muted);
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .mss-partner-copy strong {
+      color: var(--tech-primary);
+      font-size: 10.5px;
+      font-weight: 900;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .top-nav-actions {
       display: flex;
       align-items: center;
@@ -811,6 +857,7 @@
       <span class="top-nav-kicker">Portal Teknisi</span>
       <h1 class="top-nav-title"><span class="top-nav-desktop-title"><%= title %></span><span class="top-nav-mobile-title">Teknisi</span></h1>
       <div class="top-nav-mobile-meta"><span><%= techHeaderDate %></span><span class="top-nav-status">Online</span></div>
+      <%- include('../../partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'topbar' }) %>
     </div>
     <div class="top-nav-actions">
       <button type="button" class="top-nav-btn theme-switch-btn" id="themeToggleBtn" aria-label="Ganti tema portal teknisi">

@@ -4,9 +4,12 @@
       <div class="icon">
         <img src="<%= (typeof logoUrl !== 'undefined' && logoUrl) ? logoUrl : '/img/mss-logo.png' %>" alt="Logo <%= company %>" style="width:32px;height:32px;object-fit:contain" onerror="this.onerror=null;this.src='/img/mss-logo.png'">
       </div>
-      <div style="min-width:0">
+      <div class="agent-brand-copy">
         <p class="title">Agent: <%= agent?.name || '-' %></p>
-        <p class="sub"><%= company %></p>
+        <div class="agent-brand-meta">
+          <p class="sub"><%= company %></p>
+          <%- include('../../partials/partner_brand_badge', { settings: (typeof settings !== 'undefined' ? settings : {}), variant: 'topbar' }) %>
+        </div>
       </div>
     </div>
     <div class="top-actions">

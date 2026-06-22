@@ -1,0 +1,27 @@
+<%
+  const partnerSettings = (typeof settings !== 'undefined' && settings) ? settings : {};
+  const partnerEnabledValue = partnerSettings.partner_brand_enabled;
+  const partnerEnabled = partnerEnabledValue === true || partnerEnabledValue === 'true' || partnerEnabledValue === 1 || partnerEnabledValue === '1' || partnerEnabledValue === 'on';
+  const partnerName = String(partnerSettings.partner_brand_name || '').trim();
+  const partnerLegalName = String(partnerSettings.partner_legal_name || '').trim();
+  const partnerLogoUrl = String(partnerSettings.partner_logo_url || '').trim();
+  const partnerLabelText = typeof label !== 'undefined' && label ? String(label) : 'Mitra Resmi MSS';
+  const partnerVariant = typeof variant !== 'undefined' && variant ? String(variant) : 'inline';
+  const partnerShowLegal = typeof showLegal !== 'undefined' ? Boolean(showLegal) : false;
+%>
+<% if (partnerEnabled && (partnerName || partnerLogoUrl)) { %>
+  <div class="mss-partner-badge mss-partner-badge--<%= partnerVariant %>">
+    <% if (partnerLogoUrl) { %>
+      <img class="mss-partner-logo" src="<%= partnerLogoUrl %>" alt="Logo <%= partnerName || partnerLabelText %>" onerror="this.style.display='none'">
+    <% } %>
+    <div class="mss-partner-copy">
+      <span><%= partnerLabelText %></span>
+      <% if (partnerName) { %>
+        <strong><%= partnerName %></strong>
+      <% } %>
+      <% if (partnerShowLegal && partnerLegalName) { %>
+        <small><%= partnerLegalName %></small>
+      <% } %>
+    </div>
+  </div>
+<% } %>
